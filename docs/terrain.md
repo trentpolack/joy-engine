@@ -1,0 +1,2 @@
+# Resident CLOD terrain
+Joy exposes `loadTerrain`, `decodeTerrain`, `sampleTerrain`, `selectTerrain`, `reconcileTerrainEdges`, `sampleMorphedHeight` and `TerrainRenderer`. The [terrain example guide](../examples/terrain/README.md) specifies asset version 1, offline conversion, units/orientation, render-pass ownership, backend behavior and collision/road/environment integration boundaries. This pass retains indexed geometry and never expands a full landscape into the existing per-frame scene triangle stream.

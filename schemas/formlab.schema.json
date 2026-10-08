@@ -1,0 +1,7 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FORM LAB document",
+  "type": "object",
+  "required": ["version", "source"],
+  "properties": {"version": {"const": 1}, "name": {"type": "string"}, "source": {"type": "string"}, "materials": {"type": "array"}, "variants": {"type": "array"}}
+}

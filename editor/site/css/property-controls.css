@@ -1,0 +1,12 @@
+/* Copyright (c) 2026 Trent Polack. Licensed under the MIT License. */
+.numeric-error { display:block; color:#ffb4a9; font:11px/1.4 Archivo,sans-serif; grid-column:1 / -1; white-space:normal; }
+input[aria-invalid="true"] { outline:1px solid #ff8b7b; }
+.property-row input, .property-vector input, .parameter input[type="number"] { min-height:30px; }
+.remove-property, .parameter-collapse, .parameter-heading > button { min-width:30px; min-height:30px; }
+.property-history { display:flex; gap:6px; flex-wrap:wrap; padding:6px 0; }
+.property-history button { min-height:30px; }
+.numeric-guidance { font:11px/1.4 Archivo,sans-serif; color:#b9c8d9; margin:6px 0; }
+
+.field-grid input[type="number"], .bursts input, .preview-options select { min-height:30px; }
+.emitter-item { min-height:38px; padding:6px 10px; }
+.emitter-item small { font-size:10px; }

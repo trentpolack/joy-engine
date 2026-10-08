@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "name": "Prism Sprite Garden",
+  "maxParticles": 128,
+  "parameters": {},
+  "emitters": [
+    {
+      "enabled": true,
+      "root": true,
+      "duration": 5,
+      "rate": 4,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 1
+        }
+      ],
+      "lifetime": 1.5,
+      "id": "circle",
+      "renderer": "circle",
+      "spawn": "position = origin + vector(-138.0, rand(-8, 8), rand(-14, 14));\nvelocity = vector(0, rand(26, 42), 0); size = 19;\nrotation = rand(-0.3, 0.3); spin = 0.6;\ncolor = rgba(0.25, 1.8, 2.4, 1);",
+      "update": "size += 7 * dt; color.a = 1 - smoothstep(0.5, 1, t);"
+    },
+    {
+      "enabled": true,
+      "root": true,
+      "duration": 5,
+      "rate": 4,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 1
+        }
+      ],
+      "lifetime": 1.5,
+      "id": "square",
+      "renderer": "square",
+      "spawn": "position = origin + vector(-46.0, rand(-8, 8), rand(-14, 14));\nvelocity = vector(0, rand(26, 42), 0); size = 19;\nrotation = rand(-0.3, 0.3); spin = 0.6;\ncolor = rgba(0.25, 1.8, 2.4, 1);",
+      "update": "size += 7 * dt; color.a = 1 - smoothstep(0.5, 1, t);"
+    },
+    {
+      "enabled": true,
+      "root": true,
+      "duration": 5,
+      "rate": 4,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 1
+        }
+      ],
+      "lifetime": 1.5,
+      "id": "textured",
+      "renderer": "textured",
+      "spawn": "position = origin + vector(46.0, rand(-8, 8), rand(-14, 14));\nvelocity = vector(0, rand(26, 42), 0); size = 19;\nrotation = rand(-0.3, 0.3); spin = 0.6;\ncolor = rgba(2.2, 0.55, 0.2, 1);",
+      "update": "size += 7 * dt; color.a = 1 - smoothstep(0.5, 1, t);",
+      "texture": {
+        "source": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAtklEQVR4nO2WzQ2AIAyFXcNR3MpZmMFjN2IRbjVNbCTQIP7A4+BL3kUT+wnl0YmZJ6ShxX+ALwDWwzCAcBgCMPOpGQFAEQD1Blg419ITwBsAvhfAZhRXba0BXKG4yrUCKP3545WobThrz6/kuaIxSy/lbFP22fsiLuSE9VCiNXxQOFVgI7aHBIBvwTBNOMwxjA0NopqVaB7FauhlpI2Zqut1LIYOJGL4SCaGDqVi+Fj+2j8AHGAH7ni9fRnutG8AAAAASUVORK5CYII=",
+        "columns": 1,
+        "rows": 1,
+        "frames": 1,
+        "fps": 0,
+        "loop": true
+      }
+    },
+    {
+      "enabled": true,
+      "root": true,
+      "duration": 5,
+      "rate": 4,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 1
+        }
+      ],
+      "lifetime": 1.5,
+      "id": "flipbook",
+      "renderer": "flipbook",
+      "spawn": "position = origin + vector(138.0, rand(-8, 8), rand(-14, 14));\nvelocity = vector(0, rand(26, 42), 0); size = 19;\nrotation = rand(-0.3, 0.3); spin = 0.6;\ncolor = rgba(2.2, 0.55, 0.2, 1);",
+      "update": "size += 7 * dt; color.a = 1 - smoothstep(0.5, 1, t);",
+      "texture": {
+        "source": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAAAgCAYAAADaInAlAAADS0lEQVR4nO2bMUgjQRSG7e7gSs/eIFjahWCKNIJptMsVFoEVUoUrg0VSWKQ4CGdnaxFEJNV1Z2eVQkRsEhLSHEhar9H6mHt/8i9IMDo7O3sLe6/4QN6+NzOZ9+bNm9l1xRizovy/pD4ARQNA0QBQLPkgbAuB0BS+kSZl29TRAMgYn+ngrjAW/ggPwoA8UDamTkAbDYCE+CjkhC2SoyyJvnbp1GehL3SEqlB60X+Jsg51nmmzqwHgF0x2TTgResIV6VFWo46v/gLh1sxXecuy7S3qDmgbaADEZ43OhaOnwm/hXrgm95RNqVOjTVznI6X/FPYd7PdpOzZvBEHaE+vCJ6EgfOFE1/h3gc9894f0fiwMhV/CmVAXykKelCk7o86QNjnHPpG6b+nAUoyxl9jGrVmyHaTtzKjAyQ3hQrgRJuSGsgZ1fPW3RkdiZV/TyRtv6G9Q55o2xyZ6JkDxhv0bKdxl5S+yz7a65pXCME7Dq8ImWU3Y8QARfEqHP5p5sfOD9CmbUOfd4scSZJchHXoQwe6ANkO2EaXPwMyLuJbHuWuxzcBHAMDZe8KR8J0cUZZUIBTo2NDxbaEiFEmFsjAQTk38TIBiCvs5Unrdwb5O256xLwxxhu/yd/gsJrfYZtcs3BO4OP9QOBdGwhMZUXZo/AcB9nWk9gl/xFdh/RW9dT7rU7dh4tUEWLlI49jX30r7y9ig7dTYZwFc5KBo63iewxW2OWYfzgGwR0fD6XfCJbmj7Jw6PgeOlYz9HSu7vcT5L4OgTd0L454FcKbHsQ6VvcvqD6mzjRNjd08QmPmFTjWBAKiy7cA1ALCykepHdDiuH3dIk7IRdXxmAVT4KPKwsisW+hXq3tDWpU9U70jdON6VY4y9zDZ6xu5EgHnErV6cyn8ZJbbddA0AFHvY77HSL+n48NkOZU/U2fQ4cKRPpHQUe0UL/SJ1JyZ6ARaCPRMXPCjk8jHGnmcbV8ZuT8e9/sBS1+U3DdiHBoAGQPQA0C0gOpnaAoAWgdHIVBEI9BhoTyaPgWEQ6EXQ+2TyImgxEPQq+HUyfRWcJvoyKDqJvQxKC30dbE/mXgenhX4QoszQT8KUGfpRqPJP0c/ClRn6jyGKX1IfgKIBoKTIX7UrNuz76bmKAAAAAElFTkSuQmCC",
+        "columns": 4,
+        "rows": 1,
+        "frames": 4,
+        "fps": 0,
+        "loop": false
+      }
+    }
+  ]
+}

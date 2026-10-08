@@ -1,0 +1,179 @@
+/*
+ * Copyright (c) 2026 Trent Polack. All Rights Reserved. 
+ * Licensed under the MIT License.
+ */
+
+.joy-config-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  position: fixed;
+  z-index: 10020;
+  right: 16px;
+  bottom: 16px;
+  color: var(--joy-dev-widget-text);
+  font: 12px/1.35 var(--joy-dev-widget-font);
+}
+
+.joy-config-tools button, .joy-config-tools input {
+  font: inherit;
+  border-radius: 0;
+}
+
+.joy-config-launcher, .joy-config-actions button, .joy-config-field button {
+  color: inherit;
+  background: var(--joy-dev-widget-background);
+  border: 1px solid var(--joy-dev-widget-accent);
+  padding: 6px 9px;
+  cursor: pointer;
+}
+
+.joy-config-panel {
+  position: absolute;
+  right: 0;
+  bottom: 40px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border-radius: 0;
+  width: min(440px, calc(100vw - 32px));
+  max-height: min(720px, calc(100dvh - var(--joy-editor-edge-bottom, 12px) - 64px));
+  overflow: hidden;
+  margin-bottom: 0;
+  padding: 14px;
+  background: var(--joy-dev-widget-background);
+  border: 1px solid var(--joy-dev-widget-accent);
+}
+
+.joy-config-panel[hidden], .joy-config-field[hidden], .joy-config-fields fieldset[hidden] {
+  display: none;
+}
+
+.joy-config-panel h2 {
+  margin: 0 0 10px;
+  color: var(--joy-dev-widget-accent);
+  font-size: 14px;
+}
+
+.joy-config-search, .joy-config-field input[type="number"] {
+  box-sizing: border-box;
+  border-radius: 0;
+  color: var(--joy-dev-widget-text);
+  background: var(--joy-dev-widget-input);
+  border: 1px solid var(--joy-dev-widget-line);
+}
+
+.joy-config-search {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 7px;
+}
+
+.joy-config-fields {
+  min-height: 0;
+  overflow: auto;
+  scrollbar-color: var(--joy-dev-widget-accent) var(--joy-dev-widget-background);
+}
+
+.joy-config-fields fieldset {
+  border-radius: 0;
+  min-width: 0;
+  margin: 0 0 12px;
+  padding: 8px;
+  border: 1px solid var(--joy-dev-widget-line);
+}
+
+.joy-config-fields legend {
+  color: var(--joy-dev-widget-accent);
+  font-weight: 700;
+}
+
+.joy-config-field {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) auto auto;
+  gap: 5px 8px;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--joy-dev-widget-muted) 45%, transparent);
+}
+
+.joy-config-field:last-child {
+  border-bottom: 0;
+}
+
+.joy-config-mode, .joy-config-marker, .joy-config-units {
+  color: var(--joy-dev-widget-muted);
+  font-size: 10px;
+}
+
+.joy-config-description {
+  grid-column: 1 / -1;
+  color: var(--joy-dev-widget-muted);
+  font-size: 11px;
+}
+
+.joy-config-field[data-changed="true"] .joy-config-marker {
+  color: var(--joy-dev-widget-accent);
+}
+
+.joy-config-field input[type="range"] {
+  grid-column: 1 / 2;
+  width: 100%;
+  accent-color: var(--joy-dev-widget-accent);
+}
+
+.joy-config-field input[type="number"] {
+  width: 84px;
+  padding: 5px;
+}
+
+.joy-config-field button {
+  grid-column: 3;
+  justify-self: end;
+  padding: 4px 6px;
+}
+
+.joy-config-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.joy-config-state {
+  margin: 0 0 8px;
+  color: var(--joy-dev-widget-muted);
+}
+
+.joy-config-state[data-dirty="true"] {
+  color: var(--joy-dev-widget-accent);
+  font-weight: 700;
+}
+
+.joy-config-status {
+  min-height: 1.35em;
+  margin: 9px 0 0;
+  color: var(--joy-dev-widget-muted);
+}
+
+.joy-config-status[data-error="true"] {
+  color: var(--joy-dev-widget-error);
+}
+
+@media (max-width: 520px) {
+  .joy-config-tools {
+    right: 8px;
+    bottom: 8px;
+  }
+  .joy-config-panel {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - var(--joy-editor-edge-bottom, 12px) - 52px);
+  }
+}
+
+.joy-config-panel h2, .joy-config-fields legend {
+  text-transform: uppercase;
+}
+
+.joy-config-field input[aria-invalid="true"] {
+  border-color: var(--joy-dev-widget-error);
+}

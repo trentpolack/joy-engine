@@ -1,0 +1,41 @@
+{
+  "name": "@joy-games/particle-lab",
+  "version": "0.2.8",
+  "private": true,
+  "type": "module",
+  "description": "Live authoring for deterministic Joy Engine particle effects.",
+  "author": "Trent Polack",
+  "license": "MIT",
+  "gameSite": {
+    "category": "app",
+    "title": "PARTICLE LAB",
+    "description": "Author deterministic, layered particle effects with scripts, child emitters, and a live GPU preview.",
+    "status": "Creative tool",
+    "accent": "#ed6c39",
+    "startedAt": "2026-09-15",
+    "screenshot": "particle-lab.png"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build --base=./",
+    "preview": "vite preview --host 127.0.0.1",
+    "check": "joy-check-javascript src site test && tsc --project tsconfig.json",
+    "test": "node --import joy-engine/testing/register-raw-loader --test test/*.test.js",
+    "capture": "node test/browser.mjs",
+    "test:live-browser": "node test/live-apply-browser.mjs",
+    "desktop": "npm run build && electron desktop/main.cjs",
+    "desktop:pack": "npm run build && electron-packager . \"Particle Lab\" --out=release --overwrite --ignore=\"^/(site|test|release)$\"",
+    "desktop:dist": "npm run build && electron-packager . \"Particle Lab\" --out=release --overwrite --ignore=\"^/(site|test|release)$\""
+  },
+  "dependencies": {
+    "@fontsource/archivo": "^5.3.0",
+    "@fontsource/archivo-black": "^5.3.0",
+    "@joy-games/joy-editor": "file:../..",
+    "joy-engine": "file:../../.."
+  },
+  "main": "desktop/main.cjs",
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^44.5.1"
+  }
+}

@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1b293d" />
+    <meta
+      name="description"
+      content="FORM LAB — script geometry and point clouds with a live Joy Engine preview."
+    />
+    <title>FORM LAB · Joy Games</title>
+  </head>
+  <body>
+    <main id="app">
+      <header class="app-header">
+        <div class="brand">
+          <div>
+            <h1>FORM LAB<span id="tool-version" class="version"></span></h1>
+          </div>
+        </div>
+        <nav aria-label="Document actions">
+          <button id="open">Open</button
+          ><button id="save">Save project <span>↗</span></button
+          ><button id="help" class="square" aria-label="Language reference">
+            ?
+          </button>
+        </nav>
+      </header>
+      <div class="project-bar">
+        <span class="project-dot" aria-hidden="true"></span>
+        <label class="asset-name"
+          ><span class="sr-only">Study name</span
+          ><input id="document-name" maxlength="120" value="Wave study"
+        /></label>
+        <span class="project-format">FORM STUDY / .FORMLAB</span
+        ><span id="save-state" role="status" hidden></span>
+        <label class="example-picker"
+          >EXAMPLES
+          <select id="examples" aria-label="Examples">
+            <option value="">Choose an example</option>
+          </select></label
+        >
+      </div>
+      <!-- Layout presets remain available in code while this toolbar is hidden. -->
+      <div class="workspace-bar" hidden>
+        <span class="workspace-label">WORKSPACE</span>
+        <div class="layout-controls" role="group" aria-label="Workspace layout">
+          <button data-layout="balanced">Balanced</button><button data-layout="script">Script</button><button data-layout="preview">Preview</button>
+        </div>
+        <span class="workspace-hint">ONE SCRIPT. MANY POSSIBILITIES.</span>
+        <button id="recipes">Recipes <span>↗</span></button>
+      </div>
+      <section class="workbench">
+        <section class="editor-panel" aria-label="Script editor">
+          <div class="panel-heading">
+            <h2><span>01</span> SCRIPT</h2>
+            <div class="run-controls">
+              <label class="live-toggle"
+                ><input type="checkbox" id="live" checked /> Live</label
+              ><button id="run" class="primary">Run <span>▶</span></button>
+            </div>
+          </div>
+          <div class="editor-file" hidden>
+            <span>●</span> <span id="editor-filename">wave-study.form</span>
+          </div>
+          <div id="editor"></div>
+          <div class="editor-bottom">
+            <span id="cursor-position">Ln 1, Col 1</span><button id="reference-link" class="editor-reference" aria-label="FORM SCRIPT language reference">Script Reference</button>
+          </div>
+          <div id="diagnostic" class="diagnostic" role="status">
+            <span class="status-dot"></span
+            ><span id="diagnostic-text">Preparing your workspace…</span><button id="error-location" hidden>Go to error ↗</button>
+          </div>
+        </section>
+        <section id="preview-panel" class="preview-panel" aria-label="Geometry preview">
+          <div class="panel-heading">
+            <h2>
+              <span>02</span> PREVIEW
+              <span id="preview-status" role="status" data-state="pending"
+                >Pending Changes</span
+              >
+            </h2>
+            <div class="preview-actions">
+              <button id="shaded" class="selected" aria-pressed="true">
+                Shaded</button
+              ><button id="points-mode" aria-pressed="false">Points</button
+              ><button id="frame" title="Frame all geometry (F)">
+                Frame <code>F</code>
+              </button>
+              <button id="reset-camera" title="Reset camera (0)">Reset</button>
+            </div>
+          </div>
+          <div id="output-toolbar" class="output-toolbar"></div>
+          <div class="viewport-wrap">
+            <canvas
+              id="viewport"
+              tabindex="0"
+              aria-label="3D geometry viewport. Drag to orbit, shift drag to pan, scroll to zoom. Arrow keys orbit; F frames all geometry."
+            ></canvas>
+            <details class="viewport-title"><summary id="scene-title">Wave study</summary><span id="example-kind">SURFACE STUDY / 001</span></details>
+            <div id="gpu-error" class="gpu-error" hidden></div>
+            <div class="axis-label">
+              <span class="axis-y">Y ↑</span><span>Z ↙</span
+              ><span class="axis-x">X →</span>
+            </div>
+            <div class="viewport-help">
+              DRAG TO ORBIT <span>·</span> SHIFT + DRAG TO PAN
+              <span>·</span> SCROLL TO ZOOM <span>·</span> CLICK TO INSPECT
+            </div>
+          </div>
+          <div class="preview-bottom">
+            <label
+              ><input id="project-info" type="checkbox" checked /> Project info</label
+            >
+            <label
+              ><input id="grid" type="checkbox" checked title="Editor-only line grid; minor spacing follows 1/2/5 world units, major lines mark five divisions" /> Line grid</label
+            ><label
+              >Point Size
+              <input
+                id="point-size"
+                type="range"
+                min="1"
+                max="6"
+                step="0.5"
+                value="2"
+                aria-label="Point size"
+            /></label>
+            <div class="viewport-backend">
+              <span class="status-dot"></span
+              ><span id="backend">STARTING JOY ENGINE</span>
+            </div>
+          </div>
+          <details id="attribute-panel" class="attribute-panel"></details>
+          <section class="generation" aria-label="Current generated geometry">
+            <div class="generation-summary">
+              <span>Generation Time: <b id="build-time">—</b></span>
+              <span
+                title="Numeric geometry payload, excluding JavaScript array overhead, preview buffers, and exports"
+                >Data Size: <b id="data-size">—</b></span
+              >
+              <span>Vertices: <b id="vertex-count">—</b></span>
+              <span>Polygons: <b id="triangle-count">—</b></span>
+              <span>Points: <b id="point-count">—</b></span>
+            </div>
+          </section>
+        </section>
+        <aside class="inspector" aria-label="Parameters and output">
+          <div class="panel-heading">
+            <h2><span>03</span> INSPECTOR</h2>
+            <button id="reset">Reset</button>
+          </div>
+          <div class="inspector-tabs" role="tablist" aria-label="Inspector sections">
+            <button role="tab" id="parameters-tab" data-inspector-tab="parameters" aria-controls="parameters-section">Parameters</button>
+            <button role="tab" id="variants-tab" data-inspector-tab="variants" aria-controls="variants-section">Variants</button>
+            <button role="tab" id="materials-tab" data-inspector-tab="materials" aria-controls="materials-section">Materials</button>
+          </div>
+          <div class="inspector-content">
+            <section id="parameters-section" data-inspector-panel="parameters" role="tabpanel" aria-labelledby="parameters-tab">
+            <label class="parameter-search"><span class="sr-only">Find parameter</span><input id="parameter-search" type="search" placeholder="Find a parameter…" aria-label="Find parameter" /></label>
+            <p class="section-kicker">WATCH SMALL CHANGES TAKE SHAPE.</p>
+            <p id="override-state" class="numeric-guidance">Parameter overrides and materials are saved in the FORM LAB document.</p>
+            <div class="property-history"><button id="property-undo" disabled>Undo property</button><button id="property-redo" disabled>Redo property</button></div>
+            <p class="numeric-guidance">Type a value · Shift + arrows fine · Alt + arrows coarse. Source has separate editor undo.</p>
+            <div id="parameters"></div>
+            <p id="parameter-empty" hidden>No matching parameters.</p>
+            </section>
+
+            <section id="variants-section" data-inspector-panel="variants" role="tabpanel" aria-labelledby="variants-tab" aria-label="Parameter variants"></section>
+            <section id="materials-section" data-inspector-panel="materials" role="tabpanel" aria-labelledby="materials-tab" class="material-panel" aria-label="Materials">
+              <h3>MATERIALS</h3>
+              <p>Linear RGB · Select in script with <code>material(Name)</code>. Vertex colors multiply base color.</p>
+              <div id="materials"></div>
+              <p>GPU metallic/roughness lighting. MaterialX supports constant gltf_pbr inputs only.</p>
+            </section>
+          </div>
+            <div class="export-panel">
+              <h3>TAKE IT WITH YOU</h3>
+              <label for="export-format">EXPORT FORMAT</label
+              ><select id="export-format">
+                <option value="glb">GLB · Geometry + materials</option>
+                <option value="obj">OBJ · Geometry + points</option>
+                <option value="json">JSON · All data</option></select
+              ><button id="export" class="export-button" disabled>
+                EXPORT DATA <span>↓</span>
+              </button>
+              <p title="Lighting and background are editor-only. GLB retains authored materials; OBJ omits materials." id="export-note">Exports the last successful build.</p>
+            </div>
+        </aside>
+      </section>
+      <footer class="app-footer">
+        <span><a href="../../"><b>JOY-GAMES</b></a> / FORM LAB</span>
+        <span id="footer-status">LOCAL WORKSPACE · NO CLOUD REQUIRED</span>
+      </footer>
+    </main>
+    <input
+      id="file-input"
+      type="file"
+      accept=".formlab,.form,.txt,.json"
+      hidden
+    />
+    <dialog id="reference-dialog">
+      <div class="dialog-header">
+        <div>
+          <p class="section-kicker">THE FORM SCRIPT FIELD GUIDE</p>
+          <h2>A FEW WORDS.<br />INFINITE WHAT-IFS.</h2>
+        </div>
+        <button id="close-help" aria-label="Close language reference">✕</button>
+      </div>
+      <p>
+        Write commands, change a number, see what happens. Distances use your
+        own units, Y points up, and angles are in radians. Comments start with
+        <code>#</code> or <code>//</code>.
+      </p>
+      <div id="procedural-recipes"></div>
+      <section class="procedural-reference">
+        <h3>GEOMETRY YOU CAN KEEP WORKING ON</h3>
+        <p><code>let g = grid(columns, rows, width, depth)</code> creates a reusable surface. <code>geometry()</code> starts empty; <code>geometry(mesh)</code> makes a mesh editable. Bindings share geometry; <code>copy(g)</code> makes an independent copy.</p>
+        <pre>addAttribute(g, "points", "density", 0)
+color(g, rgba(1,1,1,1))
+wrangle points in g as point {
+  point.position = point.position + vector(0, 1, 0)
+  point.density = noise(point.position.x, point.position.z, 7777)
+  if point.density &gt; 0 { point.color = rgba(1, 0.4, 0.2, 1) }
+}
+output("Surface", g)
+inspect("Intermediate", g)</pre>
+        <p>Wrangle <code>points</code>, <code>faces</code>, <code>corners</code>, or <code>instances</code>. <code>point.index</code> is the current element index. Both <code>in</code> and a named <code>as</code> binding are required: <code>wrangle points in g as point</code>. Update existing scalar, XYZ, or RGBA attributes with <code>point.name = value</code>; missing reads and writes report an error. Declare fields first with <code>addAttribute(g, "points", "density", 0)</code>, or create/set point colors with <code>color(g, rgba(1,1,1,1))</code>. Declarations initialize existing elements and reject duplicate names; later topology additions receive zero defaults. Use <code>corner.uv = vector(u,v,0)</code> in <code>wrangle corners in g as corner</code> on corners for seams. Position edits clear authored normals; write normals afterward.</p>
+        <p><code>addPoint(g, vector(...))</code> and <code>addFace(g, a,b,c)</code> return indices. <code>removePoint(g, index)</code> also removes incident faces. <code>removeFace(g, index)</code> removes a face and its corners. Edit topology outside wrangles; removals compact indices.</p>
+        <p><code>attribute(g, "points", "density", index)</code> reads another element. <code>setAttribute(g, "points", "density", index, value)</code> updates an existing field outside a wrangle. Use <code>addAttribute</code> outside wrangles to create fields on points, faces, corners, or an assembly’s instances. <code>pointCount(g)</code> and <code>faceCount(g)</code> support custom loops.</p>
+        <p>Define a named record with <code>let homeData = {kind: "home", settings: {capacity: 4}}</code>, then group its geometry with <code>with userData(homeData) { point(0, 0, 0) }</code>. Nested blocks restore the previous record on exit; local variables stay inside the block. The existing <code>userData(record)</code> command still sets data for subsequent vertices; <code>userData()</code> clears it. Records support nested objects, arrays, text, numbers, booleans, and null. Use <code>setUserData(g, pointIndex, record)</code> and <code>userData(g, pointIndex)</code> for editable geometry. The USER DATA column and JSON export retain records; OBJ, PLY, and GLB do not. Records are separate from colors and numeric attributes.</p>
+        <p><code>revolve(profile, segments)</code> turns ordered <code>vector(radius,height,0)</code> points around Y (3–96 segments). Bottom-to-top profiles face outward; radius-zero ends close at a pole. <code>tube(path, radius, sides)</code> sweeps ordered XYZ points with 3–64 sides and open ends. Both require 2–512 distinct adjacent points and create new geometry with corner UVs and smooth normals. Sharp tube bends may self-intersect. <code>smoothNormals(g)</code> returns an independent copy with area-weighted point normals after deformation.</p>
+        <p><code>scatter(g, count, seed[, "density"])</code> samples triangle area and an optional nonnegative scalar point weight, interpolating point attributes. <code>instances(source, sites[, material])</code> retains a source and independent placement data. Point <code>point.position</code>, <code>point.rotation</code> (XYZ radians), <code>point.scale</code> (nonzero XYZ), and <code>point.color</code> drive placement. Use <code>wrangle instances in assembly as point</code> to edit it.</p>
+        <p><code>output("Name", value)</code> snapshots a result and includes it in the full build. <code>inspect("Name", value)</code> snapshots it for inspection only. Choose a result above the viewport, then open ATTRIBUTES. Click an index or viewport element to select it; scalar/color fields can be visualized as markers. Export always uses the complete build.</p>
+        <p>Vectors support <code>+ - * /</code> with vectors or scalars. <code>mix</code> supports vectors/colors. <code>length</code>, <code>normalize</code>, <code>dot</code>, <code>cross</code>, <code>smoothstep(low,high,value)</code>, and deterministic <code>noise(x,y,z)</code> simplify fields and transforms. Comparisons return 0 or 1. Noise is in −1…1.</p>
+      </section>
+      <div class="reference-grid">
+        <section>
+          <h3>MAKE SOMETHING</h3>
+          <pre>
+point(x, y, z)
+box(x, y, z, width, height, depth)
+sphere(x, y, z, radius, segments)
+triangle(ax, ay, az, bx, by, bz, cx, cy, cz)
+color(red, green, blue, alpha)
+color(tint)
+material(Steel)
+material()
+normal(0, 1, 0)
+normal()
+uv(u, v)</pre>
+          <p>
+            Colors and UVs are 0–1; alpha is optional and defaults to 1. Sphere segments
+            are optional (default 20). Color applies to following commands. Add named materials in the inspector, then select them with material(Name); material() returns to Default.
+          </p>
+        </section>
+        <section>
+          <h3>MAKE IT YOURS</h3>
+          <pre>
+project meta(name="Wave study",
+  info="SURFACE STUDY", title="MAKE WAVES.")
+
+param plank = meshBox(1, 0.2, 2)
+param finish = materialPbr(rgba(0.9, 0.4, 0.2, 1), 0, 0.6)
+material(finish)
+instance(plank, vector(0, 1, 0))
+let bent = deform(plank, x, y + x*x, z)
+instance(bent, vector(3, 0, 0))
+
+param height = 3 meta(min=0, max=10, step=0.1)
+param offset = vector(0, 1, 0)
+  meta(min=-5, max=5, step=0.1)
+param tint = rgba(1, 0.4, 0.2, 1)
+color(tint)
+point(offset.x, offset.y, offset.z)
+let angle = pi / 4
+repeat 20 as i {
+  point(cos(i) * 4, i * 0.2, sin(i) * 4)
+}</pre>
+          <p>
+            Metadata controls the saved name and preview heading. Parameters
+            infer scalar, vector, color, mesh, or material controls from their defaults; use
+            component names such as <code>.x</code> or <code>.r</code> in
+            expressions. Bounds keep defaults and editor values in range.
+            Parameters live outside loops, whose indices begin at zero.
+          </p>
+        </section>
+        <section>
+          <h3>MAKE A LANDSCAPE</h3>
+          <pre>
+surface(64, 64, 20, 20,
+  sin(x * 0.5) * cos(z * 0.5) * 3
+)</pre>
+          <p>
+            Columns, rows, width, depth, height expression. Inside the height
+            expression, <code>x,z</code> are world coordinates and
+            <code>u,v</code> run from 0 to 1.
+          </p>
+        </section>
+        <section>
+          <h3>A LITTLE MATH</h3>
+          <pre>
++ - * / % ^     pi tau e
+sin cos tan abs sqrt floor ceil round
+exp log min(a,b) max(a,b) pow(a,b)
+atan2(y,x) clamp(x,min,max) mix(a,b,t)
+seed(42)
+rand() # 0–1, deterministic each run</pre>
+          <p>
+            Use <code>floor()</code> for calculated repeat counts. Scripts
+            cannot access files, network, or JavaScript.
+          </p>
+        </section>
+      </div>
+      <p class="limits">
+        Limits: 150,000 vertices · 180,000 triangles · 2 million operations · 2
+        second worker timeout. Point previews sample at most 40,000 markers;
+        exports contain every point.
+      </p>
+    </dialog>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

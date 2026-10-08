@@ -1,0 +1,37 @@
+/* Copyright (c) 2026 Trent Polack. All Rights Reserved.
+ * Licensed under the MIT License.
+ */
+
+/* Development chrome owns its palette; game HUD colors remain independent. */
+.joy-dev-tools, .joy-config-tools, .joy-post-editor, .joy-dev-widget, .performance {
+  --joy-dev-widget-font: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --joy-dev-widget-accent: #ed6c39;
+  --joy-dev-widget-background: #080b16;
+  --joy-dev-widget-input: #050711;
+  --joy-dev-widget-text: #eeeeee;
+  --joy-dev-widget-muted: #b2b8cb;
+  --joy-dev-widget-line: #34394b;
+  --joy-dev-widget-error: #ff8e8e;
+  color-scheme: dark;
+  color: var(--joy-dev-widget-text);
+}
+
+:is(.joy-dev-tools, .joy-config-tools, .joy-post-editor, .joy-dev-widget, .performance) button {
+  border-radius: 0;
+}
+
+:is(.joy-dev-tools, .joy-config-tools, .joy-post-editor, .joy-dev-widget, .performance) button:hover:not(:disabled) {
+  color: var(--joy-dev-widget-background);
+  background: var(--joy-dev-widget-accent);
+  border-color: var(--joy-dev-widget-accent);
+}
+
+:is(.joy-dev-tools, .joy-config-tools, .joy-post-editor, .joy-dev-widget, .performance) :focus-visible {
+  outline: 2px solid var(--joy-dev-widget-accent);
+  outline-offset: 2px;
+}
+
+:is(.joy-dev-tools, .joy-config-tools, .joy-post-editor, .joy-dev-widget, .performance) button:disabled {
+  opacity: .45;
+  cursor: default;
+}

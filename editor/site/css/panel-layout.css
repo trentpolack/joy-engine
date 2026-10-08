@@ -1,0 +1,31 @@
+/* Copyright (c) 2026 Trent Polack. Licensed under the MIT License. */
+.joy-panel-layout { position: relative; grid-template-columns: var(--edit-width) minmax(280px, 1fr) var(--inspect-width) !important; }
+.joy-panel-layout .layout-left { grid-column: 1; }
+.joy-panel-layout .layout-center { grid-column: 2; }
+.joy-panel-layout .layout-right { grid-column: 3; }
+.layout-divider { position: absolute; width: 10px; z-index: 8; cursor: col-resize; touch-action: none; }
+.layout-divider:hover, .layout-divider:focus-visible { background: #ed6c3970; outline: 1px solid #ed6c39; }
+.panel-resizing iframe, .panel-resizing canvas { pointer-events: none; }
+.joy-panel-layout.viewport-maximized { grid-template-columns: minmax(0, 1fr) !important; }
+.joy-panel-layout.viewport-maximized .layout-left, .joy-panel-layout.viewport-maximized .layout-right,
+.joy-panel-layout.viewport-maximized .layout-divider { display: none !important; }
+.joy-panel-layout.viewport-maximized .layout-center { grid-column: 1 / -1; grid-row: 1 / -1; }
+.level-editor.viewport-maximized .layout-center { grid-row: 2; }
+.joy-panel-layout.layout-compact:not(.viewport-maximized) { grid-template-columns: minmax(160px, .7fr) minmax(260px, 1.3fr) !important; grid-template-rows: minmax(200px, 1fr) 220px; }
+.joy-panel-layout.layout-compact .layout-left { grid-column: 1 !important; grid-row: 1 / 3 !important; }
+.joy-panel-layout.layout-compact .layout-center { grid-column: 2 !important; grid-row: 1 !important; }
+.joy-panel-layout.layout-compact .layout-right { grid-column: 2 !important; grid-row: 2 !important; }
+.joy-panel-layout.layout-compact .layout-divider { display: none; }
+.level-editor.layout-compact:not(.viewport-maximized) { grid-template-rows: auto minmax(200px, 1fr) 220px 27px; }
+.level-editor.layout-compact .layout-left { grid-row: 2 / 4; }
+.level-editor.layout-compact .layout-center { grid-row: 2; }
+.level-editor.layout-compact .layout-right { grid-row: 3; }
+.joy-hosted .layout-maximize { font-size: 10px; padding: 6px; min-height: 28px; }
+
+.level-editor.layout-compact .layout-left { display:block; grid-row:2 / 4 !important; }
+.level-editor.layout-compact .layout-center { grid-row:2 !important; }
+.level-editor.layout-compact .layout-right { grid-column:2 !important; grid-row:3 !important; }
+.level-editor.viewport-maximized .layout-center { grid-column:1 / -1 !important; grid-row:2 !important; }
+
+.joy-hosted .preview-actions button { min-height:32px; min-width:36px; padding:6px 8px; font-size:10px; }
+.lab-workspace-maximized > .app-header, .lab-workspace-maximized > .project-bar { display: none; }

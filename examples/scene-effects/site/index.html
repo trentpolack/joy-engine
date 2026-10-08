@@ -1,0 +1,40 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Trent Polack. All Rights Reserved. -->
+<!-- Licensed under the MIT License. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Joy Scene Effects Lab</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+  <main>
+    <section class="viewport">
+      <header><small>JOY ENGINE / RENDERING LAB</small><h1>LIGHT / SPACE</h1><p>A reproducible room for scene effects.</p></header>
+      <canvas id="world" tabindex="0" aria-label="Scene effects room. Drag to orbit and scroll to zoom."></canvas>
+      <footer><p>Drag to orbit · scroll to zoom</p><pre id="stats" aria-live="polite">Initializing renderer…</pre></footer>
+    </section>
+    <aside>
+      <details open><summary>CONFIG</summary>
+        <label class="select">Quality <select id="quality"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
+        <div id="effects"></div>
+        <label class="effect"><input id="bloom" type="checkbox"><span>HDR bloom<small>Bright ceiling strip exceeds linear intensity 1.</small></span></label>
+        <div class="buttons"><button id="baseline">All off</button><button id="combined">Combined</button></div>
+        <h2>Temporal tests</h2>
+        <label><input id="objectMotion" type="checkbox"> Moving object</label>
+        <label><input id="cameraMotion" type="checkbox"> Camera motion</label>
+        <label><input id="paused" type="checkbox" checked> Fixed simulation time</label>
+        <label class="select">Time (seconds) <input id="time" type="number" value="2" min="0" step="0.0166667"></label>
+        <div class="buttons"><button id="step">Step 1/60 s</button><button id="cut">Camera cut</button><button id="replace">Replace scene</button><button id="reset">Reset history</button><button id="resize">Resize test</button></div>
+      </details>
+      <details><summary>JOY-EDITOR</summary><p>This procedural test scene is configured here. Launch the separate editor with <code>npm run dev:editor</code>.</p></details>
+      <details><summary>Capabilities</summary><pre id="capabilities">Awaiting device…</pre></details>
+      <p class="note">CPU submission and animation-frame cadence are measured separately. GPU execution time is unavailable in this example.</p>
+    </aside>
+  </main>
+  <div id="failure" role="alert" hidden></div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

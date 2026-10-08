@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1b293d" />
+    <meta
+      name="description"
+      content="PARTICLE LAB — script layered effects with a live Joy Engine preview."
+    />
+    <title>PARTICLE LAB · Joy Games</title>
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body>
+    <main id="app">
+      <header class="app-header">
+        <div class="brand">
+          <div>
+            <h1>PARTICLE LAB<span id="tool-version" class="version"></span></h1>
+          </div>
+        </div>
+        <nav aria-label="Document actions">
+          <button id="open">Open</button><button id="save">Save <code>.joyfx</code> <span>↗</span></button
+          ><button id="help" class="square" aria-label="Script Reference" aria-haspopup="dialog">
+            ?
+          </button>
+        </nav>
+      </header>
+      <div class="project-bar">
+        <span class="project-dot" aria-hidden="true"></span
+        ><label class="asset-name"
+          ><span class="sr-only">Asset name</span><input id="asset-name" maxlength="80"
+        /></label>
+        <span class="project-format">PARTICLE ASSET / .JOYFX</span>
+        <label class="example-picker"
+          >EXAMPLES
+          <select id="examples" aria-label="Examples"></select
+        ></label>
+      </div>
+      <section class="workspace">
+        <section class="panel inspector-panel" aria-label="Emitter composition and scripts">
+          <div class="panel-heading">
+            <h2><span>01</span> Compose</h2>
+            <div class="apply-row">
+              <label class="check"><input id="live" type="checkbox" checked /> Live</label
+              ><button id="apply" class="primary" title="Apply (Ctrl+Enter)">Apply</button>
+            </div>
+          </div>
+          <div class="emitter-heading">
+            <span>Emitter Stack</span
+            ><button id="add-emitter" title="Add emitter" aria-label="Add emitter">+ Add</button>
+          </div>
+          <p id="selected-emitter" class="numeric-guidance"></p>
+          <div id="emitter-list" class="emitter-list"></div>
+          <div class="emitter-actions">
+            <button id="duplicate-emitter">Duplicate</button
+            ><button id="delete-emitter" class="danger">Delete</button>
+          </div>
+          <div class="tabs" role="tablist">
+            <button data-tab="emitter" aria-pressed="true">EMITTER</button
+            ><button data-tab="spawn">SPAWN SCRIPT</button
+            ><button data-tab="update">UPDATE SCRIPT</button
+            >
+          </div>
+          <div id="emitter-tab" class="tab-page"></div>
+          <div id="spawn-tab" class="tab-page script-page" hidden>
+            <div id="spawn-source" class="script-editor"></div>
+          </div>
+          <div id="update-tab" class="tab-page script-page" hidden>
+            <div id="update-source" class="script-editor"></div>
+          </div>
+          <pre id="error" class="error" aria-live="polite" hidden></pre>
+          <div class="editor-bottom">
+            <span>SPAWN / UPDATE</span><span>Ctrl / Cmd + Enter to apply</span>
+          </div>
+        </section>
+        <section id="preview-panel" class="stage" aria-label="Particle preview">
+          <div class="panel-heading">
+            <h2><span>02</span> Preview <small id="diagnostic">LIVE</small></h2>
+            <div class="preview-actions">
+              <span class="panel-note">Y-UP / PERSPECTIVE</span
+              ><button id="frame-effect" title="Frame current particles (F)">Frame <code>F</code></button
+              ><button id="reset-camera" title="Reset camera (0)">Reset</button>
+            </div>
+          </div>
+          <div class="stage-toolbar">
+            <button id="restart" title="Restart (R)">↺ Restart</button
+            ><button id="play" class="primary" aria-pressed="true">Ⅱ Pause</button
+            ><button id="step" title="Step one 60 Hz tick">Step</button
+            ><label>Seed <input id="seed" type="number" value="7777" step="1" /></label
+            ><label
+              >Speed
+              <select id="speed">
+                <option value="0.25">¼×</option>
+                <option value="0.5">½×</option>
+                <option value="1" selected>1×</option>
+                <option value="2">2×</option>
+                <option value="4">4×</option>
+              </select></label
+            ><label class="check"><input id="loop" type="checkbox" checked /> Loop</label>
+          </div>
+          <div class="viewport-wrap">
+            <canvas
+              id="viewport"
+              tabindex="0"
+              aria-label="3D particle preview. Drag to orbit, shift drag to pan, scroll to zoom. Arrow keys orbit; F frames the effect; 0 resets the camera."
+            ></canvas>
+            <div class="viewport-label">DRAG TO ORBIT · SHIFT + DRAG TO PAN · SCROLL TO ZOOM</div>
+            <div id="gpu-error" class="gpu-error" hidden></div>
+          </div>
+          <div class="preview-options">
+            <label class="check"><input id="grid-toggle" type="checkbox" checked title="Editor-only lines; minor spacing follows 1/2/5 world units, major lines mark five divisions" /> Line grid</label>
+            <label>Editor background <select id="preview-background"><option value="midnight">Midnight</option><option value="slate" selected>Slate</option><option value="gray">Gray</option><option value="cream">Cream</option><option value="black">Black</option></select></label>
+            <label class="check"><input id="light-receiver" type="checkbox" /> Light receiver (editor only)</label>
+          </div>
+          <div class="preview-options"><label>Replay window <select id="replay-window"><option value="full">Full effect</option><option value="2">2 seconds</option><option value="5">5 seconds</option><option value="custom">Custom</option></select></label><input id="replay-custom" aria-label="Custom replay seconds" type="number" min="0.01" max="30" step="0.01" value="2" hidden><span class="numeric-guidance">Editor only · restart on change · Loop repeats the window</span></div>
+          <div class="timeline">
+            <span id="time">0.00 s</span
+            ><input
+              id="timeline"
+              aria-label="Timeline"
+              type="range"
+              min="0"
+              max="6"
+              value="0"
+              step="0.01"
+            /><span id="duration">6.00 s</span>
+          </div>
+          <div class="diagnostics joy-dev-widget">
+            <span><b id="particle-count">0</b> PARTICLES</span
+            ><span><b id="dropped-count">0</b> DROPPED</span><span id="backend">GPU …</span
+            ><label class="performance-mode">MONITOR <select id="performance-mode"><option value="disabled">Disabled</option><option value="overview" selected>Overview</option><option value="detailed">Detailed profiling</option></select></label>
+          </div>
+          <section id="performance" class="performance" aria-label="Preview performance">
+            <div class="performance-summary">
+              <span>Range <b id="render-range">—</b></span><span>Preview FPS <b id="preview-fps">—</b></span>
+              <span title="Average simulation CPU time per animation frame over the refresh window.">Simulation CPU <b id="simulation-ms">—</b></span><span title="Last rendered frame; includes sorting and batch assembly.">Geometry CPU <b id="geometry-ms">—</b></span>
+              <span title="Last rendered frame: CPU upload and command submission, not GPU execution time.">Submit CPU <b id="submission-ms">—</b></span>
+              <span title="Nonempty scene geometry batches; excludes post-processing and is not observed backend draws.">Scene batches <b id="scene-batches">0</b></span>
+              <span>Triangles <b id="triangle-count">0</b></span><span>Lights <b id="light-count">0</b></span>
+            </div>
+            <div id="performance-details" hidden>
+              <p>Sort + batch CPU <b id="sort-ms">—</b> · Vertices <b id="vertex-count">0</b> · Vertex payload <b id="vertex-payload">—</b> (excludes uniforms and textures)</p>
+              <p>CPU timings only; GPU time unavailable. Spawn/update: ms per simulation step; geometry: last render. Totals start when detailed profiling is enabled and reset on restart, seek or loop. Detailed profiling adds per-particle timing overhead.</p>
+              <div class="performance-table"><table><thead><tr><th>Emitter</th><th>Live</th><th>Spawn CPU</th><th>Update CPU</th><th>Geometry CPU</th><th>Triangles</th><th>Lights</th><th>Spawned Total</th><th>Dropped Total</th><th>Operations Total</th></tr></thead><tbody id="emitter-performance"></tbody></table></div>
+            </div>
+          </section>
+        </section>
+        <aside class="panel library-panel" aria-label="Exposed effect parameters">
+          <div class="panel-heading">
+            <h2><span>03</span> Effect Parameters</h2>
+            <button id="add-parameter" title="Add parameter" aria-label="Add parameter">
+              + Add
+            </button>
+          </div>
+          <div class="inspector-content">
+            <p class="section-kicker">SHAPE THE MOTION. FIND THE FEEL.</p>
+            <p id="effect-ownership" class="numeric-guidance">Whole effect · saved in .joyfx. Save exports the current definition; LIVE marks the accepted audition.</p>
+            <div class="property-history"><button id="property-undo" disabled>Undo property</button><button id="property-redo" disabled>Redo property</button></div>
+            <p class="numeric-guidance">Type directly · Shift + arrows fine · Alt + arrows coarse. Script undo is separate.</p>
+            <div id="parameter-list" class="parameter-list"></div>
+            <div class="asset-note">
+              <h3>TAKE IT WITH YOU</h3>
+              <p>Save a <code>.joyfx</code> asset to use this effect in any Joy Engine project.</p>
+            </div>
+          </div>
+        </aside>
+      </section>
+      <footer class="app-footer">
+        <span><a href="../../"><b>JOY-GAMES</b></a> / PARTICLE LAB</span>
+        <span>LOCAL WORKSPACE · NO CLOUD REQUIRED</span>
+      </footer>
+    </main>
+    <input id="file-input" type="file" accept=".joyfx,.json,application/json" hidden />
+    <input id="texture-input" type="file" accept="image/png" hidden />
+    <dialog id="reference-dialog" class="reference-dialog">
+      <div class="reference-heading">
+        <div>
+          <span class="eyebrow">BOUNDED PARTICLE LANGUAGE</span>
+          <h2>Script Reference</h2>
+        </div>
+        <button id="close-reference" aria-label="Close reference">×</button>
+      </div>
+      <p>
+        Particles use XYZ world space, with Y up in the perspective preview. Size is in world units; rotation and spin roll the camera-facing sprite. PARTICLE LAB uses its own deterministic language, not JavaScript.
+      </p>
+      <h3>Particle Values</h3>
+      <p><b>Writable containers:</b> <code>position</code>, <code>velocity</code>, and <code>acceleration</code> are vectors with <code>.x</code>, <code>.y</code>, <code>.z</code> components. <code>color</code> has <code>.r</code>, <code>.g</code>, <code>.b</code>, <code>.a</code> components.</p>
+      <p><b>Whole values:</b> <code>velocity = vector(0, 80, 0);</code> <code>color = rgba(1, 0.4, 0.1, 1);</code> <code>position = origin + vector(0, 10, 0);</code> <code>velocity += acceleration * dt;</code> Component writes such as <code>color.a = 1 - t;</code> remain available.</p>
+      <p><b>Writable scalars:</b> <code>drag</code>, <code>size</code>, <code>rotation</code>, <code>spin</code>, <code>lifetime</code>, <code>lightIntensity</code>, <code>lightRange</code>, and <code>u0</code>–<code>u3</code>.</p>
+      <p><code>u0</code>–<code>u3</code> are four custom numeric storage slots per particle. They start at zero and persist from spawn through updates; use them to remember an initial size, random phase, or other authored state. Local <code>let</code> values last only for that script invocation.</p>
+      <p><b>Read only:</b> <code>origin</code> is the root or parent spawn position; <code>parentVelocity</code> is the parent's velocity at child birth (zero for roots). Both are vectors. Other inputs are <code>dt</code>, <code>age</code>, <code>t</code>, <code>index</code>, <code>time</code>, <code>pi</code>, <code>tau</code>, and named properties.</p>
+      <p>Vector and color properties use the same component accessors, for example <code>wind.x</code> or <code>tint.a</code>, and can be copied whole: <code>color = tint;</code> Color properties use RGBA in <code>0–1</code>; scripted particle RGB may exceed one for HDR brightness. Alpha is opacity. Optional lights inherit particle RGB and alpha.</p>
+      <p>Existing version-1 scalar spellings such as <code>vx</code>, <code>alpha</code>, <code>originX</code>, <code>parentVx</code>, and vector-property <code>X/Y/Z</code> suffixes remain readable for saved assets.</p>
+      <h3>Expressions</h3>
+      <p>
+        Use <code>let</code>, assignments, <code>+= -= *= /=</code>, and
+        <code>if (...) { ... } else { ... }</code>. Operators:
+        <code>+ - * / % ^ &lt; &gt; &lt;= &gt;= == != &amp;&amp; || !</code>.
+      </p>
+      <p>
+        <b>Functions:</b> <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>abs</code>, <code>sqrt</code>, <code>floor</code>, <code>ceil</code>, <code>round</code>, <code>exp</code>, <code>log</code>, <code>min</code>, <code>max</code>, <code>pow</code>, <code>atan2</code>, <code>clamp</code>, <code>mix</code>, <code>smoothstep</code>, <code>noise</code>, <code>rand</code>, <code>vector</code>, and <code>rgba</code>.
+      </p>
+      <p>Vectors/colors support same-type addition and subtraction, scalar multiplication and division, and <code>mix(a, b, t)</code>. Assignments copy values. Conditions, comparisons, and other math functions use scalars.</p>
+      <h3>Children and Limits</h3>
+      <p>
+        Root emitters run their timeline. Trail and death links spawn particles directly from a
+        child template, inherit parent velocity inputs, and stop after four child generations.
+        Assets allow up to 4,096 live particles, 128 bursts per emitter, 30 seconds per
+        timeline/lifetime, and bounded spawn work. Loops, arbitrary objects, strings, dynamic indexing, and browser or
+        host calls are unavailable.
+      </p>
+    </dialog>
+    <dialog id="emitter-chooser" aria-labelledby="emitter-chooser-title">
+      <h2 id="emitter-chooser-title">Add emitter</h2>
+      <p>Insert one emitter into this effect.</p>
+      <div id="emitter-presets"></div>
+      <button id="cancel-emitter">Cancel</button>
+    </dialog>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

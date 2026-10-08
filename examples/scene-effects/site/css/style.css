@@ -1,0 +1,36 @@
+/* Copyright (c) 2026 Trent Polack. All Rights Reserved. */
+/* Licensed under the MIT License. */
+:root { color-scheme: dark; font-family: system-ui,sans-serif; color: #e8edf5; background: #10131a; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { display: grid; grid-template-columns: minmax(0,1fr) 310px; min-height: 100vh; }
+.viewport { position: relative; min-height: 700px; overflow: hidden; background: #11141c; }
+#world { width: 100%; height: 100vh; min-height: 700px; display: block; touch-action: none; outline: none; }
+header { position: absolute; top: 26px; left: 30px; pointer-events: none; text-shadow: 0 2px 8px #000; }
+header small { color: #b7c0d3; font-size: 11px; letter-spacing: 0.2em; }
+h1 { margin: 8px 0; font-size: clamp(26px,3vw,44px); letter-spacing: -0.04em; font-weight: 500; }
+header p,footer p { margin: 0; color: #b7c0d3; font-size: 13px; }
+footer { position: absolute; bottom: 22px; left: 30px; right: 25px; pointer-events: none; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.5; }
+aside { padding: 18px; max-height: 100vh; overflow-y: auto; border-left: 1px solid #2b3343; background: #191e29; }
+details { border-bottom: 1px solid #354054; padding: 8px 0 14px; margin-bottom: 12px; }
+summary { cursor: pointer; font-size: 12px; letter-spacing: 0.12em; margin-bottom: 14px; font-weight: 700; }
+label { display: flex; align-items: center; gap: 10px; font-size: 13px; margin: 12px 0; }
+.effect { align-items: start; margin: 13px 0; }
+.effect input { margin-top: 3px; }
+.effect span { line-height: 1.25; }
+.effect small { display: block; color: #9ba9c0; font-size: 11px; line-height: 1.4; margin-top: 3px; }
+input[type=checkbox] { accent-color: #fea465; }
+.select { justify-content: space-between; }
+select,input[type=number] { border: 1px solid #47526b; background: #242d3e; color: inherit; border-radius: 4px; padding: 5px; width: 110px; }
+button { background: #2a3447; color: #eef3fd; border: 1px solid #47526b; padding: 8px 9px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+button:hover { background: #3b4c65; }
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible { outline: 2px solid #fea465; outline-offset: 2px; }
+.buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0; }
+h2 { font-size: 12px; margin-top: 24px; color: #d1d9e7; }
+.note,details p { font-size: 11px; color: #9ba9c0; line-height: 1.6; }
+#failure { position: fixed; inset: 20%; padding: 30px; border: 1px solid #e58770; background: #301b20; white-space: pre-wrap; }
+body[data-compact=true] #world { height: 560px; min-height: 560px; }
+body[data-compact=true] .viewport { min-height: 560px; align-self: start; }
+@media(max-width:850px) { main { grid-template-columns: minmax(0,1fr) 260px; } aside { padding: 12px; } header,footer { left: 18px; } }
+@media(max-width:600px) { main { display: block; } #world,.viewport { height: 65vh; min-height: 440px; } aside { max-height: none; border-left: 0; } }

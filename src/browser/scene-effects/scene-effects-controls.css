@@ -1,0 +1,91 @@
+/* Copyright (c) 2026 Trent Polack. All Rights Reserved. */
+/* Licensed under the MIT License. */
+.joy-scene-effects-controls {
+  position: relative;
+  color: var(--joy-text, #e1e7ef);
+  font: 11px system-ui,sans-serif;
+}
+.joy-scene-effects-controls > summary {
+  cursor: pointer;
+  border: 1px solid var(--joy-line, #465267);
+  background: var(--joy-field, #253045);
+  padding: 6px 8px;
+  list-style: none;
+  white-space: nowrap;
+}
+.joy-scene-effects-controls > summary:focus-visible {
+  outline: 2px solid var(--joy-orange, #fea465);
+  outline-offset: 2px;
+}
+.joy-scene-effects-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 7px);
+  right: 0;
+  width: 260px;
+  max-height: min(560px,65vh,var(--joy-scene-effects-room,65vh));
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--joy-panel, #192231);
+  border: 1px solid var(--joy-line, #465267);
+  box-shadow: 0 8px 24px #0006;
+}
+.joy-scene-effects-controls[data-placement=above] .joy-scene-effects-panel {
+  top: auto;
+  bottom: calc(100% + 7px);
+}
+.joy-scene-effects-panel strong {
+  font-size: 12px;
+}
+.joy-scene-effects-panel fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.joy-scene-effects-panel .joy-scene-effects-note,
+.joy-scene-effects-panel .joy-scene-effects-status {
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 8px 0;
+  color: var(--joy-muted, #a3b1c6);
+}
+.joy-scene-effects-panel .joy-scene-effects-status[data-error=true] {
+  color: #ffad92;
+}
+.joy-scene-effects-panel .joy-scene-effects-status {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 0;
+  background: var(--joy-panel, #192231);
+}
+.joy-scene-effects-panel .joy-scene-effects-select {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 0;
+  font-size: 11px;
+}
+.joy-scene-effects-panel .joy-scene-effects-select select {
+  width: 145px;
+  padding: 4px;
+  color: inherit;
+  background: var(--joy-field, #253045);
+  border: 1px solid var(--joy-line, #465267);
+}
+.joy-scene-effects-panel .joy-scene-effects-toggle {
+  display: flex;
+  justify-content: start;
+  align-items: center;
+  gap: 8px;
+  margin: 9px 0;
+  font-size: 11px;
+}
+.joy-scene-effects-panel .joy-scene-effects-toggle input {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--joy-orange, #fea465);
+}

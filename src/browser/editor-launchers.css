@@ -1,0 +1,79 @@
+/* Copyright (c) 2026 Trent Polack. All Rights Reserved. */
+/* Licensed under the MIT License. */
+
+/* A viewport-local row: fixed positioning remains inside an embedded iframe.
+ * The reservation disappears when the last development tool is destroyed. */
+:root:has(.joy-dev-tools, .joy-config-tools, .joy-post-editor) {
+  --joy-dev-dock-count: 1;
+  --joy-dev-dock-gap: 8px;
+  --joy-dev-dock-height: 36px;
+  --joy-dev-dock-right: max(12px, env(safe-area-inset-right));
+  --joy-dev-dock-bottom: max(12px, env(safe-area-inset-bottom));
+  --joy-dev-dock-width: min(104px, calc((100vw - var(--joy-dev-dock-right) - max(12px, env(safe-area-inset-left)) - (var(--joy-dev-dock-count) - 1)*var(--joy-dev-dock-gap))/var(--joy-dev-dock-count)));
+  --joy-dev-dock-reserved-width: calc(var(--joy-dev-dock-right) + var(--joy-dev-dock-count)*var(--joy-dev-dock-width) + var(--joy-dev-dock-count)*var(--joy-dev-dock-gap));
+  --joy-dev-dock-reserved-height: calc(var(--joy-dev-dock-bottom) + var(--joy-dev-dock-height) + var(--joy-dev-dock-gap));
+}
+
+:root:has(.joy-dev-tools):has(.joy-config-tools),
+:root:has(.joy-dev-tools):has(.joy-post-editor),
+:root:has(.joy-config-tools):has(.joy-post-editor) {
+  --joy-dev-dock-count: 2;
+}
+
+:root:has(.joy-dev-tools):has(.joy-config-tools):has(.joy-post-editor) {
+  --joy-dev-dock-count: 3;
+}
+
+.joy-dev-tools, .joy-config-tools, .joy-post-editor {
+  right: var(--joy-dev-dock-right);
+  bottom: var(--joy-dev-dock-bottom);
+}
+
+.joy-dev-tools .joy-dev-summary,
+.joy-config-tools .joy-config-launcher,
+.joy-post-editor .joy-post-toggle {
+  --joy-dev-dock-slot: 0;
+  box-sizing: border-box;
+  position: fixed;
+  right: calc(var(--joy-dev-dock-right) + var(--joy-dev-dock-slot)*(var(--joy-dev-dock-width) + var(--joy-dev-dock-gap)));
+  bottom: var(--joy-dev-dock-bottom);
+  width: var(--joy-dev-dock-width);
+  height: var(--joy-dev-dock-height);
+  min-height: var(--joy-dev-dock-height);
+  padding: 5px 7px;
+  color: var(--joy-dev-widget-accent);
+  background: var(--joy-dev-widget-background);
+  border: 1px solid var(--joy-dev-widget-accent);
+  border-radius: 0;
+  font: 700 12px/1.45 var(--joy-dev-widget-font);
+  letter-spacing: normal;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+body:has(.joy-post-editor) .joy-config-launcher,
+body:has(.joy-post-editor, .joy-config-tools) .joy-dev-summary {
+  --joy-dev-dock-slot: 1;
+}
+
+body:has(.joy-post-editor):has(.joy-config-tools) .joy-dev-summary {
+  --joy-dev-dock-slot: 2;
+}
+
+/* All panels open above the row at the same right edge. Their owners coordinate
+ * visibility, so expanding one does not cover another menu or its launcher. */
+.joy-dev-tools .joy-dev-panel,
+.joy-config-tools .joy-config-panel,
+.joy-post-editor .joy-post-panel {
+  position: fixed;
+  right: var(--joy-dev-dock-right);
+  bottom: var(--joy-dev-dock-reserved-height);
+  max-width: calc(100vw - var(--joy-dev-dock-right) - max(12px, env(safe-area-inset-left)));
+  max-height: min(720px, calc(100dvh - var(--joy-dev-dock-reserved-height) - 12px));
+}
+
+@media (max-width: 380px) {
+  .joy-dev-summary [data-stat="fps"] {
+    display: none;
+  }
+}

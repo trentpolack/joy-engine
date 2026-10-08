@@ -1,0 +1,419 @@
+@import "./theme.css";
+
+:root {
+  font-family: 'Archivo', sans-serif;
+  color: var(--joy-text);
+  background: var(--joy-canvas);
+  font-synthesis: none;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+button {
+  border: 1px solid var(--joy-line);
+  background: var(--joy-surface);
+  color: var(--joy-text);
+  border-radius: 0;
+  padding: 7px 9px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+
+button:hover {
+  color: white;
+  border-color: var(--joy-orange-hover);
+}
+
+button:disabled {
+  opacity: .3;
+  cursor: default;
+}
+
+button.active, button.primary {
+  color: var(--joy-canvas);
+  border-color: var(--joy-orange);
+  background: var(--joy-orange);
+}
+
+input, select, textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--joy-line);
+  border-radius: 0;
+  padding: 7px;
+  background: var(--joy-field);
+  color: var(--joy-text);
+  outline: none;
+}
+
+input:focus, textarea:focus {
+  border-color: var(--joy-orange);
+}
+
+label {
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  color: var(--joy-muted);
+}
+
+label input {
+  margin-top: 6px;
+  font-size: 12px;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+
+.level-editor {
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 160px minmax(180px, 1fr) 300px;
+  grid-template-rows: auto minmax(0, 1fr) 27px;
+}
+
+.level-toolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 10px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--joy-line);
+  background: var(--joy-surface);
+}
+
+.level-toolbar strong {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--joy-orange);
+  letter-spacing: -.03em;
+  margin-right: 12px;
+}
+
+.level-toolbar strong span {
+  color: var(--joy-muted);
+  font-size: 9px;
+  margin-left: 5px;
+  letter-spacing: .08em;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.outliner, .inspector {
+  padding: 14px 12px;
+  overflow: auto;
+  background: var(--joy-surface);
+}
+
+.outliner {
+  border-right: 1px solid var(--joy-line);
+}
+
+.inspector {
+  border-left: 1px solid var(--joy-line);
+}
+
+h2, h3 {
+  font-size: 10px;
+  margin: 0 0 18px;
+  color: var(--joy-orange);
+  font-weight: 900;
+  letter-spacing: .07em;
+}
+
+h2 span, h3 span {
+  display: block;
+  color: var(--joy-muted);
+  font-size: 8px;
+  margin-top: 5px;
+  font-weight: 400;
+}
+
+h3 {
+  margin-top: 22px;
+  margin-bottom: 12px;
+}
+
+h3 span {
+  display: inline;
+  margin-left: 4px;
+}
+
+#entities {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 18px -5px 0;
+}
+
+.entity-row {
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.entity-row.selected {
+  background: var(--joy-field);
+  color: var(--joy-text);
+  border-color: var(--joy-orange);
+}
+
+.entity-row small {
+  display: block;
+  margin-top: 4px;
+  color: var(--joy-muted);
+  font-size: 9px;
+}
+
+.outliner-note, #no-selection, .component-help {
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--joy-muted);
+}
+
+.outliner-note {
+  margin-top: 25px;
+}
+
+.viewport {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--joy-canvas);
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  touch-action: none;
+}
+
+.viewport-toolbar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.viewport-toolbar label {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.viewport-toolbar input {
+  width: 47px;
+  margin: 0;
+  padding: 5px;
+  font-size: 10px;
+  background: var(--joy-field);
+}
+
+.viewport-help {
+  position: absolute;
+  bottom: 9px;
+  left: 12px;
+  right: 12px;
+  text-align: center;
+  font-size: 8px;
+  color: var(--joy-muted);
+  letter-spacing: .06em;
+  pointer-events: none;
+}
+
+.viewport-corner {
+  position: absolute;
+  left: 14px;
+  bottom: 40px;
+  font-size: 8px;
+  color: var(--joy-muted);
+  letter-spacing: .06em;
+  pointer-events: none;
+}
+
+.viewport-corner b {
+  color: var(--joy-muted);
+  margin-right: 10px;
+}
+
+#properties > label {
+  margin-bottom: 12px;
+}
+
+.transform-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-bottom: 12px;
+}
+
+.transform-row legend {
+  grid-column: 1 / -1;
+  font-size: 9px;
+  color: var(--joy-muted);
+  margin-bottom: 4px;
+}
+
+.transform-row label {
+  font-size: 8px;
+}
+
+.transform-row input {
+  padding: 6px 3px;
+  font-size: 10px;
+}
+
+#components {
+  min-height: 210px;
+  resize: vertical;
+  font-family: monospace;
+  line-height: 1.5;
+  font-size: 10px;
+  tab-size: 2;
+}
+
+#apply-components {
+  width: 100%;
+  margin-top: 8px;
+}
+
+footer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  font-size: 9px;
+  color: var(--joy-muted);
+  border-top: 1px solid var(--joy-line);
+  background: var(--joy-canvas);
+}
+
+.status-dot {
+  width: 5px;
+  height: 5px;
+  background: #a3b773;
+  border-radius: 100%;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+@media(max-width: 850px) {
+  .level-editor {
+    grid-template-columns: 128px minmax(160px, 1fr) 195px;
+  }
+  .level-toolbar strong span {
+    display: none;
+  }
+  .level-toolbar {
+    gap: 3px;
+  }
+  .level-toolbar button {
+    padding: 7px 6px;
+    font-size: 8px;
+  }
+}
+
+@media(max-width: 590px) {
+  .level-editor {
+    grid-template-columns: minmax(160px, 1fr) 185px;
+  }
+  .outliner {
+    display: none;
+  }
+  .level-toolbar strong {
+    font-size: 10px;
+    margin-right: 2px;
+  }
+}
+
+/* The specialist-tool bridge also styles generic main/inspector elements. Keep this
+   tool's own three-column layout when it is embedded in the workspace. */
+
+.joy-hosted main.level-editor {
+  display: grid;
+}
+
+.level-editor > .outliner {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.level-editor > .viewport {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.joy-hosted .level-editor > .inspector, .level-editor > .inspector {
+  grid-column: 3;
+  grid-row: 2;
+  border-top: 0;
+}
+
+@media(max-width: 590px) {
+  .level-editor > .viewport {
+    grid-column: 1;
+  }
+  .joy-hosted .level-editor > .inspector, .level-editor > .inspector {
+    grid-column: 2;
+  }
+}
+
+.level-toolbar select { max-width: 180px; width: auto; font-size: 11px; }
+.property-group { margin: 10px 0; border: 1px solid var(--joy-line); background: var(--joy-canvas); }
+.property-group > summary { padding: 10px; text-transform: uppercase; color: var(--joy-text); font-size: 11px; font-weight: 600; cursor: pointer; }
+.property-contents { padding: 8px; }
+.property-row { display: grid; grid-template-columns: minmax(0, 1fr) 22px; gap: 6px; margin-bottom: 12px; align-items: center; }
+.property-row > label { grid-column: 1 / -1; overflow-wrap: anywhere; color: var(--joy-muted); text-transform: uppercase; }
+.property-row > input, .property-row > select { grid-column: 1; font-size: 12px; }
+.property-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--joy-orange); }
+.property-row > .remove-property { grid-column: 2; grid-row: 2; }
+.remove-property { padding: 3px 5px; color: var(--joy-muted); }
+.property-add { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 12px; }
+.property-add input { width: 110px; flex: 1; }
+.property-add select { width: 72px; font-size: 10px; }
+.component-actions { display: flex; gap: 6px; }
+.component-actions select { font-size: 11px; }
+.advanced-source { margin-top: 24px; color: var(--joy-muted); font-size: 10px; }
+.advanced-source summary { cursor: pointer; padding: 8px 0; }
+.instance-actions { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+#instance-source { font-size: 10px; overflow-wrap: anywhere; display: block; }
+#instance-overrides { display: block; margin-top: 6px; color: var(--joy-muted); font-size: 10px; }
+.inspector, .outliner { scrollbar-color: #8192a9 var(--joy-field); scrollbar-width: thin; }
+@media(max-width: 1000px) { .level-editor { grid-template-columns: 120px minmax(160px, 1fr) 260px; } }
+@media(max-width: 720px) { .level-editor { grid-template-columns: minmax(160px, 1fr) 240px; } .outliner { display: none; } .level-editor > .viewport { grid-column: 1; } .joy-hosted .level-editor > .inspector, .level-editor > .inspector { grid-column: 2; } }
+
+.property-vector { border: 0; padding: 0; margin: 14px 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.property-vector legend { color: var(--joy-muted); font-size: 9px; margin-bottom: 8px; }
+.property-vector input { padding: 7px 3px; font-size: 11px; }

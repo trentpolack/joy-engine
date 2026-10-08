@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Joy level",
+  "description": "A lightweight Joy Engine level. Procedural games may omit authored entities and use only shared scene settings.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "name", "entities"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "version": {"const": 1},
+    "name": {"type": "string", "minLength": 1},
+    "postProcessing": {"$ref": "post-processing.schema.json"},
+    "entities": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/entity"}
+    }
+  },
+  "definitions": {
+    "vector3": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number"}},
+    "entity": {
+      "type": "object",
+      "required": ["id", "name", "type", "transform", "components"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "type": {"type": "string", "minLength": 1},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "transform": {
+          "type": "object",
+          "required": ["position", "rotation", "scale"],
+          "properties": {"position": {"$ref": "#/definitions/vector3"}, "rotation": {"$ref": "#/definitions/vector3"}, "scale": {"$ref": "#/definitions/vector3"}}
+        },
+        "components": {"type": "object"},
+        "source": {"type": "string"},
+        "overrides": {"type": "object"}
+      }
+    }
+  }
+}

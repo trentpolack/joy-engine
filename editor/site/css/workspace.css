@@ -1,0 +1,164 @@
+/* Copyright (c) 2026 Trent Polack. Licensed under the MIT License. */
+
+:root {
+    color-scheme: dark;
+    font: 14px Arial, sans-serif;
+    color: #e7edf5;
+    background: #101a27;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-width: 720px;
+    height: 100vh;
+    overflow: hidden;
+}
+
+button {
+    border: 1px solid #4d607a;
+    padding: 8px 12px;
+    color: inherit;
+    background: #20334c;
+    cursor: pointer;
+}
+
+button:hover,
+button[aria-pressed='true'] {
+    border-color: #ed6c39;
+    background: #34445a;
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+header {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    height: 52px;
+    padding: 0 18px;
+    border-bottom: 1px solid #33445b;
+    background: #172438;
+}
+
+header strong {
+    color: #ff8252;
+    letter-spacing: 2px;
+}
+
+header span {
+    color: #a9b7c9;
+}
+
+header button {
+    margin-left: auto;
+}
+
+main {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    height: calc(100vh - 52px);
+}
+
+aside {
+    overflow: auto;
+    padding: 18px;
+    border-right: 1px solid #33445b;
+    background: #142131;
+}
+
+h1 {
+    margin: 0 0 10px;
+    font-size: 18px;
+}
+
+aside>p {
+    overflow-wrap: anywhere;
+    color: #91a2b8;
+    line-height: 1.5;
+}
+
+nav section {
+    margin-top: 16px;
+    padding: 12px;
+    border-left: 2px solid #ed6c39;
+    background: #1a2a3e;
+}
+
+nav h2 {
+    margin: 0 0 6px;
+    font-size: 13px;
+}
+
+nav p,
+nav small {
+    margin: 0;
+    color: #91a2b8;
+}
+
+nav small {
+    display: block;
+    margin-top: 7px;
+    line-height: 1.4;
+}
+
+.workbench {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-width: 0;
+    background: #0a111c;
+}
+
+.toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid #33445b;
+    background: #19283b;
+}
+
+.toolbar b {
+    margin-right: 8px;
+    color: #ff8252;
+    letter-spacing: 1px;
+}
+
+.toolbar span {
+    margin-right: auto;
+    color: #9dafc3;
+}
+
+.toolbar span[data-error='true'] {
+    color: #ff9b83;
+}
+
+#empty {
+    align-self: center;
+    max-width: 580px;
+    margin: auto;
+    padding: 40px;
+    text-align: center;
+    color: #91a2b8;
+}
+
+#empty h2 {
+    color: #e7edf5;
+}
+
+#preview {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: #05080d;
+}
+
+body[data-preview='hidden'] .workbench {
+    background: repeating-linear-gradient(135deg, #0c1521, #0c1521 16px, #101b29 16px, #101b29 32px);
+}

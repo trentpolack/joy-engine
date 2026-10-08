@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="theme-color" content="#101722">
+    <title>Joy Editor</title>
+  </head>
+  <body>
+    <main id="workspace" class="preview-collapsed">
+      <header class="workspace-header">
+        <a class="brand" href="/editor/" aria-label="Joy Editor home"><span class="brand-mark">J</span><span>JOY <b>EDITOR</b></span></a>
+        <div class="header-divider"></div>
+        <label class="project-picker"><span>PROJECT</span><select id="project" aria-label="Active project"></select></label>
+        <button id="open-folder" hidden>Open Folder</button>
+        <div class="header-spacer"></div>
+        <button id="assets-toggle" aria-expanded="true">Content Browser</button>
+        <button id="run" class="primary">▶ Play</button>
+        <select id="play-mode" aria-label="Play destination"><option value="docked">Docked</option><option value="editor" selected>Joy Editor Tab</option><option value="browser">Browser Tab</option><option value="window">Standalone Window</option></select>
+        <select id="play-size" aria-label="Standalone content size" hidden><option value="fit">Fit to Screen</option><option value="720">720p · 1280×720</option><option value="1080">1080p · 1920×1080</option><option value="custom">Custom…</option></select>
+        <button id="pause" disabled>Pause</button><button id="stop" disabled>Stop</button><button id="restart" disabled title="Restart using selected Play destination; resets simulation">Restart</button>
+        <button id="finish-external" hidden>Finish External Preview</button>
+        <span id="connection" class="sr-only" role="status" aria-live="polite">Preview stopped</span>
+        <button id="preview-mode" title="Focus existing game preview" disabled>Focus Game</button>
+        <span id="document-state" role="status">LOCAL FILES</span><button id="save" class="primary" disabled>Save File <kbd>⌘ S</kbd></button>
+      </header>
+      <div class="workspace-body">
+        <aside class="content-browser">
+          <div class="section-title"><span>CONTENT BROWSER</span><button id="refresh" aria-label="Refresh project content" title="Refresh content">↻</button></div>
+          <div class="search-row">
+            <label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find an asset…" aria-label="Search project content"></label>
+            <div class="filter-control">
+              <button id="filter-toggle" aria-label="Filter assets" title="Filter assets" aria-expanded="false" aria-controls="asset-filters"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6 7v6l-4 2v-8z"/></svg><span id="filter-count" hidden aria-hidden="true"></span></button>
+              <div id="asset-filters" class="filter-popover" hidden role="group" aria-label="Asset types">
+                <button id="filter-all">All types</button>
+                <label><input type="checkbox" value="form"> FORM</label>
+                <label><input type="checkbox" value="joyfx"> Effects</label>
+                <label><input type="checkbox" value="joylevel"> Levels</label>
+                <label><input type="checkbox" value="joyobject"> Objects</label>
+              </div>
+            </div>
+          </div>
+          <div class="asset-actions"><button id="new-asset">+ New</button><button id="import-asset">Import</button></div>
+          <form id="new-asset-form" class="new-asset-form" hidden>
+            <label><span>TYPE</span><select id="new-asset-type" aria-label="New asset type"><option value="joylevel">Level</option><option value="joyobject">Object</option><option value="formlab" selected>FORM LAB document (.formlab)</option><option value="joyfx">Particle effect</option></select></label>
+            <label><span>NAME</span><input id="new-asset-name" autocomplete="off" placeholder="asset-name" aria-label="New asset name"></label>
+            <p id="new-asset-hint" class="asset-hint">FORM LAB saves script, parameter overrides, materials and variants.</p>
+            <div><button type="submit" class="primary">Create</button><button id="cancel-new-asset" type="button">Cancel</button></div>
+          </form>
+          <p class="asset-hint import-hint">Import .form, .formlab, .joyfx, .joylevel or .joyobject files.</p>
+          <input id="import-file" type="file" accept=".joylevel,.joyobject,.form,.formlab,.joyfx" hidden>
+          <div id="files" class="file-tree"></div>
+          <details class="project-details"><summary>Project Details</summary><span class="section-title">LOCAL PROJECT</span><strong id="project-label">Connecting…</strong><code id="project-path"></code></details>
+          <button id="workspace-help-open" class="workspace-help-open" aria-haspopup="dialog" aria-controls="workspace-help">Documentation ↗</button>
+        </aside>
+        <div id="assets-divider" class="assets-divider" role="separator" tabindex="0" aria-label="Resize Content Browser" aria-orientation="vertical"></div><section class="document-area" aria-label="Content workspace">
+          <div id="tabs" class="tabs" role="tablist" aria-label="Open documents"></div>
+          <div class="document-toolbar"><button id="return-owner" hidden>← Return to Object</button></div>
+          <div id="conflict" class="conflict" hidden><span>This file changed on disk. Your edits are still here.</span><button id="reload-disk">Use Disk Version</button><button id="keep-local">Keep My Edits</button></div>
+          <div id="editors" class="editors"><div id="empty" class="empty-state"><span class="empty-mark">J</span><h1>A place for your next idea.</h1><p>Open a FORM, particle or level asset from the project.<br>Edit it here. See it in the game.</p><button id="open-first" class="primary">Open Project Content</button><small>Same files. One workspace.</small></div></div>
+        </section>
+        <div id="preview-divider" class="divider" role="separator" aria-label="Resize game preview" tabindex="0" aria-orientation="vertical"></div>
+        <aside id="preview-panel" class="game-panel">
+          <div class="section-title"><span>GAME PREVIEW</span><button id="toggle-preview" title="Collapse preview" aria-label="Collapse game preview">→</button></div>
+
+          <div id="game-stage" class="game-stage"><div id="preview-placeholder" class="preview-placeholder"><span>↗</span><h2>Keep the game close.</h2><p>Run the project to see saved content in context.</p></div></div>
+          <div class="runtime-info" id="runtime-info"><button id="regenerate" hidden>Regenerate World</button><p id="runtime-note">Asset previews use the selected tool. The game preview uses your project's renderer.</p><a id="external-preview" href="#" target="_blank" rel="noopener">Open Game in Browser ↗</a></div>
+        </aside>
+      </div>
+      <footer><span class="status-dot"></span><span id="status" role="status">Connecting to local project…</span><button id="show-preview" hidden>Show Game Preview</button><button id="regenerate-global" hidden>Regenerate World</button><span class="footer-spacer"></span><span id="file-count"></span><span>JOY ENGINE</span></footer>
+    </main>
+    <div id="asset-menu" class="asset-menu" role="menu" aria-label="Asset actions" hidden>
+      <button id="rename-asset" role="menuitem">Rename <kbd>F2</kbd></button>
+    </div>
+    <dialog id="workspace-help" aria-labelledby="workspace-help-title">
+      <div class="dialog-header">
+        <h2 id="workspace-help-title">Joy Editor Documentation</h2>
+        <button id="workspace-help-close" aria-label="Close documentation">Close</button>
+      </div>
+      <section>
+        <h3>New and Import</h3>
+        <p><strong>New</strong> creates a starter asset in this project. Choose FORM LAB document (.formlab) to keep the script, parameter overrides, materials and variants together. Level, Object and Particle effect create their respective documents.</p>
+        <p><strong>Import</strong> copies an existing .form, .formlab, .joyfx, .joylevel or .joyobject file into the project. A raw .form keeps its script format: parameter sliders affect its preview; edit script defaults to persist values. Saved Inspector material edits and variants require .formlab.</p>
+        <p>GLB geometry can be loaded into a FORM mesh parameter. That geometry-only import does not preserve a full scene or its materials; workspace Import accepts the editable formats listed above.</p>
+      </section>
+      <section>
+        <h3>Preview and Save</h3>
+        <p>A preview accepting your changes means the tool can display them. <strong>Save File</strong> (Ctrl/Command+S) writes them to the project file. Save preserves the document format; it does not export or convert it. Save source assets to refresh dependent previews.</p>
+      </section>
+      <section>
+        <h3>Play destinations</h3>
+        <p>Choose Docked, Joy Editor Tab, Browser Tab or Standalone Window, then press <strong>Play</strong>. Changing the destination alone does not launch it. Play focuses an existing session; Restart starts a fresh session in the selected destination. Stop returns to authoring.</p>
+      </section>
+      <section>
+        <h3>Canvas focus and cameras</h3>
+        <p>Click the tool canvas before using camera shortcuts. Drag to orbit; Shift-drag, right-drag or middle-drag to pan; scroll to zoom. With canvas focus, <strong>F</strong> frames the content and <strong>0</strong> resets the camera.</p>
+      </section>
+      <p><a href="https://github.com/trentpolack/JoyGames/blob/feature/editor-workflow-v2-pass2/joy-editor/README.md" target="_blank" rel="noopener">Read the full Joy Editor guide ↗</a></p>
+    </dialog>
+    <div id="path-tooltip" class="path-tooltip" role="tooltip" hidden></div>
+    <script type="module" src="./src/workspace/main.ts"></script>
+  </body>
+</html>

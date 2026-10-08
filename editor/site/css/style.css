@@ -1,0 +1,308 @@
+@import "./theme.css";
+/* Copyright (c) 2026 Trent Polack. Licensed under the MIT License. */
+
+/* Shared Joy Editor styling. Tool-specific workbench layouts remain with each tool. */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button:hover {
+  border-color: var(--orange);
+  color: var(--orange-hover);
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+button span {
+  margin-left: 12px;
+}
+
+input[type='checkbox'] {
+  accent-color: var(--orange);
+  margin: 0;
+}
+
+.app-header {
+  height: 104px;
+  border-bottom: 7px solid var(--orange);
+  display: flex;
+  align-items: center;
+  gap: 30px;
+  padding: 18px 28px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+
+.version {
+  font:
+    500 10px Archivo,
+    sans-serif;
+  letter-spacing: 0;
+  border: 1px solid var(--orange);
+  padding: 3px 5px;
+  vertical-align: top;
+  margin-left: 10px;
+}
+
+.brand p {
+  font:
+    10px ui-monospace,
+    monospace;
+  letter-spacing: 2px;
+  margin: 10px 0 0;
+  color: var(--cream);
+}
+
+.header-copy {
+  border-left: 1px solid var(--line);
+  padding-left: 28px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.header-copy strong {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.app-header nav {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.app-header .joy-editor-navigation {
+  position: relative;
+  margin-left: auto;
+}
+
+.app-header .joy-editor-navigation + nav {
+  margin-left: 0;
+}
+
+.joy-editor-switcher summary {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 13px;
+  color: var(--cream);
+  border: 1px solid var(--line);
+  font: 600 11px/1 Archivo, sans-serif;
+  letter-spacing: 1.4px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.joy-editor-switcher summary::-webkit-details-marker {
+  display: none;
+}
+
+.joy-editor-switcher[open] summary,
+.joy-editor-switcher summary:hover {
+  color: var(--orange-hover);
+  border-color: var(--orange);
+}
+
+.joy-editor-grid {
+  width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  color: var(--background);
+  background: var(--orange);
+  font: 700 17px/1 ui-monospace, monospace;
+}
+
+.joy-editor-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(390px, calc(100vw - 24px));
+  padding: 14px;
+  color: var(--text);
+  background: #152338;
+  border: 1px solid var(--orange);
+  box-shadow: 9px 9px 0 rgb(7 15 27 / 45%);
+}
+
+.joy-editor-menu-heading {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 2px 12px;
+  color: var(--orange);
+  font: 600 11px/1 ui-monospace, monospace;
+  letter-spacing: 1.2px;
+}
+
+.joy-editor-menu-heading small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.joy-editor-tools {
+  display: grid;
+  gap: 7px;
+}
+
+.joy-editor-tool {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 11px;
+  padding: 12px;
+  color: var(--text);
+  border: 1px solid var(--line);
+  text-decoration: none;
+}
+
+.joy-editor-tool:hover,
+.joy-editor-tool.current {
+  border-color: var(--orange);
+  background: rgb(237 108 57 / 9%);
+}
+
+.joy-editor-tool-key {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  color: var(--orange);
+  border: 1px solid var(--orange);
+  font: 600 12px/1 ui-monospace, monospace;
+}
+
+.joy-editor-tool strong,
+.joy-editor-tool small,
+.joy-editor-tool code {
+  display: block;
+}
+
+.joy-editor-tool strong {
+  margin-bottom: 5px;
+  font: 600 13px/1 Archivo, sans-serif;
+  letter-spacing: 0.5px;
+}
+
+.joy-editor-tool small {
+  margin-bottom: 7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.joy-editor-tool code {
+  color: var(--orange-hover);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.joy-editor-file-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 7px;
+}
+
+.joy-editor-file-actions button {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 11px;
+  font-size: 11px;
+}
+
+.joy-editor-file-actions button span {
+  margin: 0;
+}
+
+.joy-editor-file-actions kbd {
+  color: var(--muted);
+  font: 9px/1 ui-monospace, monospace;
+}
+
+.joy-editor-home {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding: 10px 2px 1px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.joy-editor-home:hover {
+  color: var(--orange-hover);
+}
+
+@media (max-width: 920px) {
+  .app-header .joy-editor-navigation {
+    margin-left: 0;
+  }
+
+  .joy-editor-switcher summary > span:not(.joy-editor-grid):not(:last-child) {
+    display: none;
+  }
+}
+
+.app-header .square {
+  padding: 12px 16px;
+}
+
+.example-picker select {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.panel-heading {
+  min-height: 57px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+h2 > span {
+  color: var(--orange);
+  margin-right: 8px;
+  font:
+    11px ui-monospace,
+    monospace;
+}
+
+.primary:hover {
+  background: var(--orange-hover);
+  color: #182435;
+}
+
+/* Embedded document editors inherit the workspace's file and project navigation. */
+.joy-hosted .app-header,
+.joy-hosted .project-bar,
+.joy-hosted .joy-editor-navigation,
+.joy-hosted footer { display: none !important; }
+.joy-hosted #app { min-height: 0; height: 100dvh; }
+.joy-hosted .app { min-height: 0; height: 100dvh; }
+.joy-raw-form #variants-section,
+.joy-raw-form #materials-section,
+.joy-raw-form [data-inspector-tab="variants"],
+.joy-raw-form [data-inspector-tab="materials"] { display: none !important; }
+
+/* Reference dialogs use the same link treatment in both labs. */
+.editor-reference { color: var(--joy-orange); font-size: 11px; min-height: 30px; padding: 4px 6px; letter-spacing: 0; }
+.editor-reference:hover { color: var(--joy-orange-hover); text-decoration: underline; }

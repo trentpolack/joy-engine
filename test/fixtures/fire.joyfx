@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "God Game fire",
+  "maxParticles": 48,
+  "parameters": {},
+  "emitters": [
+    {
+      "id": "fire",
+      "enabled": true,
+      "root": true,
+      "duration": 3,
+      "rate": 14,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 10
+        }
+      ],
+      "lifetime": 1.5,
+      "renderer": "soft",
+      "spawn": "position.x = origin.x + rand(-0.8, 0.8);\nposition.z = origin.z + rand(-0.8, 0.8);\nvelocity.y = rand(1.2, 2.5);\nsize = rand(0.3, 0.65);\ncolor.r = 3; color.g = rand(0.3, 0.8); color.b = 0.03;",
+      "update": "size = max(0.02, size - dt * 0.15);\ncolor.a = 1 - t;"
+    }
+  ]
+}

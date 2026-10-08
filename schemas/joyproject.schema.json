@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Joy project",
+  "description": "Project-owned preview and asset capability settings for Joy Editor.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "preview", "capabilities"],
+  "properties": {
+    "$schema": {
+      "$ref": "#/definitions/text",
+      "description": "Editor schema reference, resolved relative to this manifest. Not loaded by the runtime."
+    },
+    "schemaVersion": {
+      "const": 1,
+      "description": "Manifest format version."
+    },
+    "name": {
+      "$ref": "#/definitions/text",
+      "description": "Project display name."
+    },
+    "preview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "entry"],
+      "properties": {
+        "root": {
+          "$ref": "#/definitions/relativePath",
+          "description": "Preview directory relative to the project root."
+        },
+        "entry": {
+          "$ref": "#/definitions/relativePath",
+          "description": "HTML entry point relative to the preview root."
+        }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "Project editor capabilities. IDs must be unique within this array.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "extensions", "assetRoot", "renderer"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "description": "Unique lowercase kebab-case capability identifier."
+          },
+          "label": {
+            "$ref": "#/definitions/text",
+            "description": "Capability display label."
+          },
+          "extensions": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Supported asset extensions, including the leading dot.",
+            "items": {
+              "type": "string",
+              "pattern": "^\\.[a-zA-Z0-9]+$"
+            }
+          },
+          "assetRoot": {
+            "$ref": "#/definitions/relativePath",
+            "description": "Directory containing this capability's assets, relative to the project root."
+          },
+          "renderer": {
+            "$ref": "#/definitions/text",
+            "description": "Joy Engine renderer family used to preview these assets."
+          },
+          "features": {
+            "type": "object",
+            "description": "Project-specific feature switches exposed to the editor.",
+            "additionalProperties": {"type": "boolean"},
+            "default": {}
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "text": {
+      "type": "string",
+      "pattern": "\\S"
+    },
+    "relativePath": {
+      "type": "string",
+      "description": "Non-empty relative path without absolute prefixes or parent traversal.",
+      "pattern": "^\\S(?:.*\\S)?$",
+      "not": {
+        "anyOf": [
+          {"pattern": "^[\\\\/]"},
+          {"pattern": "^[A-Za-z]:"},
+          {"pattern": "(^|[\\\\/])\\.\\.([\\\\/]|$)"}
+        ]
+      }
+    }
+  }
+}

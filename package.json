@@ -1,0 +1,75 @@
+{
+  "name": "joy-engine",
+  "version": "0.12.0",
+  "private": true,
+  "description": "Browser-native WebGPU/WebGL 2 game engine built on luma.gl: rendering, particles, gameplay, physics and development tooling.",
+  "author": "Trent Polack",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24.18.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trentpolack/joy-engine.git"
+  },
+  "workspaces": [
+    "examples/*",
+    "editor",
+    "editor/tools/*"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./development": "./src/development.ts",
+    "./development/editor": "./src/development/mount-config-editor.ts",
+    "./development/preview": "./src/development/connect-editor-preview.ts",
+    "./development/vite": "./src/development/vite.ts",
+    "./post-processing": "./src/post-processing.ts",
+    "./shaders/*": "./shaders/*",
+    "./dev/widget-theme.css": "./src/browser/dev-widget-theme.css",
+    "./dev/post-processing": "./src/browser/post-processing/editor.ts",
+    "./form": "./src/form/index.ts",
+    "./levels": "./src/gameplay/level-document.ts",
+    "./objects": "./src/gameplay/object-document.ts",
+    "./project-manifest": "./src/project/project-manifest.ts",
+    "./constants": "./src/constants.ts",
+    "./schemas/*": "./schemas/*",
+    "./testing/register-raw-loader": "./scripts/testing/register-raw-loader.mjs",
+    "./tsconfig.base.json": "./tsconfig.base.json",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "joy-check-javascript": "scripts/check-javascript.mjs"
+  },
+  "files": [
+    "src",
+    "shaders",
+    "schemas",
+    "assets",
+    "scripts",
+    "tsconfig.base.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "check": "tsc --project tsconfig.json && node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts test",
+    "test": "node --import ./scripts/testing/register-raw-loader.mjs --test test/*.test.mjs",
+    "docs:api": "node scripts/generate-api.mjs"
+  },
+  "dependencies": {
+    "@loaders.gl/core": "^4.5.2",
+    "@loaders.gl/gltf": "^4.5.2",
+    "@luma.gl/core": "^9.4.2",
+    "@luma.gl/effects": "^9.4.2",
+    "@luma.gl/engine": "^9.4.2",
+    "@luma.gl/shadertools": "^9.4.2",
+    "@luma.gl/webgl": "^9.4.2",
+    "@luma.gl/webgpu": "^9.4.2",
+    "cannon-es": "^0.20.0"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.74",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2"
+  }
+}

@@ -1,0 +1,33 @@
+/* Copyright (c) 2026 Trent Polack. Licensed under the MIT License. */
+:root {
+  color-scheme: dark;
+  --joy-orange: #ed6c39;
+  --joy-orange-hover: #ff9b70;
+  --joy-canvas: #101722;
+  --joy-field: #101a27;
+  --joy-script: #0c1522;
+  --joy-panel: #1b293d;
+  --joy-surface: #25354c;
+  --joy-button: #2b405b;
+  --joy-line: #40536d;
+  --joy-text: #e3e9f1;
+  --joy-muted: #a1b2c9;
+  --joy-danger: #ef6a62;
+  --joy-success: #b0cf81;
+  --joy-cream: #fff3cf;
+  --joy-selection: #47607b;
+  --joy-script-comment: #90a4bf;
+  --joy-script-keyword: #ff9b70;
+  --joy-script-number: #b0cf81;
+  --joy-script-function: #ffd166;
+  --joy-script-parameter: #87dce3;
+  --joy-script-operator: #c4d4e8;
+}
+button, input, select, textarea, dialog { border-radius: 0; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--joy-orange);
+  outline-offset: 2px;
+}
+input:invalid { border-color: #f56c6c; }
+input[type='number'] { color-scheme: dark; }
+input[type='number']::-webkit-inner-spin-button { opacity: 1; }

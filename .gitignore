@@ -1,0 +1,29 @@
+# Dependencies and package-manager state
+node_modules/
+.npm
+*.tgz
+
+# Build output, caches and TypeScript build info
+dist
+release/
+.cache/
+.vite/
+*.tsbuildinfo
+
+# Logs and diagnostics
+logs
+*.log
+npm-debug.log*
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Browser capture output (written by the editor and lab capture scripts)
+artifacts/
+playwright-report/
+test-results/
+coverage/
+
+# Local environment and editor state
+.env
+.env.*
+!.env.example
+.DS_Store

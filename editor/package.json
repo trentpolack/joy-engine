@@ -1,0 +1,42 @@
+{
+  "name": "@joy-games/joy-editor",
+  "version": "0.6.0",
+  "private": true,
+  "type": "module",
+  "description": "Local browser and desktop authoring workspace for Joy Engine games.",
+  "author": "Trent Polack",
+  "license": "MIT",
+  "main": "desktop/workspace.cjs",
+  "exports": {
+    ".": "./src/index.ts",
+    "./preview-fullscreen.css": "./src/preview-fullscreen.css",
+    "./desktop": "./src/desktop/application.cjs",
+    "./server": "./server/plugin.mjs",
+    "./package.json": "./package.json",
+    "./tooling/policy": "./tooling/editor-policy.mjs",
+    "./tooling/vite": "./tooling/editor-policy-plugin.mjs"
+  },
+  "scripts": {
+    "dev": "vite --config ../../scripts/development/vite-site.config.mjs --host 127.0.0.1 --open /editor/",
+    "dev:desktop": "node desktop/development.cjs",
+    "build": "vite build --base=./",
+    "check": "joy-check-javascript desktop server src site/src test tooling && tsc --project tsconfig.json",
+    "test": "node --import joy-engine/testing/register-raw-loader --test test/*.test.mjs",
+    "desktop": "electron desktop/workspace.cjs"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@lezer/highlight": "^1.2.5",
+    "joy-engine": "file:.."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@webgpu/types": "^0.1.74",
+    "electron": "^44.5.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2"
+  }
+}

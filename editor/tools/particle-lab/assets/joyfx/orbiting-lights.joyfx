@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "name": "Orbiting Lights",
+  "maxParticles": 128,
+  "parameters": {
+    "brightness": {
+      "value": 3,
+      "min": 0,
+      "max": 12
+    },
+    "reach": {
+      "value": 170,
+      "min": 50,
+      "max": 350
+    }
+  },
+  "emitters": [
+    {
+      "id": "warm",
+      "enabled": true,
+      "root": true,
+      "duration": 6,
+      "rate": 3,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 3
+        }
+      ],
+      "lifetime": 2.4,
+      "renderer": "soft",
+      "light": {
+        "intensity": 3,
+        "range": 170
+      },
+      "spawn": "u0 = rand(0, tau) + 0;\nsize = 5; color = rgba(2.5, 0.24, 0.06, 1);",
+      "update": "let angle = u0 + age*1.4;\nposition = origin + vector(cos(angle)*125, -55 + sin(age*3 + u0)*20, sin(angle)*125);\ncolor.a = 1 - smoothstep(0.6, 1, t);\nlightIntensity = brightness*(0.75 + 0.25*sin(age*5));\nlightRange = reach;"
+    },
+    {
+      "id": "cool",
+      "enabled": true,
+      "root": true,
+      "duration": 6,
+      "rate": 3,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 3
+        }
+      ],
+      "lifetime": 2.4,
+      "renderer": "soft",
+      "light": {
+        "intensity": 3,
+        "range": 170
+      },
+      "spawn": "u0 = rand(0, tau) + 3.14;\nsize = 5; color = rgba(0.04, 0.8, 2.5, 1);",
+      "update": "let angle = u0 + age*1.4;\nposition = origin + vector(cos(angle)*125, -55 + sin(age*3 + u0)*20, sin(angle)*125);\ncolor.a = 1 - smoothstep(0.6, 1, t);\nlightIntensity = brightness*(0.75 + 0.25*sin(age*5));\nlightRange = reach;"
+    }
+  ]
+}

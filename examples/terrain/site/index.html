@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Joy Terrain Lab</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cpath fill=%27%23ff6124%27 d=%27M2 28L12 4L18 18L24 10L30 28Z%27/%3E%3C/svg%3E">
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+<canvas id="world" tabindex="0" aria-label="Terrain viewport">
+</canvas>
+<header>
+<small>JOY ENGINE · RENDERING EXPERIMENT</small>
+<h1>DRAGON PIT</h1>
+<p>Roughness-adaptive terrain · indexed grids · continuous morphing</p>
+</header>
+<aside class="joy-dev-widget">
+<details>
+<summary>CONFIG</summary>
+<label>Screen error <input id="tolerance" type="range" min="0.5" max="12" step="0.5" value="2">
+</label>
+<label>Visualization <select id="diagnostic">
+<option value="0">Landscape</option>
+<option value="1">LOD colors</option>
+<option value="2">LOD + grid</option>
+</select>
+</label>
+<label>
+<input id="pin" type="checkbox" checked> Stable detail near test target</label>
+<label>
+<input id="tour" type="checkbox"> Camera tour</label>
+<button id="ground">Near ground</button>
+<button id="overview">Overview</button>
+</details>
+<details>
+<summary>JOY-EDITOR</summary>
+<p>Height authoring uses the offline EXR compiler. Terrain editing is not integrated into Joy Editor v1.</p>
+<p>Launch the separate Joy Editor from the repository root with <code>npm run dev:editor</code>.</p>
+</details>
+</aside>
+<footer class="joy-dev-widget">
+<p>Left-drag orbits · scroll zooms · hold right-click to fly: WASD move, Q/E down/up · ⌘ (Mac) / Alt (Windows) + scroll pans · G near ground · O overview</p>
+<pre id="stats">Loading resident terrain…</pre>
+<small>Demo extent 2048 × 2048; source height × 1000. Physical dimensions are unspecified.</small>
+</footer>
+<div id="failure" hidden>
+</div>
+<script type="module" src="./src/main.js">
+</script>
+</body>
+</html>

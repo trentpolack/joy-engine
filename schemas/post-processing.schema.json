@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Joy post-processing profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "preset", "overrides"],
+  "properties": {
+    "version": {"const": 1},
+    "preset": {"enum": ["default", "soft", "vivid"]},
+    "overrides": {"type": "object", "description": "Overrides validated by Joy Engine's current post-processing configuration contract."}
+  }
+}

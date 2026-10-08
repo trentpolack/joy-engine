@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Level · Joy Editor</title>
+  </head>
+  <body>
+    <main class="level-editor">
+      <header class="level-toolbar">
+        <strong><b id="authoring-kind">LEVEL</b> <span>AUTHORING</span></strong>
+        <button id="add-box">+ BOX</button>
+        <button id="add-sphere">+ SPHERE</button>
+        <select id="instance-picker" aria-label="Reusable object"></select><button id="add-instance">+ INSTANCE</button><button id="save-object">SAVE AS OBJECT</button>
+        <button id="duplicate">DUPLICATE</button>
+        <button id="delete">DELETE</button>
+        <span class="spacer"></span>
+        <button id="undo" title="Undo (Ctrl/⌘ Z)">↶</button>
+        <button id="redo" title="Redo (Ctrl/⌘ Shift Z)">↷</button>
+      </header>
+      <aside class="outliner">
+        <h2>SCENE <span id="entity-count">0 ENTITIES</span></h2>
+        <label>LEVEL NAME<input id="level-name" aria-label="Level name"></label>
+        <label>FILTER<input id="scene-filter" type="search" placeholder="Name, type or tag" aria-label="Filter scene"></label>
+        <div id="entities" role="listbox" aria-label="Level entities"></div>
+        <p class="outliner-note">Select an entity to edit its transform and components.</p>
+      </aside>
+      <section class="viewport">
+        <canvas id="viewport" aria-label="Level viewport" tabindex="0"></canvas>
+        <div class="viewport-toolbar">
+          <button id="select-mode" class="active">SELECT</button>
+          <button id="move-mode" title="Click the ground to move the selected entity">MOVE</button>
+          <button id="focus" title="Frame selection or scene (F)">FRAME F</button><button id="reset-camera" title="Reset camera (0)">RESET 0</button>
+          <label title="Editor-only lines; minor spacing follows 1/2/5 meters, major lines mark five divisions"><input id="grid-toggle" type="checkbox" checked> GRID</label>
+          <label>SNAP <input id="snap" type="number" min="0" step="0.25" value="1" aria-label="Grid snap meters"></label>
+        </div>
+        <div class="viewport-corner"><b>Y ↑</b> METERS · PERSPECTIVE</div>
+        <p class="viewport-help">CLICK SELECT · DRAG ORBIT · SHIFT DRAG PAN · SCROLL ZOOM · F FRAME · 0 RESET</p>
+      </section>
+      <aside class="inspector">
+        <h2>INSPECTOR</h2>
+        <p id="no-selection">Select an entity in the scene.</p>
+        <div id="properties" hidden>
+          <label>NAME<input id="entity-name" aria-label="Entity name"></label>
+          <label>TYPE<input id="entity-type" aria-label="Entity type"></label>
+          <label>TAGS<input id="entity-tags" aria-label="Entity tags" placeholder="comma, separated"></label>
+          <div id="instance-info" hidden><h3>LINKED OBJECT</h3><code id="instance-source"></code><small id="instance-overrides"></small><div class="instance-actions"><button id="edit-object">EDIT SOURCE ↗</button><button id="reset-overrides">RESET OVERRIDES</button><button id="detach-object">DETACH</button></div></div>
+          <h3>TRANSFORM <span>WORLD SPACE</span></h3>
+          <div id="transforms"></div>
+          <h3>COMPONENTS</h3>
+          <div class="component-actions"><select id="component-kind" aria-label="Component kind"><option value="mesh">FORM Mesh</option><option value="effect">JOYFX Effect</option><option value="render">Primitive</option><option value="physics">Physics</option><option value="custom">Custom Properties</option></select><button id="add-component">+ ADD</button></div>
+          <div id="component-fields"></div>
+          <details class="advanced-source"><summary>ADVANCED SOURCE</summary><p class="component-help">Optional component source and repair view.</p><textarea id="components" aria-label="Entity components JSON" spellcheck="false"></textarea><button id="apply-components">APPLY SOURCE</button></details>
+        </div>
+      </aside>
+      <footer><span class="status-dot"></span><span id="status" role="status">INITIALIZING VIEWPORT…</span><span class="spacer"></span><span id="backend"></span></footer>
+    </main>
+    <script type="module" src="./src/level/main.ts"></script>
+  </body>
+</html>
