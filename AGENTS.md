@@ -1,13 +1,13 @@
 # AGENTS.md
 This file applies to the entire repository unless a package-specific `AGENTS.md` says otherwise for that package.
 
-## Repository purpose
-Joy Engine is a browser-native game engine built on luma.gl (WebGPU with WebGL 2 fallback) for prototyping, procedural generation and stylized games. This repository holds the engine package, Joy Editor and its FORM LAB and PARTICLE LAB tools, and command-line engine examples. The games that use it live in [JoyGames](https://github.com/trentpolack/JoyGames), which includes this repository as a git submodule at `joy-engine/`.
+## Overview
+Joy Engine is a browser-native game engine built on luma.gl (WebGPU with WebGL 2 fallback) for prototyping, procedural generation and stylized games. This repository holds the engine package, Joy Editor and its FORM LAB and PARTICLE LAB tools, and command-line engine examples.
 
-Prefer readable control flow, named data, and small modules over clever abstractions or compression. If a change makes code harder to scan, explain why the tradeoff is worthwhile.
+Prefer readable control flow, named data, and small modules over clever abstractions or compression. If a change makes code harder to scan, explain why the tradeoff is worthwhile. There are additional specific cases in the "Code Standards and AI Agent Rules" section of this doc.
 
 ## Setup and validation
-Run commands from the repository root:
+When working in this repository on its own, run commands from its root. When it is included in a larger workspace, follow that workspace's workflow and use its existing commands to edit and validate changes across directories:
 ```bash
 npm ci
 npm run check
@@ -22,11 +22,31 @@ Before completing a change:
 1. Run the narrowest relevant check while iterating.
 2. Run the engine and workspace checks and tests above.
 3. Build the affected workspace (`npm run build --workspace <name>`).
-4. For rendering, gameplay-facing or tool UI changes, also validate from JoyGames (its `npm run validate` builds every game against this engine and runs browser captures). Record browser limitations and capture failures explicitly.
+4. For rendering, gameplay-facing or tool UI changes, also run the available hosting workspace's integration validation and browser captures. Record browser limitations and capture failures explicitly.
 
-Joy Editor's development server and browser captures run inside a hosting workspace (JoyGames today); see [the editor README](editor/README.md#package-and-hosting-workspace).
+Joy Editor's development server and browser captures run inside a hosting workspace; see [the editor README](editor/README.md#package-and-hosting-workspace).
 
-Do not commit `node_modules`, generated `dist` folders, logs, caches, or local environment files.
+Do not commit `node_modules`, generated `dist` folders, logs, caches, or local environment files (i.e., follow the `.gitignore` rules).
+
+## Assets and Intellectual Property/Trademarks
+- Treat external games as references for principles and feel, never as sources for copied code, art, audio, layouts, or exact effects.
+- When ownership or redistribution rights are unclear, stop, and ask.
+
+## Change Discipline
+Read the root README and the affected package's README before making structural changes. Preserve unrelated user work and avoid broad rewrites outside the requested package.
+
+When this repository is included as a submodule in a larger workspace, treat it as a directory for the requested edits and validation. Do not introduce a separate repository handoff or require Git state changes to complete the task. Leave submodule commits, branches, pushes, merges, tags, and the parent pin to the user unless explicitly requested; this applies to local, IDE, and cloud work.
+
+Keep the engine's public API small and document why new shared behavior belongs in `src/`. For editor- or tool-only changes, avoid touching the engine package or root tooling unless the change cannot be supported cleanly otherwise.
+
+In addition:
+- Update the root-level `CHANGELOG.md` whenever a major/minor/patch change is made; don't get too granular, just calling out major changes.
+- Group changelog entries under one `## MM-DD-YYYY` heading per day, newest first, with `###` headings for projects or topics. Reuse the day's existing heading rather than creating duplicate date sections. Use the completion date in `America/Detroit` for current work and the introducing commit's date in that timezone for historical backfills. Do not add `Unreleased` sections or replace known historical dates with today's date. Automated changelog updates must preserve existing entries and this daily structure.
+- When encountering new/found work, bugs, potential future work, deprecated logic/packages, adding tech debt then create an Issue in GitHub.
+  - Don't create "checklist" issues; just file actionable issues.
+  - For follow-up/future work, create a GitHub Issue; do not create standalone markdown files like `follow-ups.md`.
+
+Use the completion date in `America/Detroit`. Keep the whole summary under roughly 300 words; link out instead of expanding.
 
 ## Unit Test Scope
 Keep the unit suite focused on core behavior and costly regressions: document and asset round trips, bounded or deterministic simulation, resource ownership and cleanup, backend contracts and fallback, and gameplay state transitions. Extend an existing scenario when it already covers the same risk. Add a new test only when it protects a distinct failure that matters to a player, author, or shared-engine consumer.
@@ -41,10 +61,10 @@ Do not add tests solely for coverage counts, trivial helpers, fixed tuning value
 
 The engine package never imports the editor, tools or examples. The editor may depend on the engine (`file:..`). Tests, fixtures and tooling live inside the owning package. Nothing in this repository may depend on a particular game; game-specific fixtures belong in the consuming repository.
 
-Move code into `src/` when it is stable behavior that more than one game, tool or example needs.
+Move code into `src/` when it is stable behavior that more than one game, tool, or example needs.
 
-## Code standards
-- Follow [the detailed JavaScript coding standards](docs/coding-standards.md). They adapt the supplied `joygl-ts` client's staged initialization, renderer member grouping, explicit disposal, and API documentation to instance-owned browser-native JavaScript. Apply these rules to changed code, not just new documentation.
+## Code Standards and AI Agent Rules
+- Follow [the detailed JavaScript coding standards](docs/coding-standards.md). They adapt the supplied `joygl-ts` (a previous project) client's staged initialization, renderer member grouping, explicit disposal, and API documentation to instance-owned browser-native JavaScript. Apply these rules to changed code, not just new documentation.
 - Always use [JoyCore](https://github.com/trentpolack/JoyCore) as a reference for code organization, commenting style, naming, clarity, and overall readability. Consult relevant examples when implementing or refactoring code, and adapt their principles to this repository's language and browser-native architecture, even when JoyCore uses a different language or engine.
 - Write browser-native TypeScript or JavaScript modules and use descriptive names.
 - Prefer `.ts` files and native TypeScript contracts for reusable runtime source. JavaScript remains appropriate for build scripts, configuration, and small browser composition roots; describe its contracts with JSDoc. Strict TypeScript checking runs with `noEmit`; Vite owns production output.
@@ -62,10 +82,10 @@ Move code into `src/` when it is stable behavior that more than one game, tool o
 - Keep keyboard, pointer, touch, and responsive behavior intact when changing gameplay or rendering.
 - Don't use manual line breaks in markdown files; they're unnecessary.
 - Don't add a line break in between markdown headers and content.
-- Games, the editor, tools and examples must consume engine functionality through `joy-engine` package exports. Do not import engine internals by relative path or copy engine modules into consumers. No consumer should directly rely on luma.gl; it should route through `joy-engine`.
+- Games, the editor, tools and examples must consume engine functionality through `joy-engine` package exports. Do not import engine internals by relative path or copy engine modules into consumers. No consumer should directly rely on `luma.gl`; it should route through `joy-engine`.
 - Before changing an exported engine contract, locate all consumers, including JSDoc types, tests, fixtures, and documentation. Update affected consumers in the same change. Prefer a coordinated migration over permanent compatibility layers.
 - Preserve existing gameplay behavior during engine extraction and refactoring. Preserve default values, time units, update order, random-number consumption, collision semantics, and rendering order unless the task explicitly changes them. Separate behavior changes from structural changes.
-- Consumers (such as JoyGames, which includes this repository as a git submodule) pin a commit or release tag of this repository. Tag releases `vX.Y.Z` from the engine package version, keep `main` releasable, and call out breaking changes to exported contracts in the CHANGELOG. Do not create private engine copies to freeze a consumer.
+- Consumers pin a commit or release tag of this repository. When explicitly asked to tag a release, use `vX.Y.Z` from the engine package version. Keep the release branch releasable, and call out breaking changes to exported contracts in the CHANGELOG. Do not create private engine copies to freeze a consumer.
 - Document time units, coordinate spaces, ownership, mutation, and resource lifecycle at shared API boundaries. Make seconds versus milliseconds and per-tick versus per-second values explicit.
 - Shared systems must support independent instances and explicit cleanup. Avoid mutable module-level gameplay state. Owners must release event listeners, timers, audio resources, and GPU resources on disposal.
 - Keep gameplay randomness separate from cosmetic randomness. Support seeded or injected randomness where reproducible simulation is needed so visual changes do not alter gameplay outcomes.
@@ -92,53 +112,7 @@ Move code into `src/` when it is stable behavior that more than one game, tool o
 - For clarity when multiple operations are happening, I like to make the order of operations clear with parentheses that may be _functionally_ pointless but improve readability.
 - Games built on the engine need the standard CONFIG button/menu and JOY-EDITOR config button/menu; the engine owns those shared development widgets.
 - Always avoid hard-coded strings that have gameplay/logic/engine relevance; prefer to create a const variable for the string and use _that_ elsewhere.
-- Comment code and embrace the comfort of some extra line breaks when it comes to separating "chunks" of code; check out my general style of commenting/spacing in my JoyCore project: https://github.com/trentpolack/JoyCore/tree/develop/Source/JoyCore/Private/Systems; I realize `JoyGames` is JavaScript/TypeScript and has different conventions but I'm a C++/C# person so this is the style I'd bring to JS projects.
+- Comment code and embrace the comfort of some extra line breaks when it comes to separating "chunks" of code; check out my general style of commenting/spacing in my JoyCore project: https://github.com/trentpolack/JoyCore/tree/develop/Source/JoyCore/Private/Systems; this engine uses JavaScript/TypeScript and has different conventions, but I'm a C++/C# person so this is the style I'd bring to JS projects.
 - The header copyright/MIT license text for each file being created should be the copyright on one line and the license on the next line; i.e.:
   - // Copyright (c) 2026 Trent Polack. All Rights Reserved.
   - // Licensed under the MIT License.
-
-## General Development and Design Pillars for All Projects
-- Style and "game feel" is always a priority.
-- Effects can be stylized but they should feel fluid and dynamic.
-- Embrace procedural generation whenever possible; whether it's a game system, mesh generation, effect functionality, etc.
-- Effects and meshes can be dynamically modified for unique, fluid, and stylized results.
-- Systems-driven design and development is paramount.
-- Reference materials about my approach to design and development:
-  - https://trentpolack.com/blog/plugin-fun
-  - https://trentpolack.com/blog/a-guide-to-systems-based-game-development
-  - https://trentpolack.com/blog/how-i-started-programming-part-one-of-two
-  - https://trentpolack.com/blog/how-i-started-programming-part-two-of-two
-- App/editor projects, like **PARTICLE LAB** and **FORM LAB**, do not need to support mobile; should be loadable and layouts should be flexible but don't go out of the way to support mobile.
-
-## Assets and Intellectual Property/Trademarks
-- Treat external games as references for principles and feel, never as sources for copied code, art, audio, layouts, or exact effects.
-- When ownership or redistribution rights are unclear, stop and ask.
-
-## Change Discipline
-Read the root README and the affected package's README before making structural changes. Preserve unrelated user work and avoid broad rewrites outside the requested package.
-
-Keep the engine's public API small and document why new shared behavior belongs in `src/`. For editor- or tool-only changes, avoid touching the engine package or root tooling unless the change cannot be supported cleanly otherwise.
-
-In addition:
-- Update the root-level `CHANGELOG.md` whenever a major/minor/patch change is made; don't get too granular, just calling out major changes.
-- Group changelog entries under one `## MM-DD-YYYY` heading per day, newest first, with `###` headings for projects or topics. Reuse the day's existing heading rather than creating duplicate date sections. Use the completion date in `America/Detroit` for current work and the introducing commit's date in that timezone for historical backfills. Do not add `Unreleased` sections or replace known historical dates with today's date. Automated changelog updates must preserve existing entries and this daily structure.
-- When encountering new/found work, bugs, potential future work, deprecated logic/packages, adding tech debt then create an Issue in GitHub.
-  - Don't create "checklist" issues; just file actionable issues.
-  - For follow-up/future work, create a GitHub Issue; do not create standalone markdown files like `follow-ups.md`.
-
-## Session Handoff
-End every session that changes the repository (local, cloud, or delegated agent work) with a handoff summary as the final section of the completion report. The summary gets carried into the claude.ai JoyGames Project as its working history, so write it for a reader who never saw the session: self-contained, specific, and short. Don't write it to a file in the repository; the CHANGELOG, commits, PRs, and Issues remain the canonical record, and the handoff points to them rather than duplicating them.
-
-Use this format, omitting any field that has nothing to report:
-```markdown
-## Handoff: <short topic> (MM-DD-YYYY)
-- **Branch / PR:** <branch name>, <PR link or "not opened">
-- **Packages:** <Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and/or examples>
-- **Changed:** <what changed and why, in a few bullets; behavior changes called out separately from structural ones>
-- **Decisions:** <choices made, including rejected alternatives and the reason>
-- **Validation:** <checks, builds, and validate runs with results; capture gallery link; browser limitations>
-- **Open:** <unfinished work and known problems, linking the GitHub Issues filed for them>
-- **Next:** <the single most useful next step, if there is one>
-```
-
-Use the completion date in `America/Detroit`. Keep the whole summary under roughly 300 words; link out instead of expanding.
