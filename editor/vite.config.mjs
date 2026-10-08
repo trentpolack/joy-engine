@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, searchForWorkspaceRoot } from 'vite';
 import { createFaviconPlugin } from 'joy-engine/development/vite';
 import { createEditorPolicyPlugin } from './tooling/editor-policy-plugin.mjs';
 
@@ -12,6 +12,11 @@ const EDITOR_ICON_PATH = fileURLToPath(new URL('./assets/favicon.png', import.me
 export default defineConfig({
   root: fileURLToPath(new URL('./site', import.meta.url)),
   base: '/editor/',
+  server: {
+    fs: {
+      allow: [searchForWorkspaceRoot(process.cwd())]
+    }
+  },
   plugins: [createFaviconPlugin({iconPath: EDITOR_ICON_PATH}), createEditorPolicyPlugin('joy-editor')],
   build: {
     outDir: '../dist',
