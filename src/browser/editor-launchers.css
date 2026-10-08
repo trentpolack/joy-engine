@@ -9,7 +9,8 @@
   --joy-dev-dock-height: 36px;
   --joy-dev-dock-right: max(12px, env(safe-area-inset-right));
   --joy-dev-dock-bottom: max(12px, env(safe-area-inset-bottom));
-  --joy-dev-dock-width: min(104px, calc((100vw - var(--joy-dev-dock-right) - max(12px, env(safe-area-inset-left)) - (var(--joy-dev-dock-count) - 1)*var(--joy-dev-dock-gap))/var(--joy-dev-dock-count)));
+  /* Leave room for the Stats label, divider, live cadence, and button padding. */
+  --joy-dev-dock-width: min(136px, calc((100vw - var(--joy-dev-dock-right) - max(12px, env(safe-area-inset-left)) - (var(--joy-dev-dock-count) - 1)*var(--joy-dev-dock-gap))/var(--joy-dev-dock-count)));
   --joy-dev-dock-reserved-width: calc(var(--joy-dev-dock-right) + var(--joy-dev-dock-count)*var(--joy-dev-dock-width) + var(--joy-dev-dock-count)*var(--joy-dev-dock-gap));
   --joy-dev-dock-reserved-height: calc(var(--joy-dev-dock-bottom) + var(--joy-dev-dock-height) + var(--joy-dev-dock-gap));
 }
@@ -40,7 +41,7 @@
   width: var(--joy-dev-dock-width);
   height: var(--joy-dev-dock-height);
   min-height: var(--joy-dev-dock-height);
-  padding: 5px 7px;
+  padding: 5px 12px;
   color: var(--joy-dev-widget-accent);
   background: var(--joy-dev-widget-background);
   border: 1px solid var(--joy-dev-widget-accent);
@@ -72,7 +73,8 @@ body:has(.joy-post-editor):has(.joy-config-tools) .joy-dev-summary {
   max-height: min(720px, calc(100dvh - var(--joy-dev-dock-reserved-height) - 12px));
 }
 
-@media (max-width: 380px) {
+@media (max-width: 448px) {
+  .joy-dev-summary .joy-dev-summary-divider,
   .joy-dev-summary [data-stat="fps"] {
     display: none;
   }

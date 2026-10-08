@@ -17,6 +17,18 @@
   gap: 6px;
 }
 
+.joy-dev-summary-divider {
+  color: var(--joy-dev-widget-muted);
+  font-weight: 400;
+}
+
+.joy-dev-summary [data-stat="fps"] {
+  min-width: 44px;
+  color: var(--joy-dev-widget-text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .joy-dev-readout {
   display: flex;
   justify-content: space-between;

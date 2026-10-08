@@ -370,7 +370,8 @@ function createView(title: string) {
   root.innerHTML = `
     <button type="button" class="joy-dev-summary" aria-label="Toggle development details" aria-expanded="false">
       <b>STATS</b>
-      <span data-stat="fps">-- FPS</span>
+      <span class="joy-dev-summary-divider" aria-hidden="true">|</span>
+      <span data-stat="fps" aria-live="off">-- FPS</span>
     </button>
     <section class="joy-dev-panel" hidden>
       <header><b data-stat="title"></b> <kbd title="Press the backquote key to toggle runtime details">Backquote</kbd></header>
