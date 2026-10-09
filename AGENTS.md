@@ -119,5 +119,9 @@ Move code into `src/` when it is stable behavior that more than one game, tool, 
 
 ## Commit Message Standards
 - Don't use the "Conventional Commits" commit style; i.e., don't use the `feat(<branch>): <message>`, `chore: <message>`, etc..
-- Instead, the commit message should have a summary as its opening line and then a list of relevant changes (prefixed with `-` to preserve list presentation.
+- Commit messages must begin with a brief one-to-two sentence summary followed by `- ` bullet lines for subsequent details.
   - Notable changes to include in a commit message are important/significant changes to specific modules/features as well as the sort of change that'd warrant a `CHANGELOG.md` mention.
+  - Use the past tense for changes that the commit is making.
+- Group related changes into a few bullets describing meaningful outcomes. Omit minor implementation details, individual symbol changes, and routine documentation or test updates unless they materially affect behavior, compatibility, or workflow.
+- Use markdown as-needed to improve the message display (e.g., use the `code` back-ticks for code names).
+  - When committing through the command line, preserve the message literally and prevent shell expansion. Prefer writing the message to a temporary file and using `git commit --file <path>`. Markdown backticks must remain unescaped in the stored commit message.
