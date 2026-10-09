@@ -1,14 +1,16 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-export type { Vector2 } from './core/types.ts';
-export type { Vector3 } from './core/types.ts';
-export type { Velocity2 } from './core/types.ts';
-export type { MovingBody } from './core/types.ts';
-export type { RgbaColor } from './core/types.ts';
-export type { IndexedMesh3D } from './core/types.ts';
-export type { ShadedTriangle3D } from './core/types.ts';
-export type { ShadedMesh3D } from './core/types.ts';
+export type {
+  Vector2,
+  Vector3,
+  MovingBody,
+  Color,
+  IndexedMesh3D,
+  ShadedTriangle3D,
+  ShadedMesh3D
+} from './core/types.ts';
+
 export { createSeededRandom } from './core/random.ts';
 export { createConfigDocumentValues, createConfigSchema, createConfigValues } from './core/config-values.ts';
 export type { ConfigField } from './core/config-values.ts';
@@ -137,7 +139,7 @@ export { DEFAULT_PBR_LIGHTING } from './rendering/pbr/pbr-triangles.ts';
 export { MeshAsset } from './rendering/scene/mesh-asset.ts';
 export { MeshInstance } from './rendering/scene/mesh-instance.ts';
 export { RenderScene } from './rendering/scene/render-scene.ts';
-export type {PointLight} from './rendering/pbr/point-lights.ts';
+export type { PointLight } from './rendering/pbr/point-lights.ts';
 export { SceneRenderer } from './rendering/scene/scene-renderer.ts';
 export { projectToViewport, screenRay, intersectRayPlane } from './rendering/camera/projection.ts';
 export type { MeshAssetData } from './core/types.ts';

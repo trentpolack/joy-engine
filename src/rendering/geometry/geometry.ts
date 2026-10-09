@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import type { RgbaColor, ShadedMesh3D } from '../../core/types.ts';
+import type { Color, ShadedMesh3D } from '../../core/types.ts';
 
 import { TAU } from '../../core/math.ts';
 
@@ -20,7 +20,7 @@ export const FLOATS_PER_VERTEX = 7;
  * @param rotation
  * @param z
  */
-export function addTriangle(vertices: number[], x: number, y: number, radius: number, color: RgbaColor, rotation: number = 0, z: number = 0) {
+export function addTriangle(vertices: number[], x: number, y: number, radius: number, color: Color, rotation: number = 0, z: number = 0) {
   for (let index = 0; index < 3; index += 1) {
     const angle = rotation + (index * TAU) / 3;
     vertices.push(
@@ -43,7 +43,7 @@ export function addTriangle(vertices: number[], x: number, y: number, radius: nu
  * @param rotation
  * @param z
  */
-export function addQuad(vertices: number[], x: number, y: number, radius: number, color: RgbaColor, rotation: number = Math.PI / 4, z: number = 0) {
+export function addQuad(vertices: number[], x: number, y: number, radius: number, color: Color, rotation: number = Math.PI / 4, z: number = 0) {
   const corners = [];
 
   for (let index = 0; index < 4; index += 1) {
@@ -71,7 +71,7 @@ export function addQuad(vertices: number[], x: number, y: number, radius: number
  * @param segments
  * @param z
  */
-export function addCircle(vertices: number[], x: number, y: number, radius: number, color: RgbaColor, segments: number = 12, z: number = 0) {
+export function addCircle(vertices: number[], x: number, y: number, radius: number, color: Color, segments: number = 12, z: number = 0) {
   for (let index = 0; index < segments; index += 1) {
     const firstAngle = (index/segments)*TAU;
     const secondAngle = ((index + 1)/segments) * TAU;
@@ -90,7 +90,7 @@ export function addCircle(vertices: number[], x: number, y: number, radius: numb
  * @param rotation @param color
  * @param z
  */
-export function addMesh(vertices: number[], mesh: ShadedMesh3D, x: number, y: number, scale: number, rotation: number, color: RgbaColor, z: number = 0) {
+export function addMesh(vertices: number[], mesh: ShadedMesh3D, x: number, y: number, scale: number, rotation: number, color: Color, z: number = 0) {
   const cosine = Math.cos(rotation);
   const sine = Math.sin(rotation);
   for (const triangle of mesh.triangles) {
@@ -98,7 +98,7 @@ export function addMesh(vertices: number[], mesh: ShadedMesh3D, x: number, y: nu
     const shadedColor = (([
       Math.min(1, color[0] * shade), Math.min(1, color[1] * shade),
       Math.min(1, color[2] * shade), color[3],
-    ]) as RgbaColor);
+    ]) as Color);
     for (let index = 0; index < 9; index += 3) {
       const localX = triangle[index] * scale;
       const localY = triangle[index + 1] * scale;
@@ -121,7 +121,7 @@ export function addMesh(vertices: number[], mesh: ShadedMesh3D, x: number, y: nu
  * @param rotation
  * @param z
  */
-export function addPolygon(vertices: number[], x: number, y: number, radius: number, color: RgbaColor, sides: number, rotation: number, z: number) {
+export function addPolygon(vertices: number[], x: number, y: number, radius: number, color: Color, sides: number, rotation: number, z: number) {
   addRadialPolygon(vertices, x, y, radius, color, Array(sides).fill(1), rotation, z);
 }
 
@@ -139,7 +139,7 @@ export function addPolygon(vertices: number[], x: number, y: number, radius: num
  * @param rotation
  * @param z
  */
-export function addRadialPolygon(vertices: number[], x: number, y: number, radius: number, color: RgbaColor, shape: readonly number[], rotation: number, z: number) {
+export function addRadialPolygon(vertices: number[], x: number, y: number, radius: number, color: Color, shape: readonly number[], rotation: number, z: number) {
   for (let index = 0; index < shape.length; index += 1) {
     const firstAngle = rotation + index / shape.length * Math.PI * 2;
     const secondAngle = rotation + (index + 1) / shape.length * Math.PI * 2;
@@ -172,7 +172,7 @@ export function addRadialPolygon(vertices: number[], x: number, y: number, radiu
  * @param z
  */
 export function addGradientRadialPolygon(
-  vertices: number[], x: number, y: number, radius: number, centerColor: RgbaColor, edgeColor: RgbaColor, shape: readonly number[], rotation: number, z: number,
+  vertices: number[], x: number, y: number, radius: number, centerColor: Color, edgeColor: Color, shape: readonly number[], rotation: number, z: number,
 ) {
   for (let index = 0; index < shape.length; index += 1) {
     const firstAngle = rotation + index / shape.length * Math.PI * 2;
@@ -201,7 +201,7 @@ export function addGradientRadialPolygon(
  * @param segments
  * @param z
  */
-export function addRing(vertices: number[], x: number, y: number, radius: number, width: number, color: RgbaColor, segments: number, z: number) {
+export function addRing(vertices: number[], x: number, y: number, radius: number, width: number, color: Color, segments: number, z: number) {
   for (let index = 0; index < segments; index += 1) {
     const firstAngle = index / segments * Math.PI * 2;
     const secondAngle = (index + 1) / segments * Math.PI * 2;
@@ -234,7 +234,7 @@ export function addRing(vertices: number[], x: number, y: number, radius: number
  * @param color
  * @param z
  */
-export function addLine(vertices: number[], ax: number, ay: number, bx: number, by: number, width: number, color: RgbaColor, z: number) {
+export function addLine(vertices: number[], ax: number, ay: number, bx: number, by: number, width: number, color: Color, z: number) {
   const angle = Math.atan2(by - ay, bx - ax) + Math.PI / 2;
   const offsetX = Math.cos(angle) * width / 2;
   const offsetY = Math.sin(angle) * width / 2;

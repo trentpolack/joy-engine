@@ -76,7 +76,7 @@ Pack camera and environment state for ATMOSPHERE_SHADERS. The inverse view-proje
 Import from `joy-engine`. [Source](../../src/rendering/geometry/geometry.ts)
 
 ```ts
-function addCircle(vertices: number[], x: number, y: number, radius: number, color: RgbaColor, segments: number = 12, z: number = 0)
+function addCircle(vertices: number[], x: number, y: number, radius: number, color: Color, segments: number = 12, z: number = 0)
 ```
 Append a triangle fan approximating a filled circle. Mutates the supplied vertex array; coordinates use the caller's logical units.
 
@@ -93,7 +93,7 @@ Append a triangle fan approximating a filled circle. Mutates the supplied vertex
 Import from `joy-engine`. [Source](../../src/rendering/geometry/geometry.ts)
 
 ```ts
-function addMesh(vertices: number[], mesh: ShadedMesh3D, x: number, y: number, scale: number, rotation: number, color: RgbaColor, z: number = 0)
+function addMesh(vertices: number[], mesh: ShadedMesh3D, x: number, y: number, scale: number, rotation: number, color: Color, z: number = 0)
 ```
 Append one normalized, faceted 3D model to the shared GPU batch.
 
@@ -111,7 +111,7 @@ Append one normalized, faceted 3D model to the shared GPU batch.
 Import from `joy-engine`. [Source](../../src/rendering/geometry/geometry.ts)
 
 ```ts
-function addQuad(vertices: number[], x: number, y: number, radius: number, color: RgbaColor, rotation: number = Math.PI / 4, z: number = 0)
+function addQuad(vertices: number[], x: number, y: number, radius: number, color: Color, rotation: number = Math.PI / 4, z: number = 0)
 ```
 Append a square as two triangles. Radius measures to a corner, not an edge. Mutates the supplied vertex array; coordinates use the caller's logical units.
 
@@ -128,7 +128,7 @@ Append a square as two triangles. Radius measures to a corner, not an edge. Muta
 Import from `joy-engine`. [Source](../../src/rendering/geometry/geometry.ts)
 
 ```ts
-function addTriangle(vertices: number[], x: number, y: number, radius: number, color: RgbaColor, rotation: number = 0, z: number = 0)
+function addTriangle(vertices: number[], x: number, y: number, radius: number, color: Color, rotation: number = 0, z: number = 0)
 ```
 Append an equilateral triangle. Radius measures from its center to each corner. Mutates the supplied vertex array; coordinates use the caller's logical units.
 
@@ -145,7 +145,7 @@ Append an equilateral triangle. Radius measures from its center to each corner. 
 Import from `joy-engine`. [Source](../../src/rendering/geometry/geometry.ts)
 
 ```ts
-function addPolygon(vertices: number[], x: number, y: number, radius: number, color: RgbaColor, sides: number, rotation: number, z: number)
+function addPolygon(vertices: number[], x: number, y: number, radius: number, color: Color, sides: number, rotation: number, z: number)
 ```
 Append a regular polygon using equal radial samples.
 
@@ -163,7 +163,7 @@ Append a regular polygon using equal radial samples.
 Import from `joy-engine`. [Source](../../src/rendering/geometry/geometry.ts)
 
 ```ts
-function addRadialPolygon(vertices: number[], x: number, y: number, radius: number, color: RgbaColor, shape: readonly number[], rotation: number, z: number)
+function addRadialPolygon(vertices: number[], x: number, y: number, radius: number, color: Color, shape: readonly number[], rotation: number, z: number)
 ```
 Append a triangle fan from evenly spaced radial multipliers. A sample of 1 lies at radius; rotation is in radians. Each vertex repeats x/y/z/RGBA because the engine consumes a non-indexed triangle list.
 
@@ -182,7 +182,7 @@ Import from `joy-engine`. [Source](../../src/rendering/geometry/geometry.ts)
 
 ```ts
 function addGradientRadialPolygon(
-  vertices: number[], x: number, y: number, radius: number, centerColor: RgbaColor, edgeColor: RgbaColor, shape: readonly number[], rotation: number, z: number,
+  vertices: number[], x: number, y: number, radius: number, centerColor: Color, edgeColor: Color, shape: readonly number[], rotation: number, z: number,
 )
 ```
 Append an irregular triangle fan with independent center and edge colors. Interpolation creates a portable radial falloff without textures or a particle-specific shader, making the primitive useful for light blooms, smoke, and other soft particles on every renderer backend.
@@ -202,7 +202,7 @@ Append an irregular triangle fan with independent center and edge colors. Interp
 Import from `joy-engine`. [Source](../../src/rendering/geometry/geometry.ts)
 
 ```ts
-function addRing(vertices: number[], x: number, y: number, radius: number, width: number, color: RgbaColor, segments: number, z: number)
+function addRing(vertices: number[], x: number, y: number, radius: number, width: number, color: Color, segments: number, z: number)
 ```
 Append an annulus as two triangles per segment. Width is the HALF thickness: the radii are radius - width and radius + width. Clamp the inner radius to zero while the ring is smaller than its thickness.
 
@@ -220,7 +220,7 @@ Append an annulus as two triangles per segment. Width is the HALF thickness: the
 Import from `joy-engine`. [Source](../../src/rendering/geometry/geometry.ts)
 
 ```ts
-function addLine(vertices: number[], ax: number, ay: number, bx: number, by: number, width: number, color: RgbaColor, z: number)
+function addLine(vertices: number[], ax: number, ay: number, bx: number, by: number, width: number, color: Color, z: number)
 ```
 Append a butt-ended thick segment as two triangles. Width is the full thickness in the caller's logical units; z is constant along the segment.
 
@@ -314,7 +314,7 @@ Resize the backing surface without changing the caller's logical geometry.
 
 ### render
 ```ts
-render(vertices: number[] | Float32Array, uniformData: Float32Array<ArrayBuffer>, clearColor: RgbaColor, transparentVertices: number[] | Float32Array = [], timeSeconds: number = 0, transparentDraws: readonly TransparentDraw[] = [], materialFrame: PbrFrame | null = null, sceneFrame: SceneEffectsFrame = {}, atmosphereUniforms: Float32Array<ArrayBuffer> | null = null, attachmentFrame: SceneAttachmentFrame | null = null)
+render(vertices: number[] | Float32Array, uniformData: Float32Array<ArrayBuffer>, clearColor: Color, transparentVertices: number[] | Float32Array = [], timeSeconds: number = 0, transparentDraws: readonly TransparentDraw[] = [], materialFrame: PbrFrame | null = null, sceneFrame: SceneEffectsFrame = {}, atmosphereUniforms: Float32Array<ArrayBuffer> | null = null, attachmentFrame: SceneAttachmentFrame | null = null)
 ```
 Submit opaque geometry, then sorted translucent geometry; clear even if empty.
 

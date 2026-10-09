@@ -4,7 +4,7 @@
 import { VIEWPORT_GESTURE } from '../../../site/src/interaction/constants.ts';
 import { GPU_BACKEND, GPU_TEXTURE_FORMAT } from 'joy-engine/constants';
 import { PARTICLE_PROFILE_MODE } from './constants.ts';
-import type { RgbaColor, ParticleEffect } from 'joy-engine';
+import type { Color, ParticleEffect } from 'joy-engine';
 import {ViewportInput} from '../../../site/src/interaction/viewport-input.ts';
 import {
   GpuTriangleRenderer,
@@ -23,7 +23,7 @@ import wgsl from '../shaders/particle.wgsl?raw';
 import vertex from '../shaders/particle.vert.glsl?raw';
 import fragment from '../shaders/particle.frag.glsl?raw';
 
-const PREVIEW_BACKGROUNDS: Record<string, RgbaColor> = {
+const PREVIEW_BACKGROUNDS: Record<string, Color> = {
   midnight: [0.028, 0.05, 0.087, 1],
   slate: [0.09, 0.13, 0.19, 1],
   gray: [0.25, 0.25, 0.25, 1],

@@ -4,7 +4,7 @@
 import { PARTICLE_RENDERER } from './constants.ts';
 import type { ParticleEffect, EffectParticle } from './particle-effect.ts';
 import type { CompiledParticleEffect, ParticleEmitterAsset, ParticleTexture } from './asset.ts';
-import type { RgbaColor } from '../core/types.ts';
+import type { Color } from '../core/types.ts';
 import { addGradientRadialPolygon, addRadialPolygon, addRing } from '../rendering/geometry/geometry.ts';
 
 export interface ParticleCameraBasis {
@@ -173,14 +173,14 @@ function appendColoredParticle(vertices: number[], particle: EffectParticle, ren
 
   const local: number[] = [];
 
-  const color: RgbaColor = [
+  const color: Color = [
     Math.max(0, particle.r),
     Math.max(0, particle.g),
     Math.max(0, particle.b),
     Math.min(1, particle.alpha),
   ];
 
-  const edge: RgbaColor = [color[0], color[1], color[2], 0];
+  const edge: Color = [color[0], color[1], color[2], 0];
   if(renderer === PARTICLE_RENDERER.CIRCLE) {
     addRadialPolygon(local, x, y, size, color, ROUND, rotation, z);
   } else if(renderer === PARTICLE_RENDERER.SQUARE) {
@@ -194,7 +194,7 @@ function appendColoredParticle(vertices: number[], particle: EffectParticle, ren
     // Overlapping feathered lobes give volume without project-specific code.
     addGradientRadialPolygon(local, x, y, size, color, edge, BILLOW, rotation, z);
 
-    const inner: RgbaColor = [color[0] * 1.5, color[1] * 1.5, color[2] * 1.5, color[3] * 0.65];
+    const inner: Color = [color[0] * 1.5, color[1] * 1.5, color[2] * 1.5, color[3] * 0.65];
     addGradientRadialPolygon(
       local,
       x - size * 0.16,
@@ -227,7 +227,7 @@ function appendColoredParticle(vertices: number[], particle: EffectParticle, ren
  * @param out @param p
  * @param color @param camera
  */
-function appendStreak(out: number[], p: EffectParticle, color: RgbaColor, camera: ParticleCameraBasis) {
+function appendStreak(out: number[], p: EffectParticle, color: Color, camera: ParticleCameraBasis) {
   const velocity = [p.vx, p.vy, p.vz];
   const view = camera.backward;
   let side = [
@@ -263,7 +263,7 @@ function appendStreak(out: number[], p: EffectParticle, color: RgbaColor, camera
  * @param out @param size @param rotation
  * @param color
  */
-function appendQuad(out: number[], size: number, rotation: number, color: RgbaColor) {
+function appendQuad(out: number[], size: number, rotation: number, color: Color) {
   const cosine = Math.cos(rotation);
   const sine = Math.sin(rotation);
   for(const [x, y] of [[-1, 1], [-1, -1], [1, -1], [-1, 1], [1, -1], [1, 1]]) {

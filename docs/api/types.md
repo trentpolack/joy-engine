@@ -45,11 +45,11 @@ type MovingBody = Vector2 & Velocity2;
 ```
 
 
-## RgbaColor
+## Color
 Import from `joy-engine`. [Source](../../src/core/types.ts)
 
 ```ts
-type RgbaColor = readonly [number, number, number, number];
+type Color = readonly [number, number, number, number];
 ```
 
 
@@ -982,7 +982,7 @@ interface SceneFrameOptions {
   environment?: EnvironmentFrame;
   lights?: readonly PointLight[];
   ambient?: number;
-  clearColor?: RgbaColor;
+  clearColor?: Color;
   timeSeconds?: number;
   opaqueTriangles?: readonly number[];
   transparentTriangles?: readonly number[];

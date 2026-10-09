@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import type { RgbaColor } from './types.ts';
+import type { Color } from './types.ts';
 
 /**
  * Return a new straight-alpha color without mutating the borrowed palette color.
@@ -9,7 +9,7 @@ import type { RgbaColor } from './types.ts';
  * @param alpha The new alpha value.
  * @returns A new RGBA color with the specified alpha.
  */
-export function withAlpha(color: RgbaColor, alpha: number): RgbaColor {
+export function withAlpha(color: Color, alpha: number): Color {
   return([color[0], color[1], color[2], alpha]);
 }
 
@@ -19,7 +19,7 @@ export function withAlpha(color: RgbaColor, alpha: number): RgbaColor {
  * @param value The hex color string to parse.
  * @returns The parsed RGBA color or null if the input is invalid.
  */
-export function parseHexColor(value: string | undefined): RgbaColor | null {
+export function parseHexColor(value: string | undefined): Color | null {
   if(!value || (!/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value))) {
     return null;
   }

@@ -142,7 +142,7 @@ Sample a floating-point number from the half-open requested range.
 Import from `joy-engine`. [Source](../../src/core/color.ts)
 
 ```ts
-function parseHexColor(value: string | undefined): RgbaColor | null
+function parseHexColor(value: string | undefined): Color | null
 ```
 Decode #RGB or #RRGGBB notation into normalized RGBA. Unsupported forms return null so callers can select their own fallback.
 
@@ -154,7 +154,7 @@ Decode #RGB or #RRGGBB notation into normalized RGBA. Unsupported forms return n
 Import from `joy-engine`. [Source](../../src/core/color.ts)
 
 ```ts
-function withAlpha(color: RgbaColor, alpha: number): RgbaColor
+function withAlpha(color: Color, alpha: number): Color
 ```
 Return a new straight-alpha color without mutating the borrowed palette color.
 

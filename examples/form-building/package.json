@@ -1,0 +1,20 @@
+{
+  "name": "@joy-engine/example-form-building",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "author": "Trent Polack",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build --base=./",
+    "preview": "vite preview --host 127.0.0.1",
+    "check": "joy-check-javascript test vite.config.js && tsc --project tsconfig.json",
+    "test": "node --import joy-engine/testing/register-raw-loader --test test/asset.test.mjs",
+    "capture": "node test/browser.mjs",
+    "bake": "node --import joy-engine/testing/register-raw-loader test/bake.mjs"
+  },
+  "dependencies": {
+    "joy-engine": "file:../.."
+  }
+}

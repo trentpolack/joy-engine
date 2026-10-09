@@ -93,7 +93,7 @@ Move code into `src/` when it is stable behavior that more than one game, tool, 
 - Keep a consistent DPI/resolution for projects; ensure the 3D scene and HUD/UI elements have the proper scale for standard or high DPI displays. A higher resolution/DPI should not materially change how much the player can see.
 - Aim for quality rendering; stylized does not have to mean compromised fidelity or effects.
 - HTML5/CSS/Canvas can be used (but does not have to be) for HUD/UI elements but everything else in the game should be rendered in a proper 3D scene, with HDR if supported, with joy engine serving as a wrapper over luma.gl. Additionally, projects should have no need for direct luma.gl code unless it's truly a one-off (and then get approval before executing).
-  - Ensure that there is logic for rendering fallbacks; target WebGPU with a fallback to WebGL 2 if unsupported; even potentially fallback to WebGL 1 if neither WebGPU or WebGL 2 is supported. 
+  - Ensure that there is logic for rendering fallbacks; target WebGPU with a fallback to WebGL 2 if unsupported; even potentially fallback to WebGL 1 if neither WebGPU or WebGL 2 is supported.
 - Favor explicit ownership, small modules, and clear state transitions. Use object-oriented patterns when they improve clarity, but do not force them where a simpler functional or data-driven shape is clearer.
 - Keep code clear, well-formatted, and documented (in-line/commented).
 - Organize JavaScript for a C/C++-friendly reading model: make ownership and lifetimes explicit, keep composition roots procedural, use classes for stateful owners, and treat plain records as structs. Prefer early returns, descriptive intermediate values, and named functions over dense callback chains or clever expressions.
@@ -116,3 +116,8 @@ Move code into `src/` when it is stable behavior that more than one game, tool, 
 - The header copyright/MIT license text for each file being created should be the copyright on one line and the license on the next line; i.e.:
   - // Copyright (c) 2026 Trent Polack. All Rights Reserved.
   - // Licensed under the MIT License.
+
+## Commit Message Standards
+- Don't use the "Conventional Commits" commit style; i.e., don't use the `feat(<branch>): <message>`, `chore: <message>`, etc..
+- Instead, the commit message should have a summary as its opening line and then a list of relevant changes (prefixed with `-` to preserve list presentation.
+  - Notable changes to include in a commit message are important/significant changes to specific modules/features as well as the sort of change that'd warrant a `CHANGELOG.md` mention.

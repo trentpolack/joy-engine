@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "apartments",
+  "source": "# Copyright (c) 2026 Trent Polack. All Rights Reserved.\n# Licensed under the MIT License.\nproject meta(name=\"Building shell\", info=\"FORM RUNTIME ASSET / METERS / Y-UP\")\nparam width = 8 meta(min=4, max=30, step=0.25)\nparam depth = 6 meta(min=4, max=30, step=0.25)\nparam height = 6 meta(min=3, max=30, step=0.25)\nparam floors = 2 meta(min=1, max=8, step=1)\nparam window_spacing = 2 meta(min=1.5, max=6, step=0.25)\nparam door_spacing = 6 meta(min=3, max=12, step=0.25)\nparam roof_shape = 1 meta(min=0, max=1, step=1)\nparam roof_rise = 2 meta(min=0.3, max=5, step=0.1)\nparam random_seed = 42 meta(min=1, max=9999, step=1)\nparam wall_tint = rgba(0.66,0.48,0.3,1)\nparam roof_tint = rgba(0.19,0.25,0.3,1)\nparam wall_finish = materialPbr(wall_tint,0,0.85)\nparam roof_finish = materialPbr(roof_tint,0.1,0.55)\nparam window_piece = meshBox(1,1,0.12)\n\nseed(random_seed)\ncolor(1,1,1)\nlet unit = meshBox(1,1,1)\nlet trim = materialPbr(rgba(0.12,0.16,0.19,1),0,0.7)\nlet glass = materialPbr(rgba(0.16,0.46,0.58,1),0.3,0.2)\nlet floor_count = floor(floors)\nlet floor_height = height/floor_count\nlet window_height = min(1.3,floor_height*0.55)\n# Four walls leave a hollow interior; facade panels are decorative, not cut openings.\ninstance(unit,vector(0,height/2,-depth/2),vector(0,0,0),vector(width,height,0.2),wall_finish)\ninstance(unit,vector(0,height/2,depth/2),vector(0,0,0),vector(width,height,0.2),wall_finish)\nrepeat 2 as side {\n  let sign = side*2 - 1\n  instance(unit,vector(sign*width/2,height/2,0),vector(0,0,0),vector(0.2,height,depth),wall_finish)\n}\n# Floor bands and foundations are also reused boxes, not a host geometry generator.\nrepeat floor_count + 1 as level {\n  instance(unit,vector(0,level*floor_height,0),vector(0,0,0),vector(width + 0.3,0.16,depth + 0.3),trim)\n}\nlet columns = max(1,floor((width - 1)/window_spacing))\nlet side_columns = max(1,floor((depth - 1)/window_spacing))\nlet doors = max(1,floor(width/door_spacing))\nrepeat floor_count as level {\n  let y = (level + 0.5)*floor_height\n  repeat 2 as side {\n    let sign = side*2 - 1\n    repeat columns as column {\n      let x = (column - (columns - 1)/2)*window_spacing\n      # Ground front is reserved for doors, avoiding overlapped panels.\n      if(level + (1 - side) > 0) {\n        instance(unit,vector(x,y,sign*(depth/2 + 0.15)),vector(0,0,0),vector(1.25,window_height + 0.18,0.18),trim)\n        color(0.7 + rand()*0.3,0.7 + rand()*0.3,1)\n        instance(window_piece,vector(x,y,sign*(depth/2 + 0.26)),vector(0,0,0),vector(1,window_height,1),glass)\n        color(1,1,1)\n      }\n    }\n    repeat side_columns as column {\n      let z = (column - (side_columns - 1)/2)*window_spacing\n      instance(unit,vector(sign*(width/2 + 0.15),y,z),vector(0,pi/2,0),vector(1.25,window_height + 0.18,0.18),trim)\n      color(0.7 + rand()*0.3,0.7 + rand()*0.3,1)\n      instance(window_piece,vector(sign*(width/2 + 0.26),y,z),vector(0,pi/2,0),vector(1,window_height,1),glass)\n      color(1,1,1)\n    }\n  }\n}\nrepeat doors as door {\n  let x = (door - (doors - 1)/2)*door_spacing\n  let door_height = min(2.2,floor_height*0.8)\n  with userData({kind:\"entrance\",index:door,position:vector(x,0,depth/2)}) {\n    instance(unit,vector(x,door_height/2,depth/2 + 0.16),vector(0,0,0),vector(1.4,door_height,0.15),trim)\n    instance(unit,vector(x,door_height + 0.2,depth/2 + 0.5),vector(0,0,0),vector(2,0.14,0.9),roof_finish)\n  }\n}\nif(roof_shape < 0.5) {\n  instance(unit,vector(0,height + 0.25,0),vector(0,0,0),vector(width + 0.7,0.35,depth + 0.7),roof_finish)\n}\nif(roof_shape >= 0.5) {\n  let half = width/2 + 0.35\n  let slope = atan2(roof_rise,half)\n  let length = sqrt(half*half + roof_rise*roof_rise)\n  repeat 2 as side {\n    let sign = side*2 - 1\n    instance(unit,vector(sign*half/2,height + roof_rise/2,0),vector(0,0,-sign*slope),vector(length,0.2,depth + 0.7),roof_finish)\n  }\n  material(wall_finish)\n  triangle(-width/2,height,depth/2, width/2,height,depth/2, 0,height + roof_rise,depth/2)\n  triangle(width/2,height,-depth/2, -width/2,height,-depth/2, 0,height + roof_rise,-depth/2)\n}\n",
+  "overrides": {
+    "width": 12,
+    "depth": 9,
+    "height": 15,
+    "floors": 5,
+    "window_spacing": 2,
+    "door_spacing": 6,
+    "roof_shape": 0,
+    "wall_tint": [
+      0.72,
+      0.58,
+      0.42,
+      1
+    ],
+    "roof_tint": [
+      0.26,
+      0.18,
+      0.14,
+      1
+    ],
+    "random_seed": 103
+  }
+}

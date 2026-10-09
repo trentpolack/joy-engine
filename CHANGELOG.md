@@ -2,6 +2,10 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-09-2026
+### FORM building asset example
+- Added a FORM-authored building shell with three seeded presets, editable runtime parameter snapshots, baked mesh/GLB assets, and a material-group presentation adapter. Documented compiler boundaries, material rendering limits, focused tests, and local browser evidence.
+
 ## 10-08-2026
 ### Runtime diagnostics
 - Clarified the live development launcher as `STATS | <fps>` with stable numeric spacing so cadence changes remain easy to scan.

@@ -7,7 +7,7 @@ import type { PostProcessingConfig } from '../postprocessor/config.ts';
 import type { GpuDeviceOptions } from '../gpu/gpu-device.ts';
 import type { EnvironmentFrame } from '../../environment/environment-system.ts';
 import type { PointLight } from '../pbr/point-lights.ts';
-import type { RgbaColor, Vector2 } from '../../core/types.ts';
+import type { Color, Vector2 } from '../../core/types.ts';
 import type { RenderScene } from './render-scene.ts';
 import type {SceneEffectsOptions, SceneEffectsFrame} from './scene-effects.ts';
 import type {SceneTemporalSnapshot} from './scene-temporal.ts';
@@ -40,7 +40,7 @@ export interface SceneFrameOptions {
   environment?: EnvironmentFrame;
   lights?: readonly PointLight[];
   ambient?: number;
-  clearColor?: RgbaColor;
+  clearColor?: Color;
   timeSeconds?: number;
   opaqueTriangles?: readonly number[];
   transparentTriangles?: readonly number[];

@@ -15,7 +15,7 @@ export interface Velocity2 {
 }
 
 export type MovingBody = Vector2 & Velocity2;
-export type RgbaColor = readonly [number, number, number, number];
+export type Color = readonly [number, number, number, number];
 
 export interface IndexedMesh3D {
   name: string;

@@ -7,7 +7,7 @@ import { readGpuDiagnostics } from '../gpu/gpu-diagnostics.ts';
 import type { SceneEffectsOptions, SceneEffectsFrame } from '../scene/scene-effects.ts';
 import type { GpuDeviceOptions } from '../gpu/gpu-device.ts';
 import type { RenderPipelineProps, Framebuffer, Texture, Device, CanvasContext, Shader, RenderPipeline, VertexArray } from '@luma.gl/core';
-import type { PbrMesh, RgbaColor, PbrFrame } from '../../core/types.ts';
+import type { PbrMesh, Color, PbrFrame } from '../../core/types.ts';
 import type { TransparentDraw } from './textured-triangles.ts';
 import type { PbrTransparentRange } from '../pbr/pbr-triangles.ts';
 import type { PostProcessingConfig } from '../postprocessor/config.ts';
@@ -323,7 +323,7 @@ export class GpuTriangleRenderer {
    * @param [sceneFrame] Borrowed motion/camera inputs for requested scene effects. Depth defaults to this scene's owned attachment. Callers must supply real velocities and projection jitter; reset history after camera cuts or scene replacement.
    * @param [atmosphereUniforms] Optional packed background snapshot. Requires atmosphere at creation; null hides it.
    */
-  render(vertices: number[] | Float32Array, uniformData: Float32Array<ArrayBuffer>, clearColor: RgbaColor, transparentVertices: number[] | Float32Array = [], timeSeconds: number = 0, transparentDraws: readonly TransparentDraw[] = [], materialFrame: PbrFrame | null = null, sceneFrame: SceneEffectsFrame = {}, atmosphereUniforms: Float32Array<ArrayBuffer> | null = null, attachmentFrame: SceneAttachmentFrame | null = null) {
+  render(vertices: number[] | Float32Array, uniformData: Float32Array<ArrayBuffer>, clearColor: Color, transparentVertices: number[] | Float32Array = [], timeSeconds: number = 0, transparentDraws: readonly TransparentDraw[] = [], materialFrame: PbrFrame | null = null, sceneFrame: SceneEffectsFrame = {}, atmosphereUniforms: Float32Array<ArrayBuffer> | null = null, attachmentFrame: SceneAttachmentFrame | null = null) {
     if(atmosphereUniforms && !this.atmosphere) {
       throw new Error('Atmosphere uniforms require atmosphere at renderer creation.');
     }

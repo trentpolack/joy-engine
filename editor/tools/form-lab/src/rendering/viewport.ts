@@ -4,7 +4,7 @@
 import { VIEWPORT_GESTURE } from '../../../../site/src/interaction/constants.ts';
 import { FORM_VIEW_MODE } from '../constants.ts';
 import { GPU_BACKEND } from 'joy-engine/constants';
-import type { RgbaColor } from 'joy-engine';
+import type { Color } from 'joy-engine';
 import type { GeometryData } from 'joy-engine/form';
 import {ViewportInput} from '../../../../site/src/interaction/viewport-input.ts';
 import {
@@ -22,7 +22,7 @@ import fragment from '../../shaders/preview.frag.glsl?raw';
 // Neutral inspection light is editor-only and never enters geometry/material exports.
 const EDITOR_LIGHTING = {lightDirection:[0.35,0.85,0.4], lightColor:[3,3,3], ambientColor:[0.45,0.45,0.45]};
 
-const EDITOR_BACKGROUND: RgbaColor = [0.08,0.10,0.13,1];
+const EDITOR_BACKGROUND: Color = [0.08,0.10,0.13,1];
 
 /** Owns camera input, demand-driven rendering, and all GPU resources. */
 export class Viewport {

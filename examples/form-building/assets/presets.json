@@ -1,0 +1,5 @@
+{
+  "cottage": {"width":8,"depth":6,"height":3.5,"floors":1,"roof_shape":1,"roof_rise":2,"random_seed":42},
+  "warehouse": {"width":18,"depth":12,"height":6,"floors":1,"window_spacing":4,"door_spacing":5,"roof_shape":0,"wall_tint":[0.36,0.48,0.52,1],"roof_tint":[0.13,0.17,0.21,1],"random_seed":71},
+  "apartments": {"width":12,"depth":9,"height":15,"floors":5,"window_spacing":2,"door_spacing":6,"roof_shape":0,"wall_tint":[0.72,0.58,0.42,1],"roof_tint":[0.26,0.18,0.14,1],"random_seed":103}
+}
