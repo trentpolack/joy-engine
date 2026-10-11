@@ -274,7 +274,7 @@ export class DevTools {
       const counters = snapshot?.resources;
       for(const [name, label] of RESOURCE_LABELS) {
         const value = counters?.[name];
-        this.setDetail(`${label} active / created`, `${value?.active ?? 'Unavailable'} / ${value?.created ?? 'Unavailable'}`, 'gpu-resources');
+        this.setDetail(`${label} active / lifetime`, `${value?.active ?? 'Unavailable'} / ${value?.created ?? 'Unavailable'}`, 'gpu-resources');
       }
       if(snapshot?.scene) {
         this.setDetail('this scene visible / culled', `${snapshot.scene.visible} / ${snapshot.scene.culled}`, 'gpu-resources');
@@ -396,7 +396,7 @@ function createView(title: string) {
       </details>
       <details class="joy-dev-group" data-group="gpu-resources">
         <summary>GPU resources · all luma devices</summary><dl></dl>
-        <p>Active handles and lifetime-created handles across all luma devices in this JavaScript realm. These are not draw calls.</p>
+        <p>Active handles and lifetime-created handles across all luma devices in this JavaScript realm. Lifetime totals only increase and include short-lived WebGPU upload resources; they do not indicate a leak. Watch active handles and tracked allocation bytes for retained-resource growth. These are not draw calls.</p>
       </details>
     </section>
   `;

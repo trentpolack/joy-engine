@@ -4,6 +4,9 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, P
 
 ## 10-11-2026
 
+### Runtime diagnostics
+- Clarified that GPU resource lifetime totals are monotonic and include transient WebGPU uploads, directing leak investigations to active handles and tracked allocation bytes.
+
 ### Joy Editor design system
 - Fixed DESIGN opening an empty inspector, moved its launcher into the workspace and lab headers, and cleared inspection state on close or Escape.
 - Added shared design tokens and control classes across Joy Editor, FORM LAB, and PARTICLE LAB, with a development-only inspector, token viewer, comparison view, and CSS persistence endpoint.
