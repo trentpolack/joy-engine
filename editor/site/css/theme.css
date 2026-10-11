@@ -1,21 +1,23 @@
+@import '../../src/joy-tokens.css';
+@import '../../src/components.css';
 /* Copyright (c) 2026 Trent Polack. Licensed under the MIT License. */
 :root {
   color-scheme: dark;
-  --joy-orange: #ed6c39;
-  --joy-orange-hover: #ff9b70;
-  --joy-canvas: #101722;
-  --joy-field: #101a27;
-  --joy-script: #0c1522;
-  --joy-panel: #1b293d;
-  --joy-surface: #25354c;
-  --joy-button: #2b405b;
-  --joy-line: #40536d;
-  --joy-text: #e3e9f1;
-  --joy-muted: #a1b2c9;
-  --joy-danger: #ef6a62;
-  --joy-success: #b0cf81;
-  --joy-cream: #fff3cf;
-  --joy-selection: #47607b;
+  --joy-orange: var(--joy-color-accent);
+  --joy-orange-hover: var(--joy-color-accent-hover);
+  --joy-canvas: var(--joy-color-canvas);
+  --joy-field: var(--joy-color-field);
+  --joy-script: var(--joy-color-script);
+  --joy-panel: var(--joy-color-panel);
+  --joy-surface: var(--joy-color-surface);
+  --joy-button: var(--joy-color-button);
+  --joy-line: var(--joy-color-border);
+  --joy-text: var(--joy-color-text);
+  --joy-muted: var(--joy-color-muted);
+  --joy-danger: var(--joy-color-danger);
+  --joy-success: var(--joy-color-success);
+  --joy-cream: var(--joy-color-cream);
+  --joy-selection: var(--joy-color-selection);
   --joy-script-comment: #90a4bf;
   --joy-script-keyword: #ff9b70;
   --joy-script-number: #b0cf81;

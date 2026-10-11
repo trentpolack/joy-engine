@@ -4,6 +4,10 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, P
 
 ## 10-11-2026
 
+### Joy Editor design system
+- Fixed DESIGN opening an empty inspector, moved its launcher into the workspace and lab headers, and cleared inspection state on close or Escape.
+- Added shared design tokens and control classes across Joy Editor, FORM LAB, and PARTICLE LAB, with a development-only inspector, token viewer, comparison view, and CSS persistence endpoint.
+
 ### FORM LAB workbench
 - Compacted standalone chrome, exposed existing Recipes beside the script reference, added numeric default/modified feedback and undoable per-parameter resets, clarified browser recovery/document downloads versus baked exports, and kept complete inspectors reachable at narrow standalone and hosted widths. Preserved PBR preview and shadow rendering.
 

@@ -13,6 +13,7 @@ import { mountEditorNavigation } from '../../../../site/src/navigation.ts';
 import '@fontsource/archivo/400.css';
 import '@fontsource/archivo/600.css';
 import '@fontsource/archivo-black';
+import {JoyComponentRegistry} from '../../../../src/components.ts';
 import { compileParticleEffect, ParticleEffect, PARTICLE_STEP_SECONDS, DEFAULT_PARTICLE_TEXTURE } from 'joy-engine';
 import { downloadAsset, MAX_ASSET_BYTES, readAsset, writeAsset } from '../../src/document.ts';
 import { copyExample, createEmitterTemplate, EXAMPLES, EMITTER_PRESETS } from '../../src/examples.ts';
@@ -1391,17 +1392,35 @@ const workspaceBridge = connectWorkspaceTool({
   }
 });
 application.initialize();
+const components = new JoyComponentRegistry();
+if(import.meta.env.DEV) {
+  void import('../../../../src/design-mode.ts').then(({JoyDesignMode}) => {
+    const toggleHost = document.querySelector<HTMLElement>('.app-header nav[aria-label="Document actions"]');
+    if(!toggleHost) {
+      throw new Error('Design mode requires a header container.');
+    }
+    const designMode = new JoyDesignMode({toggleHost, compareUrls: ['/editor/', '/joy-editor/tools/form-lab/', '/joy-editor/tools/particle-lab/']});
+    window.addEventListener(BROWSER_EVENT.PAGEHIDE, event => {
+      if(!event.persisted) {
+        designMode.destroy();
+      }
+    }, {signal: designMode.listeners.signal});
+    import.meta.hot?.dispose(() => designMode.destroy());
+  });
+}
 window.addEventListener(BROWSER_EVENT.PAGEHIDE, event => {
   if(!event.persisted) {
     workspaceBridge.destroy();
     navigation.destroy();
     application.destroy();
+    components.destroy();
   }
 });
 if(import.meta.hot) {
   import.meta.hot.dispose(() => {
     workspaceBridge.destroy();
     navigation.destroy();
+    components.destroy();
     application.destroy();
   });
 }

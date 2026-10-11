@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, searchForWorkspaceRoot } from 'vite';
 import { createFaviconPlugin } from 'joy-engine/development/vite';
 import { createEditorPolicyPlugin } from './tooling/editor-policy-plugin.mjs';
+import {createDesignModePlugin} from './tooling/design-mode-plugin.mjs';
 
 // Joy Editor ships its own copy of the Joy icon so it builds without the hosting workspace.
 const EDITOR_ICON_PATH = fileURLToPath(new URL('./assets/favicon.png', import.meta.url));
@@ -17,7 +18,7 @@ export default defineConfig({
       allow: [searchForWorkspaceRoot(process.cwd())]
     }
   },
-  plugins: [createFaviconPlugin({iconPath: EDITOR_ICON_PATH}), createEditorPolicyPlugin('joy-editor')],
+  plugins: [createFaviconPlugin({iconPath: EDITOR_ICON_PATH}), createEditorPolicyPlugin('joy-editor'), createDesignModePlugin()],
   build: {
     outDir: '../dist',
     emptyOutDir: true,

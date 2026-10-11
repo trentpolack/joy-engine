@@ -10,6 +10,7 @@ import {GamePreviewSession} from './game-preview-session.ts';
 import '../../css/workspace/style.css';
 import '@fontsource/archivo/400.css';
 import '@fontsource/archivo/600.css';
+import {JoyComponentRegistry} from '../../../src/components.ts';
 import { WorkspaceDocument } from './documents.ts';
 import { createAssetText, editorUrl, isSupportedAssetPath } from './asset-types.ts';
 
@@ -1472,12 +1473,32 @@ function anchor(id: string) {
 }
 
 const workspace = new JoyWorkspace();
+const components = new JoyComponentRegistry();
 void workspace.start();
+if(import.meta.env.DEV) {
+  void import('../../../src/design-mode.ts').then(({JoyDesignMode}) => {
+    const toggleHost = document.querySelector<HTMLElement>('.workspace-header');
+    if(!toggleHost) {
+      throw new Error('Design mode requires a header container.');
+    }
+    const designMode = new JoyDesignMode({toggleHost, compareUrls: ['/editor/', '/joy-editor/tools/form-lab/', '/joy-editor/tools/particle-lab/']});
+    window.addEventListener(BROWSER_EVENT.PAGEHIDE, event => {
+      if(!event.persisted) {
+        designMode.destroy();
+      }
+    }, {signal: designMode.listeners.signal});
+    import.meta.hot?.dispose(() => designMode.destroy());
+  });
+}
 window.addEventListener(BROWSER_EVENT.PAGEHIDE, event => {
   if(!event.persisted) {
     workspace.destroy();
+    components.destroy();
   }
 });
 if(import.meta.hot) {
-  import.meta.hot.dispose(() => workspace.destroy());
+  import.meta.hot.dispose(() => {
+    components.destroy();
+    workspace.destroy();
+  });
 }

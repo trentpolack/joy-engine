@@ -10,6 +10,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./preview-fullscreen.css": "./src/preview-fullscreen.css",
+    "./components": "./src/components.ts",
+    "./design-mode": "./src/design-mode.ts",
+    "./tooling/design-mode": "./tooling/design-mode-plugin.mjs",
     "./desktop": "./src/desktop/application.cjs",
     "./server": "./server/plugin.mjs",
     "./package.json": "./package.json",
