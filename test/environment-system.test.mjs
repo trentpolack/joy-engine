@@ -62,6 +62,7 @@ test('environment produces aligned render data and PBR lighting', () => {
   assert.ok(Math.abs(uniforms[29] - 0.8) < 1e-6);
   assert.equal(uniforms[34], 2);
   assert.deepEqual(lighting.lightDirection, frame.primaryLight.direction);
+  assert.equal(createEnvironmentLighting({...frame, primaryLight: {...frame.primaryLight, castsShadow: false}}).castsShadow, false);
   assert.ok(lighting.lightColor.every(Number.isFinite));
   assert.ok(lighting.ambientColor.every(value => value > 0));
 });

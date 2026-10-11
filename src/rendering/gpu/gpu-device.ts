@@ -44,6 +44,8 @@ export interface PortableShaderSources {
       fragment: string;
   };
   modules?: ShaderModule[];
+  /** Compile-time feature selection applied before module assembly. */
+  defines?: Record<string, boolean | number>;
 }
 
 /**
@@ -137,7 +139,7 @@ export function createPortableShaders(device: Device, sources: PortableShaderSou
   };
 
   if(device.info.shadingLanguage === 'wgsl') {
-    const assembled = new WGSLShaderAssembler().assembleWGSLShader({ platformInfo, source: sources.wgsl, modules });
+    const assembled = new WGSLShaderAssembler().assembleWGSLShader({ platformInfo, source: sources.wgsl, modules, defines: sources.defines });
     const shader = device.createShader({ id, source: assembled.source, language: 'wgsl' });
     return({
       vertex: shader,
@@ -149,7 +151,7 @@ export function createPortableShaders(device: Device, sources: PortableShaderSou
     platformInfo,
     vs: explicitGlslVersion(sources.glsl.vertex),
     fs: explicitGlslVersion(sources.glsl.fragment),
-    modules
+    modules, defines: sources.defines
   });
   const vertex = device.createShader({ id: `${id}-vertex`, source: assembled.vs, language: 'glsl', stage: 'vertex' });
   try {

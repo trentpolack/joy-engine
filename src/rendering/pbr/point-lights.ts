@@ -15,11 +15,13 @@ export interface PointLight {
   g: number;
   b: number;
   range: number;
+  /** Geometric shadows are enabled when omitted; false retains illumination only. */
+  castsShadow?: boolean;
 }
 export const MAX_POINT_LIGHTS = 32;
 export const POINT_LIGHT_UNIFORM_BYTES = 1168;
 /** Flat, double-sided diffuse lighting for XYZ/RGBA opaque triangles.
- * Normals come from surface derivatives; lights do not cast shadows.
+ * Normals come from surface derivatives. SceneRenderer adds WebGPU shadows by default.
  * Linear HDR output feeds the renderer's optional scene post processing.
  */
 export const LIT_TRIANGLE_SHADERS = Object.freeze({ wgsl, glsl: { vertex, fragment } });

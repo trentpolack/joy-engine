@@ -22,6 +22,7 @@ export function prepareSceneFrame(scene: RenderScene, {backward, viewProjection,
 }) {
   scene.assertAlive();
   const opaque = Array.from(opaqueTriangles);
+  const shadowCasters = Array.from(opaqueTriangles);
   const transparent = Array.from(transparentTriangles);
   const opaqueRanges = [];
   const surfaceRoughness = Array(opaque.length/7).fill(1) as number[];
@@ -32,13 +33,18 @@ export function prepareSceneFrame(scene: RenderScene, {backward, viewProjection,
       continue;
     }
     const prepared = prepareMesh(instance, scene.frameCache);
+    const translucent = instance.pass === 'transparent' || (instance.pass === 'auto' && (instance.opacity < 1 || instance.asset.hasTransparency));
+    if(!translucent) {
+      for(const value of prepared.vertices) {
+        shadowCasters.push(value);
+      }
+    }
     const transform = prepared.transform;
     if(viewProjection && outsideFrustum(instance.asset, transform, viewProjection, webgpu)) {
       culled++;
       continue;
     }
     visible++;
-    const translucent = instance.pass === 'transparent' || (instance.pass === 'auto' && (instance.opacity < 1 || instance.asset.hasTransparency));
     const target = translucent ? transparent : opaque;
     if(!translucent) {
       if(!Number.isFinite(instance.sceneRoughness) || instance.sceneRoughness < 0 || instance.sceneRoughness > 1) {
@@ -53,5 +59,5 @@ export function prepareSceneFrame(scene: RenderScene, {backward, viewProjection,
       target.push(value);
     }
   }
-  return {opaque, opaqueRanges, surfaceRoughness, transparent: sortCameraTransparentTriangles(transparent, backward), visible, culled};
+  return {opaque, shadowCasters, opaqueRanges, surfaceRoughness, transparent: sortCameraTransparentTriangles(transparent, backward), visible, culled};
 }

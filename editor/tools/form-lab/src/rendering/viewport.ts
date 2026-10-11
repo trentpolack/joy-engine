@@ -4,6 +4,9 @@
 import { VIEWPORT_GESTURE } from '../../../../site/src/interaction/constants.ts';
 import { FORM_VIEW_MODE } from '../constants.ts';
 import { GPU_BACKEND } from 'joy-engine/constants';
+import type {PbrEnvironment} from 'joy-engine';
+import {DEFAULT_PREVIEW_LIGHTING, STUDIO_ENVIRONMENT, createStudioPixels, validatePreviewLighting} from './preview-lighting.ts';
+import type {PreviewLightingSettings} from './preview-lighting.ts';
 import type { Color } from 'joy-engine';
 import type { GeometryData } from 'joy-engine/form';
 import {ViewportInput} from '../../../../site/src/interaction/viewport-input.ts';
@@ -20,12 +23,14 @@ import vertex from '../../shaders/preview.vert.glsl?raw';
 import fragment from '../../shaders/preview.frag.glsl?raw';
 
 // Neutral inspection light is editor-only and never enters geometry/material exports.
-const EDITOR_LIGHTING = {lightDirection:[0.35,0.85,0.4], lightColor:[3,3,3], ambientColor:[0.45,0.45,0.45]};
+const EDITOR_AMBIENT = [0.03, 0.03, 0.03];
 
 const EDITOR_BACKGROUND: Color = [0.08,0.10,0.13,1];
 
 /** Owns camera input, demand-driven rendering, and all GPU resources. */
 export class Viewport {
+  lighting: PreviewLightingSettings = {...DEFAULT_PREVIEW_LIGHTING};
+  private environment: PbrEnvironment | null = null;
   declare canvas: HTMLCanvasElement;
   declare onError: (message: string) => void;
   declare camera: OrbitCamera;
@@ -129,6 +134,15 @@ export class Viewport {
       renderer.destroy();
       return;
     }
+    try {
+      this.environment = renderer.createMaterialEnvironment(createStudioPixels(), {
+        size: STUDIO_ENVIRONMENT.specularSize, irradianceSize: STUDIO_ENVIRONMENT.irradianceSize,
+        brdfLUTSize: STUDIO_ENVIRONMENT.brdfSize, sampleCount: STUDIO_ENVIRONMENT.sampleCount
+      });
+    } catch(error) {
+      renderer.destroy();
+      throw error;
+    }
     this.renderer = renderer;
     if(this.data) {
       await renderer.setMaterialMesh(this.data);
@@ -139,6 +153,13 @@ export class Viewport {
     this.invalidate();
     return renderer.backend;
   }
+  /** Change editor presentation without touching the authored document or exported materials. */
+  setLighting(settings: PreviewLightingSettings) {
+    validatePreviewLighting(settings);
+    this.lighting = {...settings};
+    this.invalidate();
+  }
+
   /** Borrow compiled geometry and commit its CPU preview only after a successful GPU upload.
    * @param data
    * @param shouldFrame Whether to frame the accepted geometry in world space.
@@ -272,12 +293,28 @@ export class Viewport {
         this.camera.basis().backward,
       );
       const basis = this.camera.basis();
+      const lighting = this.lighting ?? DEFAULT_PREVIEW_LIGHTING;
+      if(this.environment) {
+        this.environment.intensity = lighting.environmentIntensity;
+        this.environment.rotation = lighting.environmentRotation;
+      }
+      const directionLength = Math.hypot(lighting.directionX, lighting.directionY, lighting.directionZ);
       const materialFrame = this.mode === FORM_VIEW_MODE.POINTS || !this.data ? null : {
-        viewProjection: uniforms.subarray(0, 16), eye: basis.eye, backward: basis.backward, ...EDITOR_LIGHTING
+        viewProjection: uniforms.subarray(0, 16), eye: basis.eye, backward: basis.backward,
+        lightDirection: [lighting.directionX/directionLength, lighting.directionY/directionLength, lighting.directionZ/directionLength],
+        lightColor: [lighting.colorR*lighting.intensity, lighting.colorG*lighting.intensity, lighting.colorB*lighting.intensity],
+        ambientColor: EDITOR_AMBIENT, environment: this.environment ?? undefined, castsShadow: lighting.castsShadow,
+        shadowCamera: {viewMatrix: this.camera.viewMatrix(), projectionMatrix: this.camera.projectionMatrix(width/height, true),
+          nearPlane: this.camera.nearPlane, farPlane: this.camera.farPlane},
+        shadows: {quality: lighting.quality, normalBias: this.camera.radius*0.001,
+          shadowDistance: Math.min(this.camera.farPlane, this.camera.distance + this.camera.radius*4)}
       };
       this.renderer.render(opaque, uniforms, EDITOR_BACKGROUND, sorted, 0, [], materialFrame);
       this.canvas.dataset.renderedRevision = String(this.displayRevision);
     } catch (error) {
+      if(import.meta.env.DEV) {
+        console.error(error instanceof Error ? error.stack : String(error));
+      }
       this.onError(
         `Preview unavailable: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -318,6 +355,8 @@ export class Viewport {
     this.input.destroy();
     this.listeners.abort();
     this.observer.disconnect();
+    this.environment?.destroy();
+    this.environment = null;
     this.renderer?.destroy();
   }
 }

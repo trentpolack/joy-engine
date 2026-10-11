@@ -456,3 +456,29 @@ color(water,rgba(0.1,0.33,0.48,0.65))
 output("Water",water)
 `
 });
+
+
+EXAMPLES.push({
+  name: 'Material studio', kind: 'PBR MATERIALS', description: 'Compare polished metal, brushed metal, painted surfaces, and transparency under studio reflections.',
+  source: `# MATERIAL STUDIO
+project meta(name="Material studio", info="PBR / REFLECTION STUDY", title="GIVE LIGHT A SURFACE.")
+
+# Open Materials to edit every finish and its texture channels.
+# Lighting changes only the preview; exported materials keep their authored values.
+param polished = materialPbr(rgba(0.95, 0.65, 0.28, 1), 1, 0.12)
+param brushed = materialPbr(rgba(0.7, 0.8, 0.95, 1), 1, 0.65)
+param painted = materialPbr(rgba(0.12, 0.5, 0.65, 1), 0, 0.4)
+param glass = materialPbr(rgba(0.7, 0.85, 1, 0.35), 0, 0.12)
+param floor = materialPbr(rgba(0.28, 0.3, 0.34, 1), 0, 0.8)
+
+let sphere = meshSphere(1.25, 32)
+with userData({kind: "material-study", purpose: "compare finishes under studio lighting"}) {
+  color(1, 1, 1)
+  instance(sphere, vector(-3, 1.25, 0), vector(0,0,0), vector(1,1,1), polished)
+  instance(sphere, vector(0, 1.25, 0), vector(0,0,0), vector(1,1,1), brushed)
+  instance(sphere, vector(3, 1.25, 0), vector(0,0,0), vector(1,1,1), painted)
+  instance(meshBox(7, 2.7, 0.12), vector(0,1.35,2), vector(0,0,0), vector(1,1,1), glass)
+  instance(meshBox(11, 0.2, 7), vector(0,-0.1,0), vector(0,0,0), vector(1,1,1), floor)
+}
+`
+});

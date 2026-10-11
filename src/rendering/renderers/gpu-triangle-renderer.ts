@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+import {SceneLitPass} from '../shadows/scene-lit-pass.ts';
+import type {SceneLightFrame, ShadowOptions} from '../shadows/types.ts';
 import { GPU_BACKEND, GPU_COMPARE, GPU_TEXTURE_FORMAT, GPU_TOPOLOGY, GPU_VERTEX_FORMAT, SHADER_ENTRY_POINT } from '../gpu/constants.ts';
 import type { RendererDiagnosticOptions, RendererDiagnostics } from '../gpu/gpu-diagnostics.ts';
 import { readGpuDiagnostics } from '../gpu/gpu-diagnostics.ts';
@@ -12,6 +14,8 @@ import type { TransparentDraw } from './textured-triangles.ts';
 import type { PbrTransparentRange } from '../pbr/pbr-triangles.ts';
 import type { PostProcessingConfig } from '../postprocessor/config.ts';
 import { AtmospherePass } from '../environment/atmosphere-pass.ts';
+import {PbrEnvironment} from '../pbr/pbr-environment.ts';
+import type {PbrEnvironmentPixels, PbrEnvironmentOptions} from '../pbr/pbr-environment.ts';
 import { PbrTriangles } from '../pbr/pbr-triangles.ts';
 import { TexturedTriangles } from './textured-triangles.ts';
 import { Postprocessor } from '../postprocessor/postprocessor.ts';
@@ -39,6 +43,7 @@ export interface RendererOptions {
   uniformBufferSize?: number;
   initialVertexBufferSize?: number;
   pbr?: boolean;
+  shadows?: ShadowOptions | false;
   atmosphere?: boolean;
   postProcessing?: Partial<PostProcessingConfig>;
   sceneEffects?: SceneEffectsOptions;
@@ -74,6 +79,8 @@ export class GpuTriangleRenderer {
   declare resourcesReleased: boolean;
   declare destroyed: boolean;
   declare pbr: PbrTriangles | null;
+  private litShadowPass: SceneLitPass | null = null;
+  private readonly shadowOptions: ShadowOptions | false;
   declare textured: TexturedTriangles | null;
   declare opaqueShaders: { vertex: Shader; fragment: Shader; } | null;
   declare shaders: ReturnType<typeof createPortableShaders>;
@@ -104,7 +111,7 @@ export class GpuTriangleRenderer {
    * @param canvasContext
    * @param options
    */
-  constructor(device: Device, canvasContext: CanvasContext, { shaderSources, texturedShaderSources, opaqueShaderSources, uniformBufferSize = 16, initialVertexBufferSize = 64*1024, postProcessing, sceneEffects, pbr = false, atmosphere = false }: RendererOptions) {
+  constructor(device: Device, canvasContext: CanvasContext, { shaderSources, texturedShaderSources, opaqueShaderSources, uniformBufferSize = 16, initialVertexBufferSize = 64*1024, postProcessing, sceneEffects, pbr = false, atmosphere = false, shadows = {} }: RendererOptions) {
     if(sceneEffects && !postProcessing) {
       throw new Error('Scene effects require an offscreen post-processing scene.');
     }
@@ -119,7 +126,8 @@ export class GpuTriangleRenderer {
 
     // Optional scene stages own their resources and borrow the shared device.
     this.sceneUniformBufferSize = uniformBufferSize;
-    this.postProcessing = postProcessing ? normalizePostProcessingConfig(postProcessing) : null;
+    // PBR lighting batches accumulate linear radiance before a single display resolve.
+    this.postProcessing = postProcessing || pbr ? normalizePostProcessingConfig(postProcessing ?? {}) : null;
     this.postprocessor = this.postProcessing ? new Postprocessor(device) : null;
     if(sceneEffects?.colorFormat && sceneEffects.colorFormat !== this.postprocessor?.format) {
       throw new Error(`Scene effects colorFormat must match the post-processing scene format ${this.postprocessor?.format}.`);
@@ -132,10 +140,11 @@ export class GpuTriangleRenderer {
     this.atmosphere = null;
     this.resourcesReleased = false;
     this.destroyed = false;
+    this.shadowOptions = shadows;
     this.pbr = pbr ? new PbrTriangles(device, this.postprocessor?.format) : null;
     // Templates need a fragment output even when this renderer draws directly to
     // the canvas. Fully authored caller shaders require no template expansion.
-    const needsShaderExpansion = this.postProcessing || shaderSources.wgsl?.includes('JOY_POST_APPLY_MACRO');
+    const needsShaderExpansion = postProcessing || shaderSources.wgsl?.includes('JOY_POST_APPLY_MACRO');
     const resolvedShaderSources = needsShaderExpansion
       ? addPostProcessingShaders(shaderSources, {includeUniforms: Boolean(this.postProcessing)})
       : shaderSources;
@@ -228,7 +237,20 @@ export class GpuTriangleRenderer {
    * not this renderer alone. Returns null after disposal; performs no GPU readback.
    */
   getDiagnostics(options: RendererDiagnosticOptions = {}): RendererDiagnostics | null {
-    return this.destroyed ? null : readGpuDiagnostics(this.device, options);
+    if(this.destroyed) {
+      return null;
+    }
+    const snapshot = readGpuDiagnostics(this.device, options);
+    const lit = this.litShadowPass?.shadows.stats;
+    const pbr = this.pbr?.shadowStats;
+    snapshot.shadows = {
+      available: this.backend === GPU_BACKEND.WEBGPU && this.shadowOptions !== false,
+      castingPointLights: (lit?.castingPointLights ?? 0) + (pbr?.castingPointLights ?? 0),
+      castingDirectionalLights: (lit?.castingDirectionalLights ?? 0) + (pbr?.castingDirectionalLights ?? 0),
+      batches: (lit?.batches ?? 0) + (pbr?.batches ?? 0),
+      views: (lit?.views ?? 0) + (pbr?.views ?? 0)
+    };
+    return snapshot;
   }
 
   /** Upload a world-space material mesh; await readiness before displaying new document data.
@@ -239,6 +261,24 @@ export class GpuTriangleRenderer {
       throw new Error('Material meshes require pbr at renderer creation.');
     }
     return this.pbr.setMesh(mesh);
+  }
+
+  /**
+   * Prepare original equirectangular pixels through luma. The caller owns the result
+   * and must destroy it before this renderer/device; ordinary frames borrow it.
+   */
+  createMaterialEnvironment(pixels: PbrEnvironmentPixels, options: PbrEnvironmentOptions = {}) {
+    if(this.destroyed) {
+      throw new Error('Cannot prepare an environment on a destroyed renderer.');
+    }
+    const environment = new PbrEnvironment(this.device);
+    try {
+      environment.preparePixels(pixels, options);
+      return environment;
+    } catch(error) {
+      environment.destroy();
+      throw error;
+    }
   }
 
   /**
@@ -323,7 +363,7 @@ export class GpuTriangleRenderer {
    * @param [sceneFrame] Borrowed motion/camera inputs for requested scene effects. Depth defaults to this scene's owned attachment. Callers must supply real velocities and projection jitter; reset history after camera cuts or scene replacement.
    * @param [atmosphereUniforms] Optional packed background snapshot. Requires atmosphere at creation; null hides it.
    */
-  render(vertices: number[] | Float32Array, uniformData: Float32Array<ArrayBuffer>, clearColor: Color, transparentVertices: number[] | Float32Array = [], timeSeconds: number = 0, transparentDraws: readonly TransparentDraw[] = [], materialFrame: PbrFrame | null = null, sceneFrame: SceneEffectsFrame = {}, atmosphereUniforms: Float32Array<ArrayBuffer> | null = null, attachmentFrame: SceneAttachmentFrame | null = null) {
+  render(vertices: number[] | Float32Array, uniformData: Float32Array<ArrayBuffer>, clearColor: Color, transparentVertices: number[] | Float32Array = [], timeSeconds: number = 0, transparentDraws: readonly TransparentDraw[] = [], materialFrame: PbrFrame | null = null, sceneFrame: SceneEffectsFrame = {}, atmosphereUniforms: Float32Array<ArrayBuffer> | null = null, attachmentFrame: SceneAttachmentFrame | null = null, lightFrame: SceneLightFrame | null = null) {
     if(atmosphereUniforms && !this.atmosphere) {
       throw new Error('Atmosphere uniforms require atmosphere at renderer creation.');
     }
@@ -373,7 +413,12 @@ export class GpuTriangleRenderer {
       if(!this.pbr) {
         throw new Error('Material frames require pbr at renderer creation.');
       }
-      this.pbr.prepare(materialFrame, mixedTransparency);
+      this.pbr.prepare({...materialFrame, shadows: this.shadowOptions === false ? false : (materialFrame.shadows ?? this.shadowOptions)},
+        mixedTransparency, lightFrame?.casters);
+    }
+    if(lightFrame && this.backend === GPU_BACKEND.WEBGPU && this.shadowOptions !== false) {
+      this.litShadowPass ??= new SceneLitPass(this.device, this.shadowOptions, this.postprocessor?.format);
+      this.litShadowPass.prepare(lightFrame, uniformData, materialFrame ? (pass, matrix) => this.pbr?.drawShadow(pass, matrix) : undefined);
     }
     let processedScene: Texture | undefined;
     let renderPass = this.device.beginRenderPass({
@@ -385,10 +430,14 @@ export class GpuTriangleRenderer {
     if(atmosphereUniforms) {
       this.atmosphere?.draw(renderPass, atmosphereUniforms);
     }
+    if(lightFrame && this.litShadowPass) {
+      this.litShadowPass.draw(renderPass, this.vertexArray, vertices.length/FLOATS_PER_VERTEX);
+    } else {
     renderPass.setPipeline(this.pipeline);
     renderPass.setBindings({ uniforms: this.uniformBuffer });
     renderPass.setVertexArray(this.vertexArray);
     renderPass.draw({ vertexCount: vertices.length/FLOATS_PER_VERTEX });
+    }
     if(materialFrame) {
       this.pbr?.draw(renderPass, false);
     }
@@ -501,6 +550,7 @@ export class GpuTriangleRenderer {
       return;
     }
     this.resourcesReleased = true;
+    this.litShadowPass?.destroy();
     this.atmosphere?.destroy();
     this.pbr?.destroy();
     this.textured?.destroy();

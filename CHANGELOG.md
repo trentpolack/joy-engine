@@ -2,7 +2,18 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-11-2026
+### FORM geometry
+- Changed sphere primitives to generate smooth radial normals across UV seams and poles by default. Boxes retain flat shading, and sphere generation preserves the surrounding authored normal state.
+
+### Repository
+- Trimmed ignore rules to the engine’s npm, TypeScript/Vite, Electron, browser validation, and local development files.
+
 ## 10-09-2026
+### Light shadows and FORM LAB materials
+- Added luma.gl WebGPU directional and point-light shadows, enabled on lights by default, with configurable quality/bias, camera-independent caster queues, masked PBR casting, transparent light accumulation, and shadow-work diagnostics. Batches preserve the existing 32-point-light limit; WebGL 2 continues unshadowed illumination ([#53](https://github.com/trentpolack/joy-engine/issues/53)).
+- Added an explicitly owned PBR environment adapter, portable irradiance/reflection shading, and FORM LAB studio reflections, lighting controls, and a Material studio example. Retained independent material maps, authored exports, and atomic mesh/environment replacement. Restored hoisted font serving in the standalone FORM LAB dev command.
+
 ### FORM building asset example
 - Added a FORM-authored building shell with three seeded presets, editable runtime parameter snapshots, baked mesh/GLB assets, and a material-group presentation adapter. Documented compiler boundaries, material rendering limits, focused tests, and local browser evidence.
 

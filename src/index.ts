@@ -164,3 +164,7 @@ export type { TerrainAsset } from './rendering/terrain/terrain-asset.ts';
 export type { TerrainManifest } from './rendering/terrain/terrain-asset.ts';
 export type { TerrainView } from './rendering/terrain/terrain-selection.ts';
 export type { TerrainSelection } from './rendering/terrain/terrain-selection.ts';
+
+export type {ShadowOptions, ShadowCameraFrame, SceneLightFrame} from './rendering/shadows/types.ts';
+export {PbrEnvironment} from './rendering/pbr/pbr-environment.ts';
+export type {PbrEnvironmentOptions, PbrEnvironmentPixels} from './rendering/pbr/pbr-environment.ts';

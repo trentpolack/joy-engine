@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { PbrTriangles } from '../src/rendering/pbr/pbr-triangles.ts';
 import { GpuTriangleRenderer } from 'joy-engine';
+import {SceneShadows} from '../src/rendering/shadows/scene-shadows.ts';
+import {prepareShadowLightBatches} from '../src/rendering/shadows/shadow-light-batches.ts';
 
 const TEST_DEVICE_INFO = Object.freeze({
   type: 'webgpu',
@@ -24,7 +26,7 @@ function gpu() {
       throw new Error('GPU allocation failed');
     }
     const resource = {
-      properties, destroyed: 0, writes: [], shaderLayout: {}, bufferLayout: [],
+      properties, props: properties, destroyed: 0, writes: [], shaderLayout: {}, bufferLayout: [],
       destroy() { this.destroyed++; },
       write(data) { this.writes.push(Array.from(data)); },
       setIndexBuffer(buffer) { this.indices = buffer; },
@@ -207,4 +209,47 @@ test('failed renderer construction releases its canvas and device', async t => {
   await assert.rejects(GpuTriangleRenderer.create({}, { shaderSources: { wgsl: '', glsl: { vertex: '', fragment: '' } } }), /shader allocation failed/);
   assert.equal(canvasContext.destroyed, 1);
   assert.equal(device.destroyed, 1);
+});
+
+
+test('PBR light batches composite each transparent triangle completely and apply indirect light once', async t => {
+  t.mock.method(SceneShadows.prototype, 'prepare', (_camera, lights) =>
+    prepareShadowLightBatches(lights).map(group => ({...group, bindings: {}})));
+  const renderer = gpu();
+  const scene = new PbrTriangles(renderer.device, 'rgba16float');
+  t.after(() => scene.destroy());
+  const data = mesh(null, 'BLEND');
+  data.positions.push(0, 0, -4, 1, 0, -4, 0, 1, -4);
+  data.normals.push(...Array(9).fill(0));
+  data.colors.push(...Array(9).fill(1));
+  data.alphas.push(1, 1, 1);
+  data.uvs.push(0, 0, 1, 0, 0, 1);
+  data.triangles.push(3, 4, 5);
+  data.triangleMaterials.push(0);
+  await scene.setMesh(data);
+  const lights = Array.from({length: 5}, (_, x) => ({x, y: 3, z: 0, r: 1, g: 1, b: 1, range: 10}));
+  lights[1].castsShadow = false;
+  const environment = {bindings: {diffuseTexture: {}, specularTexture: {mipLevels: 4}, brdfLUTTexture: {}},
+    intensity: 2, rotation: 0.5, destroy() { assert.fail('borrowed environment must stay alive'); }};
+  const frame = {viewProjection: Array(16).fill(0), eye: [0, 0, 8], backward: [0, 0, 1],
+    shadowCamera: {viewMatrix: Array(16).fill(0), projectionMatrix: Array(16).fill(0), nearPlane: 0.1, farPlane: 100},
+    pointLights: lights, ambientColor: [0.2, 0.3, 0.4], environment};
+  scene.prepare(frame);
+  const draws = [];
+  const lighting = [];
+  const pass = {setPipeline() {}, setVertexArray() {}, setBindings(bindings) {
+    lighting.push(bindings.pbrLighting.writes.at(-1));
+  }, draw(value) { draws.push(value); }};
+  scene.draw(pass, true);
+  assert.deepEqual(draws.map(draw => draw.firstIndex), [0, 0, 3, 3]);
+  assert.ok(draws.every(draw => draw.indexCount === 3));
+  assert.deepEqual(lighting.map(values => values[276]), [4, 1, 4, 1]);
+  assert.deepEqual(lighting.map(values => values[277]), [1, 0, 1, 0]);
+  assert.deepEqual(lighting.map(values => values[16]), [2, 0, 2, 0]);
+  assert.equal(lighting[0][35], 0, 'noncaster retains direct illumination without a map index');
+  const countBeforeZoom = renderer.allocations.length;
+  scene.prepare({...frame, shadows: {normalBias: 0.02, shadowDistance: 50}});
+  assert.equal(renderer.allocations.length, countBeforeZoom, 'inspection zoom must reuse shadow maps and pipelines');
+  scene.destroy();
+  assert.ok(renderer.allocations.every(resource => resource.destroyed === 1));
 });

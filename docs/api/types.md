@@ -26,17 +26,6 @@ Ordered X/Y/Z components in the coordinate space documented by the consuming API
 
 
 
-## Velocity2
-Import from `joy-engine`. [Source](../../src/core/types.ts)
-
-```ts
-interface Velocity2 {
-  velocityX: number;
-  velocityY: number;
-}
-```
-
-
 ## MovingBody
 Import from `joy-engine`. [Source](../../src/core/types.ts)
 
@@ -194,6 +183,8 @@ Import from `joy-engine`. [Source](../../src/environment/environment-system.ts)
 
 ```ts
 type AtmosphereLight = {
+  /** Defaults to true for the environment primary direct light. */
+  castsShadow?: boolean;
   direction: readonly [
       number,
       number,
@@ -444,6 +435,8 @@ interface RendererDiagnostics {
   resources: Record<string, {active: number | null; created: number | null}> | null;
   /** Existing scene culling counts for this renderer's most recent rendered frame. */
   scene?: {visible: number; culled: number};
+  /** Per-renderer recorded shadow work; shared lights may occur in both colored and PBR passes. */
+  shadows?: {available: boolean; castingPointLights: number; castingDirectionalLights: number; batches: number; views: number};
 }
 ```
 
@@ -800,14 +793,7 @@ interface ParticleCameraBasis {
 Import from `joy-engine`. [Source](../../src/particles/lights.ts)
 
 ```ts
-interface ParticlePointLight {
-  x: number;
-  y: number;
-  z: number;
-  r: number;
-  g: number;
-  b: number;
-  range: number;
+interface ParticlePointLight extends PointLight {
   emitterIndex: number;
   particleIndex: number;
 }
@@ -896,6 +882,13 @@ interface PbrFrame {
   lightDirection?: readonly number[];
   lightColor?: readonly number[];
   ambientColor?: readonly number[];
+  /** Borrowed prepared environment; destroy it separately from the renderer. */
+  environment?: PbrEnvironment;
+  pointLights?: readonly PointLight[];
+  /** Directional casting defaults to true when a WebGPU shadow camera is supplied. */
+  castsShadow?: boolean;
+  shadowCamera?: ShadowCameraFrame;
+  shadows?: ShadowOptions | false;
 }
 ```
 World-space camera and lighting for a material pass. RGB light values are linear radiance.
@@ -914,6 +907,8 @@ interface PointLight {
   g: number;
   b: number;
   range: number;
+  /** Geometric shadows are enabled when omitted; false retains illumination only. */
+  castsShadow?: boolean;
 }
 ```
 
@@ -963,6 +958,8 @@ Import from `joy-engine`. [Source](../../src/rendering/scene/scene-renderer.ts)
 
 ```ts
 interface SceneRendererOptions {
+  /** WebGPU geometric shadows default to enabled. WebGL 2 retains illumination without shadows. */
+  shadows?: ShadowOptions | false;
   camera?: OrbitCamera;
   atmosphere?: boolean;
   pixelRatio?: number;
@@ -1103,6 +1100,77 @@ interface TerrainSelection {
   edges: number[];
 }
 ```
+
+
+## ShadowOptions
+Import from `joy-engine`. [Source](../../src/rendering/shadows/types.ts)
+
+```ts
+interface ShadowOptions {
+  quality?: 'low' | 'balanced' | 'cinematic';
+  directionalMapSize?: number;
+  pointMapSize?: number;
+  normalBias?: number;
+  depthBias?: number;
+  depthBiasSlopeScale?: number;
+  shadowDistance?: number;
+}
+```
+Quality and bias in world units (normal bias), depth units, and world-space shadow distance.
+
+
+
+## ShadowCameraFrame
+Import from `joy-engine`. [Source](../../src/rendering/shadows/types.ts)
+
+```ts
+interface ShadowCameraFrame {
+  viewMatrix: ArrayLike<number>;
+  projectionMatrix: ArrayLike<number>;
+  nearPlane: number;
+  farPlane: number;
+}
+```
+Borrowed column-major world-to-view and WebGPU projection matrices; clip distances are world units.
+
+
+
+## SceneLightFrame
+Import from `joy-engine`. [Source](../../src/rendering/shadows/types.ts)
+
+```ts
+interface SceneLightFrame {
+  camera: ShadowCameraFrame;
+  lights: readonly PointLight[];
+  directional: AtmosphereLight | null;
+  /** Complete opaque XYZ/RGBA caster triangles, including objects outside the camera frustum. */
+  casters: number[] | Float32Array;
+}
+```
+Borrowed lighting/caster data for the default lit triangle pass.
+
+
+
+## PbrEnvironmentOptions
+Import from `joy-engine`. [Source](../../src/rendering/pbr/pbr-environment.ts)
+
+```ts
+type PbrEnvironmentOptions = Omit<PreparePBREnvironmentOptions, 'source' | 'intensity' | 'rotation'>;
+```
+
+
+## PbrEnvironmentPixels
+Import from `joy-engine`. [Source](../../src/rendering/pbr/pbr-environment.ts)
+
+```ts
+interface PbrEnvironmentPixels {
+  width: number;
+  height: number;
+  data: Uint8Array | Float32Array;
+}
+```
+Original equirectangular pixels: byte RGB is linear UNORM; float RGB is linear HDR.
+
 
 
 ## ProjectCapability

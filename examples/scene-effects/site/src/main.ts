@@ -12,6 +12,9 @@ type Distribution = {samples:number; meanMilliseconds:number; p50Milliseconds:nu
 export type ExampleSnapshot = ReturnType<SceneEffectsExample['snapshot']>;
 export interface SceneEffectsExampleApi {
   setEffect(key:EffectKey, enabled:boolean):void;
+  setLightCasting(index:number, enabled:boolean):void;
+  shadowFixture(enabled:boolean):void;
+  setLightColor(index:number, color:readonly number[]):void;
   setQuality(quality:Quality):void;
   setBloom(enabled:boolean):void;
   setMotion(objectMotion:boolean, cameraMotion:boolean):void;
@@ -84,6 +87,35 @@ class SceneEffectsExample implements SceneEffectsExampleApi {
     }
   }
 
+  setLightCasting(index:number, enabled:boolean) {
+    const light = this.room.lights[index];
+    if(!light) {
+      throw new RangeError('Light index is outside the room.');
+    }
+    light.castsShadow = enabled;
+    this.resetHistory();
+  }
+  setLightColor(index:number, color:readonly number[]) {
+    const light = this.room.lights[index];
+    if(!light || color.length !== 3 || !color.every(value => Number.isFinite(value) && value >= 0)) {
+      throw new RangeError('Expected an existing light and finite nonnegative RGB.');
+    }
+    [light.r, light.g, light.b] = color;
+    this.resetHistory();
+  }
+  /** A high, camera-culled blocker casts onto the visible floor from five lights. */
+  shadowFixture(enabled:boolean) {
+    this.replaceScene();
+    if(enabled) {
+      this.room.scene.createMesh(this.room.moving.asset, {position:[0,20,0], scale:[4,1,4], tint:[1,1,1]});
+      this.room.lights.splice(0, this.room.lights.length,
+        {x:0,y:30,z:0,r:12,g:12,b:12,range:70},
+        {x:-4,y:4,z:0,r:0.1,g:0.1,b:0.1,range:12},
+        {x:4,y:4,z:0,r:0.1,g:0.1,b:0.1,range:12},
+        {x:0,y:4,z:-4,r:0.1,g:0.1,b:0.1,range:12},
+        {x:0,y:4,z:4,r:0.1,g:0.1,b:0.1,range:12});
+    }
+  }
   setEffect(key:EffectKey, enabled:boolean) {
     if(!EFFECTS.some(effect => effect.key === key)) {
       throw new RangeError(`Unknown scene effect: ${key}`);
@@ -190,6 +222,7 @@ class SceneEffectsExample implements SceneEffectsExampleApi {
         timeSeconds:this.timeSeconds, deltaTimeSeconds:this.deltaTimeSeconds, alternateRoom:this.alternateRoom},
       camera:{target:[...this.camera.target], yaw:this.camera.yaw, pitch:this.camera.pitch, distance:this.camera.distance},
       lights:this.room.lights.length, meshes:this.room.scene.instances.size,
+      diagnostics:this.renderer.getDiagnostics(),
       timing:{cpuRenderSubmission:distribution(this.cpuSamples), rafCadence:distribution(this.cadenceSamples),
         gpuExecution:null, note:'CPU performance.now around renderer.render; RAF timestamp intervals. Neither measures GPU execution.'},
       frames:this.frames

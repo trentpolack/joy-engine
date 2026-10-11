@@ -1376,8 +1376,8 @@ input[type='number']::-webkit-inner-spin-button {
 #material-message { color: #ffc39a; overflow-wrap: anywhere; }
 
 @media (max-width: 360px) {
-  .app-header { gap: 6px; }
-  .app-header nav[aria-label='Document actions'] { gap: 3px; }
+  .app-header { gap: 6px; height: auto; min-height: 92px; }
+  .app-header nav[aria-label='Document actions'] { gap: 3px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
   .app-header nav[aria-label='Document actions'] button { padding: 7px; }
 }
 /* Resource values share the numeric inspector's editable wells and compact rhythm. */
@@ -1564,3 +1564,9 @@ input[type='number']::-webkit-inner-spin-button {
 #preview-status[data-state="failed"] { color:#ffb4a9; }
 
 .editor-reference { color: var(--joy-orange); font-size: 11px; min-height: 30px; padding: 4px 6px; letter-spacing: 0; }
+
+/* Preview controls stay compact within the shared, scrollable inspector. */
+.preview-lighting-controls {display: grid; gap: 10px;}
+.preview-lighting-controls .parameter-row {display: grid; grid-template-columns: minmax(0, 1fr) 76px; align-items: center; gap: 8px; font-size: 12px;}
+.preview-lighting-controls input {width: 100%; min-width: 0;}
+.preview-lighting-controls input[type="checkbox"] {width: auto; justify-self: end;}

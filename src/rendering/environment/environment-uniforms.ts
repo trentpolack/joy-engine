@@ -38,6 +38,7 @@ export function createEnvironmentUniforms(frame: EnvironmentFrame): Float32Array
 export function createEnvironmentLighting(frame: EnvironmentFrame) {
   return Object.freeze({
     lightDirection: frame.primaryLight.direction,
+    castsShadow: frame.primaryLight.castsShadow,
     lightColor: Object.freeze(frame.primaryLight.color.map(value => value*frame.primaryLight.intensity)),
     ambientColor: Object.freeze(frame.skylight.color.map(value => value*frame.skylight.intensity))
   });

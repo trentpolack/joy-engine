@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+import type {PbrEnvironment} from '../rendering/pbr/pbr-environment.ts';
+import type {PointLight} from '../rendering/pbr/point-lights.ts';
+import type {ShadowCameraFrame, ShadowOptions} from '../rendering/shadows/types.ts';
 import { MATERIAL_ALPHA_MODE } from '../rendering/pbr/constants.ts';
 
 /** Shared numeric contracts. Units and gameplay meaning belong to each caller. */
@@ -74,6 +77,13 @@ export interface PbrFrame {
   lightDirection?: readonly number[];
   lightColor?: readonly number[];
   ambientColor?: readonly number[];
+  /** Borrowed prepared environment; destroy it separately from the renderer. */
+  environment?: PbrEnvironment;
+  pointLights?: readonly PointLight[];
+  /** Directional casting defaults to true when a WebGPU shadow camera is supplied. */
+  castsShadow?: boolean;
+  shadowCamera?: ShadowCameraFrame;
+  shadows?: ShadowOptions | false;
 }
 
 /** Local Y-up indexed mesh input. Optional attributes are empty or vertex-aligned. */

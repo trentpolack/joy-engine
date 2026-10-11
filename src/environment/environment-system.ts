@@ -74,6 +74,8 @@ export type NormalizedEnvironmentOptions = {
   ambientOcclusion: Required<AmbientOcclusionOptions>;
 };
 export type AtmosphereLight = {
+  /** Defaults to true for the environment primary direct light. */
+  castsShadow?: boolean;
   direction: readonly [
       number,
       number,

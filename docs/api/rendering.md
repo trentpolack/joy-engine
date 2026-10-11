@@ -248,7 +248,7 @@ static async create(canvas: HTMLCanvasElement, options: RendererOptions): Promis
 
 ### constructor
 ```ts
-constructor(device: Device, canvasContext: CanvasContext, { shaderSources, texturedShaderSources, opaqueShaderSources, uniformBufferSize = 16, initialVertexBufferSize = 64*1024, postProcessing, sceneEffects, pbr = false, atmosphere = false }: RendererOptions)
+constructor(device: Device, canvasContext: CanvasContext, { shaderSources, texturedShaderSources, opaqueShaderSources, uniformBufferSize = 16, initialVertexBufferSize = 64*1024, postProcessing, sceneEffects, pbr = false, atmosphere = false, shadows = {} }: RendererOptions)
 ```
 - **param** device
 - **param** canvasContext
@@ -268,6 +268,13 @@ async setMaterialMesh(mesh: PbrMesh): Promise<boolean>
 Upload a world-space material mesh; await readiness before displaying new document data. Requires pbr at creation. The renderer owns buffers/textures and copies input data.
 
 - **param** mesh
+
+### createMaterialEnvironment
+```ts
+createMaterialEnvironment(pixels: PbrEnvironmentPixels, options: PbrEnvironmentOptions = {})
+```
+Prepare original equirectangular pixels through luma. The caller owns the result and must destroy it before this renderer/device; ordinary frames borrow it.
+
 
 ### setPostProcessingConfig
 ```ts
@@ -314,7 +321,7 @@ Resize the backing surface without changing the caller's logical geometry.
 
 ### render
 ```ts
-render(vertices: number[] | Float32Array, uniformData: Float32Array<ArrayBuffer>, clearColor: Color, transparentVertices: number[] | Float32Array = [], timeSeconds: number = 0, transparentDraws: readonly TransparentDraw[] = [], materialFrame: PbrFrame | null = null, sceneFrame: SceneEffectsFrame = {}, atmosphereUniforms: Float32Array<ArrayBuffer> | null = null, attachmentFrame: SceneAttachmentFrame | null = null)
+render(vertices: number[] | Float32Array, uniformData: Float32Array<ArrayBuffer>, clearColor: Color, transparentVertices: number[] | Float32Array = [], timeSeconds: number = 0, transparentDraws: readonly TransparentDraw[] = [], materialFrame: PbrFrame | null = null, sceneFrame: SceneEffectsFrame = {}, atmosphereUniforms: Float32Array<ArrayBuffer> | null = null, attachmentFrame: SceneAttachmentFrame | null = null, lightFrame: SceneLightFrame | null = null)
 ```
 Submit opaque geometry, then sorted translucent geometry; clear even if empty.
 
@@ -869,7 +876,7 @@ Import from `joy-engine`. [Source](../../src/rendering/pbr/point-lights.ts)
 ```ts
 const LIT_TRIANGLE_SHADERS
 ```
-Flat, double-sided diffuse lighting for XYZ/RGBA opaque triangles. Normals come from surface derivatives; lights do not cast shadows. Linear HDR output feeds the renderer's optional scene post processing.
+Flat, double-sided diffuse lighting for XYZ/RGBA opaque triangles. Normals come from surface derivatives. SceneRenderer adds WebGPU shadows by default. Linear HDR output feeds the renderer's optional scene post processing.
 
 
 
@@ -1283,3 +1290,42 @@ Draw into a borrowed pass; does not clear/submit or own its framebuffer.
 destroy()
 ```
 Release only owned resources; repeated disposal is harmless.
+
+
+
+## PbrEnvironment
+Import from `joy-engine`. [Source](../../src/rendering/pbr/pbr-environment.ts)
+
+Owns luma-generated irradiance, filtered reflection, and BRDF textures. Source textures and the device are borrowed. Prepare submits integration work; call during setup or environment replacement, never from ordinary frame rendering.
+
+### constructor
+```ts
+constructor(device: Device)
+```
+
+### bindings
+```ts
+get bindings()
+```
+Current borrowed texture bindings; null before preparation or after destruction.
+
+
+### prepare
+```ts
+prepare(source: Texture, options: PbrEnvironmentOptions = {})
+```
+Atomically replace a prepared environment. Failure retains the accepted textures.
+
+
+### preparePixels
+```ts
+preparePixels(pixels: PbrEnvironmentPixels, options: PbrEnvironmentOptions = {})
+```
+Prepare original pixels, owning their uploaded source texture as well as generated maps.
+
+
+### destroy
+```ts
+destroy()
+```
+Release generated textures and integration resources, retaining the borrowed source.

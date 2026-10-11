@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+import type {ShadowOptions} from '../shadows/types.ts';
 import { GPU_BACKEND } from '../gpu/constants.ts';
 import type { RendererDiagnosticOptions, RendererDiagnostics } from '../gpu/gpu-diagnostics.ts';
 import type { PostProcessingConfig } from '../postprocessor/config.ts';
@@ -28,6 +29,8 @@ import vertex from '../../../shaders/rendering/scene/scene.vert.glsl?raw';
 import fragment from '../../../shaders/rendering/scene/scene.frag.glsl?raw';
 
 export interface SceneRendererOptions {
+  /** WebGPU geometric shadows default to enabled. WebGL 2 retains illumination without shadows. */
+  shadows?: ShadowOptions | false;
   camera?: OrbitCamera;
   atmosphere?: boolean;
   pixelRatio?: number;
@@ -262,7 +265,8 @@ export class SceneRenderer {
     }
     try {
       this.renderer.render(queues.opaque, uniforms, frame.clearColor ?? [0, 0, 0, 1], queues.transparent,
-        time, [], null, effectsFrame, atmosphereUniforms, attachments);
+        time, [], null, effectsFrame, atmosphereUniforms, attachments, {camera: {viewMatrix, projectionMatrix: projection, nearPlane: this.camera.nearPlane, farPlane: this.camera.farPlane},
+          lights: frame.lights ?? [], directional: frame.environment?.primaryLight ?? null, casters: queues.shadowCasters});
     } catch(error) {
       if(effectsEnabled) {
         this.resetHistory();
@@ -353,6 +357,7 @@ export class SceneRenderer {
       shaderSources: {wgsl, glsl: {vertex, fragment}}, opaqueShaderSources: LIT_TRIANGLE_SHADERS,
       uniformBufferSize: POINT_LIGHT_UNIFORM_BYTES,
       atmosphere: this.options.atmosphere,
+      shadows: this.options.shadows,
       sceneEffects: this.options.sceneEffects,
       postProcessing: this.options.postProcessing === false ? undefined : (this.options.postProcessing ?? {}),
       device: {...(this.options.device ?? {backend: gpuBackendFromQuery(globalThis.location?.search ?? '')}),

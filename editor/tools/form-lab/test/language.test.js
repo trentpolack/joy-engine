@@ -40,6 +40,27 @@ test('authored normals normalize, persist, reset to flat, and remain isolated pe
   for(const source of ['normal(0,0,0)', 'normal(1,2)', 'normal(1/0,0,0)']) {
     assert.throws(() => compile(source), error => error.line === 1 && /normal|finite/.test(error.message));
   }
+
+  // All sphere entry points must export radial normals, including duplicated
+  // UV-seam and pole vertices that face averaging cannot reliably smooth.
+  for(const source of [
+    'sphere(1,2,3,2,8)',
+    'let g=sphere(2,8) translate(g,vector(1,2,3)) output("Ball",g)',
+    'instance(meshSphere(2,8),vector(1,2,3))'
+  ]) {
+    const sphere = compile(source);
+    for(let index = 0; index < sphere.positions.length; index+= 3) {
+      const normal = sphere.normals.slice(index, index + 3);
+      assert.ok(Math.abs(Math.hypot(...normal) - 1) < 1e-12);
+      for(let axis = 0; axis < 3; axis++) {
+        assert.ok(Math.abs(normal[axis] - (sphere.positions[index + axis] - [1,2,3][axis])/2) < 1e-12);
+      }
+    }
+  }
+  const following = compile('sphere(0,0,0,1,8) box(0,0,0,1,1,1)');
+  assert.deepEqual(following.normals.slice(-24), Array(24).fill(0), 'sphere normals must not leak into boxes');
+  const preserved = compile('normal(0,3,4) sphere(0,0,0,1,8) point(1,2,3)');
+  assert.deepEqual(preserved.normals.slice(-3), [0,0.6,0.8], 'sphere generation restores the authored normal');
 });
 test('rejects arbitrary JavaScript and oversized work', () => {
   assert.throws(() => compile('fetch("https://example.com")'));

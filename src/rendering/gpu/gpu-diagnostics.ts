@@ -22,6 +22,8 @@ export interface RendererDiagnostics {
   resources: Record<string, {active: number | null; created: number | null}> | null;
   /** Existing scene culling counts for this renderer's most recent rendered frame. */
   scene?: {visible: number; culled: number};
+  /** Per-renderer recorded shadow work; shared lights may occur in both colored and PBR passes. */
+  shadows?: {available: boolean; castingPointLights: number; castingDirectionalLights: number; batches: number; views: number};
 }
 export interface RendererDiagnosticSource {
   /** Copy requested counters on demand; callers own the returned snapshot. */

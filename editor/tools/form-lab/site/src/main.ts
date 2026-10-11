@@ -20,6 +20,7 @@ import { VariantControls } from '../../src/variant-controls.ts';
 import { WorkspaceLayout } from '../../src/workspace-layout.ts';
 import { connectScriptGuide } from '../../src/script-guide.ts';
 import { OutputInspector } from '../../src/output-inspector.ts';
+import {PreviewLightingControls} from '../../src/preview-lighting-controls.ts';
 import { MaterialControls } from '../../src/material-controls.ts';
 import { readMaterials } from 'joy-engine/form';
 import { exportGlb } from '../../src/export-glb.ts';
@@ -50,6 +51,7 @@ class FormLab {
   declare parameters: ParameterControls;
   declare listeners: AbortController;
   declare panelLayout: PanelLayout;
+  declare lightingControls: PreviewLightingControls;
   declare materialControls: MaterialControls;
   declare editor: EditorView;
   declare viewport: Viewport;
@@ -116,6 +118,7 @@ class FormLab {
        ((element('viewport')) as HTMLCanvasElement),
       (message) => this.gpuError(message),
     );
+    this.lightingControls = new PreviewLightingControls(element('preview-lighting'), this.viewport.lighting, settings => this.viewport.setLighting(settings));
     this.inspection = new OutputInspector(element('output-toolbar'), element('attribute-panel'), this.viewport, () => {
       if(this.viewport.renderer) {
         element('gpu-error').hidden = true;
@@ -714,6 +717,7 @@ class FormLab {
     this.listeners.abort();
     this.parameters.destroy();
     this.materialControls.destroy();
+    this.lightingControls.destroy();
     this.layout.destroy();
     this.variants.destroy();
     this.inspection.destroy();

@@ -1,16 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+import type {PointLight} from '../rendering/pbr/point-lights.ts';
 import type { ParticleEffect } from './particle-effect.ts';
 
-export interface ParticlePointLight {
-  x: number;
-  y: number;
-  z: number;
-  r: number;
-  g: number;
-  b: number;
-  range: number;
+export interface ParticlePointLight extends PointLight {
   emitterIndex: number;
   particleIndex: number;
 }

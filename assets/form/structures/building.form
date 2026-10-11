@@ -1,0 +1,86 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+project meta(name="Building shell", info="FORM RUNTIME ASSET / METERS / Y-UP")
+param width = 8 meta(min=4, max=30, step=0.25)
+param depth = 6 meta(min=4, max=30, step=0.25)
+param height = 6 meta(min=3, max=30, step=0.25)
+param floors = 2 meta(min=1, max=8, step=1)
+param window_spacing = 2 meta(min=1.5, max=6, step=0.25)
+param door_spacing = 6 meta(min=3, max=12, step=0.25)
+param roof_shape = 1 meta(min=0, max=1, step=1)
+param roof_rise = 2 meta(min=0.3, max=5, step=0.1)
+param random_seed = 42 meta(min=1, max=9999, step=1)
+param wall_tint = rgba(0.66,0.48,0.3,1)
+param roof_tint = rgba(0.19,0.25,0.3,1)
+param wall_finish = materialPbr(wall_tint,0,0.85)
+param roof_finish = materialPbr(roof_tint,0.1,0.55)
+param window_piece = meshBox(1,1,0.12)
+
+seed(random_seed)
+color(1,1,1)
+let unit = meshBox(1,1,1)
+let trim = materialPbr(rgba(0.12,0.16,0.19,1),0,0.7)
+let glass = materialPbr(rgba(0.16,0.46,0.58,1),0.3,0.2)
+let floor_count = floor(floors)
+let floor_height = height/floor_count
+let window_height = min(1.3,floor_height*0.55)
+# Four walls leave a hollow interior; facade panels are decorative, not cut openings.
+instance(unit,vector(0,height/2,-depth/2),vector(0,0,0),vector(width,height,0.2),wall_finish)
+instance(unit,vector(0,height/2,depth/2),vector(0,0,0),vector(width,height,0.2),wall_finish)
+repeat 2 as side {
+  let sign = side*2 - 1
+  instance(unit,vector(sign*width/2,height/2,0),vector(0,0,0),vector(0.2,height,depth),wall_finish)
+}
+# Floor bands and foundations are also reused boxes, not a host geometry generator.
+repeat floor_count + 1 as level {
+  instance(unit,vector(0,level*floor_height,0),vector(0,0,0),vector(width + 0.3,0.16,depth + 0.3),trim)
+}
+let columns = max(1,floor((width - 1)/window_spacing))
+let side_columns = max(1,floor((depth - 1)/window_spacing))
+let doors = max(1,floor(width/door_spacing))
+repeat floor_count as level {
+  let y = (level + 0.5)*floor_height
+  repeat 2 as side {
+    let sign = side*2 - 1
+    repeat columns as column {
+      let x = (column - (columns - 1)/2)*window_spacing
+      # Ground front is reserved for doors, avoiding overlapped panels.
+      if(level + (1 - side) > 0) {
+        instance(unit,vector(x,y,sign*(depth/2 + 0.15)),vector(0,0,0),vector(1.25,window_height + 0.18,0.18),trim)
+        color(0.7 + rand()*0.3,0.7 + rand()*0.3,1)
+        instance(window_piece,vector(x,y,sign*(depth/2 + 0.26)),vector(0,0,0),vector(1,window_height,1),glass)
+        color(1,1,1)
+      }
+    }
+    repeat side_columns as column {
+      let z = (column - (side_columns - 1)/2)*window_spacing
+      instance(unit,vector(sign*(width/2 + 0.15),y,z),vector(0,pi/2,0),vector(1.25,window_height + 0.18,0.18),trim)
+      color(0.7 + rand()*0.3,0.7 + rand()*0.3,1)
+      instance(window_piece,vector(sign*(width/2 + 0.26),y,z),vector(0,pi/2,0),vector(1,window_height,1),glass)
+      color(1,1,1)
+    }
+  }
+}
+repeat doors as door {
+  let x = (door - (doors - 1)/2)*door_spacing
+  let door_height = min(2.2,floor_height*0.8)
+  with userData({kind:"entrance",index:door,position:vector(x,0,depth/2)}) {
+    instance(unit,vector(x,door_height/2,depth/2 + 0.16),vector(0,0,0),vector(1.4,door_height,0.15),trim)
+    instance(unit,vector(x,door_height + 0.2,depth/2 + 0.5),vector(0,0,0),vector(2,0.14,0.9),roof_finish)
+  }
+}
+if(roof_shape < 0.5) {
+  instance(unit,vector(0,height + 0.25,0),vector(0,0,0),vector(width + 0.7,0.35,depth + 0.7),roof_finish)
+}
+if(roof_shape >= 0.5) {
+  let half = width/2 + 0.35
+  let slope = atan2(roof_rise,half)
+  let length = sqrt(half*half + roof_rise*roof_rise)
+  repeat 2 as side {
+    let sign = side*2 - 1
+    instance(unit,vector(sign*half/2,height + roof_rise/2,0),vector(0,0,-sign*slope),vector(length,0.2,depth + 0.7),roof_finish)
+  }
+  material(wall_finish)
+  triangle(-width/2,height,depth/2, width/2,height,depth/2, 0,height + roof_rise,depth/2)
+  triangle(width/2,height,-depth/2, -width/2,height,-depth/2, 0,height + roof_rise,-depth/2)
+}

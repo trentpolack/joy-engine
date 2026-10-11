@@ -84,6 +84,7 @@ test('frustum culling keeps intersecting bounds and sorts translucent geometry g
   assert.equal(frame.opaque.length, 0);
   assert.equal(frame.transparent.length, 42);
   assert.equal(frame.transparent[2], -0.5);
+  assert.equal(frame.shadowCasters.length, 21, 'camera-culled opaque geometry still casts shadows');
   assert.equal(frame.culled, 1);
   assert.equal(frame.visible, 2);
   assert.equal(prepareSceneFrame(scene, {backward: [0, 0, 1], viewProjection: identity, webgpu: true}).transparent.length, 21);

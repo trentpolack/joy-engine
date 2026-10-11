@@ -1,29 +1,38 @@
-# Dependencies and package-manager state
+# npm dependencies, cache, and package archives
 node_modules/
-.npm
+.npm/
 *.tgz
 
-# Build output, caches and TypeScript build info
-dist
-release/
-.cache/
-.vite/
+# TypeScript and Vite build output
 *.tsbuildinfo
+dist/
+.vite/
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
 
-# Logs and diagnostics
-logs
+# Electron packaging output
+release/
+
+# Logs and Node diagnostic reports
+logs/
 *.log
 npm-debug.log*
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
-# Browser capture output (written by the editor and lab capture scripts)
-artifacts/
-playwright-report/
-test-results/
-coverage/
-
-# Local environment and editor state
+# Local environment files; keep the shareable template
 .env
 .env.*
 !.env.example
+
+# Browser capture and test output
+artifacts/
+playwright-report/
+test-results/
+
+# Local planning documents, patches, and editor recovery copies
+/docs/superpowers/
+/.patches/
+.joy-editor-recovery/
+
+# macOS metadata
 .DS_Store

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+
 // World-space GGX metallic/roughness shading; matches the GLSL path.
 struct FrameUniforms {
   viewProjection: mat4x4<f32>,
@@ -9,6 +10,15 @@ struct FrameUniforms {
   lightColor: vec4<f32>,
   ambientColor: vec4<f32>
 };
+
+struct PointLight {positionRange: vec4f, color: vec4f};
+struct PbrLighting {
+  viewMatrix: mat4x4f,
+  environment: vec4f,
+  lights: array<PointLight, 32>,
+  counts: vec4f
+};
+@group(1) @binding(0) var<uniform> pbrLighting: PbrLighting;
 
 struct MaterialUniforms {
   baseColor: vec4<f32>,
@@ -95,8 +105,53 @@ fn vertexMain(
   }
 
   let v = normalize(frameUniforms.eye.xyz - input.worldPosition);
-  let l = normalize(frameUniforms.lightDirection.xyz);
-  let h = normalize(v + l);
+  let viewDepth = -(pbrLighting.viewMatrix*vec4f(input.worldPosition, 1)).z;
+  var directionalVisibility = 1.0;
+#ifdef JOY_SHADOWS
+  directionalVisibility = shadow_getDirectionalFactor(input.worldPosition, n, viewDepth);
+#endif
+  var radiance = pbrDirect(base, metallic, roughness, n, v, normalize(frameUniforms.lightDirection.xyz))*frameUniforms.lightColor.rgb*directionalVisibility;
+  for(var index = 0u; index < u32(pbrLighting.counts.x); index++) {
+    let light = pbrLighting.lights[index];
+    let offset = light.positionRange.xyz - input.worldPosition;
+    let distance = length(offset);
+    let direction = offset/max(distance, 0.000001);
+    let reach = max(0.0, 1.0 - distance/light.positionRange.w);
+    var pointVisibility = 1.0;
+#ifdef JOY_SHADOWS
+    pointVisibility = shadow_getPointFactor(i32(light.color.a) - 1, input.worldPosition, n);
+#endif
+    radiance+= pbrDirect(base, metallic, roughness, n, v, direction)*light.color.rgb*reach*reach*pointVisibility;
+  }
+  radiance+= (frameUniforms.ambientColor.rgb*base*(1.0 - metallic)*occlusion + emission)*pbrLighting.counts.y;
+  if(pbrLighting.environment.x > 0.0) {
+    let angle = pbrLighting.environment.y;
+    let cosine = cos(angle);
+    let sine = sin(angle);
+    let reflection = reflect(-v, n);
+    let environmentNormal = vec3f(cosine*n.x - sine*n.z, n.y, sine*n.x + cosine*n.z);
+    let environmentReflection = vec3f(cosine*reflection.x - sine*reflection.z, reflection.y, sine*reflection.x + cosine*reflection.z);
+    let diffuseLight = textureSampleLevel(pbr_diffuseEnvSampler, pbr_diffuseEnvSamplerSampler, environmentNormal, 0).rgb;
+    let specularLight = textureSampleLevel(pbr_specularEnvSampler, pbr_specularEnvSamplerSampler, environmentReflection, roughness*pbrLighting.environment.z).rgb;
+    let nv = max(dot(n, v), 0.0001);
+    let brdf = textureSampleLevel(pbr_brdfLUT, pbr_brdfLUTSampler, vec2f(nv, roughness), 0).rg;
+    let f0 = mix(vec3f(0.04), base, metallic);
+    let fresnel = f0 + (max(vec3f(1.0 - roughness), f0) - f0)*pow(1.0 - nv, 5.0);
+    let diffuse = (vec3f(1) - fresnel)*(1.0 - metallic)*base*diffuseLight;
+    radiance+= (diffuse + specularLight*(f0*brdf.x + vec3f(brdf.y)))*occlusion*pbrLighting.environment.x;
+  }
+
+  if(frameUniforms.ambientColor.a > 0.5) {
+    radiance = displayColor(radiance);
+  }
+
+  return(vec4<f32>(radiance, alpha));
+}
+
+// Direct GGX illumination shared by the directional and local-light terms.
+fn pbrDirect(base: vec3f, metallic: f32, roughness: f32, n: vec3f, v: vec3f, l: vec3f) -> vec3f {
+  let halfDirection = v + l;
+  let h = halfDirection/max(length(halfDirection), 0.000001);
   let nv = max(dot(n, v), 0.0001);
   let nl = max(dot(n, l), 0.0);
   let nh = max(dot(n, h), 0.0);
@@ -105,16 +160,8 @@ fn vertexMain(
   let denominator = nh*nh*(a2 - 1.0) + 1.0;
   let distribution = a2/max(PI*denominator*denominator, 0.000000000001);
   let visibility = 0.5/max(nl*sqrt(nv*nv*(1.0 - a2) + a2) + nv*sqrt(nl*nl*(1.0 - a2) + a2), 0.0001);
-  let f0 = mix(vec3<f32>(0.04), base, metallic);
-  let fresnel = f0 + (1.0 - f0)*pow(1.0 - vh, 5.0);
-  let diffuse = (1.0 - fresnel)*(1.0 - metallic)*base/PI;
-
-  var radiance = (diffuse + distribution*visibility*fresnel)*frameUniforms.lightColor.rgb*nl;
-  radiance+= frameUniforms.ambientColor.rgb*base*(1.0 - metallic)*occlusion + emission;
-
-  if(frameUniforms.ambientColor.a > 0.5) {
-    radiance = displayColor(radiance);
-  }
-
-  return(vec4<f32>(radiance, alpha));
+  let f0 = mix(vec3f(0.04), base, metallic);
+  let fresnel = f0 + (vec3f(1) - f0)*pow(1.0 - vh, 5.0);
+  let diffuse = (vec3f(1) - fresnel)*(1.0 - metallic)*base/PI;
+  return (diffuse + distribution*visibility*fresnel)*nl;
 }

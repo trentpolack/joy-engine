@@ -153,6 +153,7 @@
             <button role="tab" id="parameters-tab" data-inspector-tab="parameters" aria-controls="parameters-section">Parameters</button>
             <button role="tab" id="variants-tab" data-inspector-tab="variants" aria-controls="variants-section">Variants</button>
             <button role="tab" id="materials-tab" data-inspector-tab="materials" aria-controls="materials-section">Materials</button>
+            <button role="tab" id="lighting-tab" data-inspector-tab="lighting" aria-controls="lighting-section">Lighting</button>
           </div>
           <div class="inspector-content">
             <section id="parameters-section" data-inspector-panel="parameters" role="tabpanel" aria-labelledby="parameters-tab">
@@ -171,6 +172,11 @@
               <p>Linear RGB · Select in script with <code>material(Name)</code>. Vertex colors multiply base color.</p>
               <div id="materials"></div>
               <p>GPU metallic/roughness lighting. MaterialX supports constant gltf_pbr inputs only.</p>
+            </section>
+            <section id="lighting-section" data-inspector-panel="lighting" role="tabpanel" aria-labelledby="lighting-tab">
+              <h3>PREVIEW LIGHTING</h3>
+              <p class="numeric-guidance">Studio reflections and light settings affect this preview only. Exports retain authored materials. Geometric shadows require WebGPU.</p>
+              <div id="preview-lighting" class="preview-lighting-controls"></div>
             </section>
           </div>
             <div class="export-panel">
@@ -250,7 +256,7 @@ normal()
 uv(u, v)</pre>
           <p>
             Colors and UVs are 0–1; alpha is optional and defaults to 1. Sphere segments
-            are optional (default 20). Color applies to following commands. Add named materials in the inspector, then select them with material(Name); material() returns to Default.
+            are optional (default 20). Spheres generate smooth normals; boxes retain flat shading. Color applies to following commands. Add named materials in the inspector, then select them with material(Name); material() returns to Default.
           </p>
         </section>
         <section>
