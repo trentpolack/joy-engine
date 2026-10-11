@@ -138,8 +138,10 @@ export class GeometryBuilder {
       this.face(first + a, first + b, first + c);
     }
   }
-  /** Append a sphere from XYZ center, radius and optional longitudinal segment count.
-   * Updates the active UV while generating vertices.
+  /**
+   * Append a sphere from XYZ center, radius, and optional longitudinal segment count.
+   * Generates radial smooth normals independently of the active normal, restoring
+   * that normal afterward. Updates the active UV while generating vertices.
    * @param values
    */
   sphere(values: number[]) {
@@ -150,17 +152,25 @@ export class GeometryBuilder {
     }
     const first = this.data.positions.length / 3;
     const rows = Math.ceil(segments / 2);
-    for(let j = 0; j <= rows; j++) {
-      const latitude = (Math.PI * j) / rows;
-      for(let i = 0; i <= segments; i++) {
-        const angle = (Math.PI * 2 * i) / segments;
-        this.uv = [i / segments, j / rows];
-        this.vertex(
-          x + radius * Math.sin(latitude) * Math.cos(angle),
-          y + radius * Math.cos(latitude),
-          z + radius * Math.sin(latitude) * Math.sin(angle),
-        );
+    const savedNormal = this.normal;
+    try {
+      for(let j = 0; j <= rows; j++) {
+        const latitude = (Math.PI*j)/rows;
+        for(let i = 0; i <= segments; i++) {
+          const angle = (Math.PI*2*i)/segments;
+          // Analytic normals agree across UV seams and at the poles, where
+          // averaging triangle normals would introduce visible shading seams.
+          this.normal = [Math.sin(latitude)*Math.cos(angle), Math.cos(latitude), Math.sin(latitude)*Math.sin(angle)];
+          this.uv = [i/segments, j/rows];
+          this.vertex(
+            x + radius*this.normal[0],
+            y + radius*this.normal[1],
+            z + radius*this.normal[2]
+          );
+        }
       }
+    } finally {
+      this.normal = savedNormal;
     }
     for(let j = 0; j < rows; j++) {
       for(let i = 0; i < segments; i++) {

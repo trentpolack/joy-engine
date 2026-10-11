@@ -29,7 +29,11 @@ export function meshBox(width: number, height: number, depth: number): MeshValue
   return fromBuilder('Box', builder);
 }
 
-/** Create reusable sphere geometry. @param radius @param [segments] */
+/**
+ * Create reusable sphere geometry with smooth radial normals and UVs.
+ * @param radius
+ * @param [segments]
+ */
 export function meshSphere(radius: number, segments: number = 20): MeshValue {
   const builder = new GeometryBuilder();
   builder.sphere([0, 0, 0, radius, segments]);
