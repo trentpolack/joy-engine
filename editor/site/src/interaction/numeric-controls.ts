@@ -188,6 +188,22 @@ export class NumericControls {
     this.owner.changed?.();
   }
 
+  /** Record a discrete property action, such as resetting a parameter, as one edit.
+   * @param action Owner mutation; must keep the same snapshot contract.
+   */
+  edit(action: () => void) {
+    this.capture();
+    const before = this.owner.read?.();
+    action();
+    const after = this.owner.read?.();
+    if(before !== undefined && after !== undefined && before !== after && before.length <= MAX_SNAPSHOT_BYTES && after.length <= MAX_SNAPSHOT_BYTES) {
+      this.past.push({before, after});
+      this.past.splice(0, Math.max(0, this.past.length - HISTORY_LIMIT));
+      this.future = [];
+    }
+    this.owner.changed?.();
+  }
+
   undo() {
     this.moveHistory(false);
   }

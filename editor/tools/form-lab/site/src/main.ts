@@ -88,6 +88,7 @@ class FormLab {
         this.persist();
         this.schedule();
       },
+      name => this.resetParameter(name),
     );
     this.listeners = new AbortController();
     guardNumberScroll(document, this.listeners.signal);
@@ -157,7 +158,7 @@ class FormLab {
           return {...parameter, value:typeof value === 'number' || Array.isArray(value) ? value : parameter.defaultValue};
         });
         this.parameters.clear();
-        this.parameters.update(declarations);
+        this.parameters.update(declarations, this.overrides);
         this.hasEdits = true;
         this.persist();
         this.schedule();
@@ -275,7 +276,7 @@ class FormLab {
       element('example-kind').textContent = project?.info ?? 'PROCEDURAL STUDY';
       this.inspection.update(result.data, this.shouldFrame);
       this.shouldFrame = false;
-      this.parameters.update(result.data.parameters);
+      this.parameters.update(result.data.parameters, this.overrides);
       this.filterParameters();
       element('vertex-count').textContent = (
         result.data.positions.length / 3
@@ -472,6 +473,8 @@ class FormLab {
         const text = serializeDocument(this.document());
         download(`${fileStem(this.name)}.formlab`, text, 'application/json');
         this.hasEdits = false;
+        element('save-state').hidden = false;
+        element('save-state').textContent = 'Project download requested';
       } catch (error) {
         this.status(`Save failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
       }
@@ -616,17 +619,38 @@ class FormLab {
       variants: this.variants.variants
     };
   }
+  /** Remove one override; reevaluation remains responsible for computing its default.
+   * @param name
+   */
+  resetParameter(name: string) {
+    try {
+      this.numeric.edit(() => {
+        delete this.overrides[name];
+        const declarations = this.parameters.parameters.map(parameter => parameter.name === name && 'min' in parameter
+          ? {...parameter, value: parameter.defaultValue} : parameter);
+        this.parameters.update(declarations, this.overrides);
+        this.hasEdits = true;
+        this.persist();
+        this.schedule();
+      });
+    } catch(error) {
+      this.status(error instanceof Error ? error.message : String(error), 'error');
+    }
+  }
+
   persist() {
     if(hosted) {
       return;
     }
     try {
       localStorage.setItem('joy-form-lab-v1', JSON.stringify(this.document()));
-      element('save-state').hidden = true;
+      element('save-state').hidden = false;
+      element('save-state').textContent = 'Browser recovery updated';
+      element('save-state').title = 'Recovery stays in this browser. Save project downloads an editable .formlab document; it does not update an opened file on disk.';
     } catch {
       element('save-state').hidden = false;
       element('save-state').textContent =
-        'LOCAL SAVE UNAVAILABLE · USE SAVE PROJECT';
+        'Browser recovery unavailable · use Save project';
     }
   }
   restore() {
@@ -692,8 +716,8 @@ class FormLab {
   /** @param stale */
   updateExportNote(stale: boolean) {
     element('export-note').textContent = stale
-      ? 'Script changed. Export uses the previous successful build.'
-      : 'Exports the last successful build. GLB includes materials, colors and points; OBJ omits materials.';
+      ? 'Changes pending or build failed. Export uses the previous successful build, without the recipe.'
+      : 'Export uses the last successful build, without the recipe. Save the document to keep editable source. GLB includes materials; OBJ omits them.';
   }
   /** @param message @param [state] */
   status(message: string, state: string = '') {

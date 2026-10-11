@@ -3,6 +3,10 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-11-2026
+
+### FORM LAB workbench
+- Compacted standalone chrome, exposed existing Recipes beside the script reference, added numeric default/modified feedback and undoable per-parameter resets, clarified browser recovery/document downloads versus baked exports, and kept complete inspectors reachable at narrow standalone and hosted widths. Preserved PBR preview and shadow rendering.
+
 ### FORM geometry
 - Changed sphere primitives to generate smooth radial normals across UV seams and poles by default. Boxes retain flat shading, and sphere generation preserves the surrounding authored normal state.
 

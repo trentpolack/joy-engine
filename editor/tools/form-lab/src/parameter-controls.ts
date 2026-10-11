@@ -12,19 +12,27 @@ export class ParameterControls {
   declare container: HTMLElement;
   declare onChange: (name: string, value: ParameterValue | undefined) => void;
   declare signature: string;
+  declare onReset: (name: string) => void;
   declare resourceListeners: AbortController;
   declare parameters: Parameter[];
   declare listeners: AbortController;
 
   /** @param container @param onChange */
-  constructor(container: HTMLElement, onChange: (name: string, value: ParameterValue | undefined) => void) {
+  constructor(container: HTMLElement, onChange: (name: string, value: ParameterValue | undefined) => void, onReset: (name: string) => void = name => onChange(name, undefined)) {
     this.container = container;
     this.onChange = onChange;
     this.signature = '';
+    this.onReset = onReset;
     this.resourceListeners = new AbortController();
 
     this.parameters = [];
     this.listeners = new AbortController();
+    container.addEventListener(BROWSER_EVENT.CLICK, event => {
+      const target = event.target;
+      if(target instanceof HTMLButtonElement && target.dataset.resetParameter) {
+        this.onReset(target.dataset.resetParameter);
+      }
+    }, {signal: this.listeners.signal});
     container.addEventListener(
       BROWSER_EVENT.INPUT,
       (event) => this.change(event, 'range'),
@@ -40,7 +48,7 @@ export class ParameterControls {
   /** Refresh generated values without replacing focused controls unless declarations changed.
    * @param parameters Borrowed declarations from the last successful generation.
    */
-  update(parameters: Parameter[]) {
+  update(parameters: Parameter[], overrides: Record<string, ParameterValue> = {}) {
     const signature = JSON.stringify(
       parameters.map(parameter => !('min' in parameter)
         ? {name: parameter.name, type: parameter.type}
@@ -87,6 +95,29 @@ export class ParameterControls {
         updateRangeFill(node);
       }
       this.updateSwatch(parameter.name, values);
+      this.updateDefaultState(parameter, values, Object.hasOwn(overrides, parameter.name));
+    }
+  }
+
+  /** Compare effective values with script defaults without changing the document.
+   * @param parameter @param values @param overridden
+   */
+  private updateDefaultState(parameter: NumericParameter, values: number[], overridden: boolean) {
+    const defaults = Array.isArray(parameter.defaultValue) ? parameter.defaultValue : [parameter.defaultValue];
+    const modified = values.some((value, index) => value !== defaults[index]);
+    for(const group of this.container.querySelectorAll<HTMLElement>('[data-numeric-parameter]')) {
+      if(group.dataset.numericParameter !== parameter.name) {
+        continue;
+      }
+      group.classList.toggle('modified', modified);
+      const state = group.querySelector<HTMLElement>('.parameter-default');
+      if(state) {
+        state.textContent = `Default ${defaults.join(', ')}${modified ? ' · Modified' : overridden ? ' · Override' : ''}`;
+      }
+      const reset = group.querySelector<HTMLButtonElement>('[data-reset-parameter]');
+      if(reset) {
+        reset.disabled = !overridden;
+      }
     }
   }
 
@@ -169,6 +200,7 @@ export class ParameterControls {
       }
     }
     this.updateSwatch(parameter.name, values);
+    this.updateDefaultState(parameter, values, true);
     this.onChange(
       parameter.name,
       parameter.type === FORM_PARAMETER_TYPE.SCALAR ? values[0] : values,
@@ -180,6 +212,7 @@ export class ParameterControls {
 function createGroup(parameter: NumericParameter) {
   const group = document.createElement('section');
   group.className = 'parameter';
+  group.dataset.numericParameter = parameter.name;
   const heading = document.createElement('div');
   heading.className = 'parameter-heading';
   const title = document.createElement('h3');
@@ -199,7 +232,18 @@ function createGroup(parameter: NumericParameter) {
     swatch.append(document.createElement('i'));
     heading.append(swatch);
   }
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.className = 'parameter-reset';
+  reset.dataset.resetParameter = parameter.name;
+  reset.textContent = '↺';
+  reset.title = `Reset ${parameter.name} to script default`;
+  reset.setAttribute('aria-label', reset.title);
+  heading.append(reset);
   group.append(heading);
+  const defaultState = document.createElement('p');
+  defaultState.className = 'parameter-default';
+  group.append(defaultState);
   const values = document.createElement('div');
   values.className = 'parameter-values';
   group.append(values);

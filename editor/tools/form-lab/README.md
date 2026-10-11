@@ -24,6 +24,11 @@ The Vessel workshop and Path workshop demonstrate generated profiles and paths w
 
 Profiles and paths contain 2–512 points. Their topology and attributes are not transferred to generated surfaces. Generated UVs use circumference for U and point-order fraction for V; edit corner UVs for another mapping. All generated data, copies, and outputs count against evaluation budgets. Profile operations are building blocks, not watertight-solid or collision solvers.
 
+### Parameter defaults and recovery
+Numeric parameter groups show their script defaults and mark changed values in orange. The per-parameter reset removes that override and participates in property Undo/Redo without editing source; **Reset params** restores all parameter defaults. Color controls retain separate linear RGBA channels, including opacity, with a checkerboard preview. Recipes is available beside Script Reference in both standalone and hosted modes.
+
+Standalone **Browser recovery updated** refers to origin-local recovery only. **Save project** requests an editable `.formlab` download; it does not overwrite an opened file. Geometry exports use the last successful build and do not retain the procedural recipe. At narrower widths, complete panels stack and scroll so parameter and export controls remain reachable.
+
 ### Compiler lifecycle
 Compiler module startup has a bounded 10-second loading window. Once the worker begins compiling, the existing two-second script execution budget applies. Rejected or interrupted builds retain the last accepted geometry. Run `npm run test:worker-browser --workspace=@joy-games/form-lab` for the delayed-start, execution-limit, retained-preview and recovery browser regression; set `CAPTURE_EXECUTABLE` when using an installed local Chrome.
 

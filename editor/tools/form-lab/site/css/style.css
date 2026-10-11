@@ -1570,3 +1570,69 @@ input[type='number']::-webkit-inner-spin-button {
 .preview-lighting-controls .parameter-row {display: grid; grid-template-columns: minmax(0, 1fr) 76px; align-items: center; gap: 8px; font-size: 12px;}
 .preview-lighting-controls input {width: 100%; min-width: 0;}
 .preview-lighting-controls input[type="checkbox"] {width: auto; justify-self: end;}
+
+/* Compact authoring chrome retains readable working text and the lab palette. */
+.app-header { height: 58px; padding: 8px 16px; gap: 16px; border-bottom-width: 3px; }
+h1 { font-size: 27px; letter-spacing: -1px; }
+.app-header nav[aria-label='Document actions'] button { padding: 8px 12px; min-height: 32px; }
+.project-bar { min-height: 42px; height: auto; padding: 7px 16px; gap: 10px; flex-wrap: wrap; }
+#save-state { font: 11px/1.4 Archivo, sans-serif; letter-spacing: 0; }
+.project-format { display: none; }
+.example-picker { gap: 8px; }
+.panel-heading { min-height: 44px; padding: 8px 12px; gap: 8px; }
+.run-controls { gap: 8px; }
+.cm-editor { font-size: 13px; }
+.cm-scroller { line-height: 1.65; }
+.cm-content { padding: 12px 0 !important; }
+.editor-bottom { padding: 6px 12px; align-items: center; flex-wrap: wrap; }
+.editor-bottom #recipes { color: var(--orange); font-size: 11px; padding: 4px 6px; min-height: 30px; margin-left: auto; }
+.editor-reference { margin-left: 0; }
+.diagnostic { min-height: 38px; padding: 8px 12px; }
+.preview-bottom { min-height: 38px; padding: 7px 12px; flex-wrap: wrap; }
+.preview-actions button.selected { border-color: var(--orange); color: var(--orange); }
+#preview-status, .joy-hosted .panel-heading h2 > #preview-status { display: block; margin: 4px 0 0; font: 11px/1.35 Archivo, sans-serif; letter-spacing: 0; text-transform: none; white-space: normal; }
+.inspector-tabs button { font-size: 10px; text-transform: none; }
+.inspector-tabs { padding: 6px; gap: 3px; }
+.inspector-content { padding: 12px; }
+.tuning-help { color: var(--muted); font: 11px/1.4 Archivo, sans-serif; margin: 6px 0 12px; }
+.tuning-help summary { cursor: pointer; color: var(--orange); }
+.parameter-heading h3 { flex: 1; font-size: 11px; padding-block: 8px; }
+.parameter-type { flex-basis: 28px; }
+.parameter-heading .parameter-reset { margin: 0; align-self: center; padding: 3px 7px; border: 0; color: var(--orange); background: transparent; font-size: 18px; }
+.parameter.modified { border-color: var(--orange); }
+.parameter-default { margin: 0; padding: 6px 8px 0; color: var(--muted); font: 11px/1.4 Archivo, sans-serif; overflow-wrap: anywhere; }
+.parameter.modified .parameter-default { color: var(--orange); }
+.parameter-component label { font-size: 11px; }
+.parameter .color-swatch { width: 28px; min-width: 28px; height: 24px; }
+.inspector > .export-panel #export-note { font: 11px/1.4 Archivo, sans-serif; }
+.app-footer { height: 26px; padding: 6px 16px; }
+
+/* Below three-pane widths, scroll complete panels rather than clipping the inspector. */
+@media (min-width: 681px) and (max-width: 930px) {
+  #app .workbench { grid-template-columns: minmax(240px, .9fr) minmax(280px, 1.3fr) !important; grid-template-rows: minmax(440px, 65dvh) auto !important; }
+  #app .workbench .editor-panel { grid-column: 1 !important; grid-row: 1 !important; height: auto; }
+  #app .workbench .preview-panel { grid-column: 2 !important; grid-row: 1 !important; height: auto; }
+  #app .workbench .inspector { grid-column: 1 / -1 !important; grid-row: 2 !important; height: auto; min-height: 360px; display: flex; flex-direction: column; }
+  #app .inspector-content { overflow: visible; }
+  #parameters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  #parameters > .parameter { margin: 0; }
+}
+@media (max-width: 930px) {
+  .joy-hosted body { height: auto; overflow: auto; }
+  .joy-hosted #app { height: auto; min-height: 100dvh; overflow: visible; }
+  .joy-hosted #app .workbench { overflow: visible; }
+  .layout-divider { display: none; }
+}
+@media (max-width: 680px) {
+  .app-header { height: auto; min-height: 58px; padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
+  .app-header nav[aria-label='Document actions'] { margin-left: auto; }
+  .app-header nav[aria-label='Document actions'] button { font-size: 11px; padding: 7px 9px; }
+  .project-bar { padding: 8px 12px; }
+  .example-picker { margin-top: 0; }
+  #app .workbench { display: flex; flex-direction: column; }
+  #app .workbench .editor-panel { height: 390px; min-height: 390px; }
+  #app .workbench .preview-panel { height: 470px; min-height: 470px; }
+  #app .workbench .inspector { height: auto; overflow: visible; }
+  #app .inspector-content { overflow: visible; }
+  .preview-actions { flex-wrap: wrap; }
+}

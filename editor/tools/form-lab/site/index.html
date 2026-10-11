@@ -48,7 +48,6 @@
           <button data-layout="balanced">Balanced</button><button data-layout="script">Script</button><button data-layout="preview">Preview</button>
         </div>
         <span class="workspace-hint">ONE SCRIPT. MANY POSSIBILITIES.</span>
-        <button id="recipes">Recipes <span>↗</span></button>
       </div>
       <section class="workbench">
         <section class="editor-panel" aria-label="Script editor">
@@ -65,7 +64,7 @@
           </div>
           <div id="editor"></div>
           <div class="editor-bottom">
-            <span id="cursor-position">Ln 1, Col 1</span><button id="reference-link" class="editor-reference" aria-label="FORM SCRIPT language reference">Script Reference</button>
+            <span id="cursor-position">Ln 1, Col 1</span><button id="recipes" title="Append a recipe to the script">Recipes ↗</button><button id="reference-link" class="editor-reference" aria-label="FORM SCRIPT language reference">Script Reference</button>
           </div>
           <div id="diagnostic" class="diagnostic" role="status">
             <span class="status-dot"></span
@@ -147,7 +146,7 @@
         <aside class="inspector" aria-label="Parameters and output">
           <div class="panel-heading">
             <h2><span>03</span> INSPECTOR</h2>
-            <button id="reset">Reset</button>
+            <button id="reset" title="Restore all parameter defaults; materials and preview lighting are unchanged">Reset params</button>
           </div>
           <div class="inspector-tabs" role="tablist" aria-label="Inspector sections">
             <button role="tab" id="parameters-tab" data-inspector-tab="parameters" aria-controls="parameters-section">Parameters</button>
@@ -159,9 +158,9 @@
             <section id="parameters-section" data-inspector-panel="parameters" role="tabpanel" aria-labelledby="parameters-tab">
             <label class="parameter-search"><span class="sr-only">Find parameter</span><input id="parameter-search" type="search" placeholder="Find a parameter…" aria-label="Find parameter" /></label>
             <p class="section-kicker">WATCH SMALL CHANGES TAKE SHAPE.</p>
-            <p id="override-state" class="numeric-guidance">Parameter overrides and materials are saved in the FORM LAB document.</p>
+            <p id="override-state" class="numeric-guidance">Save project downloads source, parameter overrides, and materials together. Browser recovery stays in this browser.</p>
             <div class="property-history"><button id="property-undo" disabled>Undo property</button><button id="property-redo" disabled>Redo property</button></div>
-            <p class="numeric-guidance">Type a value · Shift + arrows fine · Alt + arrows coarse. Source has separate editor undo.</p>
+            <details class="tuning-help"><summary>Tuning keys &amp; defaults</summary><p class="numeric-guidance">Type a value · Shift + arrows fine · Alt + arrows coarse. Reset returns to the script default; source has separate editor undo. Color channels are linear RGBA; A controls opacity.</p></details>
             <div id="parameters"></div>
             <p id="parameter-empty" hidden>No matching parameters.</p>
             </section>

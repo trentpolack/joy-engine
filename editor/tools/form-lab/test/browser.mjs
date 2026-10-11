@@ -147,6 +147,25 @@ try {
   await expect(page.locator('#materials')).toBeVisible();
   await expect(page.locator('#parameters')).toBeHidden();
   await page.getByRole('tab', {name:'Parameters', exact:true}).click();
+  // Resetting an override is an authoring edit; it must not change the recipe.
+  const sourceBeforeReset = await page.locator('.cm-content').innerText();
+  const heightValue = page.getByRole('spinbutton', {name: 'height value', exact: true});
+  const heightReset = page.getByRole('button', {name: 'Reset height to script default'});
+  await expect(heightReset).toBeDisabled();
+  await heightValue.fill('4');
+  await heightValue.press('Tab');
+  await expect(page.locator('#preview-status')).toHaveAttribute('data-state', 'generated');
+  await expect(page.locator('[data-numeric-parameter="height"]')).toContainText('Modified');
+  await heightReset.click();
+  await expect(heightValue).toHaveValue('2.4');
+  await page.locator('#property-undo').click();
+  await expect(heightValue).toHaveValue('4');
+  await page.locator('#property-redo').click();
+  await expect(heightValue).toHaveValue('2.4');
+  assert.equal(await page.locator('.cm-content').innerText(), sourceBeforeReset, 'parameter reset/history preserve source');
+  await page.locator('#recipes').click();
+  await expect(page.locator('#reference-dialog')).toBeVisible();
+  await page.locator('#close-help').click();
   await capture('workspace-balanced');
   await page.getByRole('tab', {name:'Variants', exact:true}).click();
   await page.locator('#variant-name').fill('Script defaults');
