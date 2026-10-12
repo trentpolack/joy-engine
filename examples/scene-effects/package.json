@@ -15,5 +15,14 @@
   },
   "dependencies": {
     "joy-engine": "file:../.."
+  },
+  "gameSite": {
+    "category": "example",
+    "title": "SCENE EFFECTS",
+    "description": "Inspect lighting, shadows, and post-processing on a live 3D scene.",
+    "status": "Engine example",
+    "accent": "#69a7c7",
+    "startedAt": "2026-10-02",
+    "screenshot": "example-scene-effects.png"
   }
 }

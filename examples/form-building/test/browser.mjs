@@ -1,16 +1,23 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 import assert from 'node:assert/strict';
-import {mkdir,writeFile} from 'node:fs/promises';
+import {copyFile,mkdir,writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
+import path from 'node:path';
 import {chromium} from '@playwright/test';
 import {createServer,preview} from 'vite';
 const built = process.argv.includes('--built');
+const previewArgument = process.argv.indexOf('--preview-directory');
+const previewDirectory = previewArgument < 0 ? null : process.argv[previewArgument + 1];
 const directory = new URL(`../../../../artifacts/captures/${Date.now()}-form-building/`,import.meta.url);
 const configFile = fileURLToPath(new URL('../vite.config.js',import.meta.url));
 const server = built ? await preview({configFile,preview:{host:'127.0.0.1',port:0}})
   : await createServer({configFile,server:{host:'127.0.0.1',port:0}});
-const browser = await chromium.launch({executablePath:process.env.CAPTURE_EXECUTABLE ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:false,args:['--enable-unsafe-webgpu']});
+const browser = await chromium.launch({
+  executablePath: process.env.CAPTURE_EXECUTABLE,
+  headless: process.env.FORM_BUILDING_HEADLESS === '1' || (process.platform !== 'darwin' && process.env.FORM_BUILDING_HEADED !== '1'),
+  args: ['--enable-unsafe-webgpu']
+});
 const results = [];
 let failure;
 await mkdir(directory,{recursive:true});
@@ -86,13 +93,17 @@ try {
     await page.screenshot({path:fileURLToPath(new URL(`${backend}-baked.png`,directory))});
     await page.close();
   }
+  if(built && previewDirectory) {
+    await mkdir(previewDirectory, {recursive: true});
+    await copyFile(new URL('webgpu-cottage.png', directory), path.join(previewDirectory, 'example-form-building.png'));
+  }
 } catch(error) {
   failure = String(error);
   process.exitCode = 1;
 } finally {
   await browser.close();
   await server.close();
-  await writeFile(new URL('results.json',directory),JSON.stringify({built,browser:process.env.CAPTURE_EXECUTABLE ?? 'Google Chrome',results,failure},null,2));
+  await writeFile(new URL('results.json',directory),JSON.stringify({built,browser:process.env.CAPTURE_EXECUTABLE ?? 'Playwright Chromium',results,failure},null,2));
   const images = ['webgl','webgpu'].flatMap(backend => ['cottage','warehouse','apartments','roof-edit','maximum','baked'].map(name => `${backend}-${name}.png`));
   await writeFile(new URL('index.html',directory),`<!doctype html><title>FORM building captures</title><style>body{background:#142330;color:white;font:16px system-ui}img{width:95%;max-width:1000px}figure{margin:20px}</style><h1>FORM building captures</h1>${images.map(name => `<figure><figcaption>${name}</figcaption><img src="${name}"></figure>`).join('')}`);
   console.info(`Capture gallery: ${fileURLToPath(new URL('index.html',directory))}`);

@@ -410,6 +410,139 @@ interface PhysicsTransform {
 ```
 
 
+## DestructibleChunkDefinition
+Import from `joy-engine`. [Source](../../src/physics/destruction/chunk-structure.ts)
+
+```ts
+interface DestructibleChunkDefinition {
+  id: string;
+  center: Vector3;
+  size: Vector3;
+  material: string;
+  hitPoints: number;
+}
+```
+
+
+## RadialDamage
+Import from `joy-engine`. [Source](../../src/physics/destruction/chunk-structure.ts)
+
+```ts
+interface RadialDamage {
+  center: readonly number[];
+  radius: number;
+  damage: number;
+}
+```
+
+
+## ChunkChangeSet
+Import from `joy-engine`. [Source](../../src/physics/destruction/chunk-structure.ts)
+
+```ts
+interface ChunkChangeSet {
+  revision: number;
+  /** All chunks leaving static geometry and queries at this boundary, including support detachments. */
+  removed: readonly DestructibleChunkDefinition[];
+  /** Subset of removed chunks released by support loss, retaining their remaining health. */
+  detached: readonly DestructibleChunkDefinition[];
+  activeChunkCount: number;
+}
+```
+
+
+## ChunkDamageState
+Import from `joy-engine`. [Source](../../src/physics/destruction/chunk-structure.ts)
+
+```ts
+interface ChunkDamageState {
+  chunkId: string;
+  remainingHitPoints: number;
+  maximumHitPoints: number;
+  active: boolean;
+}
+```
+Copied committed damage state; hit points use the same units as queued damage.
+
+
+
+## ChunkSupportOptions
+Import from `joy-engine`. [Source](../../src/physics/destruction/chunk-support.ts)
+
+```ts
+interface ChunkSupportOptions {
+  groundHeight: number;
+  maximumCantileverDistance: number;
+  contactTolerance?: number;
+}
+```
+Optional Y-up masonry support approximation, in the same world units as chunk geometry. Face contacts carry support upward and sideways; horizontal offsets spend the cantilever allowance. This is a geometric support rule, not a stress, torque, or material-load solver.
+
+
+
+## ChunkSupportState
+Import from `joy-engine`. [Source](../../src/physics/destruction/chunk-support.ts)
+
+```ts
+interface ChunkSupportState {
+  chunkId: string;
+  anchored: boolean;
+  supported: boolean;
+  lateralDistance: number | null;
+}
+```
+Copied static support diagnostics. Null distance means no permitted route to a ground anchor. Released rigid bodies are outside this graph, even after they land on the ground.
+
+
+
+## PhysicsBackend
+Import from `joy-engine`. [Source](../../src/physics/backend-contract.ts)
+
+```ts
+interface PhysicsBackend {
+  readonly residency: PhysicsResidency;
+  readonly activeBodyCount: number;
+  applyMutations(batch: PhysicsMutationBatch): void | Promise<void>;
+  step(elapsedSeconds:number): void | Promise<void>;
+  query(origin:readonly number[], direction:readonly number[], maximumDistance:number):
+    null | {shapeId:string; distance:number; point:Vector3};
+  destroy():void;
+}
+```
+Solver-neutral synchronization boundary for resident bodies, transforms, velocities, and shapes. Gameplay-visible mutation batches complete before query(), avoiding asynchronous readback on aim and character collision paths. GPU backends may retain simulation state on-device and publish only compact event/readback records; CPU implementations remain the required fallback.
+
+
+
+## PhysicsResidency
+Import from `joy-engine`. [Source](../../src/physics/backend-contract.ts)
+
+```ts
+type PhysicsResidency = 'cpu' | 'gpu';
+```
+
+
+## PhysicsCollisionShape
+Import from `joy-engine`. [Source](../../src/physics/backend-contract.ts)
+
+```ts
+type PhysicsCollisionShape = Readonly<{id:string; center:Vector3; halfExtents:Vector3}>;
+```
+
+
+## PhysicsMutationBatch
+Import from `joy-engine`. [Source](../../src/physics/backend-contract.ts)
+
+```ts
+type PhysicsMutationBatch = Readonly<{
+  sequence:number;
+  removedShapeIds:readonly string[];
+  addedShapes:readonly PhysicsCollisionShape[];
+  invalidatesContacts:boolean;
+  rebuildsAccelerationStructure:boolean;
+}>;
+```
+
+
 ## DevToolsOptions
 Import from `joy-engine`. [Source](../../src/browser/diagnostics/dev-tools.ts)
 

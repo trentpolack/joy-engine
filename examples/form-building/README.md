@@ -12,6 +12,8 @@ npm run build --workspace @joy-engine/example-form-building
 npm run capture --workspace @joy-engine/example-form-building
 npm run capture --workspace @joy-engine/example-form-building -- --built
 ```
+Captures use Playwright Chromium by default, or `CAPTURE_EXECUTABLE` when supplied. They run headed on macOS for GPU presentation and headless elsewhere; `FORM_BUILDING_HEADLESS=1` and `FORM_BUILDING_HEADED=1` override that choice.
+
 Open the URL printed by Vite. Use `?backend=webgl` or `?backend=webgpu` to select a backend. Add `&mode=baked` to load the supplied cottage mesh without parsing or evaluating FORM. Drag to orbit, scroll to zoom, and click **Frame view** after large dimension changes. The sidebar scrolls independently of the asset viewport.
 
 ## Editable procedural use
@@ -31,4 +33,4 @@ Open `assets/cottage.formlab`, `warehouse.formlab`, or `apartments.formlab` in F
 The example owns its RAF, listeners, renderer, and scene. `dispose()` stops the loop, aborts listeners, destroys rendering resources, clears scene references, and releases the current asset. Mesh assets own CPU arrays only. Legacy FORM `instance()` reuses source meshes during authoring but realizes copies in final geometry; this example does not demonstrate GPU instancing or retained logical `instances()` outputs.
 
 ## Findings and evidence
-See [the findings report](FINDINGS.md) for measured timings, the focused matrix, minimal diagnostic reproductions, browser evidence, and the existing repository-validation blocker. The example is an engine workspace, excluded from site discovery. No game or Vectors to Victory files changed.
+See [the findings report](FINDINGS.md) for measured timings, the focused matrix, minimal diagnostic reproductions, browser evidence, and the existing repository-validation blocker. The example remains an independent engine workspace and is published in the JoyGames platform’s Joy Engine Examples section at `/examples/form-building/`.

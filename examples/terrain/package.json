@@ -15,5 +15,14 @@
   },
   "dependencies": {
     "joy-engine": "file:../.."
+  },
+  "gameSite": {
+    "category": "example",
+    "title": "TERRAIN",
+    "description": "Explore continuous terrain detail, fly controls, and GPU selection.",
+    "status": "Engine example",
+    "accent": "#91ba80",
+    "startedAt": "2026-10-02",
+    "screenshot": "example-terrain.png"
   }
 }

@@ -204,3 +204,92 @@ Tire contacts recorded during the most recent fixed step.
 destroy()
 ```
 Remove the solver's pre-step callback while retaining the borrowed chassis. Idempotent.
+
+
+
+## ChunkStructure
+Import from `joy-engine`. [Source](../../src/physics/destruction/chunk-structure.ts)
+
+Owns damage for stable, axis-aligned chunks and commits queued changes only at an explicit simulation boundary. Coordinates and dimensions use caller-defined world units.
+
+### constructor
+```ts
+constructor(definitions: readonly DestructibleChunkDefinition[], support?: ChunkSupportOptions)
+```
+Copy all definitions so generation data can be released or reused by the caller. Omit support to retain damage-only removal; support-enabled consumers release unsupported chunks at commit().
+
+
+### queueDamage
+```ts
+queueDamage(damage: RadialDamage)
+```
+Queue radial damage. Geometry and collision remain unchanged until commit().
+
+
+### commit
+```ts
+commit(): ChunkChangeSet
+```
+Apply every queued hit atomically and return the chunks removed by this boundary. Overlapping hits accumulate before removal, while already removed chunks are ignored. With support enabled, evaluate the surviving contacts and detach unsupported chunks in the same revision.
+
+
+### reset
+```ts
+reset(): ChunkChangeSet
+```
+Restore original health and activity, discarding uncommitted hits.
+
+
+### activeChunks
+```ts
+activeChunks()
+```
+Active definitions are borrowed immutable records in stable generation order.
+
+
+### damageState
+```ts
+damageState(): ChunkDamageState[]
+```
+Copy damage state in generation order. Impact-destroyed chunks have zero health; support-detached chunks retain health while becoming inactive. Queued damage is invisible until commit(); callers own the returned array and records.
+
+
+### supportState
+```ts
+supportState(): ChunkSupportState[]
+```
+Copy committed static support diagnostics, or an empty array when support is disabled.
+
+
+### raycast
+```ts
+raycast(origin: readonly number[], direction: readonly number[], maximumDistance: number)
+```
+Nearest active chunk hit by a world-space ray, or null.
+
+
+### canOccupy
+```ts
+canOccupy(center: readonly number[], halfExtents: readonly number[])
+```
+True when a player-sized axis-aligned probe can occupy the supplied world position.
+
+
+
+## createChunkMeshData
+Import from `joy-engine`. [Source](../../src/physics/destruction/chunk-geometry.ts)
+
+```ts
+function createChunkMeshData(chunks: readonly Readonly<DestructibleChunkDefinition>[]):MeshAssetData
+```
+Build closed box geometry. Every removed neighbor therefore reveals an authored interior face.
+
+
+
+## createRemovalMutationBatch
+Import from `joy-engine`. [Source](../../src/physics/backend-contract.ts)
+
+```ts
+function createRemovalMutationBatch(sequence:number, removedShapeIds:readonly string[]):PhysicsMutationBatch
+```
+Create a contact-invalidating batch for chunk removals at one simulation boundary.

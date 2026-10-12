@@ -1,0 +1,28 @@
+{
+  "name": "@joy-engine/example-form-destruction",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "author": "Trent Polack",
+  "license": "MIT",
+  "gameSite": {
+    "category": "example",
+    "title": "FORM DESTRUCTION",
+    "description": "Inspect wall integrity, apply cumulative damage, and keep the resulting rubble.",
+    "status": "Engine example",
+    "accent": "#ff641a",
+    "startedAt": "2026-10-12",
+    "screenshot": "example-form-destruction.png"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build --base=./",
+    "preview": "vite preview --host 127.0.0.1",
+    "check": "joy-check-javascript test vite.config.js && tsc --project tsconfig.json",
+    "test": "node --import joy-engine/testing/register-raw-loader --test test/*.test.mjs",
+    "capture": "node test/browser.mjs"
+  },
+  "dependencies": {
+    "joy-engine": "file:../.."
+  }
+}

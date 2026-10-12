@@ -1,5 +1,5 @@
 # Scene effects example
-This developer workspace is excluded from the published site and automatic release captures. It consumes the public `joy-engine` scene API without importing luma directly. Its deterministic room demonstrates depth-aware blur, SSAO or GTAO, SSGI, outlines, TAA, motion blur, SSR, height fog, clustered volumetric lighting, adaptive exposure and existing HDR bloom. Start from the repository root:
+This engine example is available in the JoyGames platform’s Joy Engine Examples section at `/examples/scene-effects/`, including site builds and release captures. It consumes the public `joy-engine` scene API without importing luma directly. Its deterministic room demonstrates depth-aware blur, SSAO or GTAO, SSGI, outlines, TAA, motion blur, SSR, height fog, clustered volumetric lighting, adaptive exposure and existing HDR bloom. Start from the repository root:
 
 ```sh
 npm run dev --workspace @joy-engine/example-scene-effects

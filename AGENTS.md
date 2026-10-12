@@ -2,7 +2,7 @@
 This file applies to the entire repository unless a package-specific `AGENTS.md` says otherwise for that package.
 
 ## Overview
-Joy Engine is a browser-native game engine built on luma.gl (WebGPU with WebGL 2 fallback) for prototyping, procedural generation and stylized games. This repository holds the engine package, Joy Editor and its FORM LAB and PARTICLE LAB tools, and command-line engine examples.
+Joy Engine is a browser-native game engine built on luma.gl (WebGPU with WebGL 2 fallback) for prototyping, procedural generation and stylized games. This repository holds the engine package, Joy Editor and its FORM LAB and PARTICLE LAB tools, and independently runnable engine examples.
 
 Prefer readable control flow, named data, and small modules over clever abstractions or compression. If a change makes code harder to scan, explain why the tradeoff is worthwhile. There are additional specific cases in the "Code Standards and AI Agent Rules" section of this doc.
 
@@ -57,7 +57,7 @@ Do not add tests solely for coverage counts, trivial helpers, fixed tuning value
 - `src/`, `shaders/`, `schemas/`, `assets/`: the `joy-engine` package (public entry points are listed in [README.md](README.md)).
 - `test/`, `scripts/`, `docs/`: the engine's unit suite, tooling, guide and generated API reference.
 - `editor/`: Joy Editor (`@joy-games/joy-editor`), a separate package with its own dependencies; FORM LAB and PARTICLE LAB live in `editor/tools/`.
-- `examples/*`: command-line engine examples, outside any published site.
+- `examples/*`: engine feature demonstrations. A hosting workspace can publish examples that opt in with `gameSite.category: "example"`; examples remain independent of games and the host.
 
 The engine package never imports the editor, tools or examples. The editor may depend on the engine (`file:..`). Tests, fixtures and tooling live inside the owning package. Nothing in this repository may depend on a particular game; game-specific fixtures belong in the consuming repository.
 

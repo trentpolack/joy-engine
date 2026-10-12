@@ -16,5 +16,14 @@
   },
   "dependencies": {
     "joy-engine": "file:../.."
+  },
+  "gameSite": {
+    "category": "example",
+    "title": "FORM BUILDING",
+    "description": "Generate and reshape a building shell from an editable FORM recipe.",
+    "status": "Engine example",
+    "accent": "#ed6c39",
+    "startedAt": "2026-10-09",
+    "screenshot": "example-form-building.png"
   }
 }

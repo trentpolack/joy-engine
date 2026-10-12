@@ -2,6 +2,19 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-12-2026
+### Engine examples
+- Added FORM Destruction's integrity heatmap and remaining-hit readout from committed chunk health, increased wall resistance and gravity, and kept released chunks until reset without expiry or eviction.
+- Added FORM Destruction's large solid ground and rigid-body debris collision, with bounded, toggleable impact-point, ray, and damage-radius debug drawing.
+- Added FORM Destruction as an independent example with surface-projected click impacts, cumulative damage, orbit/zoom inspection, bounded debris, and reset. Removed the game-specific movement probe and reticle.
+- Opted Terrain, Scene Effects, FORM Building, and FORM Destruction into the hosting platform’s example directory and production preview workflow.
+
+### Runtime destruction and physics contracts
+- Added opt-in ground support with bounded cantilevers and atomic release of unsupported healthy chunks; FORM Destruction now shows support paths and collides falling chunks against surviving structure.
+- Exposed copied committed chunk damage state so consumers can visualize partial damage without duplicating simulation health.
+- Added stable chunk destruction under `src/physics/destruction` with queued simulation-boundary damage, reset, closed geometry generation, raycasts, player-volume collision queries, and behavior tests. Kept destruction solver-independent and preserved its public exports.
+- Defined solver-neutral CPU/GPU physics residency and ordered mutation batches for contact invalidation and acceleration-structure updates.
+
 ## 10-11-2026
 
 ### Runtime diagnostics

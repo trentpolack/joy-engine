@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 import assert from 'node:assert/strict';
-import { access, mkdir, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { platform, release, cpus, totalmem } from 'node:os';
 import { chromium, expect } from '@playwright/test';
@@ -10,6 +11,8 @@ import { createServer, preview } from 'vite';
 
 const EFFECTS = ['depthAwareBlur','ssao','gtao','ssgi','outlines','taa','motionBlur','ssr','heightFog','clusteredLighting','adaptiveExposure'];
 const built = process.argv.includes('--built');
+const previewArgument = process.argv.indexOf('--preview-directory');
+const previewDirectory = previewArgument < 0 ? null : process.argv[previewArgument + 1];
 const directory = new URL(`../../../../artifacts/captures/${Date.now()}-scene-effects/`, import.meta.url);
 const configFile = fileURLToPath(new URL('../vite.config.js', import.meta.url));
 const server = built
@@ -153,6 +156,10 @@ try {
     await page.close();
   }
   assert.ok(scenarios.length > 0, 'At least one backend must complete the capture matrix.');
+  if(built && previewDirectory) {
+    await mkdir(previewDirectory, {recursive: true});
+    await copyFile(new URL(`${scenarios.some(scenario => scenario.name === 'webgpu-combined-medium') ? 'webgpu' : 'webgl'}-combined-medium.png`, directory), path.join(previewDirectory, 'example-scene-effects.png'));
+  }
   success = true;
 } finally {
   if(page && !page.isClosed() && !success) {

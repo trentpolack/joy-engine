@@ -1,10 +1,13 @@
 // Copyright (c) 2026 Trent Polack. Licensed under the MIT License.
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { chromium, expect } from '@playwright/test';
 import { createServer, preview } from 'vite';
 const built = process.argv.includes('--built');
+const previewArgument = process.argv.indexOf('--preview-directory');
+const previewDirectory = previewArgument < 0 ? null : process.argv[previewArgument + 1];
 const directory = new URL(`../../../../artifacts/captures/${Date.now()}-terrain-lab/`,import.meta.url);
 await mkdir(directory,{recursive:true});
 const configFile = fileURLToPath(new URL('../vite.config.js',import.meta.url));
@@ -117,6 +120,10 @@ try {
     else { assert.ok(routineLogs.some(message => message.startsWith('Terrain Lab ready:')),`${backend} development startup diagnostics`); }
     reports.push(`${backend} passed. ${await page.locator('#stats').textContent()}`);
     await page.close();
+  }
+  if(built && previewDirectory) {
+    await mkdir(previewDirectory, {recursive: true});
+    await copyFile(new URL(`${captures.includes('webgpu-overview') ? 'webgpu' : 'webgl'}-overview.png`, directory), path.join(previewDirectory, 'example-terrain.png'));
   }
   success = true;
 } finally {

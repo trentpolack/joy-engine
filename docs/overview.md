@@ -8,6 +8,7 @@
 - Provides easy access for creating per-project game loops.
 - Dev tools for development deployments of projects (or the whole site).
 - Access to a seeded random stream for consistent results across sessions.
+- Supports chunk-built runtime destruction with explicit simulation-boundary commits, stable identities, closed interior geometry, raycasts, and CPU player-volume queries.
 - And more as it comes up.
 
 
@@ -18,6 +19,8 @@ See [JavaScript coding standards](coding-standards.md) for the concrete reading 
 See [repository architecture](https://github.com/trentpolack/JoyGames/blob/develop/docs/architecture.md) for the engine feature buckets, script organization, configuration format decision, and commenting expectations used across JavaScript and shaders.
 
 The `joy-engine/src` tree is the single engine implementation. All consumers use the `joy-engine` workspace package, whose public API is `joy-engine/src/index.ts`; neither games nor repository tests reach through that package boundary.
+
+`ChunkStructure` queues damage until `commit()`, allowing consumers to update visible geometry and collision from one returned revision. Its copied `damageState()` records expose committed remaining/maximal hit points and activity, so consumers can visualize partial damage without owning a second health model. An optional `ChunkSupportOptions` argument enables ground-anchored, upward face-contact support with a bounded sideways span. `commit()` releases unsupported healthy chunks in the same geometry/collision revision, identifies them in `detached` (a subset of `removed`), and exposes copied `supportState()` diagnostics. This geometric support rule does not model stress or torque. The solver-neutral `PhysicsBackend` and `PhysicsMutationBatch` contracts let future CPU- or GPU-resident implementations receive ordered shape changes, invalidate contacts, and rebuild or refit acceleration data without requiring asynchronous gameplay readback.
 
 Future games can reuse these mechanisms without inheriting SPACE SCUFFLES rules. These modules operate on plain data and browser resources; they do not import project configuration, assets, or gameplay classes.
 - `joy-engine/src/simulation/motion.ts`: `accelerateBody` applies acceleration and drag per fixed tick; `moveBody` advances position in the caller's velocity units. Games own steering, collision response, lifetime, and bounds.
