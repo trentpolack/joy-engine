@@ -1,15 +1,18 @@
+// Copyright (c) 2026 Trent Polack. All Rights Reserved.
+// Licensed under the MIT License.
+
 /**
   * GPU counterpart of terrain-selection.js. Evaluate every fixed leaf first, then reconcile
   * in a separate ordered dispatch so all neighbor LODs are ready.
   */
 
+
 /**
   * Scene matches TerrainRenderer.frameData: view-projection matrix, eye.xyz +
   * CSS projection scale, sample size/tile cells/XZ extents, height offset/scale +
   * error tolerance/diagnostic mode, and world-space target.xyz + pin radius.
+  *   TODO (trent, 10/12/26): Unpack these into relevant-sized vectors and scalars; there's no benefit to packing here.
   */
-
-// Scene structure matches TerrainRenderer.frameData.
 struct Scene {
   // View-projection matrix.
   matrix:mat4x4<f32>,
@@ -37,10 +40,19 @@ struct Metadata {
 };
 
 // Patch: sample origin X/Z, fractional LOD, padding; edges are -X/+X/-Z/+Z.
-struct Patch { base:vec4<f32>, edges:vec4<f32> };
+struct Patch {
+  base:vec4<f32>,
+  edges:vec4<f32>
+};
 
 // Draw follows the five-word drawIndexedIndirect command layout (20 bytes).
-struct Draw { count:u32, instances:u32, first:u32, base:u32, instance:u32 };
+struct Draw {
+  count:u32,
+  instances:u32,
+  first:u32,
+  base:u32,
+  instance:u32
+};
 
 @group(0) @binding(0) var<uniform> scene:Scene;
 @group(0) @binding(1) var<storage,read> metadata:array<Metadata>;
@@ -51,6 +63,11 @@ struct Draw { count:u32, instances:u32, first:u32, base:u32, instance:u32 };
 
 // Flat patches still need a projected cell-size limit. This error floor enforces
 // a maximum of 32 CSS pixels per cell independently of geometric roughness.
+
+/**
+ * Returns the conservative world-space error for one terrain LOD.
+ * A projected cell-size floor keeps geometrically flat patches from producing oversized screen-space cells.
+ */
 fn errorAt(p:Metadata,level:u32) -> f32 {
   var error:f32;
   if(level < 4u) {
@@ -64,16 +81,23 @@ fn errorAt(p:Metadata,level:u32) -> f32 {
   return(max(error, exp2(f32(level))*spacing*scene.settings.z/32.0));
 }
 
-// One invocation per leaf; the final workgroup can extend past the leaf count.
+/**
+ * Selects a fractional terrain LOD independently for one leaf patch.
+ * Distance is measured against patch bounds, and the fractional result later drives a continuous height morph rather than an abrupt topology change.
+ */
 @compute @workgroup_size(64) fn evaluate(@builtin(global_invocation_id) id:vec3<u32>) {
-  let i = id.x; if(i >= arrayLength(&metadata)) { return; }
+  let i = id.x;
+  if(i >= arrayLength(&metadata)) {
+    return;
+  }
+
   let p = metadata[i];
 
   // Measure nearest distance to the world-space bounds, not the patch center.
-  let origin = p.bounds.xy/(scene.geometry.x - 1.0)*scene.geometry.zw - scene.geometry.zw/2.0;
+  let origin = p.bounds.xy/(scene.geometry.x - 1.0)*scene.geometry.zw - (scene.geometry.zw/2.0);
   let end = origin + scene.geometry.y/(scene.geometry.x - 1.0)*scene.geometry.zw;
-  let lowPoint = vec3<f32>(origin.x,p.bounds.z,origin.y);
-  let highPoint = vec3<f32>(end.x,p.bounds.w,end.y);
+  let lowPoint = vec3<f32>(origin.x, p.bounds.z, origin.y);
+  let highPoint = vec3<f32>(end.x, p.bounds.w, end.y);
 
   // Pin finest detail where the horizontal footprint touches the target disk.
   let targetDistance = length(max(max(origin - scene.focus.xz,scene.focus.xz - end),vec2<f32>(0)));
@@ -82,7 +106,7 @@ fn errorAt(p:Metadata,level:u32) -> f32 {
     return;
   }
 
-  let distance = max(0.01, length(max(max(lowPoint - scene.eye.xyz,scene.eye.xyz - highPoint), vec3<f32>(0))));
+  let distance = max(0.01, length(max(max(lowPoint - scene.eye.xyz, scene.eye.xyz - highPoint), vec3<f32>(0))));
 
   // Pixel tolerance becomes a world-height error budget at this distance.
   let budget = distance/scene.eye.w*scene.settings.z;
@@ -126,9 +150,17 @@ fn errorAt(p:Metadata,level:u32) -> f32 {
   * The firstInstance is always zero; a static per-draw uniform supplies the descriptor index instead.
   */
 @compute @workgroup_size(64) fn reconcile(@builtin(global_invocation_id) id:vec3<u32>) {
-  let i = id.x; if(i >= arrayLength(&metadata)) { return; }
+  let i = id.x;
+  if(i >= arrayLength(&metadata)) {
+    return;
+  }
+
   let axis = u32((scene.geometry.x - 1.0)/scene.geometry.y);
-  let x = i % axis; let z = i/axis; let detail = details[i];
+ 
+  let x = i % axis;
+  let z = i/axis;
+  let detail = details[i];
+ 
   var edges = vec4<f32>(detail);
   if(x > 0u) {
     edges.x = max(detail,details[i - 1u]);
@@ -146,9 +178,10 @@ fn errorAt(p:Metadata,level:u32) -> f32 {
     edges.w = max(detail,details[i + axis]);
   }
 
-  patches[i] = Patch(vec4<f32>(metadata[i].bounds.xy,detail,0),edges);
+  patches[i] = Patch(vec4<f32>(metadata[i].bounds.xy, detail, 0.0), edges);
 
-  // Emit the selected index range directly for the render pass. firstInstance stays zero; a static per-draw uniform supplies the descriptor index instead.
+  // Emit the selected index range directly for the render pass.
+  // firstInstance stays zero; a static per-draw uniform supplies the descriptor index instead.
   let range = ranges[u32(floor(detail))];
   draws[i] = Draw(range.y, 1u, range.x, 0u, 0u);
 }

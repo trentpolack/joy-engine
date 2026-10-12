@@ -12,11 +12,9 @@ struct animatedGrainUniforms {
 @group(0) @binding(auto) var<uniform> animatedGrain: animatedGrainUniforms;
 
 /**
- * Filters a color with animated film grain effect.
- * @param color The input color.
- * @param texSize The size of the texture.
- * @param texCoord The texture coordinates.
- * @returns The filtered color.
+ * Adds temporally animated, luminance-aware film grain to the source color.
+ * Quantized pixel cells and frame time keep the grain coherent at its configured size, while midtone weighting protects highlights and shadows.
+ *  TODO (trent, 10/12/26): Need to revisit this for a proper noise calculation (in addition to adding support for an optional texture overlay).
  */
 fn animatedGrain_filterColor_ext(
   color: vec4f,

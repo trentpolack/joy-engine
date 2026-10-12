@@ -1,12 +1,13 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+precision highp float;
+
 /*
  * Metallic/roughness microfacet lighting: GGX distribution, Smith visibility, Schlick Fresnel and energy-conserving Lambert diffuse.
  *  NOTE: No environment map.
  */
 
-precision highp float;
 struct PointLight {vec4 positionRange; vec4 color;};
 layout(std140) uniform pbrLighting {
   mat4 lightingViewMatrix;
@@ -14,8 +15,12 @@ layout(std140) uniform pbrLighting {
   PointLight lights[32];
   vec4 counts;
 };
-vec3 pbrDirect(vec3 base, float metallic, float roughness, vec3 n, vec3 v, vec3 l);
 
+/**
+ * Evaluates one direct-light contribution for the metallic-roughness material.
+ * The calculation combines a GGX specular lobe with energy-conserving Lambertian diffuse and protects grazing-angle denominators from zero.
+ */
+vec3 pbrDirect(vec3 base, float metallic, float roughness, vec3 n, vec3 v, vec3 l);
 
 layout(std140) uniform frameUniforms {
   mat4 viewProjection;
@@ -44,6 +49,10 @@ in vec4 vertexColor;
 in vec2 texCoord;
 out vec4 fragmentColor;
 
+/**
+ * Shades one metallic-roughness surface sample into linear HDR color.
+ * Texture factors, normal mapping, environment lighting, shadows, and direct lights are combined before the renderer tone-maps the target.
+ */
 void main() {
   // Sample before alpha discard so derivative-based tangent frames remain valid.
   vec4 sampledBase = texture(baseColorTexture, texCoord);
@@ -66,6 +75,7 @@ void main() {
 
   if(roughnessAlpha.w > 0.5 && abs(determinant) > 0.0000001 && dot(tangent, tangent) > 0.0000001) {
     tangent = normalize(tangent)*sign(determinant);
+
     vec3 bitangent = normalize(cross(n, tangent))*sign(determinant);
     n = normalize(tangent*tangentNormal.x + bitangent*tangentNormal.y + n*tangentNormal.z);
   }
@@ -86,9 +96,10 @@ void main() {
     vec3 offset = light.positionRange.xyz - worldPosition;
     float distance = length(offset);
     vec3 direction = offset/max(distance, 0.000001);
-    float reach = max(0.0, 1.0 - distance/light.positionRange.w);
+    float reach = max(0.0, 1.0 - (distance/light.positionRange.w));
     radiance+= pbrDirect(base, metallic, roughness, n, v, direction)*light.color.rgb*reach*reach;
   }
+
   radiance+= (ambientColor.rgb*base*(1.0 - metallic)*occlusion + emission)*counts.y;
   if(environment.x > 0.0) {
     float cosine = cos(environment.y);
@@ -110,6 +121,11 @@ void main() {
   fragmentColor = vec4((ambientColor.a > 0.5) ? displayColor(radiance) : radiance, alpha);
 }
 
+/**
+ * Evaluates a metallic-roughness material's response to one directional or local light.
+ * Combines GGX specular with energy-conserving Lambertian diffuse.
+ * The caller applies light color, attenuation, and shadow visibility.
+ */
 vec3 pbrDirect(vec3 base, float metallic, float roughness, vec3 n, vec3 v, vec3 l) {
   vec3 halfDirection = v + l;
   vec3 h = halfDirection/max(length(halfDirection), 0.000001);
@@ -124,5 +140,6 @@ vec3 pbrDirect(vec3 base, float metallic, float roughness, vec3 n, vec3 v, vec3 
   vec3 f0 = mix(vec3(0.04), base, metallic);
   vec3 fresnel = f0 + (1.0 - f0)*pow(1.0 - vh, 5.0);
   vec3 diffuse = (1.0 - fresnel)*(1.0 - metallic)*base/PI;
-  return (diffuse + distribution*visibility*fresnel)*nl;
+
+  return((diffuse + distribution*visibility*fresnel)*nl);
 }

@@ -28,7 +28,17 @@ struct CasterOutput {
   @location(1) alpha: f32
 };
 
-@vertex fn vertexMain(@location(0) position: vec3f, @location(2) color: vec4f, @location(3) uv: vec2f) -> CasterOutput {
+/**
+ * Projects a PBR mesh into the shadow caster camera.
+ * UV and vertex alpha are forwarded because masked materials must reproduce their visible coverage in the depth map.
+ * Input locations match the PBR mesh layout; normal at location 1 is unused.
+ * CasterOutput locations independently define the interpolants passed to fragmentMain.
+ */
+@vertex fn vertexMain(
+  @location(0) position: vec3f,
+  @location(2) color: vec4f,
+  @location(3) uv: vec2f
+) -> CasterOutput {
   var output: CasterOutput;
   output.position = casterCamera.viewProjection*vec4f(position, 1.0);
   output.uv = uv;
@@ -36,6 +46,10 @@ struct CasterOutput {
   return output;
 }
 
+/**
+ * Discards transparent texels for alpha-masked shadow casters.
+ * Opaque materials take the no-discard path, allowing the depth attachment to remain the only output.
+ */
 @fragment fn fragmentMain(input: CasterOutput) {
   let alpha = textureSample(baseColorTexture, baseColorTextureSampler, input.uv).a*materialUniforms.baseColor.a*input.alpha;
 

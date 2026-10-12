@@ -23,13 +23,18 @@ in vec4 vertexColor;
 in vec3 worldPosition;
 out vec4 fragmentColor;
 
+/**
+ * Lights a vertex-colored triangle with atmosphere and bounded point lights.
+ * A derivative normal avoids expanding the portable vertex format, while range falloff keeps each point light local.
+ */
 void main() {
   vec3 surface = cross(dFdx(worldPosition), dFdy(worldPosition));
-  vec3 normal = surface / max(length(surface), 0.000001);
+  vec3 normal = surface/max(length(surface), 0.000001);
   vec3 irradiance = vec3(lighting.y) + skylightColorIntensity.rgb*skylightColorIntensity.a;
   float atmosphereDiffuse = abs(dot(normal, atmosphereDirectionIntensity.xyz));
   irradiance+= atmosphereColor.rgb*atmosphereDirectionIntensity.a*atmosphereDiffuse;
 
+  // Point lights are bounded by their configured range, and the diffuse contribution is modulated by the angle between the light direction and the surface normal.
   for(int index = 0; index < 32; index++) {
     if(index >= int(lighting.x)) {
       break;
@@ -37,8 +42,8 @@ void main() {
 
     vec3 offset = lights[index].positionRange.xyz - worldPosition;
     float distance = length(offset);
-    vec3 direction = offset / max(distance, 0.000001);
-    float reach = max(0.0, 1.0 - distance / lights[index].positionRange.w);
+    vec3 direction = offset/max(distance, 0.000001);
+    float reach = max(0.0, 1.0 - (distance/lights[index].positionRange.w));
     float diffuse = abs(dot(normal, direction));
 
     irradiance+= lights[index].color.rgb*pow(reach, 2.0)*diffuse;

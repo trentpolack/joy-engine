@@ -12,6 +12,10 @@ layout(location = 1) in vec4 color;
 
 out vec4 vertexColor;
 
+/**
+ * Projects PARTICLE LAB geometry and applies the preview tint.
+ * Tinting before interpolation keeps the WebGL 2 and WebGPU preview paths equivalent.
+ */
 void main() {
   gl_Position = viewProjection*vec4(position, 1.0);
   vertexColor = color*tint;

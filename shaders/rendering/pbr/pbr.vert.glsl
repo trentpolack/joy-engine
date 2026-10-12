@@ -19,6 +19,10 @@ out vec3 worldNormal;
 out vec4 vertexColor;
 out vec2 texCoord;
 
+/**
+ * Transforms a PBR mesh vertex and prepares world-space material inputs.
+ * The normal matrix protects lighting from non-uniform model scale, and UVs are forwarded unchanged for material sampling.
+ */
 void main() {
   gl_Position = viewProjection*vec4(position, 1.0);
   worldPosition = position;

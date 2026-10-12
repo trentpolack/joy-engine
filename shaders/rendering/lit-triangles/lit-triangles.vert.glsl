@@ -22,6 +22,11 @@ layout(location = 1) in vec4 color;
 out vec4 vertexColor;
 out vec3 worldPosition;
 
+/**
+ * Projects a world-space colored vertex for the lightweight lit-triangle path.
+ *
+ * World position is forwarded because the fragment stage derives a flat normal from screen-space derivatives.
+ */
 void main() {
   gl_Position = viewProjection*vec4(position, 1.0);
   worldPosition = position;

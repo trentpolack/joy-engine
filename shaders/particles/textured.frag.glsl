@@ -19,6 +19,10 @@ in vec2 textureUv;
 in vec4 vertexColor;
 out vec4 fragmentColor;
 
+/**
+ * Samples the particle texture and modulates it with interpolated particle color.
+ * The result retains straight alpha for the blend state configured by the particle renderer.
+ */
 void main() {
   vec4 sourceColor = vertexColor*texture(particleTexture, textureUv);
   fragmentColor = sourceColor;

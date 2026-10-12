@@ -16,7 +16,13 @@ in vec4 vertexColor;
 out vec4 fragmentColor;
 // JOY_POST_DECLARATIONS_MACRO
 
+/**
+ * Writes interpolated scene color and optional post-processing output.
+ *
+ * The source stays in linear space so injected post modules can operate before display encoding.
+ */
 void main() {
   vec4 sourceColor = vertexColor;
+
   // JOY_POST_APPLY_MACRO
 }

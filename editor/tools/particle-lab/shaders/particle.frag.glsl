@@ -14,7 +14,12 @@ out vec4 fragmentColor;
 
 // JOY_POST_DECLARATIONS_MACRO
 
+/**
+ * Passes interpolated particle color into the configurable post-processing chain.
+ * Alpha remains straight because the host pipeline controls the blend operation.
+ */
 void main() {
   vec4 sourceColor = vertexColor;
+
   // JOY_POST_APPLY_MACRO
 }

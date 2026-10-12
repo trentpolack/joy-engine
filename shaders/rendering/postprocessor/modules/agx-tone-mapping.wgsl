@@ -9,9 +9,8 @@ struct agxToneMappingUniforms {
 @group(0) @binding(auto) var<uniform> agxToneMapping: agxToneMappingUniforms;
 
 /**
- * Approximates the contrast of a color with AGX tone mapping.
- * @param value The input color.
- * @returns The contrast-adjusted color.
+ * Approximates the AgX sigmoid contrast curve in the encoded working space.
+ * The polynomial is kept in Horner form to minimize shader operations and to match both rendering backends.
  */
 fn agxToneMapping_contrastApproximation(
   value: vec3f
@@ -23,15 +22,23 @@ fn agxToneMapping_contrastApproximation(
     0.4298 * valueSquared + 0.1191 * value - 0.00232);
 }
 
+/**
+ * Applies the optional punchy AgX look in linear display space.
+ * Luminance-preserving saturation is blended after contrast so neutral values remain neutral.
+ */
 fn agxToneMapping_applyPunchyLook(
   color: vec3f
   ) -> vec3f {
   let luminanceWeights = vec3f(0.2126, 0.7152, 0.0722);
   let luminance = dot(color, luminanceWeights);
   let contrastColor = pow(max(color, vec3f(0.0)), vec3f(1.35));
-  return mix(vec3f(luminance), contrastColor, 1.4);
+  return(mix(vec3f(luminance), contrastColor, 1.4));
 }
 
+/**
+ * Maps a linear HDR source color through the AgX display transform.
+ * The source is moved into the AgX inset gamut, log encoded, contrast shaped, optionally styled, and returned to linear sRGB.
+ */
 fn agxToneMapping_filterColor_ext(
   color: vec4f,
   texSize: vec2f,
@@ -47,10 +54,11 @@ fn agxToneMapping_filterColor_ext(
     -0.098020, 1.151904, -0.098043,
     -0.099029, -0.098961, 1.151073
   );
+
   var value = inset * max(color.rgb * agxToneMapping.exposure, vec3f(0.0));
-  value = clamp((log2(max(value, vec3f(0.000001))) + 12.47393) / 16.5, vec3f(0.0), vec3f(1.0));
+  value = clamp((log2(max(value, vec3f(0.000001))) + 12.47393)/16.5, vec3f(0.0), vec3f(1.0));
   value = agxToneMapping_contrastApproximation(value);
   value = mix(value, agxToneMapping_applyPunchyLook(value), agxToneMapping.look);
-  value = max(outset * value, vec3f(0.0));
-  return vec4f(pow(value, vec3f(2.2)), color.a);
+  value = max(outset*value, vec3f(0.0));
+  return(vec4f(pow(value, vec3f(2.2)), color.a));
 }

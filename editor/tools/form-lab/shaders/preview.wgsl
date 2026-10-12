@@ -24,6 +24,11 @@ struct VertexOutput {
   @location(0) color: vec4<f32>,
 };
 
+/**
+ * Projects authored FORM geometry for the preview viewport.
+ *
+ * FORM positions already use world space, so this stage applies only the camera transform and preview tint.
+ */
 @vertex fn vertexMain(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
   output.position = uniforms.viewProjection * vec4<f32>(input.position, 1.0);
@@ -35,8 +40,13 @@ struct VertexOutput {
 
 // JOY_POST_DECLARATIONS_MACRO
 
+/**
+ * Passes the interpolated FORM preview color into the configurable post-processing chain.
+ * Authored alpha remains untouched so the viewport blend state owns final compositing.
+ */
 @fragment fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
   // Alpha is preserved for the viewport blend state to resolve.
   let sourceColor = input.color;
+
   // JOY_POST_APPLY_MACRO
 }

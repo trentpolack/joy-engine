@@ -8,11 +8,8 @@ struct linearExposureUniforms {
 @group(0) @binding(auto) var<uniform> linearExposure: linearExposureUniforms;
 
 /**
- * Filters a color using linear exposure.
- * @param color The input color.
- * @param texSize The size of the texture.
- * @param texCoord The texture coordinates.
- * @returns The filtered color.
+ * Scales linear scene color by the configured photographic exposure.
+ * Negative RGB values are clamped after scaling, while alpha bypasses exposure because it represents coverage rather than emitted light.
  */
 fn linearExposure_filterColor_ext(
   color: vec4f,

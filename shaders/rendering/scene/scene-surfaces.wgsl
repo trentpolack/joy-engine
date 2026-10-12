@@ -13,9 +13,17 @@ struct VertexOutput {
   @location(1) roughness: f32,
 };
 
+/**
+ * Projects procedural scene geometry and forwards its surface roughness.
+ * World position is retained for derivative normals and view-dependent lighting in the fragment stage.
+ */
 @vertex
-fn vertexMain(@location(0) position: vec3f, @location(1) roughness: f32) -> VertexOutput {
+fn vertexMain(
+  @location(0) position: vec3f,
+  @location(1) roughness: f32
+  ) -> VertexOutput {
   var output: VertexOutput;
+
   // Keep the same expression and world coordinates as the opaque scene shader.
   output.position = uniforms.viewProjection*vec4f(position, 1.0);
   output.worldPosition = position;
@@ -23,6 +31,10 @@ fn vertexMain(@location(0) position: vec3f, @location(1) roughness: f32) -> Vert
   return output;
 }
 
+/**
+ * Shades a procedural scene surface with the shared environment model.
+ * A derivative normal and scalar roughness keep the source vertex layout compact.
+ */
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
   // Derivatives match the flat-lit scene's geometric plane, including scaled meshes.

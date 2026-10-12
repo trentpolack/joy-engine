@@ -3,6 +3,9 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-12-2026
+### Shader documentation
+- Documented WebGPU and WebGL 2 shader entry points and helpers with matching context, pipeline assumptions, and non-obvious rendering rationale.
+
 ### Scene rendering
 - Corrected WebGPU flat-lit receiver normals so shadow bias moves out of visible surfaces instead of causing self-shadowing; extended the shadow browser regression to verify illuminated and occluded colored receivers.
 

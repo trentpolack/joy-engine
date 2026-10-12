@@ -22,6 +22,10 @@ struct VertexOutput {
   @location(1) uv: vec2<f32>,
 };
 
+/**
+ * Projects a camera-facing particle vertex and forwards its texture coordinates.
+ * Per-particle color and the emitter tint are combined before interpolation to keep the fragment stage inexpensive.
+ */
 @vertex
 fn vertexMain(
   @location(0) position: vec3<f32>,
@@ -36,6 +40,10 @@ fn vertexMain(
   return output;
 }
 
+/**
+ * Samples the particle texture and modulates it with interpolated particle color.
+ * The result retains straight alpha for the blend state configured by the particle renderer.
+ */
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
   let sourceColor = textureSample(particleTexture, particleTextureSampler, input.uv)*input.color;

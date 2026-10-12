@@ -17,6 +17,10 @@ struct VertexOutput {
 
 // JOY_POST_DECLARATIONS_MACRO
 
+/**
+ * Projects PARTICLE LAB geometry and applies the preview tint.
+ * Tinting before interpolation keeps the WebGL 2 and WebGPU preview paths equivalent.
+ */
 @vertex
 fn vertexMain(
   @location(0) position: vec3<f32>,
@@ -28,8 +32,13 @@ fn vertexMain(
   return output;
 }
 
+/**
+ * Passes interpolated particle color into the configurable post-processing chain.
+ * Alpha remains straight because the host pipeline controls the blend operation.
+ */
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4<f32> {
   let sourceColor = input.color;
+
   // JOY_POST_APPLY_MACRO
 }

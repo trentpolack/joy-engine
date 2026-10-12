@@ -15,7 +15,14 @@ struct VertexOutput {
   @location(1) previousClip: vec4f,
 };
 
-@vertex fn vertexMain(@location(0) position: vec3f, @location(1) previousPosition: vec3f) -> VertexOutput {
+/**
+ * Projects scene geometry for the motion-vector pass.
+ * Current and previous clip positions are both preserved so the fragment stage can derive screen-space velocity.
+ */
+@vertex fn vertexMain(
+  @location(0) position: vec3f,
+  @location(1) previousPosition: vec3f
+  ) -> VertexOutput {
   var output: VertexOutput;
   output.position = uniforms.rasterViewProjection*vec4f(position, 1.0);
   output.currentClip = uniforms.currentViewProjection*vec4f(position, 1.0);
@@ -28,6 +35,10 @@ struct MotionOutput {
   @location(1) jittered: vec4f,
 };
 
+/**
+ * Encodes per-pixel screen-space motion from current and previous clip positions.
+ * The perspective divide happens per fragment to avoid interpolating already-divided coordinates.
+ */
 @fragment fn fragmentMain(input: VertexOutput) -> MotionOutput {
   var velocity = vec2f(0.0);
 

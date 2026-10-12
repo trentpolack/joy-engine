@@ -9,12 +9,9 @@ layout(std140) uniform vignetteBlurUniforms {
 uniform sampler2D blurredTexture;
 
 /**
- * Samples a color with vignette blur effect.
- * @param sourceTexture The source texture.
- * @param sourceTextureSampler The source texture sampler.
- * @param texSize The size of the texture.
- * @param texCoord The texture coordinates.
- * @returns The blurred color.
+ * Blends a pre-blurred image into the source near the viewport boundary.
+ * Aspect-corrected distance keeps the vignette circular on non-square targets, and source alpha remains authoritative for compositing.
+ *  TODO (trent, 10/12/26): Implement proper vignette blur logic and not a texture sampled one.
  */
 vec4 vignetteBlur_sampleColor(
   sampler2D sourceTexture,

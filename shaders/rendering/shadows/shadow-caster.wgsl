@@ -11,14 +11,17 @@ struct CasterCamera {
 @group(0) @binding(0) var<uniform> casterCamera: CasterCamera;
 
 /**
- * Vertex shader for the shadow caster.
+ * Projects untextured geometry into the shadow caster camera.
+ * The depth-only pipeline needs no interpolants beyond the built-in clip-space position.
  */
 @vertex fn vertexMain(@location(0) position: vec3f) -> @builtin(position) vec4f {
   return(casterCamera.viewProjection*vec4f(position, 1.0));
 }
 
 /**
- * Luma pipelines require a fragment stage even for depth-only attachments; it just, you know, does nothing.
+ * Completes the depth-only shadow pipeline without writing a color target.
+ *
+ * Luma requires a fragment stage even though rasterized depth is the only retained result.
  */
 @fragment fn fragmentMain() {
   // no-op.

@@ -49,6 +49,11 @@ struct VertexOutput {
   @location(3) uv: vec2<f32>
 };
 
+/**
+ * Transforms a PBR mesh vertex and prepares world-space material inputs.
+ *
+ * The normal matrix protects lighting from non-uniform model scale, and UVs are forwarded unchanged for material sampling.
+ */
 @vertex
 fn vertexMain(
   @location(0) position: vec3<f32>,
@@ -116,13 +121,16 @@ fn vertexMain(
     let offset = light.positionRange.xyz - input.worldPosition;
     let distance = length(offset);
     let direction = offset/max(distance, 0.000001);
-    let reach = max(0.0, 1.0 - distance/light.positionRange.w);
+    let reach = max(0.0, 1.0 - (distance/light.positionRange.w));
     var pointVisibility = 1.0;
+
 #ifdef JOY_SHADOWS
     pointVisibility = shadow_getPointFactor(i32(light.color.a) - 1, input.worldPosition, n);
 #endif
+
     radiance+= pbrDirect(base, metallic, roughness, n, v, direction)*light.color.rgb*reach*reach*pointVisibility;
   }
+
   radiance+= (frameUniforms.ambientColor.rgb*base*(1.0 - metallic)*occlusion + emission)*pbrLighting.counts.y;
   if(pbrLighting.environment.x > 0.0) {
     let angle = pbrLighting.environment.y;
@@ -148,7 +156,11 @@ fn vertexMain(
   return(vec4<f32>(radiance, alpha));
 }
 
-// Direct GGX illumination shared by the directional and local-light terms.
+/**
+ * Evaluates a metallic-roughness material's response to one directional or local light.
+ * Combines GGX specular with energy-conserving Lambertian diffuse.
+ * The caller applies light color, attenuation, and shadow visibility.
+ */
 fn pbrDirect(base: vec3f, metallic: f32, roughness: f32, n: vec3f, v: vec3f, l: vec3f) -> vec3f {
   let halfDirection = v + l;
   let h = halfDirection/max(length(halfDirection), 0.000001);
@@ -161,7 +173,8 @@ fn pbrDirect(base: vec3f, metallic: f32, roughness: f32, n: vec3f, v: vec3f, l: 
   let distribution = a2/max(PI*denominator*denominator, 0.000000000001);
   let visibility = 0.5/max(nl*sqrt(nv*nv*(1.0 - a2) + a2) + nv*sqrt(nl*nl*(1.0 - a2) + a2), 0.0001);
   let f0 = mix(vec3f(0.04), base, metallic);
-  let fresnel = f0 + (vec3f(1) - f0)*pow(1.0 - vh, 5.0);
-  let diffuse = (vec3f(1) - fresnel)*(1.0 - metallic)*base/PI;
-  return (diffuse + distribution*visibility*fresnel)*nl;
+  let fresnel = f0 + (vec3f(1.0) - f0)*pow(1.0 - vh, 5.0);
+  let diffuse = (vec3f(1.0) - fresnel)*(1.0 - metallic)*base/PI;
+
+  return((diffuse + distribution*visibility*fresnel)*nl);
 }

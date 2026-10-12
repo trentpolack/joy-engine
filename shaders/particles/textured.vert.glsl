@@ -15,6 +15,10 @@ layout(location = 2) in vec2 uv;
 out vec2 textureUv;
 out vec4 vertexColor;
 
+/**
+ * Projects a camera-facing particle vertex and forwards its texture coordinates.
+ * Per-particle color and the emitter tint are combined before interpolation to keep the fragment stage inexpensive.
+ */
 void main() {
   textureUv = uv;
   gl_Position = viewProjection * vec4(position, 1.0);

@@ -14,6 +14,10 @@ layout(location = 0) in vec3 position;
 layout(location = 1) in vec4 color;
 out vec4 vertexColor;
 
+/**
+ * Projects a scene vertex and forwards its authored linear color.
+ * The scene path consumes world-space geometry, so no model transform is required here.
+ */
 void main() {
   gl_Position = viewProjection * vec4(position, 1.0);
   vertexColor = color*tint;
