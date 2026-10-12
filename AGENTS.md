@@ -116,6 +116,8 @@ Move code into `src/` when it is stable behavior that more than one game, tool, 
 - The header copyright/MIT license text for each file being created should be the copyright on one line and the license on the next line; i.e.:
   - // Copyright (c) 2026 Trent Polack. All Rights Reserved.
   - // Licensed under the MIT License.
+- We use the oxford comma in this house, robot.
+- Capitalize major words in Markdown headings.
 
 ## Commit Message Standards
 - Don't use the "Conventional Commits" commit style; i.e., don't use the `feat(<branch>): <message>`, `chore: <message>`, etc..

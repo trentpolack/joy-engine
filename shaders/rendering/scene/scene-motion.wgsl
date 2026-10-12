@@ -30,13 +30,16 @@ struct MotionOutput {
 
 @fragment fn fragmentMain(input: VertexOutput) -> MotionOutput {
   var velocity = vec2f(0.0);
+
   // History behind the eye is not a valid correspondence and must never produce NaNs.
-  if(input.currentClip.w > 0.000001 && input.previousClip.w > 0.000001) {
+  if((input.currentClip.w > 0.000001) && (input.previousClip.w > 0.000001)) {
     let currentNdc = input.currentClip.xy/input.currentClip.w;
     let previousNdc = input.previousClip.xy/input.previousClip.w;
+
     // WebGPU framebuffer UVs run downward while clip-space Y runs upward.
     velocity = (currentNdc - previousNdc)*vec2f(0.5, -0.5);
   }
+
   var output: MotionOutput;
   output.unjittered = vec4f(velocity, 0.0, 1.0);
   output.jittered = vec4f(velocity + uniforms.velocityJitterDelta.xy, 0.0, 1.0);

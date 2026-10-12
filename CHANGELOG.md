@@ -3,6 +3,9 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-12-2026
+### Scene rendering
+- Corrected WebGPU flat-lit receiver normals so shadow bias moves out of visible surfaces instead of causing self-shadowing; extended the shadow browser regression to verify illuminated and occluded colored receivers.
+
 ### Engine examples
 - Added FORM Destruction's integrity heatmap and remaining-hit readout from committed chunk health, increased wall resistance and gravity, and kept released chunks until reset without expiry or eviction.
 - Added FORM Destruction's large solid ground and rigid-body debris collision, with bounded, toggleable impact-point, ray, and damage-radius debug drawing.

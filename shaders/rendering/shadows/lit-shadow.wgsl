@@ -39,19 +39,21 @@ fn vertexMain(@location(0) position: vec3f, @location(1) color: vec4f) -> Vertex
 
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
-  let surface = cross(dpdx(input.worldPosition), dpdy(input.worldPosition));
+  // WebGPU framebuffer Y points down (top-left corner is the origin). Reverse the derivative cross so receiver normal bias moves toward the visible surface rather than into its caster.
+  let surface = cross(dpdy(input.worldPosition), dpdx(input.worldPosition));
   let normal = surface / max(length(surface), 0.000001);
   var irradiance = vec3f(uniforms.lighting.y) + uniforms.skylightColorIntensity.rgb*uniforms.skylightColorIntensity.a;
   let viewDepth = -(receiver.viewMatrix*vec4f(input.worldPosition, 1)).z;
   let sunShadow = shadow_getDirectionalFactor(input.worldPosition, normal, viewDepth);
   let atmosphereDiffuse = abs(dot(normal, uniforms.atmosphereDirectionIntensity.xyz));
   irradiance+= uniforms.atmosphereColor.rgb*uniforms.atmosphereDirectionIntensity.a*atmosphereDiffuse*sunShadow;
+
   for(var index = 0u; index < u32(uniforms.lighting.x); index++) {
     let light = uniforms.lights[index];
     let offset = light.positionRange.xyz - input.worldPosition;
     let distance = length(offset);
-    let direction = offset / max(distance, 0.000001);
-    let reach = max(0.0, 1.0 - distance / light.positionRange.w);
+    let direction = offset/max(distance, 0.000001);
+    let reach = max(0.0, 1.0 - (distance/light.positionRange.w));
     let diffuse = abs(dot(normal, direction));
 
     let visibility = shadow_getPointFactor(i32(light.color.a) - 1, input.worldPosition, normal);

@@ -31,10 +31,11 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
   let transformed = (uniforms.view*vec4f(worldNormal, 0.0)).xyz;
   var viewNormal = transformed/max(length(transformed), 0.000001);
   let viewPosition = (uniforms.view*vec4f(input.worldPosition, 1.0)).xyz;
-  // Lighting is double-sided. Orient the visible side toward the eye while keeping
-  // signed components: GTAO and reflection rays depend on the complete direction.
+
+  // Lighting is double-sided. Orient the visible side toward the eye while keeping signed components: GTAO and reflection rays depend on the complete direction.
   if(dot(viewNormal, -viewPosition) < 0.0) {
     viewNormal = -viewNormal;
   }
-  return vec4f(viewNormal*0.5 + 0.5, clamp(input.roughness, 0.0, 1.0));
+
+  return(vec4f((viewNormal*0.5) + 0.5, clamp(input.roughness, 0.0, 1.0)));
 }

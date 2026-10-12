@@ -46,7 +46,10 @@ try {
   const fifthOnly = await page.locator('#world').screenshot();
   assert.notDeepEqual(noDirect, fifthOnly, 'fifth light must illuminate visible surfaces through batch two');
   await capture('fifth-light-only');
-  const fixturePath = `/@fs${fileURLToPath(new URL('../src/shadow-material-fixture.ts', import.meta.url))}`;
+  // Keep fixture imports on the same Vite server as the example when a host
+  // mounts it under a route prefix, avoiding a second copy of luma.gl.
+  const exampleBase = new URL('./', page.url()).pathname;
+  const fixturePath = `${exampleBase}@fs${fileURLToPath(new URL('../src/shadow-material-fixture.ts', import.meta.url))}`;
   const maskPixels = await page.evaluate(async path => {
     const {captureMaskShadow} = await import(path);
     const source = document.createElement('canvas');
@@ -65,7 +68,8 @@ try {
       const solid = await captureMaskShadow(canvas, source.toDataURL(), false);
       const masked = await captureMaskShadow(canvas, source.toDataURL(), true);
       const colored = await captureMaskShadow(canvas, source.toDataURL(), true, true);
-      return {solid,masked,colored};
+      const coloredReceiver = await captureMaskShadow(canvas, source.toDataURL(), false, false, true);
+      return {solid,masked,colored,coloredReceiver};
     } finally { canvas.remove(); }
   }, fixturePath);
   for(const index of [0,2]) {
@@ -76,13 +80,16 @@ try {
     assert.ok(maskPixels.masked.samples[index] <= maskPixels.solid.samples[index] + 20, 'opaque alpha cells retain shadow');
   }
   assert.ok(maskPixels.colored.samples.every(value => value < 30), 'colored caster queue must shadow PBR receivers');
+  assert.ok(maskPixels.coloredReceiver.samples.slice(0,4).every(value => value < 30), 'PBR caster must shadow colored receivers');
+  assert.ok(maskPixels.coloredReceiver.samples[4] > Math.max(...maskPixels.coloredReceiver.samples.slice(0,4)) + 100,
+    `colored receiver normal bias must preserve unoccluded direct light: ${JSON.stringify(maskPixels.coloredReceiver.samples)}`);
   for(const [name, result] of Object.entries(maskPixels)) {
     await writeFile(new URL(`${name}-caster.png`, output), Buffer.from(result.image.split(',')[1], 'base64'));
     captures.push(`${name}-caster`);
   }
   assert.deepEqual(errors, []);
   await writeFile(new URL('index.html', output), captures.map(name => `<figure><img src="${name}.png"><figcaption>${name}</figcaption></figure>`).join('\n'));
-  console.log(`PASS point shadows, 27 lights, five-light batching, camera-culled caster, and opt-out. Gallery: ${fileURLToPath(new URL('index.html', output))}`);
+  console.log(`PASS point shadows, 27 lights, five-light batching, camera-culled caster, opt-out, and colored receiver lighting. Gallery: ${fileURLToPath(new URL('index.html', output))}`);
 } finally {
   await browser.close();
 }

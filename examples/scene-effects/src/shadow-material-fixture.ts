@@ -7,7 +7,7 @@ import vertex from 'joy-engine/shaders/rendering/lit-triangles/lit-triangles.ver
 import fragment from 'joy-engine/shaders/rendering/lit-triangles/lit-triangles.frag.glsl?raw';
 
 /** Browser regression fixture: only the floor is camera-visible; the high cutout casts vertically. */
-export async function captureMaskShadow(canvas: HTMLCanvasElement, source: string, masked: boolean, coloredBlocker: boolean = false) {
+export async function captureMaskShadow(canvas: HTMLCanvasElement, source: string, masked: boolean, coloredBlocker: boolean = false, coloredReceiver: boolean = false) {
   const camera = new OrbitCamera();
   camera.target = [0,0,0];
   camera.radius = 6;
@@ -24,13 +24,18 @@ export async function captureMaskShadow(canvas: HTMLCanvasElement, source: strin
     const positions = [-6,0,-6, 6,0,-6, 6,0,6, -6,0,6, -2,20,-2, 2,20,-2, 2,20,2, -2,20,2];
     const mesh: PbrMesh = {positions, normals:Array.from({length:8}, () => [0,1,0]).flat(),
       colors:Array(24).fill(1), alphas:Array(8).fill(1), uvs:[0,0,1,0,1,1,0,1, 0,0,1,0,1,1,0,1],
-      triangles:[0,2,1,0,3,2,4,6,5,4,7,6], triangleMaterials:[0,0,1,1],
+      triangles:coloredReceiver ? [4,6,5,4,7,6] : [0,2,1,0,3,2,4,6,5,4,7,6],
+      triangleMaterials:coloredReceiver ? [1,1] : [0,0,1,1],
       materials:[material, {...material, alphaMode:masked ? 'MASK' : 'OPAQUE', textures:{...material.textures,baseColor:source}}]};
     await renderer.setMaterialMesh(mesh);
     renderer.resize(640,640,1);
     const basis = camera.basis();
     const uniforms = new Float32Array(292);
     uniforms.set(camera.matrix(1,true));
+    uniforms.set([1,1,1,1], 16);
+    uniforms[21] = 0.02;
+    uniforms.set([0,1,0,4], 280);
+    uniforms.set([1,1,1,0], 284);
     const frame = {viewProjection:camera.matrix(1,true), eye:basis.eye, backward:basis.backward,
       lightDirection:[0,1,0], lightColor:[4,4,4], ambientColor:[0.02,0.02,0.02],
       shadowCamera:{viewMatrix:camera.viewMatrix(),projectionMatrix:camera.projectionMatrix(1,true),nearPlane:0.1,farPlane:100},
@@ -38,12 +43,19 @@ export async function captureMaskShadow(canvas: HTMLCanvasElement, source: strin
     // Read the same submitted frame before the canvas drawing buffer is cleared.
     return await new Promise<{samples:number[]; image:string}>(resolve => requestAnimationFrame(() => {
       const casterVertices: number[] = [];
+      const receiverVertices: number[] = [];
+      if(coloredReceiver) {
+        for(const index of [0,2,1,0,3,2]) {
+          receiverVertices.push(positions[index*3], 0, positions[index*3 + 2], 0.6,0.6,0.6,1);
+        }
+        casterVertices.push(...receiverVertices);
+      }
       if(coloredBlocker) {
         for(const index of [0,2,1,0,3,2]) {
           casterVertices.push(positions[index*3], 10, positions[index*3 + 2], 1,1,1,1);
         }
       }
-      renderer.render([],uniforms,[0,0,0,1],[],0,[],frame,{},null,null, coloredBlocker ? {
+      renderer.render(receiverVertices,uniforms,[0,0,0,1],[],0,[],frame,{},null,null, coloredBlocker || coloredReceiver ? {
         camera:frame.shadowCamera, lights:[], directional:{kind:'sun',direction:[0,1,0],color:[1,1,1],intensity:4,angularRadius:0.00465},
         casters:casterVertices
       } : null);
@@ -55,7 +67,9 @@ export async function captureMaskShadow(canvas: HTMLCanvasElement, source: strin
       const samples: number[] = [];
       const matrix = frame.viewProjection;
       // Samples are inside alternating texture cells, clear of checker boundaries.
-      for(const x of [-1.5,-0.5,0.5,1.5]) {
+      // The last sample lies beyond the blocker, so a colored floor must receive
+      // direct light there while the original four samples remain shadowed.
+      for(const x of coloredReceiver ? [-1.5,-0.5,0.5,1.5,4] : [-1.5,-0.5,0.5,1.5]) {
         const z = 0.5;
         const w = matrix[3]*x + matrix[11]*z + matrix[15];
         const px = Math.round(((matrix[0]*x + matrix[8]*z + matrix[12])/w*0.5 + 0.5)*640);

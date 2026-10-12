@@ -24,13 +24,14 @@ struct VertexOutput {
 }
 
 fn hashNoise(value: vec2f) -> f32 {
-  return fract(sin(dot(value, vec2f(127.1, 311.7)))*43758.5453);
+  return(fract(sin(dot(value, vec2f(127.1, 311.7)))*43758.5453));
 }
 
 fn cloudNoise(initialPoint: vec2f) -> f32 {
   var point = initialPoint;
   var result = 0.0;
   var weight = 0.5;
+
   for(var octave = 0; octave < 4; octave++) {
     let cell = floor(point);
     var local = fract(point);
