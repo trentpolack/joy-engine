@@ -1,6 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+import type {NativeSceneGeometry} from './native-geometry.ts';
+import type {TerrainInstance} from './terrain-instance.ts';
+import type {PreparedTerrainPacket} from './scene-geometry.ts';
+import {TerrainScenePass} from '../terrain/terrain-scene-pass.ts';
 import type {ShadowOptions} from '../shadows/types.ts';
 import { GPU_BACKEND } from '../gpu/constants.ts';
 import type { RendererDiagnosticOptions, RendererDiagnostics } from '../gpu/gpu-diagnostics.ts';
@@ -13,7 +17,7 @@ import type { RenderScene } from './render-scene.ts';
 import type {SceneEffectsOptions, SceneEffectsFrame} from './scene-effects.ts';
 import type {SceneTemporalSnapshot} from './scene-temporal.ts';
 import type {SceneAttachmentFrame} from './scene-effect-attachments.ts';
-import {normalizeSceneEffectsOptions} from './scene-effect-config.ts';
+import {getSceneEffectsRequirements, normalizeSceneEffectsOptions} from './scene-effect-config.ts';
 import {prepareSceneTemporalFrame} from './scene-temporal.ts';
 import {multiplyCameraMatrices, sceneCameraJitter, jitterProjection} from './scene-camera-frame.ts';
 import type { WorldRay } from '../camera/projection.ts';
@@ -23,10 +27,13 @@ import { projectToViewport, screenRay, intersectRayPlane, invertMatrix } from '.
 import { LIT_TRIANGLE_SHADERS, POINT_LIGHT_UNIFORM_BYTES, createPointLightUniforms } from '../pbr/point-lights.ts';
 import { createAtmosphereRenderUniforms } from '../environment/atmosphere-rendering.ts';
 import { gpuBackendFromQuery } from '../gpu/gpu-device.ts';
+import { SCENE_GEOMETRY_KIND, prepareSceneGeometry } from './scene-geometry.ts';
 import { prepareSceneFrame } from './prepare-frame.ts';
 import wgsl from '../../../shaders/rendering/scene/scene.wgsl?raw';
 import vertex from '../../../shaders/rendering/scene/scene.vert.glsl?raw';
 import fragment from '../../../shaders/rendering/scene/scene.frag.glsl?raw';
+
+const UNSUPPORTED_TERRAIN_ATTACHMENTS = ['normalTexture', 'velocityTexture', 'taaVelocityTexture'] as const;
 
 export interface SceneRendererOptions {
   /** WebGPU geometric shadows default to enabled. WebGL 2 retains illumination without shadows. */
@@ -73,6 +80,8 @@ export class SceneRenderer {
   private previousCamera: {camera: OrbitCamera; eye: readonly number[]; yaw: number; pitch: number;
     projection: Float32Array<ArrayBuffer>; matrix: Float32Array<ArrayBuffer>; rasterMatrix: Float32Array<ArrayBuffer>; jitter: [number, number]; time: number} | null = null;
   private frameIndex = 0;
+  // Owned resident adapters borrow the backend device and scene nodes.
+  private readonly terrainAdapters = new Map<TerrainInstance, TerrainScenePass>();
   declare stats: { visible: number; culled: number; };
 
   /**
@@ -180,6 +189,19 @@ export class SceneRenderer {
     if(!this.ready || !this.renderer) {
       return false;
     }
+    if(this.canvas.clientWidth <= 0 || this.canvas.clientHeight <= 0) {
+      this.resetHistory();
+      return false;
+    }
+    const geometrySnapshots = prepareSceneGeometry(scene);
+    if(this.options.sceneEffects && geometrySnapshots.some(geometry => geometry.kind === SCENE_GEOMETRY_KIND.TERRAIN)) {
+      const requirements = getSceneEffectsRequirements(normalizeSceneEffectsOptions(this.options.sceneEffects));
+      for(const attachment of UNSUPPORTED_TERRAIN_ATTACHMENTS) {
+        if(requirements[attachment]) {
+          throw new Error(`Native terrain does not supply the ${attachment} attachment required by the requested scene effects.`);
+        }
+      }
+    }
     if(!this.resize()) {
       this.resetHistory();
       return false;
@@ -209,7 +231,8 @@ export class SceneRenderer {
     const matrix = multiplyCameraMatrices(rasterProjection, viewMatrix);
     const queues = prepareSceneFrame(scene, {backward: this.camera.basis().backward,
       viewProjection: frame.culling === false ? undefined : unjitteredMatrix, webgpu,
-      opaqueTriangles: frame.opaqueTriangles, transparentTriangles: frame.transparentTriangles});
+      opaqueTriangles: frame.opaqueTriangles, transparentTriangles: frame.transparentTriangles}, geometrySnapshots);
+    const nativeGeometry = this.prepareTerrainGeometry(queues.terrainPackets, matrix, eye, this.height*Math.abs(projection[5])/2);
     const ambient = frame.ambient ?? (frame.environment ? 0 : 0.3);
     const uniforms = createPointLightUniforms(matrix, frame.lights ?? [], ambient, frame.environment);
     let atmosphereUniforms = null;
@@ -266,7 +289,7 @@ export class SceneRenderer {
     try {
       this.renderer.render(queues.opaque, uniforms, frame.clearColor ?? [0, 0, 0, 1], queues.transparent,
         time, [], null, effectsFrame, atmosphereUniforms, attachments, {camera: {viewMatrix, projectionMatrix: projection, nearPlane: this.camera.nearPlane, farPlane: this.camera.farPlane},
-          lights: frame.lights ?? [], directional: frame.environment?.primaryLight ?? null, casters: queues.shadowCasters});
+          lights: frame.lights ?? [], directional: frame.environment?.primaryLight ?? null, casters: queues.shadowCasters, receivesShadowRanges: queues.receivesShadowRanges}, nativeGeometry);
     } catch(error) {
       if(effectsEnabled) {
         this.resetHistory();
@@ -344,11 +367,54 @@ export class SceneRenderer {
 
     this.resetHistory();
     this.destroyed = true;
+    for(const adapter of this.terrainAdapters.values()) {
+      adapter.destroy();
+    }
+    this.terrainAdapters.clear();
     this.renderer?.destroy();
     this.renderer = null;
   }
 
-  /** 
+  /** Prepare resident adapters before render passes open; prune inactive scene and hierarchy references. */
+  private prepareTerrainGeometry(packets: readonly PreparedTerrainPacket[], matrix: ArrayLike<number>, eye: readonly number[], projectionScale: number): NativeSceneGeometry[] {
+    const renderer = this.renderer!;
+    const participating = packets.filter(packet => packet.visible || packet.castsShadow);
+    // Camera culling must not churn already resident allocations. Hidden/removed
+    // nodes disappear from packets and release their adapters on this frame.
+    const active = new Set(packets.map(packet => packet.instance));
+    for(const [instance, adapter] of this.terrainAdapters) {
+      if(!active.has(instance)) {
+        adapter.destroy();
+        this.terrainAdapters.delete(instance);
+      }
+    }
+
+    const geometry: NativeSceneGeometry[] = [];
+    for(const packet of participating) {
+      const instance = packet.instance;
+      const previous = this.terrainAdapters.get(instance);
+      const adapter = previous ?? new TerrainScenePass(renderer.device, instance.asset, renderer.postprocessor?.format, this.options.shadows);
+      if(!previous) {
+        this.terrainAdapters.set(instance, adapter);
+      }
+      try {
+        adapter.prepare(matrix, packet.worldTransform, {eye: Array.from(eye), target: Array.from(this.camera.target),
+          projectionScale, tolerance: instance.tolerance, targetRadius: instance.targetRadius}, instance.diagnostic);
+      } catch(error) {
+        if(!previous) {
+          adapter.destroy();
+          this.terrainAdapters.delete(instance);
+        }
+        throw error;
+      }
+      geometry.push({visible: packet.visible, castsShadow: packet.castsShadow, receivesShadow: packet.receivesShadow,
+        draw: (pass, bindings, shadowed, additive) => adapter.draw(pass, bindings, shadowed, additive),
+        drawShadow: (pass, lightMatrix) => adapter.drawShadow(pass, lightMatrix)});
+    }
+    return geometry;
+  }
+
+  /**
    * Initialize the GPU renderer.
    * @private
    */

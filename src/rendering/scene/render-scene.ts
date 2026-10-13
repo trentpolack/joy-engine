@@ -1,10 +1,12 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+import type { TerrainAsset } from '../terrain/terrain-asset.ts';
 import type { MeshAsset } from './mesh-asset.ts';
-import type { MeshInstanceOptions, SceneNodeOptions } from '../../core/types.ts';
+import type { MeshInstanceOptions, SceneNodeOptions, TerrainInstanceOptions } from '../../core/types.ts';
 import type { PreparedMesh } from './mesh-frame.ts';
 
+import { TerrainInstance } from './terrain-instance.ts';
 import { SceneNode } from './scene-node.ts';
 import { MeshInstance } from './mesh-instance.ts';
 import { MeshCollection } from './mesh-collection.ts';
@@ -14,6 +16,7 @@ export class RenderScene {
   private readonly ownedNodes = new Set<SceneNode>();
   private readonly rootNodes = new Set<SceneNode>();
   private readonly meshInstances = new Set<MeshInstance>();
+  private readonly terrains = new Set<TerrainInstance>();
   private readonly collections = new Set<MeshCollection>();
   /** @internal Scene-owned world vertex cache. */
   frameCache = new WeakMap<MeshInstance, PreparedMesh>();
@@ -22,6 +25,7 @@ export class RenderScene {
   get nodes(): ReadonlySet<SceneNode> { return this.ownedNodes; }
   get roots(): ReadonlySet<SceneNode> { return this.rootNodes; }
   get instances(): ReadonlySet<MeshInstance> { return this.meshInstances; }
+  get terrainInstances(): ReadonlySet<TerrainInstance> { return this.terrains; }
 
   /** Create a transform-only node; the explicit parent overrides options.parent when provided. */
   createNode(options: SceneNodeOptions = {}, parent: SceneNode | null = options.parent ?? null) {
@@ -35,6 +39,14 @@ export class RenderScene {
   createMesh(asset: MeshAsset, options: MeshInstanceOptions = {}) {
     this.assertAlive();
     const instance = new MeshInstance(asset, options, this);
+    this.registerNode(instance);
+    return instance;
+  }
+
+  /** Create a resident terrain node; the renderer owns its device-specific adapter resources. */
+  createTerrain(asset: TerrainAsset, options: TerrainInstanceOptions = {}) {
+    this.assertAlive();
+    const instance = new TerrainInstance(asset, options, this);
     this.registerNode(instance);
     return instance;
   }
@@ -55,6 +67,9 @@ export class RenderScene {
       if(current instanceof MeshInstance) {
         this.meshInstances.delete(current);
         this.frameCache.delete(current);
+      }
+      if(current instanceof TerrainInstance) {
+        this.terrains.delete(current);
       }
       current.invalidate();
     }
@@ -98,6 +113,9 @@ export class RenderScene {
     this.ownedNodes.add(node);
     if(node instanceof MeshInstance) {
       this.meshInstances.add(node);
+    }
+    if(node instanceof TerrainInstance) {
+      this.terrains.add(node);
     }
     this.updateRootNode(node);
   }

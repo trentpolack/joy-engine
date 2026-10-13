@@ -152,3 +152,150 @@ test('scene effects expose real object/camera correspondence and reset on discon
     GpuTriangleRenderer.create = original;
   }
 });
+
+async function residentTerrainAsset() {
+  const {decodeTerrain} = await import('../src/rendering/terrain/terrain-asset.ts');
+  return decodeTerrain({version: 1, size: 3, tileCells: 2, extent: [2, 2], heightOffset: 0, heightScale: 1,
+    heightFile: 'height.bin', orientation: 'row-0-to-negative-z', patches: [{x: 0, z: 0, min: 0, max: 0, errors: [0, 0]}]}, new ArrayBuffer(18));
+}
+
+test('resident terrain rejects missing normal and motion attachments before allocating or resizing GPU resources', async () => {
+  const original = GpuTriangleRenderer.create;
+  let submitted = 0;
+  let resized = 0;
+  const backend = {backend: 'webgpu', resetSceneHistory() {}, resize() { resized++; },
+    render() { submitted++; }, destroy() {}};
+  GpuTriangleRenderer.create = async () => backend;
+  try {
+    const scene = new RenderScene();
+    const parent = scene.createNode();
+    scene.createTerrain(await residentTerrainAsset(), {parent});
+    for(const [effects, attachment] of [[{ssao: {normalSource: 'normal-texture'}}, 'normalTexture'],
+      [{clusteredLighting: true}, 'velocityTexture'], [{taa: true}, 'taaVelocityTexture']]) {
+      const renderer = new SceneRenderer({clientWidth: 800, clientHeight: 500}, {sceneEffects: effects});
+      await renderer.initialize();
+      assert.throws(() => renderer.render(scene), new RegExp(`terrain.*${attachment}`, 'i'));
+      assert.equal(submitted, 0);
+      assert.equal(resized, 0, 'missing native attachments fail before resize allocations');
+      renderer.destroy();
+    }
+    parent.visible = false;
+    const hidden = new SceneRenderer({clientWidth: 800, clientHeight: 500}, {sceneEffects: {taa: true}});
+    await hidden.initialize();
+    assert.equal(hidden.render(scene), true, 'hidden native geometry contributes no unsupported attachments');
+    hidden.destroy();
+  } finally {
+    GpuTriangleRenderer.create = original;
+  }
+});
+
+function residentTerrainDevice(backend = 'webgl') {
+  const resources = [];
+  function resource(extra = {}) {
+    const result = {destroyCount: 0, destroy() { this.destroyCount++; }, ...extra};
+    resources.push(result);
+    return result;
+  }
+  return {type: backend, info: {shadingLanguage: backend === 'webgpu' ? 'wgsl' : 'glsl', gpu: 'unknown'}, features: new Set(), limits: {}, resources,
+    createShader: props => resource({source: props.source}),
+    createRenderPipeline: props => resource({props, shaderLayout: {attributes: [], bindings: []}, bufferLayout: props.bufferLayout}),
+    createComputePipeline: () => resource({setBindings() {}}),
+    beginComputePass: () => ({setPipeline() {}, dispatch() {}, end() {}}),
+    createVertexArray: () => resource({setBuffer() {}, setIndexBuffer() {}}),
+    createBuffer: props => resource({byteLength: props.byteLength, write() {}}),
+    createTexture: () => resource({copyImageData() {}})};
+}
+
+test('scene renderer retains native terrain adapters across frames and disposes inactive nodes before the GPU owner', async () => {
+  const original = GpuTriangleRenderer.create;
+  const gpu = residentTerrainDevice();
+  const submissions = [];
+  let backendDestroyed = 0;
+  const backend = {backend: 'webgl', device: gpu, postprocessor: {format: 'rgba16float'},
+    resetSceneHistory() {}, resize() {}, render(...args) { submissions.push(args); },
+    destroy() {
+      assert.ok(gpu.resources.every(resource => resource.destroyCount === 1), 'native resources must be released before their device owner');
+      backendDestroyed++;
+    }};
+  GpuTriangleRenderer.create = async () => backend;
+  try {
+    const renderer = new SceneRenderer({clientWidth: 800, clientHeight: 500}, {pixelRatio: 2});
+    await renderer.initialize();
+    const scene = new RenderScene();
+    const parent = scene.createNode();
+    const terrain = scene.createTerrain(await residentTerrainAsset(), {parent, receivesShadow: false});
+    renderer.render(scene, {culling: false});
+    assert.equal(submissions[0][11]?.length, 1);
+    assert.equal(submissions[0][11][0].visible, true);
+    assert.equal(submissions[0][11][0].castsShadow, true);
+    assert.equal(submissions[0][11][0].receivesShadow, false);
+    assert.equal(submissions[0][0].length, 0, 'resident terrain does not add CPU triangles');
+    assert.deepEqual(submissions[0][10].receivesShadowRanges, []);
+    const allocations = gpu.resources.length;
+    assert.ok(allocations > 0);
+    renderer.camera.yaw+= 0.01;
+    renderer.render(scene, {culling: false});
+    assert.equal(gpu.resources.length, allocations, 'camera movement retains resident allocations');
+    parent.position[0] = 10000;
+    renderer.render(scene);
+    assert.equal(submissions[2][11].length, 1);
+    assert.equal(submissions[2][11][0].visible, false, 'off-camera terrain retains its shadow adapter');
+    assert.equal(gpu.resources.length, allocations);
+    terrain.castsShadow = false;
+    renderer.render(scene);
+    assert.equal(submissions[3][11].length, 0);
+    assert.ok(gpu.resources.every(resource => resource.destroyCount === 0), 'camera culling retains already resident noncasting terrain');
+    parent.position[0] = 0;
+    renderer.render(scene, {culling: false});
+    assert.equal(submissions[4][11][0].castsShadow, false);
+    assert.equal(gpu.resources.length, allocations, 'returning to the camera reuses retained resident resources');
+    parent.visible = false;
+    renderer.render(scene);
+    assert.equal(submissions[5][11].length, 0);
+    assert.ok(gpu.resources.every(resource => resource.destroyCount === 1));
+    parent.visible = true;
+    renderer.render(scene, {culling: false});
+    scene.remove(parent);
+    renderer.render(scene);
+    assert.equal(submissions[7][11].length, 0);
+    assert.ok(gpu.resources.every(resource => resource.destroyCount === 1));
+    const anotherScene = new RenderScene();
+    anotherScene.createTerrain(terrain.asset);
+    renderer.render(anotherScene, {culling: false});
+    renderer.render(new RenderScene());
+    assert.ok(gpu.resources.every(resource => resource.destroyCount === 1), 'switching scenes prunes the previous scene adapters');
+    anotherScene.createTerrain(terrain.asset);
+    renderer.render(anotherScene, {culling: false});
+    renderer.destroy();
+    renderer.destroy();
+    assert.equal(backendDestroyed, 1);
+    assert.equal(anotherScene.terrainInstances.size, 2, 'renderer still borrows scene nodes and assets');
+  } finally {
+    GpuTriangleRenderer.create = original;
+  }
+});
+
+
+test('native terrain permits effects reconstructed from depth without requesting missing surface attachments', async () => {
+  const original = GpuTriangleRenderer.create;
+  const gpu = residentTerrainDevice('webgpu');
+  let submitted;
+  const backend = {backend: 'webgpu', device: gpu, postprocessor: {format: 'rgba16float'},
+    resetSceneHistory() {}, resize() {}, render(...args) { submitted = args; }, destroy() {}};
+  GpuTriangleRenderer.create = async () => backend;
+  try {
+    const renderer = new SceneRenderer({clientWidth: 800, clientHeight: 500},
+      {shadows: false, sceneEffects: {ssao: true}});
+    await renderer.initialize();
+    const scene = new RenderScene();
+    scene.createTerrain(await residentTerrainAsset());
+    assert.equal(renderer.render(scene, {culling: false}), true);
+    assert.equal(submitted[11].length, 1);
+    assert.equal(submitted[11][0].visible, true);
+    assert.equal(submitted[9].motion.vertices.length, 0);
+    renderer.destroy();
+    assert.ok(gpu.resources.every(resource => resource.destroyCount === 1));
+  } finally {
+    GpuTriangleRenderer.create = original;
+  }
+});

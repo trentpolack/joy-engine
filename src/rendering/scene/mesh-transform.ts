@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 import type { AffineTransform, GeometryBounds } from '../../core/types.ts';
-import type { MeshAsset } from './mesh-asset.ts';
 
 /** Column-major affine transform: scale, rotate X/Y/Z, then translate.
  * @param instance
@@ -30,7 +29,7 @@ export function transformPoint(matrix: readonly number[], x: number, y: number, 
  * @param asset @param transform
  * @param matrix View/projection matrix. @param webgpu
  */
-export function outsideFrustum(asset: MeshAsset, transform: readonly number[], matrix: ArrayLike<number>, webgpu: boolean) {
+export function outsideFrustum(asset: {bounds: GeometryBounds}, transform: readonly number[], matrix: ArrayLike<number>, webgpu: boolean) {
   const outside = [true, true, true, true, true, true];
   for(let corner = 0; corner < 8; corner++) {
     const local = [0, 1, 2].map(axis => (corner & (1 << axis)) ? asset.bounds.max[axis] : asset.bounds.min[axis]);

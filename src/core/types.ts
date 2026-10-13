@@ -130,5 +130,15 @@ export interface MeshInstanceOptions extends SceneNodeOptions {
   sceneRoughness?: number;
 }
 
+/** Resident terrain settings. Tolerance is CSS pixels; targetRadius is world units. */
+export interface TerrainInstanceOptions extends SceneNodeOptions {
+  castsShadow?: boolean;
+  receivesShadow?: boolean;
+  tolerance?: number;
+  targetRadius?: number;
+  /** Zero is normal shading; positive values select the terrain adapter diagnostic. */
+  diagnostic?: number;
+}
+
 /** Ordered X/Y/Z components in the coordinate space documented by the consuming API. */
 export type Vector3 = [number, number, number];

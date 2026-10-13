@@ -5,7 +5,8 @@ import type { RenderScene } from './render-scene.ts';
 
 import { sortCameraTransparentTriangles } from '../camera/orbit-camera.ts';
 import { outsideFrustum } from './mesh-transform.ts';
-import { prepareSceneGeometry } from './scene-geometry.ts';
+import type { PreparedSceneGeometry, PreparedTerrainPacket } from './scene-geometry.ts';
+import { SCENE_GEOMETRY_KIND, prepareSceneGeometry } from './scene-geometry.ts';
 import { MESH_PASS } from './mesh-instance.ts';
 import { prepareMesh } from './mesh-frame.ts';
 
@@ -14,6 +15,7 @@ import { prepareMesh } from './mesh-frame.ts';
  * the existing flat-lit colored-triangle games. Transparency uses global centroid sorting.
  * @param scene
  * @param options
+ * @param preparedGeometry Optional same-scene snapshots from this frame, reused after capability validation.
  */
 export function prepareSceneFrame(scene: RenderScene, {backward, viewProjection, webgpu = false, opaqueTriangles = [], transparentTriangles = []}: {
     backward: readonly number[];
@@ -21,7 +23,7 @@ export function prepareSceneFrame(scene: RenderScene, {backward, viewProjection,
     webgpu?: boolean;
     opaqueTriangles?: readonly number[];
     transparentTriangles?: readonly number[];
-}) {
+}, preparedGeometry?: readonly PreparedSceneGeometry[]) {
   scene.assertAlive();
   const opaque = Array.from(opaqueTriangles);
   const shadowCasters = Array.from(opaqueTriangles);
@@ -31,11 +33,22 @@ export function prepareSceneFrame(scene: RenderScene, {backward, viewProjection,
   if(opaque.length) {
     receivesShadowRanges.push({firstVertex: 0, vertexCount: opaque.length/7, receivesShadow: true});
   }
-  const geometrySnapshots = prepareSceneGeometry(scene);
+  const geometrySnapshots = preparedGeometry ?? prepareSceneGeometry(scene);
   const surfaceRoughness = Array(opaque.length/7).fill(1) as number[];
+  const terrainPackets: PreparedTerrainPacket[] = [];
   let visible = 0;
   let culled = 0;
   for(const geometry of geometrySnapshots) {
+    if(geometry.kind === SCENE_GEOMETRY_KIND.TERRAIN) {
+      const cameraVisible = !viewProjection || !outsideFrustum({bounds: geometry.localBounds}, geometry.worldTransform, viewProjection, webgpu);
+      terrainPackets.push({...geometry, visible: cameraVisible});
+      if(cameraVisible) {
+        visible++;
+      } else {
+        culled++;
+      }
+      continue;
+    }
     const instance = geometry.instance;
     const prepared = prepareMesh(instance, scene.frameCache, geometry.worldTransform);
     const translucent = geometry.coverage === MESH_PASS.TRANSPARENT;
@@ -65,5 +78,5 @@ export function prepareSceneFrame(scene: RenderScene, {backward, viewProjection,
       target.push(value);
     }
   }
-  return {opaque, shadowCasters, opaqueRanges, receivesShadowRanges, geometrySnapshots, surfaceRoughness, transparent: sortCameraTransparentTriangles(transparent, backward), visible, culled};
+  return {opaque, shadowCasters, opaqueRanges, receivesShadowRanges, geometrySnapshots, terrainPackets, surfaceRoughness, transparent: sortCameraTransparentTriangles(transparent, backward), visible, culled};
 }

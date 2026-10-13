@@ -196,3 +196,46 @@ test('shadow policy keeps off-camera solid casters independent from opaque recei
   assert.equal(frame.geometrySnapshots[0].asset, asset);
   assert.equal(frame.geometrySnapshots[0].worldBounds.min[0], 20);
 });
+
+test('resident terrain inherits transforms, bounds and pass policy without expanding CPU triangles', async () => {
+  const {decodeTerrain} = await import('../src/rendering/terrain/terrain-asset.ts');
+  const asset = decodeTerrain({version: 1, size: 3, tileCells: 2, extent: [2, 4], heightOffset: -2, heightScale: 4,
+    heightFile: 'height.bin', orientation: 'row-0-to-negative-z', patches: [{x: 0, z: 0, min: -2, max: 2, errors: [0, 0]}]}, new ArrayBuffer(18));
+  const scene = new RenderScene();
+  const parent = scene.createNode({position: [20, 0, 0]});
+  const terrain = scene.createTerrain(asset, {parent, receivesShadow: false});
+  assert.equal(terrain.asset, asset);
+  assert.equal(scene.terrainInstances.size, 1);
+  assert.equal(terrain.tolerance, 2);
+  assert.equal(terrain.targetRadius, 0);
+  assert.equal(terrain.diagnostic, 0);
+  assert.equal(terrain.castsShadow, true);
+  const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  let frame = prepareSceneFrame(scene, {backward: [0, 0, 1], viewProjection: identity});
+  assert.equal(frame.opaque.length, 0);
+  assert.equal(frame.shadowCasters.length, 0);
+  assert.equal(frame.visible, 0);
+  assert.equal(frame.culled, 1);
+  assert.equal(frame.terrainPackets.length, 1);
+  assert.equal(frame.terrainPackets[0].visible, false);
+  assert.equal(frame.terrainPackets[0].castsShadow, true);
+  assert.equal(frame.terrainPackets[0].receivesShadow, false);
+  assert.deepEqual(frame.terrainPackets[0].localBounds, {min: [-1, -2, -2], max: [1, 2, 2]});
+  assert.deepEqual(frame.terrainPackets[0].worldBounds, {min: [19, -2, -2], max: [21, 2, 2]});
+  parent.position[0] = 0;
+  frame = prepareSceneFrame(scene, {backward: [0, 0, 1], viewProjection: identity});
+  assert.equal(frame.visible, 1);
+  assert.equal(frame.terrainPackets[0].visible, true);
+  parent.visible = false;
+  assert.equal(prepareSceneFrame(scene, {backward: [0, 0, 1]}).terrainPackets.length, 0);
+  const count = scene.nodes.size;
+  assert.throws(() => scene.createTerrain(asset, {parent, tolerance: 0}), /tolerance/i);
+  assert.throws(() => terrain.set({position: [99, 0, 0], targetRadius: -1}), /radius/i);
+  assert.deepEqual(terrain.position, [0, 0, 0]);
+  assert.equal(scene.nodes.size, count);
+  assert.equal(parent.children.size, 1);
+  scene.remove(parent);
+  assert.equal(scene.terrainInstances.size, 0);
+  assert.equal(terrain.removed, true);
+  assert.equal(asset.heights.length, 9);
+});

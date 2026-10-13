@@ -143,16 +143,17 @@ export type { PbrFrame } from './core/types.ts';
 export { DEFAULT_PBR_LIGHTING } from './rendering/pbr/pbr-triangles.ts';
 
 export { MeshAsset } from './rendering/scene/mesh-asset.ts';
+export { TerrainInstance } from './rendering/scene/terrain-instance.ts';
 export { SceneNode } from './rendering/scene/scene-node.ts';
 export { prepareSceneGeometry } from './rendering/scene/scene-geometry.ts';
-export type { SceneGeometrySnapshot, PreparedMeshGeometry } from './rendering/scene/scene-geometry.ts';
+export type { SceneGeometrySnapshot, PreparedMeshGeometry, PreparedTerrainGeometry, PreparedTerrainPacket, PreparedSceneGeometry } from './rendering/scene/scene-geometry.ts';
 export { MeshInstance } from './rendering/scene/mesh-instance.ts';
 export { RenderScene } from './rendering/scene/render-scene.ts';
 export type { PointLight } from './rendering/pbr/point-lights.ts';
 export { SceneRenderer } from './rendering/scene/scene-renderer.ts';
 export { projectToViewport, screenRay, intersectRayPlane } from './rendering/camera/projection.ts';
 export type { MeshAssetData } from './core/types.ts';
-export type { AffineTransform, GeometryBounds, SceneNodeOptions, MeshInstanceOptions } from './core/types.ts';
+export type { AffineTransform, GeometryBounds, SceneNodeOptions, MeshInstanceOptions, TerrainInstanceOptions } from './core/types.ts';
 export type { SceneRendererOptions } from './rendering/scene/scene-renderer.ts';
 export type { SceneFrameOptions } from './rendering/scene/scene-renderer.ts';
 
