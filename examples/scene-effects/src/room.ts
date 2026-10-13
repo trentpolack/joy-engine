@@ -13,8 +13,9 @@ const CUBE = new MeshAsset({
 /** Deterministic Y-up geometry. The caller owns scene disposal; assets are borrowed. */
 export function createRoom(alternate: boolean = false) {
   const scene = new RenderScene();
+  const room = scene.createNode();
   function box(position: number[], scale: number[], tint: number[], sceneRoughness: number = 1) {
-    const options: MeshInstanceOptions = {position, scale, tint, sceneRoughness};
+    const options: MeshInstanceOptions = {parent: room, position, scale, tint, sceneRoughness};
     return scene.createMesh(CUBE, options);
   }
 

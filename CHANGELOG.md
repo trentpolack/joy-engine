@@ -2,6 +2,14 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-13-2026
+### Scene Graph And Shared Rendering
+- Added scene-owned parent/child nodes, affine world transforms, inherited visibility, subtree removal, and common geometry snapshots with independent camera and shadow participation.
+- Centralized colored, PBR, and native terrain shadow submission under one frame owner, with per-node casting and receiving controls.
+- Integrated resident indexed terrain into SceneRenderer color, depth, and shared lighting/shadows, including explicit unsupported normal/motion attachment errors and WebGL fallback.
+- Corrected WebGPU point-shadow depth, cube-face orientation, and per-sample receiver-plane comparisons so blockers align and planar surfaces do not shadow themselves.
+- Preserved GLSL version directives ahead of license comments during portable shader assembly, fixing terrain startup on WebGL.
+
 ## 10-12-2026
 ### Shader documentation
 - Documented WebGPU and WebGL 2 shader entry points and helpers with matching context, pipeline assumptions, and non-obvious rendering rationale.

@@ -4,16 +4,25 @@ import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {chromium, expect} from '@playwright/test';
+import {createServer} from 'vite';
 
-const output = new URL(`../../../../artifacts/captures/${Date.now()}-light-shadows/`, import.meta.url);
+const output = new URL(`../../../artifacts/captures/${Date.now()}-light-shadows/`, import.meta.url);
 await mkdir(output, {recursive:true});
-const browser = await chromium.launch({channel:process.env.CAPTURE_CHANNEL ?? 'chrome'});
+const server = process.env.CAPTURE_URL ? null : await createServer({
+  configFile: fileURLToPath(new URL('../vite.config.js', import.meta.url)), server: {host: '127.0.0.1', port: 0}
+});
+await server?.listen();
+const url = process.env.CAPTURE_URL ?? `${server.resolvedUrls.local[0]}?backend=webgpu`;
+const browser = await chromium.launch({
+  ...(process.env.CAPTURE_EXECUTABLE_PATH ? {executablePath: process.env.CAPTURE_EXECUTABLE_PATH} : {channel: process.env.CAPTURE_CHANNEL ?? 'chrome'}),
+  args: JSON.parse(process.env.CAPTURE_ARGS ?? '[]')
+});
 try {
   const page = await browser.newPage({viewport:{width:1480,height:900}});
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if(message.type() === 'error') { errors.push(message.text()); } });
-  await page.goto(process.env.CAPTURE_URL ?? 'http://127.0.0.1:5176/?backend=webgpu');
+  await page.goto(url);
   await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
   await expect.poll(() => page.evaluate(() => window.sceneEffectsExample.snapshot().diagnostics.shadows.castingPointLights)).toBe(27);
   const captures = [];
@@ -50,7 +59,21 @@ try {
   // mounts it under a route prefix, avoiding a second copy of luma.gl.
   const exampleBase = new URL('./', page.url()).pathname;
   const fixturePath = `${exampleBase}@fs${fileURLToPath(new URL('../src/shadow-material-fixture.ts', import.meta.url))}`;
-  const maskPixels = await page.evaluate(async path => {
+  // Each fixture owns its device. Close the main example and each fixture page
+  // before requesting another adapter, including on software WebGPU backends.
+  const fixtureUrl = new URL('__shadow-material', page.url()).href;
+  await page.close();
+  const maskPixels = {};
+  for(const [name, masked, coloredBlocker, coloredReceiver] of [
+    ['solid', false, false, false], ['masked', true, false, false],
+    ['colored', true, true, false], ['coloredReceiver', false, false, true]
+  ]) {
+    const fixturePage = await browser.newPage({viewport:{width:640,height:640}});
+    fixturePage.on('pageerror', error => errors.push(error.message));
+    fixturePage.on('console', message => { if(message.type() === 'error') { errors.push(message.text()); } });
+    await fixturePage.route(fixtureUrl, route => route.fulfill({contentType:'text/html',body:'<canvas></canvas>'}));
+    await fixturePage.goto(fixtureUrl);
+    maskPixels[name] = await fixturePage.evaluate(async ({path, masked, coloredBlocker, coloredReceiver}) => {
     const {captureMaskShadow} = await import(path);
     const source = document.createElement('canvas');
     source.width = source.height = 32;
@@ -61,17 +84,10 @@ try {
         if((x + y)%2) { context.fillRect(x*8,y*8,8,8); }
       }
     }
-    const canvas = document.createElement('canvas');
-    canvas.style.cssText = 'position:fixed;inset:0;width:640px;height:640px;z-index:1000';
-    document.body.append(canvas);
-    try {
-      const solid = await captureMaskShadow(canvas, source.toDataURL(), false);
-      const masked = await captureMaskShadow(canvas, source.toDataURL(), true);
-      const colored = await captureMaskShadow(canvas, source.toDataURL(), true, true);
-      const coloredReceiver = await captureMaskShadow(canvas, source.toDataURL(), false, false, true);
-      return {solid,masked,colored,coloredReceiver};
-    } finally { canvas.remove(); }
-  }, fixturePath);
+    return captureMaskShadow(document.querySelector('canvas'), source.toDataURL(), masked, coloredBlocker, coloredReceiver);
+    }, {path:fixturePath, masked, coloredBlocker, coloredReceiver});
+    await fixturePage.close();
+  }
   for(const index of [0,2]) {
     assert.ok(maskPixels.masked.samples[index] > maskPixels.solid.samples[index] + 60,
       `alpha holes must illuminate receiver samples: ${JSON.stringify({solid:maskPixels.solid.samples,masked:maskPixels.masked.samples})}`);
@@ -92,4 +108,5 @@ try {
   console.log(`PASS point shadows, 27 lights, five-light batching, camera-culled caster, opt-out, and colored receiver lighting. Gallery: ${fileURLToPath(new URL('index.html', output))}`);
 } finally {
   await browser.close();
+  await server?.close();
 }

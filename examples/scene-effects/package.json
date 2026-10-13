@@ -11,7 +11,8 @@
     "preview": "vite preview --host 127.0.0.1",
     "check": "joy-check-javascript test vite.config.js && tsc --project tsconfig.json",
     "capture": "node test/browser.mjs",
-    "test:shadows-browser": "node test/shadows-browser.mjs"
+    "test:shadows-browser": "node test/shadows-browser.mjs",
+    "test:scene-graph-browser": "node test/scene-graph-browser.mjs"
   },
   "dependencies": {
     "joy-engine": "file:../.."

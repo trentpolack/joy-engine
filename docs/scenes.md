@@ -1,77 +1,72 @@
-# Mesh Assets and Rendering Scenes
-Joy Engine 0.8.0 owns shared mesh assets, persistent presentation instances and frame preparation. LUNA and MAGIC COLORS use this layer; their simulation and cosmetic effect lifetimes remain project-owned.
+# Scene Graph And Geometry
+`RenderScene` owns a hierarchy of presentation nodes. Meshes and resident terrain share transforms, visibility, bounds, and pass policy. Gameplay state stays with the game; authored assets remain reusable across scenes.
 
-## Create an asset and instance
-```js
-import { RenderScene, SceneRenderer, OrbitCamera } from 'joy-engine';
-import { createFormMeshAsset } from 'joy-engine/form';
-import heroSource from './assets/hero.form?raw';
+## Create A Hierarchy
+```ts
+import {MeshAsset, RenderScene, SceneRenderer} from 'joy-engine';
 
-const asset = createFormMeshAsset(heroSource);
 const scene = new RenderScene();
-const hero = scene.createMesh(asset, {position: [0, 0, 0]});
-const camera = new OrbitCamera();
-const renderer = new SceneRenderer(canvas, {camera});
+const group = scene.createNode({position: [4, 0, 0]});
+const mesh = scene.createMesh(new MeshAsset({positions, indices}), {
+  parent: group,
+  position: [0, 1, 0],
+  castsShadow: true,
+  receivesShadow: true
+});
+const renderer = new SceneRenderer(canvas);
 await renderer.initialize();
-
-// Update presentation from gameplay; units are world units and radians.
-hero.position[0] = player.x;
-hero.position[2] = player.z;
-hero.rotation[1] = player.heading;
-renderer.render(scene, {timeSeconds: world.time, lights: [], ambient: 0.5});
-
-renderer.destroy();
-scene.destroy();
+group.rotation[1]+= 0.1;
+renderer.render(scene, {lights, timeSeconds});
 ```
 
-`MeshAsset` copies and freezes indexed local-space geometry. Normals, UVs, colors, alpha, material assignments and materials remain available on `asset.geometry`. The FORM producer also preserves named outputs, parameters, point metadata and project metadata under `asset.geometry.metadata`. Local bounds are available as `asset.bounds`. Shared assets contain no device-specific resources; removing an instance or destroying a scene cannot invalidate an asset used elsewhere.
+Nodes expose local `position`, `rotation`, and `scale` arrays, plus `visible`. Positions use Y-up engine units; rotations are XYZ Euler radians, applied X, then Y, then Z after scaling. Parents compose full affine transforms, including shear from rotated children under nonuniform scale. Negative and zero scales are supported. Direct array edits must retain three finite components. `set(options)` validates before changing state.
 
-`new MeshAsset({positions, indices, ...})` accepts engine primitives and other geometry producers. `meshBox()` from `joy-engine/form` already supplies this indexed representation. Recompile an asset to regenerate visuals, then assign the replacement asset to its existing instance; instance identity and presentation transforms remain intact.
+`node.setParent(parent)` preserves the local transform. Pass `null` to make a root. Cycles, foreign scenes, and removed parents are rejected without changing the hierarchy. A hidden ancestor hides its descendants. `worldTransform` is a read-only 12-number column-major affine snapshot: three basis columns followed by translation. `worldVisible` and `worldRevision` reflect ancestor changes. Frame preparation updates world transforms once, before deriving geometry packets.
 
-## Instance transforms and ownership
-Instances own mutable `position`, `rotation`, `scale`, `tint`, `opacity`, `visible`, and `pass` values. Positions use Y-up world coordinates. Rotations are XYZ Euler radians applied X, then Y, then Z; positive Y rotation preserves the prototypes' heading convention. Scaling precedes rotation and translation. Nonuniform, negative, and zero scales are supported by the vertex-color adapter.
+`scene.remove(node)` removes its complete subtree and invalidates its nodes. `clear()` leaves the scene and keyed collections reusable; `destroy()` is idempotent and prevents further creation. Assets are borrowed, so neither operation destroys shared mesh or heightfield data. Renderers release detached terrain GPU adapters on their next frame, or immediately when destroyed. Dispose the renderer before releasing its device.
 
-`instance.set(options)` validates and copies supplied values; omitted fields retain their values. Direct array edits are supported and must retain three finite components. Opacity is between zero and one. `pass` is `auto`, `opaque`, or `transparent`; auto routes instances with vertex alpha or opacity below one to transparency. Explicit transparent instances preserve unlit projectile behavior even at full opacity.
+## Mesh Assets And Collections
+`MeshAsset` copies and freezes indexed local geometry and exposes local bounds. FORM assets retain normals, UVs, colors, alpha, materials, named outputs, and metadata. Assigning a replacement mesh asset preserves instance identity. The standard scene mesh adapter evaluates vertex colors; authored PBR materials remain available to the low-level material adapter and are not automatically interpreted by `createMesh`.
 
-`scene.remove(instance)` removes that view. `scene.clear()` removes all instances while leaving the scene and its collections reusable. `scene.destroy()` is idempotent and prevents further creation. Scenes hold no gameplay authority and do not save or destroy simulation entities. The renderer borrows the scene and camera; dispose each owner explicitly.
+Meshes add `tint`, `opacity`, `sceneRoughness`, and `pass`. `pass: 'auto'` sends alpha-bearing assets or opacity below one to transparency. Explicit `opaque` and `transparent` policies remain available. Transparent meshes retain unlit, globally centroid-sorted blending and do not become solid shadow blockers.
 
-## Synchronize a collection
-```js
+```ts
 const actors = scene.createCollection();
-
-function synchronizeActors(world) {
-  actors.beginUpdate();
-  for(const actor of world.actors) {
-    actors.set(actor.id, assets[actor.kind], {
-      position: [actor.x, actor.y, actor.z],
-      rotation: [0, actor.heading, 0],
-      tint: actor.frozen ? [0.6, 1.2, 1.8] : [1, 1, 1]
-    });
-  }
-  actors.endUpdate();
+actors.beginUpdate();
+for(const actor of world.actors) {
+  actors.set(actor.id, assets[actor.kind], {
+    parent: group,
+    position: [actor.x, actor.y, actor.z]
+  });
 }
+actors.endUpdate();
 ```
 
-A key returns the same instance across updates. Missing keys are removed at `endUpdate()`, so dead or despawned entities cannot grow the scene indefinitely. Keys may be stable IDs or simulation record references; avoid array indices when removing/reordering actors. Collections borrow record keys until removed and never modify them. Static scenery can use `scene.createMesh()` once instead of joining a collection update.
+Stable keys retain instances; missing keys are removed at `endUpdate()`. Collections recognize nodes removed through their ancestors. Neither keys nor simulation records are modified by the scene.
 
-## Frame preparation
-`SceneRenderer` owns backend selection, standard shaders, canvas resizing, postprocessing, instance transforms, conservative frustum culling, render queues, transparency sorting, light uniforms and GPU cleanup. It is the default composition root for games and editor viewports and uses the existing WebGPU-first/WebGL 2 fallback. `backend`, `colorFormat`, `ready` and `stats` expose diagnostics without access to device resources. `getDiagnostics({memory, resources})` copies requested luma counters on demand, plus this scene’s last visible/culled counts; it returns null before initialization or after disposal. Allocation/resource counters cover all luma devices in the JavaScript realm, not only this scene. Missing counters remain null and the snapshot is caller-owned. Postprocessing is enabled by default, accepts the existing resolved profile/configuration, and may be disabled explicitly with `postProcessing: false` for focused diagnostics. `setPostProcessingConfig()` updates it after initialization.
+## Native Terrain
+```ts
+import {loadTerrain} from 'joy-engine';
+const asset = await loadTerrain('/landscape/terrain.json');
+const ground = scene.createTerrain(asset, {
+  parent: group,
+  tolerance: 2,
+  targetRadius: 12
+});
+```
 
-Unchanged instance geometry is cached in scene-owned weak references. The adapter still assembles and uploads CPU triangle batches. Retained instances do not imply hardware instancing or persistent GPU meshes in this release.
+Terrain nodes share the hierarchy and default shadow/depth participation while retaining resident indexed GPU geometry. Camera movement updates compact selection data; it never expands a landscape into the mesh triangle stream. Terrain uses the same morphed surface for color, depth, and light-space shadow views. LOD projection scale uses CSS pixels, and affine transforms conservatively adjust local selection. `targetRadius` is in world units around the camera target; `diagnostic` selects material (0), LOD colors (1), or grid (2).
 
-Opaque meshes use the existing flat, double-sided vertex-color lighting. Transparent meshes are unlit. Authored material/normal/UV channels are preserved but this adapter does not evaluate PBR materials or textures. Projects should select an appropriate render adapter before relying on those channels visually. Transparency is globally centroid-sorted and retains the usual intersecting-surface limitations. Lights do not cast shadows; the existing 32-light maximum applies.
+The adapter supplies color and depth, with shared point/directional lighting. Native normal/roughness and motion attachments are not implemented: WebGPU effects requiring these reject the frame with a specific attachment error. Depth-reconstructed effects remain available. WebGL keeps the existing source-preserving effects fallback. Terrain editing, streaming, collision updates, and independently selected shadow LOD remain later work in [#61](https://github.com/trentpolack/joy-engine/issues/61).
 
-For bespoke procedural feedback and existing particle code, `render()` accepts borrowed `opaqueTriangles` and `transparentTriangles`. These are world-space XYZ/RGBA triangles and participate in the shared frame, lighting and transparency ordering. This escape hatch does not transfer effect lifetime management into the engine. LUNA and MAGIC COLORS keep their project-authored rings, slash/bolt shapes, event mapping and particle lifetime logic in this pass.
+## Shared Pass Participation
+Opaque mesh and terrain nodes cast and receive geometric shadows by default on WebGPU. `castsShadow = false` removes a node from light views; `receivesShadow = false` preserves direct illumination without applying shadow visibility. Camera culling and caster selection are independent: an off-camera object can still shadow a visible surface. One frame owner records shadow maps for colored, PBR, and native terrain adapters; their receivers borrow the same bindings. PBR masked casters retain texture-aware alpha rejection. WebGL 2 retains lighting and depth while reporting geometric shadows unavailable.
 
-## Camera queries
-`renderer.screenRay(clientX, clientY)` uses client CSS pixels and the actual camera matrix, including backend clip-depth conventions. `renderer.pickGround(clientX, clientY, height)` intersects a horizontal world plane. `renderer.project([x, y, z])` returns canvas-local CSS pixels or null behind the camera/when the canvas has no size. Device pixel ratio only changes drawing-buffer density, never view or picking scale. Low-level `screenRay`, `projectToViewport`, and `intersectRayPlane` functions are also public for custom camera integrations.
+This hierarchy is not a spatial acceleration structure. Mesh world vertices remain cached on the CPU and uploaded in batches; terrain retains native GPU buffers. The graph does not yet provide GPU mesh instancing, streamed world partitioning, occlusion culling, or shadowed volumetrics. Those scaling stages are tracked in [#60](https://github.com/trentpolack/joy-engine/issues/60).
 
-## Verification
-The focused tests are `joy-engine/test/mesh-scene.test.mjs` and `scene-frame.test.mjs`. Run them with the repository raw-asset loader. Project build/capture commands remain `npm run build:luna`, `npm run capture:luna`, `npm run build:magic-colors`, and `npm run capture:magic-colors`. Use `-- --built` on capture commands for production previews.
+`SceneRenderer` owns backend selection, CSS-aware resizing, camera culling, draw sequencing, atmosphere, post-processing, and GPU cleanup. `backend`, `colorFormat`, `ready`, `stats`, and `getDiagnostics()` expose state. Global luma allocation counters are distinct from per-renderer shadow work. Frame `opaqueTriangles` and `transparentTriangles` remain borrowed world-space XYZ/RGBA escape hatches for procedural feedback and particles.
 
-### Results for this branch
-Root `npm run check`, all 300 tests and `npm run build` passed. The seven focused scene tests cover ownership, attribute preservation, collection pruning, transforms/cache updates, frustum culling, CSS projection, frame submission and late initialization cleanup. An independent code review found no blocking issues.
+## Camera Queries And Validation
+`screenRay`, `pickGround`, and `project` use CSS pixels and the camera's backend clip convention. Pixel ratio changes backing density without changing world framing.
 
-LUNA's complete development capture passed, including combat, progression, pause, responsive layouts and unsupported-GPU handling. MAGIC COLORS' complete production capture passed, including reactions, reset, narrow layouts, touch input, production diagnostic silence and unsupported-GPU handling; its gallery preview was refreshed from that run.
-
-The broad `npm run validate` reached browser captures after passing checks/tests/build, but BLAST GARDEN could not find its default Playwright browser. That broad capture run was stopped. LUNA's production capture timed out during a screenshot after startup, without browser application errors. Software Chromium screenshots were inspected; they are not GPU performance measurements. Safari, Edge and hardware WebGPU remain unverified. No dependency versions were changed to work around browser availability.
+Core regressions live in `test/mesh-scene.test.mjs`, `test/scene-frame.test.mjs`, `test/pbr-triangles.test.mjs`, and `test/terrain-renderer.test.mjs`. The Scene Effects workspace provides `test:scene-graph-browser` for mixed hierarchy/terrain participation and `test:shadows-browser` for material alpha coverage and light batching. Both accept `CAPTURE_EXECUTABLE_PATH` and JSON `CAPTURE_ARGS` for an available Chromium installation. Captures are appearance evidence, not hardware performance measurements.
