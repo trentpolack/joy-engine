@@ -111,10 +111,10 @@ Project tuning belongs under `src/config/`, uses a descriptive `*-config.js` suf
 Keep authored GPU programs in `.wgsl` and `.glsl` files, and substantial UI styling in readable CSS. Use multiline markup for structured views and `textContent` for variable labels. JavaScript selects, loads, and binds authored assets. Do not compress source or turn readable shaders/styles into generated strings in authored JavaScript.
 
 ### Canonical Code Style Reference
-Before implementing or refactoring engine code, inspect `src/rendering/scene/scene-effect-attachments.ts` and its style refactor between commits `54ea0e689e384a1753fa90a73deb07151612a32d` and `<AFTER_SHA>`.
+Before implementing or refactoring engine code, inspect `src/rendering/scene/scene-effect-attachments.ts` and its style refactor between commits `54ea0e` and `784f24`.
 
 From the engine repository root:
-`git diff 54ea0e689e384a1753fa90a73deb07151612a32d <AFTER_SHA> -- src/rendering/scene/scene-effect-attachments.ts`
+`git diff 54ea0e 784f24 -- src/rendering/scene/scene-effect-attachments.ts`
 
 Apply the demonstrated principles:
 - Keep the main execution path procedural and easy to scan.
