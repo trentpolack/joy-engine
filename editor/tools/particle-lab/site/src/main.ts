@@ -21,7 +21,10 @@ import { readStoredText, storeText } from '../../src/storage.ts';
 import { ParticleScriptEditor } from '../../src/editor.ts';
 import { ParticleViewport } from '../../src/viewport.ts';
 import type { PreviewPerformanceMode } from '../../src/viewport.ts';
-import { parameterMarkup, setParameterCollapsed, refreshRangeFill, colorStyle } from '../../src/parameter-controls.ts';
+import {pickedColor, syncColorControl} from '../../../../src/lab-controls.ts';
+import { parameterMarkup, setParameterCollapsed, refreshRangeFill } from '../../src/parameter-controls.ts';
+
+document.documentElement.classList.add('lab-controls');
 
 const STORAGE_KEY = 'joy-games:particle-lab:v1';
 const LIVE_DELAY_MILLISECONDS = 260;
@@ -920,6 +923,30 @@ class ParticleLab {
       return;
     }
 
+    if(field === 'color' && target instanceof HTMLInputElement) {
+      const item = this.asset.parameters[name];
+      if(item.type !== PARTICLE_PARAMETER_TYPE.COLOR) {
+        return;
+      }
+      const hex = target.value;
+      try {
+        this.numeric.edit(() => {
+          item.value = pickedColor(hex, item.value, item.min, item.max) as [number, number, number, number];
+          const card = target.closest('.parameter')!;
+          for(const input of card.querySelectorAll<HTMLInputElement>('input[data-field="value"]')) {
+            input.value = String(item.value[Number(input.dataset.component)]);
+            refreshRangeFill(input);
+          }
+          syncColorControl(card, item.value);
+          this.documentChanged();
+        });
+      } catch(error) {
+        syncColorControl(target.closest('.parameter')!, item.value);
+        this.showError(error instanceof Error ? error.message : String(error));
+      }
+      return;
+    }
+
     if(field === 'delete') {
       if(this.parameterIsUsed(name)) {
         this.showError(`Parameter '${name}' is used by a script and cannot be deleted.`);
@@ -1008,9 +1035,8 @@ class ParticleLab {
           }
         }
       }
-      const swatch = card?.querySelector('.color-swatch i');
-      if(swatch instanceof HTMLElement && item.type === PARTICLE_PARAMETER_TYPE.COLOR) {
-        swatch.style.background = colorStyle(item.value);
+      if(card && item.type === PARTICLE_PARAMETER_TYPE.COLOR) {
+        syncColorControl(card, item.value);
       }
     }
     this.documentChanged();

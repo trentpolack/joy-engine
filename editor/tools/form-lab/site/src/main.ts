@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { FORM_VIEW_MODE } from '../../src/constants.ts';
-import { BROWSER_EVENT, GPU_BACKEND } from 'joy-engine/constants';
+import { BROWSER_EVENT, GPU_BACKEND, FORM_VALUE_KIND } from 'joy-engine/constants';
 import type { GeometryData, Material, ParameterValue } from 'joy-engine/form';
 import type { FormDocument } from '../../src/document.ts';
 import type { EditorView } from '@codemirror/view';
@@ -90,6 +90,7 @@ class FormLab {
         this.schedule();
       },
       name => this.resetParameter(name),
+      action => this.numeric.edit(action),
     );
     this.listeners = new AbortController();
     guardNumberScroll(document, this.listeners.signal);
@@ -141,19 +142,20 @@ class FormLab {
     });
     this.variants.setVariants(saved?.variants ?? []);
     this.numeric = new NumericControls(element('parameters'), this.listeners.signal, {
-      read: () => JSON.stringify(Object.fromEntries(Object.entries(this.overrides).filter(([,value]) => typeof value === 'number' || Array.isArray(value)))),
+      read: () => JSON.stringify(Object.fromEntries(Object.entries(this.overrides).filter(([,value]) => isPropertyOverride(value)))),
       commit: input => this.parameters.changeInput(input, 'number'),
       restore: text => {
-        // Property history owns numeric overrides only; imported resources stay current.
+        // Property history includes material factors; imported meshes stay current.
         for(const [name,value] of Object.entries(this.overrides)) {
-          if(typeof value === 'number' || Array.isArray(value)) {
+          if(isPropertyOverride(value)) {
             delete this.overrides[name];
           }
         }
         Object.assign(this.overrides, JSON.parse(text));
         const declarations = this.parameters.parameters.map(parameter => {
           if(!('min' in parameter)) {
-            return parameter;
+            const value = this.overrides[parameter.name];
+            return {...parameter, value: value && typeof value === 'object' && !Array.isArray(value) ? value : parameter.defaultValue};
           }
           const value = this.overrides[parameter.name];
           return {...parameter, value:typeof value === 'number' || Array.isArray(value) ? value : parameter.defaultValue};
@@ -471,6 +473,7 @@ class FormLab {
     click('save', () => {
       try {
         this.numeric.capture();
+        this.materialControls.capture();
         const text = serializeDocument(this.document());
         download(`${fileStem(this.name)}.formlab`, text, 'application/json');
         this.hasEdits = false;
@@ -627,8 +630,15 @@ class FormLab {
     try {
       this.numeric.edit(() => {
         delete this.overrides[name];
-        const declarations = this.parameters.parameters.map(parameter => parameter.name === name && 'min' in parameter
-          ? {...parameter, value: parameter.defaultValue} : parameter);
+        const declarations = this.parameters.parameters.map(parameter => {
+          if(parameter.name !== name) {
+            return parameter;
+          }
+          if('min' in parameter) {
+            return {...parameter, value: parameter.defaultValue};
+          }
+          return {...parameter, value: parameter.defaultValue};
+        });
         this.parameters.update(declarations, this.overrides);
         this.hasEdits = true;
         this.persist();
@@ -767,6 +777,8 @@ function button(id: string) {
   return  ((element(id)) as HTMLButtonElement);
 }
 
+document.documentElement.classList.add('lab-controls');
+
 const app = new FormLab();
 const navigation = mountEditorNavigation({
   currentTool: 'form-lab',
@@ -788,6 +800,7 @@ const workspaceBridge = connectWorkspaceTool({
   },
   serialize() {
     app.numeric.capture();
+    app.materialControls.capture();
     return workspacePath.endsWith('.form') ? app.editor.state.doc.toString() : serializeDocument(app.document());
   }
 });
@@ -823,4 +836,9 @@ if(import.meta.hot) {
     components.destroy();
     app.destroy();
   });
+}
+
+/** Resource meshes are deliberately excluded from bounded property-history snapshots. */
+function isPropertyOverride(value: ParameterValue): boolean {
+  return typeof value === 'number' || Array.isArray(value) || value.kind === FORM_VALUE_KIND.MATERIAL;
 }

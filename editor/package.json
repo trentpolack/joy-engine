@@ -25,6 +25,7 @@
     "build": "vite build --base=./",
     "check": "joy-check-javascript desktop server src site/src test tooling && tsc --project tsconfig.json",
     "test": "node --import joy-engine/testing/register-raw-loader --test test/*.test.mjs",
+    "test:lab-controls": "node test/lab-controls-browser.mjs",
     "desktop": "electron desktop/workspace.cjs"
   },
   "dependencies": {

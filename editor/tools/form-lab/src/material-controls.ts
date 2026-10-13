@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+import {createNumericControl, colorPickerMarkup, pickedColor, syncColorControl, refreshRangeFill} from '../../../src/lab-controls.ts';
+import {NumericControls} from '../../../site/src/interaction/numeric-controls.ts';
 import { BROWSER_EVENT, FORM_MATERIAL, MATERIAL_ALPHA_MODE } from 'joy-engine/constants';
 import type { Material } from 'joy-engine/form';
 import { defaultMaterial, readMaterials } from 'joy-engine/form';
@@ -22,6 +24,8 @@ export class MaterialControls {
   declare fields: HTMLDivElement;
   declare message: HTMLParagraphElement;
   declare deleteButton: HTMLButtonElement;
+  private readonly commits = new WeakMap<HTMLInputElement, () => void>();
+  private readonly numeric: NumericControls;
 
   /** @param host @param onChange */
   constructor(host: HTMLElement, onChange: (materials: Material[]) => void) {
@@ -80,6 +84,9 @@ export class MaterialControls {
       download('form-lab-materials.mtlx', exportMaterialX(this.materials), 'application/xml');
     }), { signal });
     file.addEventListener(BROWSER_EVENT.CHANGE, async () => this.importFile(file), { signal });
+    this.numeric = new NumericControls(host, signal, {
+      commit: input => this.commits.get(input)?.()
+    });
     this.setMaterials(this.materials);
   }
 
@@ -174,19 +181,21 @@ export class MaterialControls {
   /** @param material @param field @param title @param channels */
   vectorProperty(material: Material, field: 'baseColor' | 'emissive', title: string, channels: string[]) {
     const property = section(title);
-    const swatch = document.createElement('span');
-    swatch.className = 'color-swatch material-color-swatch';
-    swatch.setAttribute('role', 'img');
-    swatch.setAttribute('aria-label', `${title} color preview`);
-    const fill = document.createElement('i');
-    swatch.append(fill);
-    const updateSwatch = () => {
-      const [red, green, blue, alpha = 1] = material[field];
-      fill.style.backgroundColor = `rgba(${red*255}, ${green*255}, ${blue*255}, ${alpha})`;
-      swatch.title = `${title} (${material[field].join(', ')})`;
-    };
-    updateSwatch();
-    property.firstElementChild?.append(swatch);
+    property.firstElementChild?.insertAdjacentHTML('beforeend', colorPickerMarkup(title, material[field]));
+    const updateSwatch = () => syncColorControl(property, material[field]);
+    property.querySelector<HTMLInputElement>('.lab-color-picker')!.addEventListener(BROWSER_EVENT.CHANGE, event => {
+      const picker = event.target as HTMLInputElement;
+      if(!this.numeric.validate(false)) {
+        updateSwatch();
+        return;
+      }
+      material[field] = pickedColor(picker.value, material[field], [0, 0, 0], [1, 1, 1]);
+      property.querySelectorAll<HTMLInputElement>('input[type=number]').forEach((input, index) => {
+        input.value = String(material[field][index]);
+      });
+      updateSwatch();
+      this.changed();
+    });
     const texture = this.textureControl(material, field);
     property.append(texture);
     if(material.textures[field]) {
@@ -196,11 +205,12 @@ export class MaterialControls {
       property.append(hint);
     }
     const components = document.createElement('div');
-    components.className = 'material-components';
-    material[field].forEach((value, channel) => components.append(this.number(`${field}-${channel}`, channels[channel], value, next => {
+    components.className = 'lab-components';
+    components.style.setProperty('--lab-components', String(channels.length));
+    material[field].forEach((value, channel) => components.append(this.number(`${field}-${channel}`, `${title} ${channels[channel]} value`, value, next => {
       material[field][channel] = next;
       updateSwatch();
-    })));
+    }, channels[channel])));
     property.append(components);
     this.fields.append(property);
   }
@@ -209,7 +219,7 @@ export class MaterialControls {
   scalarProperty(material: Material, field: 'metallic' | 'roughness', title: string) {
     const property = section(title);
     property.append(this.textureControl(material, field));
-    const label = material.textures[field] ? 'Factor × texture' : 'Value';
+    const label = material.textures[field] ? `${title} factor × texture` : `${title} value`;
     property.append(this.number(field, label, material[field], next => {
       material[field] = next;
     }));
@@ -307,25 +317,34 @@ export class MaterialControls {
   }
 
   /** @param id @param title @param value @param update */
-  number(id: string, title: string, value: number, update: (value: number) => void) {
-    const label = document.createElement('label');
-    label.textContent = title;
-    const control = document.createElement('input');
-    control.id = `material-${id}`;
-    control.type = 'number';
-    control.min = '0';
-    control.max = '1';
-    control.step = 'any';
-    control.required = true;
-    control.value = String(value);
-    control.addEventListener(BROWSER_EVENT.CHANGE, () => {
-      if(control.reportValidity()) {
-        update(control.valueAsNumber);
+  number(id: string, title: string, value: number, update: (value: number) => void, component: string = '') {
+    const row = createNumericControl({label: title, component, value, min: 0, max: 1, step: 0.01, slider: !component});
+    const number = row.querySelector<HTMLInputElement>('input[type=number]')!;
+    number.id = `material-${id}`;
+    for(const input of row.querySelectorAll('input')) {
+      const commit = () => {
+        if(!Number.isFinite(input.valueAsNumber) || input.validity.rangeOverflow || input.validity.rangeUnderflow) {
+          input.setCustomValidity('Enter a number from 0 to 1.');
+          return;
+        }
+        input.setCustomValidity('');
+        update(input.valueAsNumber);
+        for(const sibling of row.querySelectorAll('input')) {
+          sibling.value = input.value;
+          sibling.setCustomValidity('');
+          refreshRangeFill(sibling);
+        }
         this.changed();
-      }
-    });
-    label.append(control);
-    return label;
+      };
+      this.commits.set(input, commit);
+      input.addEventListener(input.type === 'range' ? BROWSER_EVENT.INPUT : BROWSER_EVENT.CHANGE, commit);
+    }
+    return row;
+  }
+
+  /** Validate and flush a focused factor before saving an editable document. */
+  capture() {
+    this.numeric.capture();
   }
 
   changed() {
@@ -353,6 +372,7 @@ export class MaterialControls {
 function section(title: string) {
   const node = document.createElement('section');
   node.className = 'material-property';
+  node.setAttribute('aria-label', title);
   const heading = document.createElement('span');
   heading.className = 'material-property-title';
   heading.textContent = title;

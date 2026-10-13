@@ -1,12 +1,15 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+import {createNumericControl, colorPickerMarkup, pickedColor, syncColorControl, refreshRangeFill} from '../../../src/lab-controls.ts';
 import { BROWSER_EVENT, FORM_PARAMETER_TYPE, FORM_VALUE_KIND, MATERIAL_ALPHA_MODE } from 'joy-engine/constants';
 import type { ResourceParameter, ParameterValue } from 'joy-engine/form';
 import { parseGlbMesh } from 'joy-engine';
 import { meshBox, meshSphere, readMesh, readMaterialValue } from 'joy-engine/form';
 export type { ResourceParameter };
 export type { ParameterValue };
+
+const inputCommits = new WeakMap<HTMLInputElement, () => void>();
 
 const synchronizers: WeakMap<HTMLElement, (parameter: ResourceParameter) => void> = new WeakMap();
 
@@ -15,7 +18,7 @@ const synchronizers: WeakMap<HTMLElement, (parameter: ResourceParameter) => void
  * @param onChange
  * @param signal
  */
-export function createResourceGroup(parameter: ResourceParameter, onChange: (name: string, value: ParameterValue | undefined) => void, signal: AbortSignal) {
+export function createResourceGroup(parameter: ResourceParameter, onChange: (name: string, value: ParameterValue | undefined) => void, signal: AbortSignal, edit: (action: () => void) => void = action => action(), onReset: (name: string) => void = name => onChange(name, undefined)) {
   let importRequest = 0;
   let importMessage = '';
   const group = document.createElement('section');
@@ -35,11 +38,15 @@ export function createResourceGroup(parameter: ResourceParameter, onChange: (nam
   status.setAttribute('role', 'status');
   const reset = document.createElement('button');
   reset.type = 'button';
-  reset.textContent = 'Use script default';
+  reset.textContent = '↺';
+  reset.className = 'parameter-reset';
+  reset.setAttribute('aria-label', 'Use script default');
+  reset.title = `Reset ${parameter.name} to script default`;
+  heading.append(reset);
   reset.addEventListener(BROWSER_EVENT.CLICK, () => {
     importRequest++;
     importMessage = '';
-    onChange(parameter.name, undefined);
+    onReset(parameter.name);
   }, {signal});
 
   if(parameter.value.kind === FORM_VALUE_KIND.MESH) {
@@ -110,64 +117,113 @@ export function createResourceGroup(parameter: ResourceParameter, onChange: (nam
     });
   } else {
     let value = readMaterialValue(parameter.value);
-    for(const [name, component] of [['Red', 0], ['Green', 1], ['Blue', 2], ['Alpha', 3]]) {
-      const index = Number(component);
-      addNumber(String(name), value.material.baseColor[index], number => {
+    const color = document.createElement('div');
+    color.className = 'lab-components';
+    color.style.setProperty('--lab-components', '4');
+    const title = document.createElement('span');
+    title.className = 'lab-field-title';
+    title.textContent = 'Base color · linear RGBA';
+    heading.insertAdjacentHTML('beforeend', colorPickerMarkup(parameter.name, value.material.baseColor));
+    const picker = heading.querySelector<HTMLInputElement>('.lab-color-picker')!;
+    picker.addEventListener(BROWSER_EVENT.CHANGE, () => {
+      const hex = picker.value;
+      try {
+        edit(() => {
+          value.material.baseColor = pickedColor(hex, value.material.baseColor, [0, 0, 0], [1, 1, 1]);
+          publish();
+          refresh();
+        });
+        status.textContent = '';
+      } catch(error) {
+        status.textContent = error instanceof Error ? error.message : String(error);
+        syncColorControl(group, value.material.baseColor);
+      }
+    }, {signal});
+    const controls: {input: HTMLInputElement; read: () => number}[] = [];
+    for(const [index, name] of ['Red', 'Green', 'Blue', 'Alpha'].entries()) {
+      addNumber(color, name, ['R', 'G', 'B', 'A'][index], () => value.material.baseColor[index], number => {
         value.material.baseColor[index] = number;
         value.material.alphaMode = value.material.baseColor[3] < 1 ? MATERIAL_ALPHA_MODE.BLEND : MATERIAL_ALPHA_MODE.OPAQUE;
-        onChange(parameter.name, readMaterialValue(value));
       });
     }
-    for(const key of  ((['metallic', 'roughness']) as const)) {
-      addNumber(key, value.material[key], number => {
-        value.material[key] = number;
-        onChange(parameter.name, readMaterialValue(value));
-      });
+    group.append(title, color);
+    for(const key of ['metallic', 'roughness'] as const) {
+      const row = document.createElement('div');
+      row.className = 'lab-scalar';
+      const label = document.createElement('span');
+      label.className = 'lab-field-title';
+      label.textContent = key === 'metallic' ? 'Metallic' : 'Roughness';
+      row.append(label);
+      addNumber(row, key, '', () => value.material[key], number => { value.material[key] = number; });
+      group.append(row);
     }
-    status.textContent = 'Linear RGBA · independent material override';
     synchronizers.set(group, current => {
       value = readMaterialValue(current.value);
-      const numbers = [...value.material.baseColor, value.material.metallic, value.material.roughness];
-      group.querySelectorAll('input[type=number]').forEach((input, index) => {
-        if(input instanceof HTMLInputElement && input !== document.activeElement) {
-          input.value = String(numbers[index]);
-        }
-      });
+      refresh();
     });
+    refresh();
+
+    function publish() {
+      onChange(parameter.name, readMaterialValue(value));
+      group.classList.add('modified');
+      reset.disabled = false;
+      syncColorControl(group, value.material.baseColor);
+    }
+
+    function refresh() {
+      for(const {input, read} of controls) {
+        if(input !== document.activeElement && input.getAttribute('aria-invalid') !== 'true') {
+          input.value = String(read());
+        }
+        refreshRangeFill(input);
+      }
+      syncColorControl(group, value.material.baseColor);
+    }
+
+    function addNumber(parent: HTMLElement, name: string, component: string, read: () => number, change: (value: number) => void) {
+      const control = createNumericControl({label: `${parameter.name} ${name}`, component, value: read(), min: 0, max: 1, step: 0.01, slider: !component});
+      for(const input of control.querySelectorAll('input')) {
+        controls.push({input, read});
+        const commit = () => {
+          const number = input.valueAsNumber;
+          if(!Number.isFinite(number) || number < 0 || number > 1) {
+            input.setCustomValidity('Enter a number from 0 to 1.');
+            return;
+          }
+          input.setCustomValidity('');
+          change(number);
+          for(const sibling of control.querySelectorAll('input')) {
+            sibling.value = String(number);
+            sibling.setCustomValidity('');
+            refreshRangeFill(sibling);
+          }
+          publish();
+        };
+        inputCommits.set(input, commit);
+      }
+      parent.append(control);
+    }
   }
-  group.append(status, reset);
+  group.append(status);
   return group;
 
-  /** @param name @param value @param change */
-  function addNumber(name: string, value: number, change: (value: number) => void) {
-    const label = document.createElement('label');
-    label.className = 'parameter-top';
-    label.textContent = name;
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.min = '0';
-    input.max = '1';
-    input.step = '0.01';
-    input.value = String(value);
-    input.setAttribute('aria-label', `${parameter.name} ${name}`);
-    input.addEventListener(BROWSER_EVENT.CHANGE, () => {
-      const number = input.value === '' ? NaN : Number(input.value);
-      if(!Number.isFinite(number)) {
-        input.value = String(value);
-        return;
-      }
-      const clamped = Math.max(0, Math.min(1, number));
-      input.value = String(clamped);
-      change(clamped);
-    }, {signal});
-    label.append(input);
-    group.append(label);
-  }
 }
 
 /** Refresh resource values while preserving focused controls and in-flight file selection.
  * @param group @param parameter
  */
-export function updateResourceGroup(group: HTMLElement, parameter: ResourceParameter) {
+export function updateResourceGroup(group: HTMLElement, parameter: ResourceParameter, overridden: boolean = false) {
+  group.classList.toggle('modified', overridden);
+  const reset = group.querySelector<HTMLButtonElement>('.parameter-reset');
+  if(reset) {
+    reset.disabled = !overridden;
+  }
   synchronizers.get(group)?.(parameter);
+}
+
+/** Commit a focused resource draft through the same path as native input. */
+export function commitResourceInput(input: HTMLInputElement): boolean {
+  const commit = inputCommits.get(input);
+  commit?.();
+  return Boolean(commit);
 }

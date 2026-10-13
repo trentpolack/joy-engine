@@ -276,7 +276,7 @@ try {
   await page.keyboard.press('Tab');
   await expect(page.locator('#parameters .color-swatch i')).toHaveCSS(
     'background-color',
-    'rgba(255, 128, 0, 0.3)',
+    'rgba(255, 188, 0, 0.3)',
   );
   await expect(page.locator('#preview-status')).toHaveAttribute('data-state','pending');
   await page.locator('#run').click();

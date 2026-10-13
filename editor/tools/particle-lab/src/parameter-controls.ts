@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+import {numericControlMarkup, colorPickerMarkup, escapeAttribute} from '../../../src/lab-controls.ts';
+export {refreshRangeFill, colorStyle} from '../../../src/lab-controls.ts';
 import { PARTICLE_PARAMETER_TYPE } from 'joy-engine/constants';
 import type { ParticleParameter } from 'joy-engine';
 
@@ -17,16 +19,11 @@ export function parameterMarkup(name: string, item: ParticleParameter, collapsed
   const values = Array.isArray(item.value) ? item.value : [item.value];
   const minimums = Array.isArray(item.min) ? item.min : [item.min];
   const maximums = Array.isArray(item.max) ? item.max : [item.max];
-  const rows = values.map((value, component) => {
-    const label = `${safeName} ${components[component]}`.trim();
-    const attributes = `data-param="${safeName}" data-component="${component}"`;
-    return `
-      <div class="parameter-component">
-        <b aria-hidden="true">${components[component]}</b>
-        <input aria-label="${label} slider" type="range" ${attributes} data-field="value" min="${minimums[component]}" max="${maximums[component]}" step="any" value="${value}" style="--range-fill:${rangePercent(value, minimums[component], maximums[component])}%">
-        <input aria-label="${label} value" class="component-value" type="number" ${attributes} data-field="value" min="${minimums[component]}" max="${maximums[component]}" step="any" value="${value}">
-      </div>`;
-  }).join('');
+  const rows = values.map((value, component) => numericControlMarkup({
+    label: `${name} ${components[component]}`.trim() + ' value',
+    component: components[component], value, min: minimums[component], max: maximums[component], step: 0.1, sliderStep: 'any',
+    attributes: {'data-param': name, 'data-component': String(component), 'data-field': 'value'}
+  })).join('');
   const bounds = values.map((value, component) => {
     const label = `${safeName} ${components[component]}`.trim();
     const attributes = `data-param="${safeName}" data-component="${component}" step="any"`;
@@ -38,7 +35,7 @@ export function parameterMarkup(name: string, item: ParticleParameter, collapsed
         <label><span>MAX</span><input aria-label="${label} maximum" type="number" ${attributes} ${colorLimits} data-field="max" value="${maximums[component]}"></label>
       </div>`;
   }).join('');
-  const swatch = type === 'color' ? `<span class="color-swatch" aria-label="${safeName} color preview"><i style="background:${colorStyle(values)}"></i></span>` : '';
+  const swatch = type === 'color' ? colorPickerMarkup(name, values, {'data-param': name, 'data-field': 'color'}) : '';
   return `
     <section class="parameter" data-collapsed="${collapsed}" aria-label="${safeName} property">
       <div class="parameter-heading">
@@ -55,7 +52,7 @@ export function parameterMarkup(name: string, item: ParticleParameter, collapsed
         <button data-param="${safeName}" data-field="delete" aria-label="Delete ${safeName}">×</button>
       </div>
       <output class="parameter-summary" aria-label="${safeName} current value" ${!collapsed || type === 'color' ? 'hidden' : ''}>${parameterSummary(item)}</output>
-      <div class="parameter-values" ${collapsed ? 'hidden' : ''}>${rows}</div>
+      <div class="parameter-values ${values.length > 1 ? 'lab-components' : ''}" style="--lab-components:${values.length}" ${collapsed ? 'hidden' : ''}>${rows}</div>
       <details class="parameter-bounds" ${collapsed ? 'hidden' : ''}><summary>Bounds${type === 'color' ? ' · RGBA 0–1' : ''}</summary>${bounds}</details>
     </section>`;
 }
@@ -97,26 +94,4 @@ function parameterSummary(item: ParticleParameter) {
     return item.value.map((value, index) => `${['X', 'Y', 'Z'][index]} ${Number(value.toFixed(3))}`).join(' · ');
   }
   return String(Number(item.value.toFixed(3)));
-}
-
-/** Keep the shared track fill aligned with native keyboard/pointer range input.
- * @param input
- */
-export function refreshRangeFill(input: HTMLInputElement) {
-  input.style.setProperty('--range-fill', `${rangePercent(input.valueAsNumber, Number(input.min), Number(input.max))}%`);
-}
-
-/** @param values */
-export function colorStyle(values: readonly number[]) {
-  return `rgba(${values[0] * 255}, ${values[1] * 255}, ${values[2] * 255}, ${values[3]})`;
-}
-
-/** @param value @param min @param max */
-function rangePercent(value: number, min: number, max: number) {
-  return max > min ? Math.max(0, Math.min(100, (value - min) / (max - min) * 100)) : 0;
-}
-
-/** @param value */
-function escapeAttribute(value: string) {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
