@@ -1,13 +1,13 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import type { MeshInstance } from './mesh-instance.ts';
+import type { AffineTransform, GeometryBounds } from '../../core/types.ts';
 import type { MeshAsset } from './mesh-asset.ts';
 
 /** Column-major affine transform: scale, rotate X/Y/Z, then translate.
  * @param instance
  */
-export function meshTransform(instance: MeshInstance) {
+export function meshTransform(instance: {position: readonly number[]; rotation: readonly number[]; scale: readonly number[]}): AffineTransform {
   const [rx, ry, rz] = instance.rotation;
   const sx = Math.sin(rx), cx = Math.cos(rx);
   const sy = Math.sin(ry), cy = Math.cos(ry);
@@ -16,7 +16,7 @@ export function meshTransform(instance: MeshInstance) {
   return [cy*cz*x, cy*sz*x, -sy*x,
     (sx*sy*cz - cx*sz)*y, (sx*sy*sz + cx*cz)*y, sx*cy*y,
     (cx*sy*cz + sx*sz)*z, (cx*sy*sz - sx*cz)*z, cx*cy*z,
-    ...instance.position];
+    instance.position[0], instance.position[1], instance.position[2]];
 }
 
 /** @param matrix @param x @param y @param z */
@@ -43,4 +43,33 @@ export function outsideFrustum(asset: MeshAsset, transform: readonly number[], m
     }
   }
   return outside.some(Boolean);
+}
+
+/** Compose complete affine bases without decomposing shear or dividing by scale. */
+export function composeTransforms(parent: AffineTransform, local: AffineTransform): AffineTransform {
+  const result = Array(12).fill(0) as number[];
+  for(let column = 0; column < 3; column++) {
+    for(let row = 0; row < 3; row++) {
+      result[column*3 + row] = parent[row]*local[column*3] + parent[3 + row]*local[column*3 + 1] + parent[6 + row]*local[column*3 + 2];
+    }
+  }
+  const translation = transformPoint(parent, local[9], local[10], local[11]);
+  return [result[0], result[1], result[2], result[3], result[4], result[5], result[6], result[7], result[8], translation[0], translation[1], translation[2]];
+}
+
+/** Transform the local bounding box into a conservative world-space bounding box. */
+export function transformBounds(bounds: GeometryBounds, transform: AffineTransform): GeometryBounds {
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for(let corner = 0; corner < 8; corner++) {
+    const point = transformPoint(transform,
+      (corner & 1) ? bounds.max[0] : bounds.min[0],
+      (corner & 2) ? bounds.max[1] : bounds.min[1],
+      (corner & 4) ? bounds.max[2] : bounds.min[2]);
+    for(let axis = 0; axis < 3; axis++) {
+      min[axis] = Math.min(min[axis], point[axis]);
+      max[axis] = Math.max(max[axis], point[axis]);
+    }
+  }
+  return {min, max};
 }

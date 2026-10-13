@@ -1,14 +1,15 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+import type { AffineTransform } from '../../core/types.ts';
 import type { MeshAsset } from './mesh-asset.ts';
 import type { MeshInstance } from './mesh-instance.ts';
 
-import { meshTransform, transformPoint } from './mesh-transform.ts';
+import { transformPoint } from './mesh-transform.ts';
 export interface PreparedMesh {
   asset: MeshAsset;
   signature: number[];
-  transform: number[];
+  transform: AffineTransform;
   vertices: number[];
 }
 
@@ -17,9 +18,9 @@ export interface PreparedMesh {
  * @param instance
  * @param cache Scene-owned cache.
  */
-export function prepareMesh(instance: MeshInstance, cache: WeakMap<MeshInstance, PreparedMesh>) {
-  const signature = [...instance.position, ...instance.rotation, ...instance.scale, ...instance.tint, instance.opacity];
-  if(signature.length !== 13 || !signature.every(Number.isFinite)) {
+export function prepareMesh(instance: MeshInstance, cache: WeakMap<MeshInstance, PreparedMesh>, transform: AffineTransform = instance.worldTransform) {
+  const signature = [...transform, ...instance.tint, instance.opacity];
+  if(instance.tint.length !== 3 || signature.length !== 16 || !signature.every(Number.isFinite)) {
     throw new RangeError('Mesh instance needs finite XYZ transforms, RGB tint and opacity.');
   }
   if(instance.opacity < 0 || instance.opacity > 1) {
@@ -29,7 +30,6 @@ export function prepareMesh(instance: MeshInstance, cache: WeakMap<MeshInstance,
   if(previous?.asset === instance.asset && signature.every((value, index) => value === previous.signature[index])) {
     return previous;
   }
-  const transform = meshTransform(instance);
   const geometry = instance.asset.geometry;
   const vertices = [];
   for(const index of geometry.indices) {

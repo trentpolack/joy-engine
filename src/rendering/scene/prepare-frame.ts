@@ -5,6 +5,8 @@ import type { RenderScene } from './render-scene.ts';
 
 import { sortCameraTransparentTriangles } from '../camera/orbit-camera.ts';
 import { outsideFrustum } from './mesh-transform.ts';
+import { prepareSceneGeometry } from './scene-geometry.ts';
+import { MESH_PASS } from './mesh-instance.ts';
 import { prepareMesh } from './mesh-frame.ts';
 
 /** Prepare owned vertex-color queues without mutating scene, assets or borrowed triangles.
@@ -25,16 +27,19 @@ export function prepareSceneFrame(scene: RenderScene, {backward, viewProjection,
   const shadowCasters = Array.from(opaqueTriangles);
   const transparent = Array.from(transparentTriangles);
   const opaqueRanges = [];
+  const receivesShadowRanges: {firstVertex: number; vertexCount: number; receivesShadow: boolean}[] = [];
+  if(opaque.length) {
+    receivesShadowRanges.push({firstVertex: 0, vertexCount: opaque.length/7, receivesShadow: true});
+  }
+  const geometrySnapshots = prepareSceneGeometry(scene);
   const surfaceRoughness = Array(opaque.length/7).fill(1) as number[];
   let visible = 0;
   let culled = 0;
-  for(const instance of scene.instances) {
-    if(!instance.visible || instance.opacity === 0) {
-      continue;
-    }
-    const prepared = prepareMesh(instance, scene.frameCache);
-    const translucent = instance.pass === 'transparent' || (instance.pass === 'auto' && (instance.opacity < 1 || instance.asset.hasTransparency));
-    if(!translucent) {
+  for(const geometry of geometrySnapshots) {
+    const instance = geometry.instance;
+    const prepared = prepareMesh(instance, scene.frameCache, geometry.worldTransform);
+    const translucent = geometry.coverage === MESH_PASS.TRANSPARENT;
+    if(geometry.castsShadow) {
       for(const value of prepared.vertices) {
         shadowCasters.push(value);
       }
@@ -51,6 +56,7 @@ export function prepareSceneFrame(scene: RenderScene, {backward, viewProjection,
         throw new RangeError('Scene roughness must be between zero and one.');
       }
       opaqueRanges.push({identity: instance, topology: instance.asset, firstVertex: opaque.length/7, vertexCount: prepared.vertices.length/7});
+      receivesShadowRanges.push({firstVertex: opaque.length/7, vertexCount: prepared.vertices.length/7, receivesShadow: geometry.receivesShadow});
       for(let vertex = 0; vertex < prepared.vertices.length/7; vertex++) {
         surfaceRoughness.push(instance.sceneRoughness);
       }
@@ -59,5 +65,5 @@ export function prepareSceneFrame(scene: RenderScene, {backward, viewProjection,
       target.push(value);
     }
   }
-  return {opaque, shadowCasters, opaqueRanges, surfaceRoughness, transparent: sortCameraTransparentTriangles(transparent, backward), visible, culled};
+  return {opaque, shadowCasters, opaqueRanges, receivesShadowRanges, geometrySnapshots, surfaceRoughness, transparent: sortCameraTransparentTriangles(transparent, backward), visible, culled};
 }
