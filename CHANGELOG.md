@@ -6,6 +6,9 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, P
 ### Gameplay navigation
 - Added `searchGrid` and `traceGridRoute`: deterministic weighted reachability and cheapest-route tracing over caller-defined grid cells, with stable equal-cost tie-breaking and a bounded cell limit.
 
+### Lab Scripting
+- Added editor-neutral FORM and particle language catalogs plus shared CodeMirror completion and hover tooling for FORM LAB, PARTICLE LAB, and future scripting surfaces.
+
 ### Scene frame assembly
 - Split scene-effect attachment preparation into documented motion, surface, and lighting stages while preserving update order and resource cleanup.
 - Replaced flat mesh-cache signatures with named, copied vectors, preserving cache reuse and detection of in-place transform, tint, and opacity edits.

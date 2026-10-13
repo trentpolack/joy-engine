@@ -12,6 +12,11 @@ export {
   createScriptEditorState,
   StreamLanguage
 } from './script-editor.ts';
+export {
+  createScriptCompletionOptions,
+  findScriptSymbol,
+  scriptLanguageTools
+} from './script-language-tools.ts';
 
 // Preview presentation.
 export {

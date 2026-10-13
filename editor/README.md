@@ -28,6 +28,11 @@ The workspace, level editor, shared browser controls, and FORM/PARTICLE LAB impl
 
 Shared editor chrome and desktop-launch behavior live at this level. Tool-specific source, assets, tests, and build configuration live in [`tools/`](tools/).
 
+## Shared Script Editing
+FORM LAB and PARTICLE LAB use the shared CodeMirror owner exported by `@joy-games/joy-editor`. Editable scripting surfaces opt into an editor-neutral Joy Engine language catalog to receive the same completion and hover behavior without copying built-in names into each tool. Language definitions remain in Joy Engine's non-rendering FORM and particle modules; CodeMirror adaptation, tooltip presentation, and editor lifecycle remain in Joy Editor.
+
+Built-in completion opens while typing and with Ctrl+Space. Function completion inserts a call with the cursor inside its parentheses. Hovering a known keyword, function, field, or input displays its catalog documentation. JSON and other read-only surfaces do not enable scripting-language tools.
+
 ## Shared design system
 Joy Editor, FORM LAB, and PARTICLE LAB consume the component styles exported by `@joy-games/joy-editor/components`. The generated `src/joy-tokens.css` is sourced from the JoyGames root `joy-tokens.json`; run `npm run design:tokens` from that workspace after changing a token. This keeps the portable JSON source suitable for native application generators while giving browser tools ordinary CSS custom properties.
 
