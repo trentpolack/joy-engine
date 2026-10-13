@@ -2,9 +2,8 @@
 // Licensed under the MIT License.
 
 import {ibl} from '@luma.gl/shadertools';
-import {shadow} from '@luma.gl/experimental';
-import {SceneShadows} from '../shadows/scene-shadows.ts';
-import {ShadowCasters} from '../shadows/shadow-casters.ts';
+import {sceneShadowModule as shadow} from '../shadows/scene-shadow-module.ts';
+import type {PreparedShadowBatch} from '../shadows/scene-shadows.ts';
 import type {ShadowOptions} from '../shadows/types.ts';
 import {prepareShadowLightBatches} from '../shadows/shadow-light-batches.ts';
 import {DEFAULT_SHADOW_OPTIONS} from '../shadows/types.ts';
@@ -59,7 +58,7 @@ export class PbrTriangles {
   private readonly lightingBuffers: Buffer[] = [];
   private activeBindings: Record<string, Binding>[] = [];
   private environmentBindings: Record<string, Binding> = {};
-  private shadowResources: {owner: SceneShadows; casters: ShadowCasters; shaders: ReturnType<typeof createPortableShaders>;
+  private shadowResources: {shaders: ReturnType<typeof createPortableShaders>;
     opaque: RenderPipeline; transparent: RenderPipeline; additive: RenderPipeline; transparentAdditive: RenderPipeline;
     casterShader: ReturnType<typeof createPortableShaders>; casterPipeline: RenderPipeline; optionsKey: string} | null = null;
   private activeShadows = false;
@@ -207,7 +206,7 @@ export class PbrTriangles {
    * @param frame
    * @param [includeTransparentRanges] Build per-triangle ranges for mixed material sorting.
    */
-  prepare(frame: PbrFrame, includeTransparentRanges: boolean = false, coloredCasters: number[] | Float32Array = []) {
+  prepare(frame: PbrFrame, includeTransparentRanges: boolean = false, casterOptions?: ShadowOptions) {
     const values = new Float32Array(32);
     values.set(frame.viewProjection);
     values.set(frame.eye, 16);
@@ -217,6 +216,9 @@ export class PbrTriangles {
     values[31] = this.displayResolve ? 1 : 0;
     this.uniforms.write(values);
     this.prepareLighting(frame, values);
+    if(casterOptions && !this.activeShadows) {
+      this.ensureShadows(casterOptions);
+    }
     const opaque = this.triangles.filter(triangle => this.definitions[triangle.material].alphaMode !== MATERIAL_ALPHA_MODE.BLEND);
     const transparent = this.triangles.filter(triangle => this.definitions[triangle.material].alphaMode === MATERIAL_ALPHA_MODE.BLEND);
     opaque.sort((a, b) => a.material - b.material);
@@ -243,14 +245,11 @@ export class PbrTriangles {
     if(indices.length) {
       this.indices?.write(indices);
     }
-    if(this.activeShadows && this.shadowResources && frame.shadowCamera) {
-      this.shadowResources.casters.prepare(coloredCasters);
-      const direction = frame.lightDirection ?? DEFAULT_PBR_LIGHTING.lightDirection;
-      const color = frame.lightColor ?? DEFAULT_PBR_LIGHTING.lightColor;
-      const batches = this.shadowResources.owner.prepare(frame.shadowCamera, frame.pointLights ?? [], {
-        direction: [direction[0], direction[1], direction[2]], color: [1, 1, 1], intensity: Math.max(...color),
-        kind: 'sun', angularRadius: 0.00465, castsShadow: frame.castsShadow
-      }, view => this.shadowResources?.casters.draw(view, (pass, matrix) => this.drawShadow(pass, matrix)));
+  }
+
+  /** Borrow the frame owner's maps; materials never allocate or render private shadow maps. */
+  setShadowBatches(batches: readonly PreparedShadowBatch[]) {
+    if(this.activeShadows) {
       this.activeBindings = batches.map(batch => batch.bindings);
     }
   }
@@ -344,7 +343,7 @@ export class PbrTriangles {
       this.ensureShadows(frame.shadows || {});
     }
     const groups = this.activeShadows ? prepareShadowLightBatches(lights) : [{lights, shadowIndices: lights.map(() => -1)}];
-    this.activeBindings = groups.map(() => ({}));
+    this.activeBindings = this.activeShadows ? [] : groups.map(() => ({}));
     for(const [index, group] of groups.entries()) {
       const lighting = new Float32Array(280);
       if(frame.shadowCamera) {
@@ -374,26 +373,16 @@ export class PbrTriangles {
     }
   }
 
-  /** Copy per-instance shadow work without exposing owned GPU resources. */
-  get shadowStats() {
-    return this.activeShadows && this.shadowResources ? {...this.shadowResources.owner.stats} : null;
-  }
-
   private ensureShadows(options: ShadowOptions) {
     // Receiver bias and fitted distance change with inspection zoom, without
     // changing resource shape. Retain maps, shaders, and pipelines across these edits.
-    const {normalBias, shadowDistance, ...allocationOptions} = options;
+    const {normalBias: _normalBias, shadowDistance: _shadowDistance, ...allocationOptions} = options;
     const optionsKey = JSON.stringify(allocationOptions);
     if(this.shadowResources?.optionsKey === optionsKey) {
-      this.shadowResources.owner.setReceiverOptions({normalBias, shadowDistance});
       return;
     }
     const allocated: {destroy(): void}[] = [];
     try {
-      const owner = new SceneShadows(this.device, options);
-      allocated.push(owner);
-      const casters = new ShadowCasters(this.device, options);
-      allocated.push(casters);
       const shaders = createPortableShaders(this.device, {wgsl, glsl: {vertex, fragment}, modules: [ibl, shadow],
         defines: {USE_IBL: true, JOY_SHADOWS: true}}, 'pbr-shadow');
       allocated.push(shaders.vertex);
@@ -413,7 +402,7 @@ export class PbrTriangles {
       allocated.push(transparentAdditive);
       const casterShader = createPortableShaders(this.device, {wgsl: casterWgsl, glsl: {vertex: '', fragment: ''}}, 'pbr-caster');
       allocated.push(casterShader.vertex);
-      const casterPipeline = this.device.createRenderPipeline({vs: casterShader.vertex, fs: casterShader.fragment,
+      const casterPipeline = this.device.createRenderPipeline({id: 'pbr-caster', vs: casterShader.vertex, fs: casterShader.fragment,
         vertexEntryPoint: 'vertexMain', fragmentEntryPoint: 'fragmentMain', topology: 'triangle-list',
         bufferLayout: this.pipelineOptions.bufferLayout, depthStencilAttachmentFormat: 'depth32float', colorAttachmentFormats: [],
         parameters: {depthWriteEnabled: true, depthCompare: 'less-equal', cullMode: 'none',
@@ -421,7 +410,7 @@ export class PbrTriangles {
           depthBiasSlopeScale: options.depthBiasSlopeScale ?? DEFAULT_SHADOW_OPTIONS.depthBiasSlopeScale}});
       allocated.push(casterPipeline);
       this.releaseShadows();
-      this.shadowResources = {owner, casters, shaders, opaque, transparent, additive, transparentAdditive, casterShader, casterPipeline, optionsKey};
+      this.shadowResources = {shaders, opaque, transparent, additive, transparentAdditive, casterShader, casterPipeline, optionsKey};
     } catch(error) {
       for(const resource of allocated.reverse()) {
         resource.destroy();
@@ -453,8 +442,6 @@ export class PbrTriangles {
     if(!resources) {
       return;
     }
-    resources.owner.destroy();
-    resources.casters.destroy();
     resources.shaders.vertex.destroy();
     resources.casterShader.vertex.destroy();
     resources.casterPipeline.destroy();

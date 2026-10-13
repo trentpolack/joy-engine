@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 
 import {SceneLitPass} from '../shadows/scene-lit-pass.ts';
+import type {NativeSceneGeometry} from '../scene/native-geometry.ts';
+import {SceneShadowPass} from '../shadows/scene-shadow-pass.ts';
+import {DEFAULT_PBR_LIGHTING} from '../pbr/pbr-triangles.ts';
 import type {SceneLightFrame, ShadowOptions} from '../shadows/types.ts';
 import { GPU_BACKEND, GPU_COMPARE, GPU_TEXTURE_FORMAT, GPU_TOPOLOGY, GPU_VERTEX_FORMAT, SHADER_ENTRY_POINT } from '../gpu/constants.ts';
 import type { RendererDiagnosticOptions, RendererDiagnostics } from '../gpu/gpu-diagnostics.ts';
@@ -80,6 +83,9 @@ export class GpuTriangleRenderer {
   declare destroyed: boolean;
   declare pbr: PbrTriangles | null;
   private litShadowPass: SceneLitPass | null = null;
+  private shadowPass: SceneShadowPass | null = null;
+  private shadowAllocationKey = '';
+  private shadowFrameActive = false;
   private readonly shadowOptions: ShadowOptions | false;
   declare textured: TexturedTriangles | null;
   declare opaqueShaders: { vertex: Shader; fragment: Shader; } | null;
@@ -241,14 +247,13 @@ export class GpuTriangleRenderer {
       return null;
     }
     const snapshot = readGpuDiagnostics(this.device, options);
-    const lit = this.litShadowPass?.shadows.stats;
-    const pbr = this.pbr?.shadowStats;
+    const shadows = this.shadowFrameActive ? this.shadowPass?.shadows.stats : null;
     snapshot.shadows = {
       available: this.backend === GPU_BACKEND.WEBGPU && this.shadowOptions !== false,
-      castingPointLights: (lit?.castingPointLights ?? 0) + (pbr?.castingPointLights ?? 0),
-      castingDirectionalLights: (lit?.castingDirectionalLights ?? 0) + (pbr?.castingDirectionalLights ?? 0),
-      batches: (lit?.batches ?? 0) + (pbr?.batches ?? 0),
-      views: (lit?.views ?? 0) + (pbr?.views ?? 0)
+      castingPointLights: shadows?.castingPointLights ?? 0,
+      castingDirectionalLights: shadows?.castingDirectionalLights ?? 0,
+      batches: shadows?.batches ?? 0,
+      views: shadows?.views ?? 0
     };
     return snapshot;
   }
@@ -363,7 +368,7 @@ export class GpuTriangleRenderer {
    * @param [sceneFrame] Borrowed motion/camera inputs for requested scene effects. Depth defaults to this scene's owned attachment. Callers must supply real velocities and projection jitter; reset history after camera cuts or scene replacement.
    * @param [atmosphereUniforms] Optional packed background snapshot. Requires atmosphere at creation; null hides it.
    */
-  render(vertices: number[] | Float32Array, uniformData: Float32Array<ArrayBuffer>, clearColor: Color, transparentVertices: number[] | Float32Array = [], timeSeconds: number = 0, transparentDraws: readonly TransparentDraw[] = [], materialFrame: PbrFrame | null = null, sceneFrame: SceneEffectsFrame = {}, atmosphereUniforms: Float32Array<ArrayBuffer> | null = null, attachmentFrame: SceneAttachmentFrame | null = null, lightFrame: SceneLightFrame | null = null) {
+  render(vertices: number[] | Float32Array, uniformData: Float32Array<ArrayBuffer>, clearColor: Color, transparentVertices: number[] | Float32Array = [], timeSeconds: number = 0, transparentDraws: readonly TransparentDraw[] = [], materialFrame: PbrFrame | null = null, sceneFrame: SceneEffectsFrame = {}, atmosphereUniforms: Float32Array<ArrayBuffer> | null = null, attachmentFrame: SceneAttachmentFrame | null = null, lightFrame: SceneLightFrame | null = null, nativeGeometry: readonly NativeSceneGeometry[] = []) {
     if(atmosphereUniforms && !this.atmosphere) {
       throw new Error('Atmosphere uniforms require atmosphere at renderer creation.');
     }
@@ -409,16 +414,49 @@ export class GpuTriangleRenderer {
 
     // Merge material streams only when PBR and caller geometry share the transparent phase.
     const mixedTransparency = Boolean(materialFrame && (transparentVertices.length || transparentDraws.length));
+    const frameLights = lightFrame ?? materialLightFrame(materialFrame, vertices);
+    const options = this.shadowOptions === false ? false : (lightFrame ? (this.shadowOptions ?? {}) : (materialFrame?.shadows ?? this.shadowOptions ?? {}));
+    this.shadowFrameActive = Boolean(frameLights && this.backend === GPU_BACKEND.WEBGPU && options !== false);
     if(materialFrame) {
       if(!this.pbr) {
         throw new Error('Material frames require pbr at renderer creation.');
       }
-      this.pbr.prepare({...materialFrame, shadows: this.shadowOptions === false ? false : (materialFrame.shadows ?? this.shadowOptions)},
-        mixedTransparency, lightFrame?.casters);
+      // A mixed scene has one light population and camera for all receivers.
+      const lighting = lightFrame ? {
+        shadowCamera: lightFrame.camera, pointLights: lightFrame.lights,
+        lightDirection: lightFrame.directional?.direction ?? materialFrame.lightDirection,
+        lightColor: lightFrame.directional ? lightFrame.directional.color.map(value => value*lightFrame.directional!.intensity) : [0, 0, 0]
+      } : {};
+      this.pbr.prepare({...materialFrame, ...lighting, shadows: materialFrame.shadows === false ? false : options}, mixedTransparency,
+        this.shadowFrameActive && options !== false ? options : undefined);
     }
-    if(lightFrame && this.backend === GPU_BACKEND.WEBGPU && this.shadowOptions !== false) {
-      this.litShadowPass ??= new SceneLitPass(this.device, this.shadowOptions, this.postprocessor?.format);
-      this.litShadowPass.prepare(lightFrame, uniformData, materialFrame ? (pass, matrix) => this.pbr?.drawShadow(pass, matrix) : undefined);
+    if(this.shadowFrameActive && frameLights && options !== false) {
+      const {normalBias, shadowDistance, ...allocationOptions} = options;
+      const allocationKey = JSON.stringify(allocationOptions);
+      if(!this.shadowPass || this.shadowAllocationKey !== allocationKey) {
+        const replacement = new SceneShadowPass(this.device, options);
+        this.shadowPass?.destroy();
+        this.shadowPass = replacement;
+        this.shadowAllocationKey = allocationKey;
+      }
+      this.shadowPass.shadows.setReceiverOptions({normalBias, shadowDistance});
+      const batches = this.shadowPass.prepare(frameLights, (pass, matrix) => {
+        if(materialFrame) {
+          this.pbr?.drawShadow(pass, matrix);
+        }
+        for(const geometry of nativeGeometry) {
+          if(geometry.castsShadow) {
+            geometry.drawShadow(pass, matrix);
+          }
+        }
+      });
+      if(materialFrame) {
+        this.pbr?.setShadowBatches(batches);
+      }
+      if(lightFrame) {
+        this.litShadowPass ??= new SceneLitPass(this.device, this.postprocessor?.format);
+        this.litShadowPass.prepare(frameLights.camera, uniformData, batches);
+      }
     }
     let processedScene: Texture | undefined;
     let renderPass = this.device.beginRenderPass({
@@ -430,16 +468,29 @@ export class GpuTriangleRenderer {
     if(atmosphereUniforms) {
       this.atmosphere?.draw(renderPass, atmosphereUniforms);
     }
-    if(lightFrame && this.litShadowPass) {
-      this.litShadowPass.draw(renderPass, this.vertexArray, vertices.length/FLOATS_PER_VERTEX);
-    } else {
-    renderPass.setPipeline(this.pipeline);
-    renderPass.setBindings({ uniforms: this.uniformBuffer });
-    renderPass.setVertexArray(this.vertexArray);
-    renderPass.draw({ vertexCount: vertices.length/FLOATS_PER_VERTEX });
+    const ranges = lightFrame?.receivesShadowRanges ?? [{firstVertex: 0, vertexCount: vertices.length/FLOATS_PER_VERTEX, receivesShadow: true}];
+    for(const range of ranges) {
+      if(lightFrame && this.shadowFrameActive && this.litShadowPass && range.receivesShadow) {
+        this.litShadowPass.draw(renderPass, this.vertexArray, range.vertexCount, range.firstVertex);
+      } else {
+        renderPass.setPipeline(this.pipeline);
+        renderPass.setBindings({uniforms: this.uniformBuffer});
+        renderPass.setVertexArray(this.vertexArray);
+        renderPass.draw({firstVertex: range.firstVertex, vertexCount: range.vertexCount});
+      }
     }
     if(materialFrame) {
       this.pbr?.draw(renderPass, false);
+    }
+    for(const geometry of nativeGeometry) {
+      if(!geometry.visible) {
+        continue;
+      }
+      if(lightFrame && this.shadowFrameActive && this.litShadowPass && geometry.receivesShadow) {
+        this.litShadowPass.drawNative(renderPass, (pass, bindings, additive) => geometry.draw(pass, bindings, true, additive));
+      } else {
+        geometry.draw(renderPass, {uniforms: this.uniformBuffer}, false, false);
+      }
     }
     // Resolve depth-dependent effects on opaque color, then composite translucent geometry
     // against the original opaque depth. Particles retain crisp coverage and need no fabricated velocity.
@@ -551,6 +602,7 @@ export class GpuTriangleRenderer {
     }
     this.resourcesReleased = true;
     this.litShadowPass?.destroy();
+    this.shadowPass?.destroy();
     this.atmosphere?.destroy();
     this.pbr?.destroy();
     this.textured?.destroy();
@@ -672,4 +724,16 @@ function mergeTransparentRange(previous: TransparentRange, next: TransparentRang
   }
   previous.vertexCount+= next.vertexCount;
   return true;
+}
+
+/** Adapt the low-level material-only entry point to the same frame shadow owner. */
+function materialLightFrame(frame: PbrFrame | null, casters: number[] | Float32Array): SceneLightFrame | null {
+  if(!frame?.shadowCamera) {
+    return null;
+  }
+  const direction = frame.lightDirection ?? DEFAULT_PBR_LIGHTING.lightDirection;
+  const color = frame.lightColor ?? DEFAULT_PBR_LIGHTING.lightColor;
+  return {camera: frame.shadowCamera, lights: frame.pointLights ?? [], casters,
+    directional: {direction: [direction[0], direction[1], direction[2]], color: [color[0], color[1], color[2]],
+      intensity: 1, kind: 'sun', angularRadius: 0.00465, castsShadow: frame.castsShadow}};
 }

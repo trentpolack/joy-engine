@@ -235,6 +235,7 @@ test('PBR light batches composite each transparent triangle completely and apply
     shadowCamera: {viewMatrix: Array(16).fill(0), projectionMatrix: Array(16).fill(0), nearPlane: 0.1, farPlane: 100},
     pointLights: lights, ambientColor: [0.2, 0.3, 0.4], environment};
   scene.prepare(frame);
+  scene.setShadowBatches(prepareShadowLightBatches(lights).map(group => ({...group, bindings: {}})));
   const draws = [];
   const lighting = [];
   const pass = {setPipeline() {}, setVertexArray() {}, setBindings(bindings) {
@@ -252,4 +253,46 @@ test('PBR light batches composite each transparent triangle completely and apply
   assert.equal(renderer.allocations.length, countBeforeZoom, 'inspection zoom must reuse shadow maps and pipelines');
   scene.destroy();
   assert.ok(renderer.allocations.every(resource => resource.destroyed === 1));
+});
+
+test('mixed geometry records one set of light views and shares receiver bindings', async t => {
+  const resources = gpu();
+  const pbr = new PbrTriangles(resources.device, 'rgba16float');
+  await pbr.setMesh(mesh(null, 'MASK'));
+  let preparations = 0;
+  const shadowBinding = {};
+  const casterDraws = [], receiverBindings = [], colorDraws = [];
+  let pipeline;
+  const pass = {setPipeline(value) { pipeline = value; }, setVertexArray() {}, end() {},
+    setBindings(bindings) { receiverBindings.push(bindings); },
+    draw(range) { colorDraws.push({id: pipeline?.props?.id, ...range}); }};
+  const shadowPass = {setPipeline(value) { pipeline = value; }, setVertexArray() {}, setBindings() {},
+    draw(range) { casterDraws.push({id: pipeline?.props?.id, ...range}); }};
+  t.mock.method(SceneShadows.prototype, 'prepare', (_camera, lights, _direction, draw) => {
+    preparations++;
+    draw({renderPass: shadowPass, viewProjectionMatrix: new Float32Array(16)});
+    return prepareShadowLightBatches(lights).map(group => ({...group, bindings: {shadow: shadowBinding}}));
+  });
+  const renderer = Object.assign(Object.create(GpuTriangleRenderer.prototype), {
+    pbr, device: {...resources.device, beginRenderPass: () => pass, submit() {}}, backend: 'webgpu', shadowOptions: {},
+    vertexBuffer: {write() {}}, uniformBuffer: {write() {}}, vertexArray: {}, pipeline: {props: {id: 'unshadowed'}},
+    transparentPipeline: {}, sceneUniformBufferSize: 1168,
+    canvasContext: {getCurrentFramebuffer: () => ({})}
+  });
+  t.after(() => { renderer.litShadowPass?.destroy(); renderer.shadowPass?.destroy(); pbr.destroy(); });
+  const camera = {viewMatrix: new Float32Array(16), projectionMatrix: new Float32Array(16), nearPlane: 0.1, farPlane: 100};
+  const lights = [{x: 0, y: 2, z: 0, r: 1, g: 1, b: 1, range: 5}];
+  const materialFrame = {viewProjection: new Float32Array(16), eye: [0, 0, 8], backward: [0, 0, 1], shadowCamera: camera, pointLights: lights};
+  const colored = new Float32Array(42);
+  renderer.render(colored, new Float32Array(292), [0, 0, 0, 1], [], 0, [], materialFrame, {}, null, null,
+    {camera, lights, directional: null, casters: colored, receivesShadowRanges: [
+      {firstVertex: 0, vertexCount: 3, receivesShadow: true},
+      {firstVertex: 3, vertexCount: 3, receivesShadow: false}
+    ]});
+  assert.equal(preparations, 1, 'mixed receivers must not render duplicate shadow maps');
+  assert.equal(casterDraws.filter(draw => draw.id === 'colored-shadow-caster').length, 1);
+  assert.equal(casterDraws.filter(draw => draw.id === 'pbr-caster').length, 1, 'masked material retains its texture-aware caster');
+  assert.ok(receiverBindings.filter(bindings => bindings.shadow).every(bindings => bindings.shadow === shadowBinding));
+  assert.ok(colorDraws.some(draw => draw.id === 'lit-shadow-base' && draw.firstVertex === 0 && draw.vertexCount === 3));
+  assert.ok(colorDraws.some(draw => draw.id === 'unshadowed' && draw.firstVertex === 3 && draw.vertexCount === 3));
 });

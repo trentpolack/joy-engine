@@ -75,3 +75,27 @@ test('shadow view clip depth includes casters at the point-light near plane', ()
   assert.ok(Math.abs(nearDepth) < 0.0001, `WebGPU near depth must be zero, received ${nearDepth}`);
   assert.ok(Math.abs(farDepth - 1) < 0.0001, `WebGPU far depth must be one, received ${farDepth}`);
 });
+
+test('point-light raster coordinates match native cube sampling on all six faces', () => {
+  const {device} = gpu();
+  const owner = new SceneShadows(device);
+  const camera = new OrbitCamera();
+  // Cube samplers use top-to-bottom T coordinates, while clip-space Y points up.
+  const samples = {
+    '+X': {point:[5,2,1],uv:[0.4,0.3]}, '-X': {point:[-5,2,1],uv:[0.6,0.3]},
+    '+Y': {point:[1,5,2],uv:[0.6,0.7]}, '-Y': {point:[1,-5,2],uv:[0.6,0.3]},
+    '+Z': {point:[1,2,5],uv:[0.6,0.3]}, '-Z': {point:[1,2,-5],uv:[0.4,0.3]}
+  };
+  let checked = 0;
+  owner.prepare({viewMatrix:camera.viewMatrix(),projectionMatrix:camera.projectionMatrix(1,true),nearPlane:0.1,farPlane:100},
+    [{x:0,y:0,z:0,r:1,g:1,b:1,range:10}], null, view => {
+      const {point,uv} = samples[view.pointFace];
+      const matrix = view.viewProjectionMatrix;
+      const clip = [0,1,2,3].map(row => point.reduce((sum,value,axis) => sum + value*matrix[axis*4 + row],matrix[12 + row]));
+      assert.ok(Math.abs((clip[0]/clip[3]*0.5 + 0.5) - uv[0]) < 0.00001, view.pointFace);
+      assert.ok(Math.abs((0.5 - clip[1]/clip[3]*0.5) - uv[1]) < 0.00001, view.pointFace);
+      checked++;
+    });
+  assert.equal(checked, 6);
+  owner.destroy();
+});

@@ -76,15 +76,16 @@ export class SceneShadows {
           this.stats.views++;
           // Luma 9.4.2 computes OpenGL-depth light projections. Convert both
           // raster and receiver matrices so WebGPU retains the entire light frustum.
+          // Cube faces also need the Y orientation expected by textureSampleCompare.
           const matrix = view.viewProjectionMatrix.clone();
-          matrix.copy(toWebGpuDepth(view.viewProjectionMatrix));
+          matrix.copy(toWebGpuDepth(view.viewProjectionMatrix, view.type === 'point'));
           drawCasters({...view, viewProjectionMatrix: matrix,
-            camera: {...view.camera, projectionMatrix: toWebGpuDepth(view.camera.projectionMatrix)}});
+            camera: {...view.camera, projectionMatrix: toWebGpuDepth(view.camera.projectionMatrix, view.type === 'point')}});
         }
       });
-      props.directionalViewProjectionMatrices = props.directionalViewProjectionMatrices.map(toWebGpuDepth);
-      props.pointViewProjectionMatrices = props.pointViewProjectionMatrices.map(toWebGpuDepth);
-      props.spotViewProjectionMatrices = props.spotViewProjectionMatrices.map(toWebGpuDepth);
+      props.directionalViewProjectionMatrices = props.directionalViewProjectionMatrices.map(matrix => toWebGpuDepth(matrix));
+      props.pointViewProjectionMatrices = props.pointViewProjectionMatrices.map(matrix => toWebGpuDepth(matrix, true));
+      props.spotViewProjectionMatrices = props.spotViewProjectionMatrices.map(matrix => toWebGpuDepth(matrix));
       owner.inputs.setProps({shadow: props});
       owner.store.setUniforms(owner.inputs.getUniformValues());
       result.push({...group, bindings: {
@@ -161,11 +162,14 @@ export class SceneShadows {
   }
 }
 
-/** Remap homogeneous clip Z from [-W,W] to [0,W], keeping X/Y/W unchanged. */
-function toWebGpuDepth(matrix: ArrayLike<number>): ShadowShaderProps['pointViewProjectionMatrices'][number] {
+/** Remap clip Z to [0,W] and orient cube-face raster Y for WebGPU cube sampling. */
+function toWebGpuDepth(matrix: ArrayLike<number>, cubeFace: boolean = false): ShadowShaderProps['pointViewProjectionMatrices'][number] {
   const result = Array.from(matrix);
   for(let column = 0; column < 4; column++) {
     const offset = column*4;
+    if(cubeFace) {
+      result[offset + 1] = -result[offset + 1];
+    }
     result[offset + 2] = (result[offset + 2] + result[offset + 3])*0.5;
   }
   return result as [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];

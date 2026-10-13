@@ -30,6 +30,8 @@ export interface SceneLightFrame {
   directional: AtmosphereLight | null;
   /** Complete opaque XYZ/RGBA caster triangles, including objects outside the camera frustum. */
   casters: number[] | Float32Array;
+  /** Camera-visible opaque runs; omitted means every colored receiver accepts shadows. */
+  receivesShadowRanges?: readonly {firstVertex: number; vertexCount: number; receivesShadow: boolean}[];
 }
 
 /** Named defaults keep editor-scale bias independent from world geometry size. */

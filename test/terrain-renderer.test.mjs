@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TerrainRenderer } from '../src/rendering/terrain/terrain-renderer.ts';
 import { decodeTerrain } from '../src/rendering/terrain/terrain-asset.ts';
+import { TerrainScenePass } from '../src/rendering/terrain/terrain-scene-pass.ts';
 function asset() {
   return decodeTerrain({version:1,size:3,tileCells:2,extent:[2,2],heightOffset:0,heightScale:1,heightFile:'height.bin',orientation:'row-0-to-negative-z',patches:[{x:0,z:0,min:0,max:0,errors:[0,0]}]},new ArrayBuffer(18));
 }
@@ -18,7 +19,7 @@ function device(failAt = Infinity) {
     createShader:() => resource(),
     createRenderPipeline:props => resource({shaderLayout:{attributes:[],bindings:[]},bufferLayout:props.bufferLayout}),
     createVertexArray:() => resource({setBuffer(){},setIndexBuffer(){}}),
-    createBuffer:props => resource({byteLength:props.byteLength,write(data){calls.push({kind:'upload',bytes:data.byteLength});}}),
+    createBuffer:props => resource({...props,write(data){calls.push({kind:'upload',bytes:data.byteLength,id:props.id,values:Array.from(data)});}}),
     createTexture:() => resource({copyImageData(){}})};
 }
 test('terrain construction rolls back every partial GPU allocation', () => {
@@ -26,6 +27,37 @@ test('terrain construction rolls back every partial GPU allocation', () => {
     const gpu = device(failure);
     assert.throws(() => new TerrainRenderer(gpu,asset()),/Allocation failure/);
     assert.ok(gpu.resources.every(resource => resource.destroyCount === 1));
+  }
+});
+
+test('native terrain retains indexed resources across transforms and unwinds partial construction', () => {
+  const gpu = device();
+  const native = new TerrainScenePass(gpu, asset());
+  const count = gpu.resources.length;
+  const transform = [2,0,0, 0,2,0, 0,0,2, 8,4,-6];
+  const view = {eye:[10,8,-4],target:[8,4,-6],projectionScale:100,tolerance:2,targetRadius:0};
+  native.prepare(new Float32Array(16), transform, view);
+  assert.deepEqual(Array.from(native.terrain.frameData.slice(16,20)), [1,2,1,100], 'LOD eye uses local coordinates and uniform scale keeps screen error invariant');
+  const draws = [];
+  const pass = {setPipeline(){},setVertexArray(){},setBindings(){},draw(value){draws.push(value);}};
+  for(let index = 0; index < 10; index++) {
+    transform[9]+= 1;
+    native.prepare(new Float32Array(16), transform, view);
+    native.draw(pass, {uniforms:{}}, false, false);
+  }
+  assert.equal(gpu.resources.length, count);
+  assert.ok(draws.every(draw => draw.indexCount > 0 && !('vertexCount' in draw)), 'scene path must retain indexed draws');
+  native.prepare(new Float32Array(16), Array(12).fill(0), view);
+  assert.ok(native.terrain.frameData.every(Number.isFinite), 'collapsed transforms never feed infinities into LOD selection');
+  const uploads = gpu.calls.length;
+  assert.throws(() => native.prepare(new Float32Array(16), [...transform.slice(0,11),NaN], view), /finite affine/);
+  assert.equal(gpu.calls.length, uploads);
+  native.destroy(); native.destroy();
+  assert.ok(gpu.resources.every(resource => resource.destroyCount === 1));
+  for(let failure = 1; failure <= count; failure++) {
+    const failing = device(failure);
+    assert.throws(() => new TerrainScenePass(failing, asset()), /Allocation failure/);
+    assert.ok(failing.resources.every(resource => resource.destroyCount === 1));
   }
 });
 test('terrain frames retain resources, use WebGL indexed byte offsets and release once', () => {
