@@ -110,6 +110,23 @@ Project tuning belongs under `src/config/`, uses a descriptive `*-config.js` suf
 
 Keep authored GPU programs in `.wgsl` and `.glsl` files, and substantial UI styling in readable CSS. Use multiline markup for structured views and `textContent` for variable labels. JavaScript selects, loads, and binds authored assets. Do not compress source or turn readable shaders/styles into generated strings in authored JavaScript.
 
+### Canonical Code Style Reference
+Before implementing or refactoring engine code, inspect `src/rendering/scene/scene-effect-attachments.ts` and its style refactor between commits `54ea0e689e384a1753fa90a73deb07151612a32d` and `<AFTER_SHA>`.
+
+From the engine repository root:
+`git diff 54ea0e689e384a1753fa90a73deb07151612a32d <AFTER_SHA> -- src/rendering/scene/scene-effect-attachments.ts`
+
+Apply the demonstrated principles:
+- Keep the main execution path procedural and easy to scan.
+- Extract cohesive stages into descriptive private methods.
+- Keep resource creation, use, and cleanup together.
+- Use named, typed intermediate data and explicit control flow.
+- Follow the demonstrated formatting, spacing, and comment layout.
+- Fully document function contracts, including parameter meaning, mutation, ownership, resource validity, failure behavior, and return values.
+- Use readonly members for dependencies assigned during construction and never replaced.
+
+Before completing a change, compare the changed code against this reference. Adapt the principles to the responsibility of each module.
+
 ## Review Checklist
 - Can a reader identify each owner, borrowed dependency, and mutable record?
 - Can startup, one frame, failure, and disposal be followed in order?

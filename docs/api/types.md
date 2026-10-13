@@ -26,6 +26,21 @@ Ordered X/Y/Z components in the coordinate space documented by the consuming API
 
 
 
+## AffineTransform3D
+Import from `joy-engine`. [Source](../../src/core/types.ts)
+
+```ts
+type AffineTransform3D = readonly [
+  ...basisX: Vector3,
+  ...basisY: Vector3,
+  ...basisZ: Vector3,
+  ...translation: Vector3
+];
+```
+Column-major affine transform: three scaled basis columns followed by translation. Maps local XYZ positions into the coordinate space documented by the consuming API.
+
+
+
 ## MovingBody
 Import from `joy-engine`. [Source](../../src/core/types.ts)
 
@@ -229,6 +244,42 @@ interface EntityWorldOptions {
   componentRegistry?: ComponentRegistry;
 }
 ```
+
+
+## GridRoute
+Import from `joy-engine`. [Source](../../src/gameplay/grid-navigation.ts)
+
+```ts
+interface GridRoute<Cell> {
+  /** Accumulated step cost from the search origin, in caller-defined cost units. */
+  cost: number;
+  /** Cell this route entered from; null only for the origin. */
+  previous: Cell | null;
+}
+```
+Cheapest known route into one cell.
+
+
+
+## GridSearchOptions
+Import from `joy-engine`. [Source](../../src/gameplay/grid-navigation.ts)
+
+```ts
+interface GridSearchOptions<Cell> {
+  /** Search origin. Always reachable at zero cost. */
+  start: Cell;
+  /** Inclusive maximum accumulated cost. Use Infinity to flood the whole connected region. */
+  budget: number;
+  /** Adjacent candidates. Iteration order is the deterministic tie-break between equal-cost routes. */
+  neighbors: (cell: Cell) => Iterable<Cell>;
+  /** Finite nonnegative cost to step from `from` into `to`, or null when the step is not allowed. */
+  stepCost: (from: Cell, to: Cell) => number | null;
+  /** Maximum settled cells before the search throws; guards unbounded implicit graphs. */
+  cellLimit?: number;
+}
+```
+Borrowed rules for one search. Callbacks must not mutate the grid during the search.
+
 
 
 ## EntityDefinition

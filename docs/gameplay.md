@@ -19,6 +19,7 @@ Joy's gameplay layer separates the object being controlled from the source of it
 | `LevelRuntime` | Instantiate entities and physics from a copied level. |
 | `LevelScene` | Synchronize primitive presentation with retained mesh instances. |
 | `PhysicsWorld` | Rigid bodies, collision queries, fixed stepping and vehicle lifetimes. |
+| `searchGrid` / `traceGridRoute` | Deterministic weighted reachability and cheapest routes over caller-defined grid cells. |
 
 Game rules stay in project character subclasses. A controller may outlive a character and possess another one. Transfer and destruction clear intent and detach both sides. `PlayerController` borrows a sampler; the application still owns input listeners, camera policy, menus and pause state. No input device is hard-coded into a character.
 
@@ -81,6 +82,23 @@ world.spawn({
 Components borrow their entity-owned JSON record rather than copying it again, so editor/runtime adapters and systems observe one value. `onAttach(entity)` may acquire resources with `own`; `onDetach()` and owned resources run during removal or failed-spawn rollback. Systems are world-owned and run in insertion order before legacy `Entity.update` hooks. Each update uses a stable snapshot: removal takes effect immediately, while entities spawned by a system wait until the next frame. `query(componentTypes)` returns a borrowed-entity snapshot and never transfers ownership.
 
 This first version deliberately avoids archetype storage, implicit global registries and parallel scheduling. The object-oriented lifetime shell keeps browser, GPU and physics ownership explicit; data-oriented systems provide the flexible composition point. Hot paths can later move component data into specialized storage without changing authored level documents or the base world-object contract.
+
+## Grid navigation
+Turn-based and tile-based games share one weighted search. `searchGrid` floods outward from a start cell within an inclusive cost budget and returns a caller-owned `Map` from each reachable cell to `{cost, previous}`; `traceGridRoute` rebuilds the cheapest route from that result. The engine does not interpret coordinates, terrain or factions: cells are any `Map` key (tile indices are typical), `neighbors(cell)` lists adjacent candidates, and `stepCost(from, to)` returns a finite nonnegative cost or `null` when the step is not allowed. Unit classes, occupancy, elevation limits and zones of control stay in the project's cost callback.
+
+```js
+import { searchGrid, traceGridRoute } from 'joy-engine';
+
+const routes = searchGrid({
+  start: unit.tile,
+  budget: unit.movement,
+  neighbors: tile => map.adjacent(tile),
+  stepCost: (from, to) => (map.isWall(to) || enemyAt(to)) ? null : map.moveCost(to, unit.movementClass)
+});
+const path = traceGridRoute(routes, destination); // [] when out of reach
+```
+
+Results are deterministic: equal-cost routes keep the first one discovered in `neighbors` order, and the map iterates in settle order (nondecreasing cost), so AI that scans the result breaks ties identically on every run. Use `budget: Infinity` for whole-region distance fields, such as AI approach planning. Each search is bounded by `cellLimit` (65,536 settled cells by default) and throws instead of running away on an unbounded implicit graph. Searches are synchronous, retain no callbacks and own no resources.
 
 ## Authored data
 A `.joylevel` file uses `{version:1,name,entities:[...]}`. Each entity has a stable `id`, trusted registered `type`, display `name`, `tags`, `transform`, and `components`. IDs must be unique. Components are JSON-compatible records, so project-specific fields round-trip through the editor. They cannot contain executable scripts or arbitrary factory references.

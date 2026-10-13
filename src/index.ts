@@ -4,6 +4,7 @@
 export type {
   Vector2,
   Vector3,
+  AffineTransform3D,
   MovingBody,
   Color,
   IndexedMesh3D,
@@ -37,6 +38,8 @@ export { EntityRegistry } from './gameplay/entity-registry.ts';
 export { EntityWorld } from './gameplay/entity-world.ts';
 export type { EntityWorldOptions } from './gameplay/entity-world.ts';
 export { copyEntityDefinition } from './gameplay/entity-definition.ts';
+export { searchGrid, traceGridRoute } from './gameplay/grid-navigation.ts';
+export type { GridRoute, GridSearchOptions } from './gameplay/grid-navigation.ts';
 export { LevelDocument, parseLevel, serializeLevel } from './gameplay/level-document.ts';
 export { LevelScene } from './gameplay/level-scene.ts';
 export { LevelRuntime } from './gameplay/level-runtime.ts';

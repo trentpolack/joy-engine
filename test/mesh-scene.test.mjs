@@ -63,12 +63,25 @@ test('frame preparation applies full transforms and preserves shared local geome
   const asset = triangle();
   const instance = scene.createMesh(asset, {position: [1, 2, 3], scale: [-2, 3, 1], rotation: [0, Math.PI/2, 0], tint: [2, 0.5, 1]});
   const frame = prepareSceneFrame(scene, {backward: [0, 0, 1]});
-  assert.deepEqual(frame.opaque.slice(0, 7), [1, 2, 3, 2, 0.5, 1, 1]);
+  assert.deepEqual(Array.from(frame.opaque.slice(0, 7)), [1, 2, 3, 2, 0.5, 1, 1]);
   assert.ok(Math.abs(frame.opaque[7] - 1) < 1e-12);
   assert.equal(frame.opaque[9], 5);
   assert.deepEqual(asset.geometry.positions.slice(0, 6), [0, 0, 0, 1, 0, 0]);
+  const cached = scene.frameCache.get(instance);
+  prepareSceneFrame(scene, {backward: [0, 0, 1]});
+  assert.equal(scene.frameCache.get(instance), cached, 'unchanged instances reuse prepared geometry');
+
   instance.position[0] = 8;
   assert.equal(prepareSceneFrame(scene, {backward: [0, 0, 1]}).opaque[0], 8);
+  instance.rotation[1] = 0;
+  assert.equal(prepareSceneFrame(scene, {backward: [0, 0, 1]}).opaque[7], 6);
+  instance.scale[0] = -4;
+  assert.equal(prepareSceneFrame(scene, {backward: [0, 0, 1]}).opaque[7], 4);
+  instance.tint[1] = 0.25;
+  assert.equal(prepareSceneFrame(scene, {backward: [0, 0, 1]}).opaque[4], 0.25);
+  instance.opacity = 0.5;
+  assert.equal(prepareSceneFrame(scene, {backward: [0, 0, 1]}).transparent[6], 0.5);
+
   instance.visible = false;
   assert.equal(prepareSceneFrame(scene, {backward: [0, 0, 1]}).opaque.length, 0);
 });

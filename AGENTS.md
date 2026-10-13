@@ -64,7 +64,7 @@ The engine package never imports the editor, tools or examples. The editor may d
 Move code into `src/` when it is stable behavior that more than one game, tool, or example needs.
 
 ## Code Standards and AI Agent Rules
-- Follow [the detailed JavaScript coding standards](docs/coding-standards.md). They adapt the supplied `joygl-ts` (a previous project) client's staged initialization, renderer member grouping, explicit disposal, and API documentation to instance-owned browser-native JavaScript. Apply these rules to changed code, not just new documentation.
+- Follow [**the detailed JavaScript coding standards**](docs/coding-standards.md). They adapt the supplied `joygl-ts` (a previous project) client's staged initialization, renderer member grouping, explicit disposal, and API documentation to instance-owned browser-native JavaScript. Apply these rules to changed code, not just new documentation.
 - Always use [JoyCore](https://github.com/trentpolack/JoyCore) as a reference for code organization, commenting style, naming, clarity, and overall readability. Consult relevant examples when implementing or refactoring code, and adapt their principles to this repository's language and browser-native architecture, even when JoyCore uses a different language or engine.
 - Write browser-native TypeScript or JavaScript modules and use descriptive names.
 - Prefer `.ts` files and native TypeScript contracts for reusable runtime source. JavaScript remains appropriate for build scripts, configuration, and small browser composition roots; describe its contracts with JSDoc. Strict TypeScript checking runs with `noEmit`; Vite owns production output.
@@ -113,11 +113,12 @@ Move code into `src/` when it is stable behavior that more than one game, tool, 
 - Games built on the engine need the standard CONFIG button/menu and JOY-EDITOR config button/menu; the engine owns those shared development widgets.
 - Always avoid hard-coded strings that have gameplay/logic/engine relevance; prefer to create a const variable for the string and use _that_ elsewhere.
 - Comment code and embrace the comfort of some extra line breaks when it comes to separating "chunks" of code; check out my general style of commenting/spacing in my JoyCore project: https://github.com/trentpolack/JoyCore/tree/develop/Source/JoyCore/Private/Systems; this engine uses JavaScript/TypeScript and has different conventions, but I'm a C++/C# person so this is the style I'd bring to JS projects.
-- The header copyright/MIT license text for each file being created should be the copyright on one line and the license on the next line; i.e.:
+- The header copyright/MIT license text for each file being created should be the copyright on one line and the license on the next line (except on form/joyfx scripts); i.e.:
   - // Copyright (c) 2026 Trent Polack. All Rights Reserved.
   - // Licensed under the MIT License.
 - We use the oxford comma in this house, robot.
 - Capitalize major words in Markdown headings.
+- Before implementing or refactoring code, read, and follow [**Coding Standards**](docs/coding-standards.md), including its canonical style reference. Before completion, review all changed code against those requirements.
 
 ## Commit Message Standards
 - Don't use the "Conventional Commits" commit style; i.e., don't use the `feat(<branch>): <message>`, `chore: <message>`, etc..

@@ -2,6 +2,16 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-13-2026
+### Gameplay navigation
+- Added `searchGrid` and `traceGridRoute`: deterministic weighted reachability and cheapest-route tracing over caller-defined grid cells, with stable equal-cost tie-breaking and a bounded cell limit.
+
+### Scene frame assembly
+- Split scene-effect attachment preparation into documented motion, surface, and lighting stages while preserving update order and resource cleanup.
+- Replaced flat mesh-cache signatures with named, copied vectors, preserving cache reuse and detection of in-place transform, tint, and opacity edits.
+- Documented `PreparedMesh` ownership and packed layouts, with readonly fixed-length signature and affine-transform contracts composed from core `Vector3` and `Color` types.
+- Reworked `prepareSceneFrame` into a two-pass assembly that sizes every queue first and copies cached `Float32Array` vertices with `TypedArray.set`. Opaque and shadow-caster queues are now `Float32Array`s; submission order, culling, roughness ranges, and transparent sorting are unchanged. In Node, CPU preparation for 185–331 instances (26,000–43,000 triangles) fell from roughly 40–70 ms to 4–7 ms per frame.
+
 ## 10-12-2026
 ### LAB Editing Controls
 - Unified FORM LAB and PARTICLE LAB with compact scalar, vector, and linear RGBA controls, native color selection, readable modified/reset states, and borderless idle slider surfaces with keyboard focus.

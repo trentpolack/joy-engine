@@ -114,3 +114,14 @@ export interface MeshInstanceOptions {
 
 /** Ordered X/Y/Z components in the coordinate space documented by the consuming API. */
 export type Vector3 = [number, number, number];
+
+/**
+ * Column-major affine transform: three scaled basis columns followed by translation.
+ * Maps local XYZ positions into the coordinate space documented by the consuming API.
+ */
+export type AffineTransform3D = readonly [
+  ...basisX: Vector3,
+  ...basisY: Vector3,
+  ...basisZ: Vector3,
+  ...translation: Vector3
+];

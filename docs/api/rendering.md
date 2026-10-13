@@ -844,12 +844,13 @@ function crossVectors3(a: number[], b: number[])
 Import from `joy-engine`. [Source](../../src/rendering/camera/orbit-camera.ts)
 
 ```ts
-function sortCameraTransparentTriangles(vertices: readonly number[], backward: readonly number[]): number[]
+function sortCameraTransparentTriangles(vertices: ArrayLike<number>, backward: readonly number[]): number[]
 ```
 Back-to-front centroid sorting for any camera orientation; leaves input untouched. Intersecting transparent surfaces remain an approximation, not order-independent transparency.
 
-- **param** vertices Interleaved XYZ/RGBA triangles.
+- **param** vertices Interleaved XYZ/RGBA triangles (number arrays or typed arrays).
 - **param** backward Unit vector from target toward camera.
+- **returns** A new caller-owned array in back-to-front order; equal depths keep input order.
 
 
 ## EditorGrid

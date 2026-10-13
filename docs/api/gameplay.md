@@ -429,6 +429,32 @@ Validate and copy a definition, applying defaults without retaining authored ref
 - **param** definition
 
 
+## searchGrid
+Import from `joy-engine`. [Source](../../src/gameplay/grid-navigation.ts)
+
+```ts
+function searchGrid<Cell>(options: GridSearchOptions<Cell>): Map<Cell, GridRoute<Cell>>
+```
+Find every cell reachable within a cost budget, with its cheapest route. Equal-cost alternatives keep the first route discovered, so identical inputs always produce identical routes and identical `Map` iteration order (cells appear in the order they were settled: nondecreasing cost).
+
+- **param** options Borrowed search rules.
+- **returns** Caller-owned map from each reachable cell to its cheapest route, origin included.
+- **throws** RangeError for an invalid budget or step cost, or when the cell limit is exceeded.
+
+
+## traceGridRoute
+Import from `joy-engine`. [Source](../../src/gameplay/grid-navigation.ts)
+
+```ts
+function traceGridRoute<Cell>(routes: ReadonlyMap<Cell, GridRoute<Cell>>, target: Cell): Cell[]
+```
+Rebuild the cheapest route to a target from a `searchGrid` result.
+
+- **param** routes Borrowed search result; not mutated.
+- **param** target Destination cell.
+- **returns** New array from origin to target inclusive, or an empty array when unreachable.
+
+
 ## LevelDocument
 Import from `joy-engine`. [Source](../../src/gameplay/level-document.ts)
 

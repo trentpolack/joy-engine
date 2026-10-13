@@ -117,12 +117,14 @@ function multiply(a: Float32Array, b: Float32Array) {
   return out;
 }
 
-/** Back-to-front centroid sorting for any camera orientation; leaves input untouched.
+/**
+ * Back-to-front centroid sorting for any camera orientation; leaves input untouched.
  * Intersecting transparent surfaces remain an approximation, not order-independent transparency.
- * @param vertices Interleaved XYZ/RGBA triangles.
+ * @param vertices Interleaved XYZ/RGBA triangles (number arrays or typed arrays).
  * @param backward Unit vector from target toward camera.
+ * @returns A new caller-owned array in back-to-front order; equal depths keep input order.
  */
-export function sortCameraTransparentTriangles(vertices: readonly number[], backward: readonly number[]): number[] {
+export function sortCameraTransparentTriangles(vertices: ArrayLike<number>, backward: readonly number[]): number[] {
   if(vertices.length % 21 !== 0) {
     throw new RangeError('Triangle data must contain 21 values per triangle.');
   }
@@ -137,10 +139,13 @@ export function sortCameraTransparentTriangles(vertices: readonly number[], back
     triangles.push({ offset, depth });
   }
   triangles.sort((a, b) => a.depth - b.depth);
-  const sorted = [];
+  // Preallocated and filled by index: large particle and overlay batches sort every frame.
+  const sorted: number[] = new Array(vertices.length);
+  let cursor = 0;
   for(const { offset } of triangles) {
     for(let component = 0; component < 21; component++) {
-      sorted.push(vertices[offset + component]);
+      sorted[cursor] = vertices[offset + component];
+      cursor++;
     }
   }
   return sorted;
