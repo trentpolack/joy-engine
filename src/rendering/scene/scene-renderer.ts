@@ -193,8 +193,10 @@ export class SceneRenderer {
       this.resetHistory();
       return false;
     }
+    const webgpu = this.backend === GPU_BACKEND.WEBGPU;
+    const effectsEnabled = webgpu && Boolean(this.options.sceneEffects);
     const geometrySnapshots = prepareSceneGeometry(scene);
-    if(this.options.sceneEffects && geometrySnapshots.some(geometry => geometry.kind === SCENE_GEOMETRY_KIND.TERRAIN)) {
+    if(effectsEnabled && geometrySnapshots.some(geometry => geometry.kind === SCENE_GEOMETRY_KIND.TERRAIN)) {
       const requirements = getSceneEffectsRequirements(normalizeSceneEffectsOptions(this.options.sceneEffects));
       for(const attachment of UNSUPPORTED_TERRAIN_ATTACHMENTS) {
         if(requirements[attachment]) {
@@ -207,8 +209,6 @@ export class SceneRenderer {
       return false;
     }
 
-    const webgpu = this.backend === GPU_BACKEND.WEBGPU;
-    const effectsEnabled = webgpu && Boolean(this.options.sceneEffects);
     const viewMatrix = this.camera.viewMatrix();
     const projection = this.camera.projectionMatrix(this.width/this.height, webgpu);
     const unjitteredMatrix = multiplyCameraMatrices(projection, viewMatrix);

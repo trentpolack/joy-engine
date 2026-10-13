@@ -299,3 +299,34 @@ test('native terrain permits effects reconstructed from depth without requesting
     GpuTriangleRenderer.create = original;
   }
 });
+
+test('WebGL terrain renders its effects fallback when TAA is configured', async () => {
+  const original = GpuTriangleRenderer.create;
+  const {SceneEffects} = await import('../src/rendering/scene/scene-effects.ts');
+  const gpu = residentTerrainDevice();
+  const effects = new SceneEffects(gpu, {taa: true});
+  const source = {width: 800, height: 500};
+  let submitted;
+  const backend = {backend: 'webgl', device: gpu, postprocessor: {format: 'rgba16float'}, sceneEffects: effects,
+    resetSceneHistory() {}, resize() {}, render(...args) {
+      submitted = args;
+      assert.equal(effects.render(source, args[7]), source, 'WebGL preserves the source instead of requiring unavailable attachments');
+    }, destroy() { effects.destroy(); }};
+  GpuTriangleRenderer.create = async () => backend;
+  let renderer;
+  try {
+    renderer = new SceneRenderer({clientWidth: 800, clientHeight: 500}, {sceneEffects: {taa: true}});
+    await renderer.initialize();
+    const scene = new RenderScene();
+    scene.createTerrain(await residentTerrainAsset());
+    assert.equal(renderer.render(scene, {culling: false}), true);
+    assert.equal(submitted[11].length, 1);
+    assert.equal(submitted[11][0].visible, true);
+    assert.deepEqual(submitted[7], {});
+    assert.equal(submitted[9], null, 'disabled backend effects do not prepare motion attachments');
+  } finally {
+    renderer?.destroy();
+    GpuTriangleRenderer.create = original;
+  }
+  assert.ok(gpu.resources.every(resource => resource.destroyCount === 1));
+});
