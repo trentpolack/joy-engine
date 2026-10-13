@@ -22,7 +22,10 @@ test('portable GLSL compilation releases the vertex shader if fragment allocatio
     }
   };
   assert.throws(() => createPortableShaders(device, {
-    wgsl: '', glsl: { vertex: 'vertex shader', fragment: 'fragment shader' }
+    wgsl: '', glsl: {
+      vertex: '// Licensed shader\n\n#version 300 es\nvoid main() { gl_Position = vec4(0.0); }',
+      fragment: '// Licensed shader\n\n#version 300 es\nprecision highp float;\nout vec4 color;\nvoid main() { color = vec4(1.0); }'
+    }
   }), /fragment allocation failed/);
   assert.equal(vertexShader.destroyed, 1);
 });

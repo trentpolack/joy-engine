@@ -169,8 +169,13 @@ export function createPortableShaders(device: Device, sources: PortableShaderSou
 /**
  * Shadertools requires the GLSL version that raw Device compilation inferred.
  * @param source
- * @returns GLSL version directive prepended to the source if absent.
+ * The assembler reads and removes the first line as the version directive.
+ * Keep authored license comments, but move an existing directive ahead of them.
  */
 function explicitGlslVersion(source: string): string {
-  return(/^\s*#version\s+/m.test(source) ? source : `#version 300 es\n${source}`);
+  const directive = /^[\t ]*#version[^\r\n]*/m.exec(source);
+  if(directive) {
+    return(`${directive[0].trim()}\n${source.slice(0, directive.index)}${source.slice(directive.index + directive[0].length)}`);
+  }
+  return(`#version 300 es\n${source}`);
 }
