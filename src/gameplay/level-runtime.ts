@@ -19,7 +19,7 @@ export interface LevelRuntimeOptions {
  * Instantiates a copied level. Owns entities and their physics handles; a supplied physics world is borrowed.
  * `physics` components use local collider dimensions; entity scale is applied once at construction.
  * `vehicle` components use the PhysicsWorld vehicle contract, in chassis-local meters.
- * Physics handles are attached during construction; later EntityWorld spawns require their own setup.
+ * Spawn through this owner so authored and dynamically created entities receive the same physics setup.
  */
 export class LevelRuntime {
   declare level: LevelData;
@@ -49,65 +49,89 @@ export class LevelRuntime {
     this.destroyed = false;
     try {
       for(const definition of this.level.entities) {
-        const entity = this.world.spawn(definition);
-        const collider = entity.components.physics;
-        const vehicleConfig = entity.components.vehicle;
-        if(vehicleConfig !== undefined && collider === undefined) {
-          throw new TypeError(`Entity ${entity.id}: vehicle requires a physics component.`);
-        }
-        if(collider === undefined) {
-          continue;
-        }
-        const config = componentRecord(collider, 'physics');
-        const scale = entity.transform.scale;
-        if(scale.some(value => value <= 0)) {
-          throw new RangeError('Physics entity scale must be positive.');
-        }
-        // The backend validates shape, mass and material values before allocating solver resources.
-        if(config.shape !== PRIMITIVE_SHAPE.BOX && config.shape !== PRIMITIVE_SHAPE.SPHERE && config.shape !== PRIMITIVE_SHAPE.PLANE) {
-          throw new TypeError('Physics shape must be box, sphere or plane.');
-        }
-        const options = {
-          ...config,
-          shape: config.shape,
-          position: entity.transform.position,
-          rotation: entity.transform.rotation
-        };
-        if(config.shape === PRIMITIVE_SHAPE.BOX) {
-          const extents = config.halfExtents ?? [0.5, 0.5, 0.5];
-          if(!Array.isArray(extents) || extents.length !== 3 || extents.some(value => typeof value !== 'number' || !Number.isFinite(value) || value <= 0)) {
-            throw new TypeError('Box halfExtents require three finite positive numbers.');
-          }
-          Object.assign(options, {halfExtents: extents.map((value, index) => value*scale[index])});
-        } else if(config.shape === PRIMITIVE_SHAPE.SPHERE) {
-          if(scale[0] !== scale[1] || scale[1] !== scale[2]) {
-            throw new RangeError('Sphere physics requires uniform entity scale.');
-          }
-          const radius = config.radius ?? 0.5;
-          if(typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) {
-            throw new TypeError('Sphere radius must be finite and positive.');
-          }
-          Object.assign(options, {radius: radius*scale[0]});
-        }
-        const body = this.physics.createBody(((options) as PhysicsBodyOptions));
-        entity.own(body);
-        this.bodies.set(entity.id, body);
-        if(vehicleConfig !== undefined) {
-          const vehicleOptions = componentRecord(vehicleConfig, 'vehicle');
-          if(scale[0] !== scale[1] || scale[1] !== scale[2]) {
-            throw new RangeError('Vehicle physics requires uniform entity scale.');
-          }
-          const scaledOptions = scaleVehicle(vehicleOptions, scale[0]);
-          const vehicle = this.physics.createVehicle(body,  ((scaledOptions) as PhysicsVehicleOptions));
-          entity.own(vehicle);
-          this.vehicles.set(entity.id, vehicle);
-        }
+        this.spawn(definition);
       }
     } catch(error) {
       try {
         this.destroy();
       } catch(cleanupError) {
         throw new AggregateError([error, cleanupError], 'Level setup and rollback failed.');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Create an entity and attach every runtime-owned physics handle. Failed setup
+   * removes the entity and releases partial resources before reporting the error.
+   * @param definition Copied authored or dynamically generated entity definition.
+   */
+  spawn(definition: Parameters<EntityWorld['spawn']>[0]) {
+    if(this.destroyed) {
+      throw new Error('LevelRuntime is destroyed.');
+    }
+    const entity = this.world.spawn(definition);
+    try {
+      const collider = entity.components.physics;
+      const vehicleConfig = entity.components.vehicle;
+      if(vehicleConfig !== undefined && collider === undefined) {
+        throw new TypeError(`Entity ${entity.id}: vehicle requires a physics component.`);
+      }
+      if(collider === undefined) {
+        return entity;
+      }
+      const config = componentRecord(collider, 'physics');
+      const scale = entity.transform.scale;
+      if(scale.some(value => value <= 0)) {
+        throw new RangeError('Physics entity scale must be positive.');
+      }
+      // The backend validates shape, mass and material values before allocating solver resources.
+      if(config.shape !== PRIMITIVE_SHAPE.BOX && config.shape !== PRIMITIVE_SHAPE.SPHERE && config.shape !== PRIMITIVE_SHAPE.PLANE) {
+        throw new TypeError('Physics shape must be box, sphere or plane.');
+      }
+      const options = {
+        ...config,
+        shape: config.shape,
+        position: entity.transform.position,
+        rotation: entity.transform.rotation
+      };
+      if(config.shape === PRIMITIVE_SHAPE.BOX) {
+        const extents = config.halfExtents ?? [0.5, 0.5, 0.5];
+        if(!Array.isArray(extents) || extents.length !== 3 || extents.some(value => typeof value !== 'number' || !Number.isFinite(value) || value <= 0)) {
+          throw new TypeError('Box halfExtents require three finite positive numbers.');
+        }
+        Object.assign(options, {halfExtents: extents.map((value, index) => value*scale[index])});
+      } else if(config.shape === PRIMITIVE_SHAPE.SPHERE) {
+        if(scale[0] !== scale[1] || scale[1] !== scale[2]) {
+          throw new RangeError('Sphere physics requires uniform entity scale.');
+        }
+        const radius = config.radius ?? 0.5;
+        if(typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) {
+          throw new TypeError('Sphere radius must be finite and positive.');
+        }
+        Object.assign(options, {radius: radius*scale[0]});
+      }
+      const body = this.physics.createBody(((options) as PhysicsBodyOptions));
+      entity.own(body);
+      this.bodies.set(entity.id, body);
+      if(vehicleConfig !== undefined) {
+        const vehicleOptions = componentRecord(vehicleConfig, 'vehicle');
+        if(scale[0] !== scale[1] || scale[1] !== scale[2]) {
+          throw new RangeError('Vehicle physics requires uniform entity scale.');
+        }
+        const scaledOptions = scaleVehicle(vehicleOptions, scale[0]);
+        const vehicle = this.physics.createVehicle(body, ((scaledOptions) as PhysicsVehicleOptions));
+        entity.own(vehicle);
+        this.vehicles.set(entity.id, vehicle);
+      }
+      return entity;
+    } catch(error) {
+      this.bodies.delete(entity.id);
+      this.vehicles.delete(entity.id);
+      try {
+        this.world.remove(entity.id);
+      } catch(cleanupError) {
+        throw new AggregateError([error, cleanupError], 'Dynamic entity setup and rollback failed.');
       }
       throw error;
     }

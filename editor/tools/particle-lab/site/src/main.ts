@@ -15,7 +15,7 @@ import '@fontsource/archivo/600.css';
 import '@fontsource/archivo-black';
 import {JoyComponentRegistry} from '../../../../src/components.ts';
 import { compileParticleEffect, ParticleEffect, PARTICLE_STEP_SECONDS, DEFAULT_PARTICLE_TEXTURE } from 'joy-engine';
-import { downloadAsset, MAX_ASSET_BYTES, readAsset, writeAsset } from '../../src/document.ts';
+import { downloadAsset, MAX_ASSET_BYTES, readAsset, readRecoveryAsset, writeAsset } from '../../src/document.ts';
 import { copyExample, createEmitterTemplate, EXAMPLES, EMITTER_PRESETS } from '../../src/examples.ts';
 import { readStoredText, storeText } from '../../src/storage.ts';
 import { ParticleScriptEditor } from '../../src/editor.ts';
@@ -1303,7 +1303,7 @@ function escapeText(value: string) {
 function loadInitialAsset() {
   try {
     const saved = hosted ? null : readStoredText(STORAGE_KEY);
-    return saved ? readAsset(saved) : copyExample(0);
+    return saved ? readRecoveryAsset(saved) : copyExample(0);
   } catch {
     return copyExample(0);
   }

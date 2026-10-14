@@ -24,6 +24,25 @@ export function readAsset(text: string): ParticleEffectAsset {
 }
 
 /**
+ * Restore an origin-local working draft without compiling unfinished scripts.
+ * Portable file imports continue through readAsset; recovery deliberately keeps
+ * text that may only be half of the author's next valid expression.
+ *
+ * @param text
+ */
+export function readRecoveryAsset(text: string): ParticleEffectAsset {
+  if(new Blob([text]).size > MAX_ASSET_BYTES) {
+    throw new Error(`Particle recovery cannot exceed ${MAX_ASSET_BYTES.toLocaleString()} bytes.`);
+  }
+
+  const value = JSON.parse(text);
+  if(!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Particle recovery must contain an effect object.');
+  }
+  return structuredClone(((value) as ParticleEffectAsset));
+}
+
+/**
  * @param asset
  */
 export function writeAsset(asset: ParticleEffectAsset): string {

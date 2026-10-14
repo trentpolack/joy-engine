@@ -2,6 +2,11 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-14-2026
+### Authoring Safety And Runtime Setup
+- Preserved unfinished PARTICLE LAB scripts in browser recovery, and kept FORM LAB exports paired with the preview that successfully acquired GPU resources.
+- Added one LevelRuntime spawn path so initial and dynamically created entities receive matching physics and vehicle setup with rollback.
+
 ## 10-13-2026
 ### Gameplay navigation
 - Added `searchGrid` and `traceGridRoute`: deterministic weighted reachability and cheapest-route tracing over caller-defined grid cells, with stable equal-cost tie-breaking and a bounded cell limit.

@@ -79,7 +79,7 @@ export class OutputInspector {
 
   }
   /** @param data @param frame */
-  update(data: GeometryData, frame: boolean) {
+  async update(data: GeometryData, frame: boolean): Promise<boolean> {
     this.data = data;
     const previous = this.outputs.value;
     this.outputs.replaceChildren(option('', 'All outputs'));
@@ -87,7 +87,7 @@ export class OutputInspector {
       this.outputs.append(option(output.name, `${output.name}${output.visible ? '' : ' · inspect'}`));
     }
     this.outputs.value = (data.outputs ?? []).some(output => output.name === previous) ? previous : '';
-    this.showResult(frame);
+    return this.showResult(frame);
   }
   reset() {
     this.revision+= 1;
@@ -113,10 +113,10 @@ export class OutputInspector {
   /** Pair the inspector with the mesh actually accepted by the GPU resource owner.
    * @param frame
    */
-  async showResult(frame: boolean) {
+  async showResult(frame: boolean): Promise<boolean> {
     const data = this.data;
     if(!data) {
-      return;
+      return false;
     }
     const revision = ++this.revision;
     const requestedName = this.outputs.value;
@@ -124,7 +124,7 @@ export class OutputInspector {
     this.pending(true);
     const accepted = await this.viewport.setData(output?.geometry ?? data, frame);
     if(revision !== this.revision) {
-      return;
+      return false;
     }
     this.pending(false);
     if(!accepted) {
@@ -135,7 +135,7 @@ export class OutputInspector {
       }
       this.outputs.value = this.acceptedName;
       this.outputs.disabled = !this.data;
-      return;
+      return false;
     }
     this.acceptedData = data;
     this.acceptedName = requestedName;
@@ -150,6 +150,7 @@ export class OutputInspector {
       kind.textContent = output ? instances ? 'Retained instances' : output.visible ? 'Output geometry' : 'Inspection snapshot' : 'Full build · export source';
     }
     this.showDomain();
+    return true;
   }
   /** @param pending */
   pending(pending: boolean) {

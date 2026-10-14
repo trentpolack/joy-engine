@@ -2,12 +2,20 @@
 // Licensed under the MIT License.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { MAX_ASSET_BYTES, readAsset, writeAsset } from '../src/document.ts';
+import { MAX_ASSET_BYTES, readAsset, readRecoveryAsset, writeAsset } from '../src/document.ts';
 import { copyExample } from '../src/examples.ts';
 
 test('authored assets survive a fully validated portable JSON round trip', () => {
   const asset = copyExample(0);
   assert.deepEqual(readAsset(writeAsset(asset)), asset);
+});
+
+test('browser recovery preserves an unfinished script that portable import rejects', () => {
+  const asset = copyExample(0);
+  asset.emitters[0].spawn = 'size = (';
+  const text = writeAsset(asset);
+  assert.throws(() => readAsset(text));
+  assert.deepEqual(readRecoveryAsset(text), asset);
 });
 
 test('readAsset delegates malformed nested records to shared validation', () => {

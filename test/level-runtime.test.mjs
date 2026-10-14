@@ -70,7 +70,7 @@ test('throwing project cleanup cannot retain the runtime solver', () => {
   runtime.destroy();
 });
 
-test('same-id entity replacement cannot reuse disposed runtime physics handles', () => {
+test('dynamic entity replacement receives fresh runtime physics handles', () => {
   for(const inspectBeforeStep of [false, true]) {
     const kart = definition('kart', 4, 10);
     kart.transform.scale = [1, 1, 1];
@@ -80,21 +80,21 @@ test('same-id entity replacement cannot reuse disposed runtime physics handles',
     const vehicle = runtime.getVehicle('kart');
     runtime.world.remove('kart');
     kart.transform.position = [3, 9, 2];
-    const replacement = runtime.world.spawn(kart);
+    const replacement = runtime.spawn(kart);
     assert.equal(body.disposed, true);
     assert.equal(vehicle.disposed, true);
     if(inspectBeforeStep) {
-      assert.equal(runtime.getVehicle('kart'), null);
-      assert.equal(runtime.getBody('kart'), null);
+      assert.notEqual(runtime.getVehicle('kart'), vehicle);
+      assert.notEqual(runtime.getBody('kart'), body);
     }
     assert.doesNotThrow(() => runtime.step(0));
     assert.deepEqual(replacement.transform.position, [3, 9, 2]);
-    assert.equal(runtime.getBody('kart'), null);
-    assert.equal(runtime.getVehicle('kart'), null);
-    assert.equal(runtime.bodies.size, 0);
-    assert.equal(runtime.vehicles.size, 0);
-    assert.equal(runtime.physics.bodies.size, 0);
-    assert.equal(runtime.physics.vehicles.size, 0);
+    assert.notEqual(runtime.getBody('kart'), body);
+    assert.notEqual(runtime.getVehicle('kart'), vehicle);
+    assert.equal(runtime.bodies.size, 1);
+    assert.equal(runtime.vehicles.size, 1);
+    assert.equal(runtime.physics.bodies.size, 1);
+    assert.equal(runtime.physics.vehicles.size, 1);
     runtime.destroy();
   }
 });

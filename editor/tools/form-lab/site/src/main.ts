@@ -239,7 +239,7 @@ class FormLab {
     };
     const executionFailure = 'Build exceeded 2 seconds. Reduce loops or resolution. Previous preview retained.';
     this.timeout = window.setTimeout(() => expire('Compiler startup exceeded 10 seconds. Check module loading or restart the tool. Previous preview retained.'), STARTUP_TIMEOUT_MILLISECONDS);
-    worker.onmessage = (event) => {
+    worker.onmessage = async (event) => {
       if(this.worker !== worker || this.disposed) {
         return;
       }
@@ -268,6 +268,13 @@ class FormLab {
         button('error-location').dataset.column = String(result.column);
         return;
       }
+      const accepted = await this.inspection.update(result.data, this.shouldFrame);
+      if(this.disposed || !accepted) {
+        this.previewFailed();
+        this.status('Preview resources rejected this build. Previous preview and export retained.', 'error');
+        this.updateExportNote(true);
+        return;
+      }
       this.data = result.data;
       const project = ((result.data) as GeometryData).project;
       if(project) {
@@ -277,7 +284,6 @@ class FormLab {
       element('scene-title').textContent =
         project?.title ?? this.name.toUpperCase();
       element('example-kind').textContent = project?.info ?? 'PROCEDURAL STUDY';
-      this.inspection.update(result.data, this.shouldFrame);
       this.shouldFrame = false;
       this.parameters.update(result.data.parameters, this.overrides);
       this.filterParameters();
