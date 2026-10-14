@@ -1,0 +1,41 @@
+# PARAMETRIC BRIDGE
+project meta(name="Parametric bridge", info="RUNTIME RECIPE / 001", title="GIVE AN IDEA SOME ROOM.")
+
+# The editor and a game supply these same inputs.
+param start = vector(-8, 2, 0) meta(min=-20, max=20, step=0.1)
+param end = vector(8, 2, 0) meta(min=-20, max=20, step=0.1)
+param count = 24 meta(min=4, max=64, step=1)
+param width = 3 meta(min=1, max=6, step=0.1)
+param sag = 2 meta(min=0, max=6, step=0.1)
+param variation = 0.08 meta(min=0, max=0.4, step=0.01)
+param random_seed = 42 meta(min=1, max=9999, step=1)
+param tint = rgba(0.93, 0.42, 0.22, 1)
+param plank = meshBox(1, 0.18, 1)
+param finish = materialPbr(tint, 0.15, 0.55)
+
+seed(random_seed)
+color(1, 1, 1)
+let dx = end.x - start.x
+let dz = end.z - start.z
+let span = sqrt(dx*dx + dz*dz)
+let heading = -atan2(dz, dx)
+
+repeat count as i {
+  let t = i / (count - 1)
+  let px = mix(start.x, end.x, t)
+  let py = mix(start.y, end.y, t) - sin(t*pi)*sag
+  let pz = mix(start.z, end.z, t)
+  let slope = atan2(end.y - start.y - cos(t*pi)*pi*sag, max(span, 0.01))
+  with userData({kind: "bridge-plank", index: i, spanPosition: t}) {
+    instance(plank, vector(px, py, pz),
+      vector((rand() - 0.5)*variation, heading, slope),
+      vector(max(span, 0.1)/count*0.9, 1, width), finish)
+  }
+}
+
+# Reusable geometry can also be deformed before instancing.
+let support = deform(meshBox(0.35, 3, 0.35), x, y + 1.5, z)
+material(finish)
+with userData({kind: "bridge-support", endpoint: "start"}) { instance(support, start) }
+with userData({kind: "bridge-support", endpoint: "end"}) { instance(support, end) }
+

@@ -7,6 +7,8 @@ import type { Extension } from '@codemirror/state';
 import { EditorState } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { syntaxHighlighting, HighlightStyle, bracketMatching } from '@codemirror/language';
+import type { ScriptLanguageCatalog } from 'joy-engine/scripting';
+import { scriptLanguageTools } from './script-language-tools.ts';
 
 export { StreamLanguage } from '@codemirror/language';
 
@@ -19,6 +21,7 @@ export function createScriptEditor(options: {
     parent: HTMLElement;
     source: string;
     language: Extension;
+    languageInformation?: ScriptLanguageCatalog;
     label: string;
     readOnly?: boolean;
     background?: string;
@@ -33,7 +36,7 @@ export function createScriptEditor(options: {
  * Create replacement state to reset history when the owner switches documents.
  * @param options
  */
-export function createScriptEditorState({ source, language, label, onChange, onRun, onCursor, readOnly = false, background = 'var(--joy-script, #0c1522)' }: Parameters<typeof createScriptEditor>[0]) {
+export function createScriptEditorState({ source, language, languageInformation, label, onChange, onRun, onCursor, readOnly = false, background = 'var(--joy-script, #0c1522)' }: Parameters<typeof createScriptEditor>[0]) {
   return EditorState.create({
     doc: source,
     extensions: [
@@ -46,6 +49,7 @@ export function createScriptEditorState({ source, language, label, onChange, onR
       highlightActiveLineGutter(),
       bracketMatching(),
       language,
+      ...(languageInformation && !readOnly ? [scriptLanguageTools(languageInformation)] : []),
       syntaxHighlighting(HighlightStyle.define([
         { tag: tags.comment, color: 'var(--joy-script-comment, #90a4bf)' },
         { tag: tags.keyword, color: 'var(--joy-script-keyword, #ff9b70)' },
@@ -86,6 +90,9 @@ export function createScriptEditorState({ source, language, label, onChange, onR
         '.cm-activeLineGutter': { color: 'var(--joy-orange, #ed6c39)', backgroundColor: 'var(--joy-surface, #21324a)' },
         '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--joy-surface, #21324a) 40%, transparent)' },
         '.cm-script-parameter': { color: 'var(--joy-script-parameter, #87dce3)' },
+        '.cm-script-tooltip': { maxWidth: '420px', padding: '8px 10px' },
+        '.cm-script-tooltip strong': { color: 'var(--joy-script-function, #ffd166)', fontFamily: 'monospace' },
+        '.cm-script-tooltip p': { margin: '6px 0 0', lineHeight: '1.4' },
         '.cm-cursor': { borderLeftColor: 'var(--joy-cream, #fff3cf)' },
         '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': { backgroundColor: 'var(--joy-selection, #47607b)' },
       }, { dark: true }),

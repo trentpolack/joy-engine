@@ -29,3 +29,4 @@ export type { DataValue } from './user-data.ts';
 export type { UserData } from './user-data.ts';
 
 export { createFormMeshAsset } from './mesh-asset.ts';
+export { FORM_LANGUAGE_CATALOG } from './language-information.ts';

@@ -1,0 +1,58 @@
+# TACTICAL TERRACES
+project meta(name="Tactical terraces", info="GAMEPLAY / GRID", title="MAKE EVERY TILE MATTER.")
+
+param rows = 8 meta(min=3, max=12, step=1)
+param columns = 8 meta(min=3, max=12, step=1)
+param cellSize = 1.5 meta(min=1, max=2.5, step=0.1)
+param elevation = 3 meta(min=0.5, max=5, step=0.1)
+param waterLevel = 1.5 meta(min=0, max=3, step=0.1)
+param random_seed = 19 meta(min=1, max=9999, step=1)
+
+let tiles = geometry()
+addAttribute(tiles,"points","height",0)
+addAttribute(tiles,"points","walkable",1)
+addAttribute(tiles,"points","moveCost",1)
+addAttribute(tiles,"points","scale",vector(1,1,1))
+color(tiles,rgba(1,1,1,1))
+repeat rows as row {
+  repeat columns as column {
+    let field = noise(column*0.3,row*0.3,random_seed)
+    let height = 0.3 + floor((field + 1)*elevation*2)/4
+    let id = addPoint(tiles,vector((column - (columns - 1)/2)*cellSize,height,(row - (rows - 1)/2)*cellSize))
+    let tileData = {
+      kind: "tile",
+      id: id,
+      grid: {x: column, z: row},
+      cellSize: cellSize
+    }
+    setUserData(tiles,id,tileData)
+    setAttribute(tiles,"points","height",id,height)
+  }
+}
+wrangle points in tiles as tile {
+  # Higher tiles cost more to cross.
+  tile.moveCost = 1 + tile.height/elevation
+  tile.walkable = 1
+  tile.color = mix(rgba(0.25,0.48,0.32,1),rgba(0.85,0.71,0.4,1),clamp(tile.height/elevation,0,1))
+  if tile.height < waterLevel {
+    tile.walkable = 0
+    tile.color = rgba(0.15,0.39,0.58,1)
+  }
+  tile.scale = vector(cellSize*0.94,tile.height,cellSize*0.94)
+}
+inspect("Tiles",tiles)
+
+# Choose "Tiles" to inspect the grid. Each tile has an ID and X/Z grid coordinates.
+# A game can use walkable (1 = yes, 0 = no) and moveCost to plan movement.
+# Track units and buildings by tile ID. Rebuild that list if the grid size changes.
+# Try raising waterLevel to see which tiles become blocked.
+
+# Build downward so each tile's position stays at the top of its column.
+let columnMesh = box(1,1,1)
+translate(columnMesh,vector(0,-0.5,0))
+output("Terrain columns",instances(columnMesh,tiles))
+let water = box(columns*cellSize,0.06,rows*cellSize)
+translate(water,vector(0,waterLevel - 0.03,0))
+color(water,rgba(0.1,0.33,0.48,0.65))
+output("Water",water)
+

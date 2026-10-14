@@ -1,0 +1,34 @@
+# VESSEL WORKSHOP
+project meta(name="Vessel workshop", info="PROFILE / PROP STUDY", title="SHAPE A FAMILY.")
+
+param height = 5 meta(min=2, max=8, step=0.1)
+param belly = 2 meta(min=0.8, max=3, step=0.1)
+param neck = 0.7 meta(min=0.3, max=1.5, step=0.05)
+param flutes = 8 meta(min=0, max=16, step=1)
+param detail = 48 meta(min=12, max=64, step=4)
+param tint = rgba(0.92, 0.43, 0.24, 1)
+
+# Profile points run bottom to top: X is radius, Y is height.
+# A radius-zero first point closes the base; the mouth stays open.
+let profile = geometry()
+addPoint(profile, vector(0, 0, 0))
+addPoint(profile, vector(belly*0.6, 0, 0))
+addPoint(profile, vector(belly, height*0.25, 0))
+addPoint(profile, vector(belly*0.85, height*0.55, 0))
+addPoint(profile, vector(neck, height*0.82, 0))
+addPoint(profile, vector(neck*1.15, height, 0))
+let vessel = revolve(profile, detail)
+repeat pointCount(vessel) as i {
+  setUserData(vessel, i, {kind: "vessel-surface", profile: "sculpted"})
+}
+color(vessel, tint)
+wrangle points in vessel as element {
+  let angle = atan2(element.position.z, element.position.x)
+  let ripple = 1 + sin(angle*flutes)*0.05
+  element.position = vector(element.position.x*ripple, element.position.y, element.position.z*ripple)
+  element.color = mix(tint, rgba(0.98,0.78,0.47,1), element.position.y/height*0.55)
+}
+let finished = smoothNormals(vessel)
+output("Vessel", finished)
+inspect("Profile", profile)
+

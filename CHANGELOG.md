@@ -2,9 +2,21 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-14-2026
+### FORM LAB
+- Kept all four DESIGN MODE frame edges visible above editor panels without blocking selection or changing the layout.
+- Moved twelve full examples out of TypeScript into `assets/examples/*.form`; recursively discovered FORM and FORMLAB files from `assets/examples` and `assets/form`, grouped them by folder, and preserved document resources when opening independent working copies.
+- Restored header hover feedback and orange DESIGN styling with Escape cleanup, moved View beside Tools, and hid file destination controls when no native picker is available.
+- Aligned the relocated tool menu to open to the right, keeping it inside narrower viewports.
+- Simplified the header and removed the footer; added save/export dialogs with direct `.form` source saving, explicit `.formlab` document preservation, and native location selection with a browser download fallback.
+- Added persistent Script, Preview, and Inspector visibility through an always-reachable View menu, preserving hidden panel state and keeping at least one panel visible.
+
 ## 10-13-2026
 ### Gameplay navigation
 - Added `searchGrid` and `traceGridRoute`: deterministic weighted reachability and cheapest-route tracing over caller-defined grid cells, with stable equal-cost tie-breaking and a bounded cell limit.
+
+### Lab Scripting
+- Added editor-neutral FORM and particle language catalogs plus shared CodeMirror completion and hover tooling for FORM LAB, PARTICLE LAB, and future scripting surfaces.
 
 ### Scene frame assembly
 - Split scene-effect attachment preparation into documented motion, surface, and lighting stages while preserving update order and resource cleanup.

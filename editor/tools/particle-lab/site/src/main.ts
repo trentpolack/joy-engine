@@ -1420,7 +1420,10 @@ const workspaceBridge = connectWorkspaceTool({
 application.initialize();
 const components = new JoyComponentRegistry();
 if(import.meta.env.DEV) {
-  void import('../../../../src/design-mode.ts').then(({JoyDesignMode}) => {
+  void import('../../../../src/design-mode.ts').then(({JoyDesignMode, isDesignComparisonFrame}) => {
+    if(isDesignComparisonFrame()) {
+      return;
+    }
     const toggleHost = document.querySelector<HTMLElement>('.app-header nav[aria-label="Document actions"]');
     if(!toggleHost) {
       throw new Error('Design mode requires a header container.');

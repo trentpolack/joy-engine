@@ -28,10 +28,17 @@ The workspace, level editor, shared browser controls, and FORM/PARTICLE LAB impl
 
 Shared editor chrome and desktop-launch behavior live at this level. Tool-specific source, assets, tests, and build configuration live in [`tools/`](tools/).
 
+## Shared Script Editing
+FORM LAB and PARTICLE LAB use the shared CodeMirror owner exported by `@joy-games/joy-editor`. Editable scripting surfaces opt into an editor-neutral Joy Engine language catalog to receive the same completion and hover behavior without copying built-in names into each tool. Language definitions remain in Joy Engine's non-rendering FORM and particle modules; CodeMirror adaptation, tooltip presentation, and editor lifecycle remain in Joy Editor.
+
+Built-in completion opens while typing and with Ctrl+Space. Function completion inserts a call with the cursor inside its parentheses. Hovering a known keyword, function, field, or input displays its catalog documentation. JSON and other read-only surfaces do not enable scripting-language tools.
+
 ## Shared design system
 Joy Editor, FORM LAB, and PARTICLE LAB consume the component styles exported by `@joy-games/joy-editor/components`. The generated `src/joy-tokens.css` is sourced from the JoyGames root `joy-tokens.json`; run `npm run design:tokens` from that workspace after changing a token. This keeps the portable JSON source suitable for native application generators while giving browser tools ordinary CSS custom properties.
 
-Development builds expose a **DESIGN** control in the header. Open it for instructions, then select an element to inspect its shared component classes, matching stylesheet, selector, and resolved Joy tokens. Close it with **Close**, **DESIGN**, or Escape to clear the selection outline. Drag across a selected element to persist a width override through the development server; Vite accepts writes only to CSS beneath the active tool root and reloads the page. **COMPARE TOOLS** tiles the workspace and both labs. The module is dynamically imported behind `import.meta.env.DEV`, and its server plugin uses Vite's serve-only lifecycle, so neither interface nor write endpoint ships in production builds.
+Development builds expose a **DESIGN** control in the header. The active state uses an orange frame and an unobtrusive exit label; select an element to open its shared component classes, matching stylesheet, selector, and resolved Joy tokens. Close it with **Close**, **DESIGN**, or Escape to clear the selection outline. Drag across a selected element to persist a width override through the development server; Vite accepts writes only to CSS beneath the active tool root and reloads the page. The test-only **COMPARE TOOLS** action is available with the `?joy-compare-tools` query and cannot recursively activate inside its comparison frames. The module is dynamically imported behind `import.meta.env.DEV`, and its server plugin uses Vite's serve-only lifecycle, so neither interface nor write endpoint ships in production builds.
+
+Shared editor availability lives in the hosting workspace's `joy.joyconfig`; shared visual tokens live in `joy-tokens.json` and generate `src/joy-tokens.css`. Lab documents do not copy either configuration source.
 
 ## Production availability
 [`joy.joyconfig`](https://github.com/trentpolack/JoyGames/blob/develop/joy.joyconfig) controls which editors ship in production. Development commands always enable all three editors. Restart development servers after changing the file; rebuild before publishing production changes.

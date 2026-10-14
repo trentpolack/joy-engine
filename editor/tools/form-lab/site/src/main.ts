@@ -30,11 +30,24 @@ import {COMPILING_PHASE,STARTUP_TIMEOUT_MILLISECONDS,EXECUTION_TIMEOUT_MILLISECO
 import { ParameterControls, updateRangeFill } from '../../src/parameter-controls.ts';
 import { createEditor } from '../../src/editor.ts';
 import { Viewport } from '../../src/rendering/viewport.ts';
-import { EXAMPLES } from '../../src/examples.ts';
-import { readDocument, serializeDocument, download, fileStem } from '../../src/document.ts';
+import {FORM_ASSETS, createInitialFormDocument} from './form-assets.ts';
+import {openFormLibraryAsset} from '../../src/form-library.ts';
+import { readDocument, serializeDocument, fileStem } from '../../src/document.ts';
 import { DOCUMENT_LIMITS } from 'joy-engine/form';
 import { exportObj, exportPly } from '../../src/export.ts';
+import {ArtifactDialog, type ArtifactFormat} from '../../src/artifact-dialog.ts';
 export type { GeometryData };
+
+const SAVE_FORMATS: readonly ArtifactFormat[] = [
+  {id: 'form', label: 'FORM script (.form)', mime: 'text/plain', description: 'Editable script source. Inspector overrides, named variants, imported meshes, and document materials are not included. Edit script defaults to keep tuned values in this file.'},
+  {id: 'formlab', label: 'FORM LAB document (.formlab)', mime: 'application/json', description: 'Script, parameter overrides, materials, imported meshes, and named variants. Opens in FORM LAB and Joy Editor; Joy Engine can rebuild it as a scene asset.'}
+];
+const EXPORT_FORMATS: readonly ArtifactFormat[] = [
+  {id: 'glb', label: 'GLB (.glb)', mime: 'model/gltf-binary', description: 'Baked geometry with authored materials and textures. Does not include the procedural script.'},
+  {id: 'obj', label: 'OBJ (.obj)', mime: 'text/plain', description: 'Baked geometry without materials or the procedural script.'},
+  {id: 'ply', label: 'PLY (.ply)', mime: 'text/plain', description: 'Baked mesh and point data for geometry tools. Does not include the procedural script.'},
+  {id: 'json', label: 'Geometry data (.json)', mime: 'application/json', description: 'Generated geometry and metadata for custom integrations. This is not an editable FORM LAB document.'}
+];
 
 /** Composition root: owns document, editor, worker and viewport lifetimes. */
 class FormLab {
@@ -60,6 +73,7 @@ class FormLab {
   declare variants: VariantControls;
   declare numeric: NumericControls;
   declare layout: WorkspaceLayout;
+  declare artifactDialog: ArtifactDialog;
 
   constructor() {
     element('tool-version').textContent = version;
@@ -94,15 +108,17 @@ class FormLab {
     );
     this.listeners = new AbortController();
     guardNumberScroll(document, this.listeners.signal);
-    this.panelLayout = new PanelLayout(((document.querySelector('.workbench')) as HTMLElement), {left:  ((document.querySelector('.editor-panel')) as HTMLElement), right:  ((document.querySelector('.inspector')) as HTMLElement), center:  ((document.querySelector('.preview-panel')) as HTMLElement), key: 'joy-editor-panels-form-v2', leftWidth: 320, rightWidth: 260, maximizeMode: 'workspace', onMaximize: requestWorkspaceMaximize});
+    this.panelLayout = new PanelLayout(((document.querySelector('.workbench')) as HTMLElement), {left:  ((document.querySelector('.editor-panel')) as HTMLElement), right:  ((document.querySelector('.inspector')) as HTMLElement), center:  ((document.querySelector('.preview-panel')) as HTMLElement), key: 'joy-editor-panels-form-v2', leftWidth: 320, rightWidth: 260, visibilityHost: element('panel-visibility-controls'), maximizeMode: 'workspace', onMaximize: requestWorkspaceMaximize});
+    this.artifactDialog = new ArtifactDialog(element('artifact-dialog') as HTMLDialogElement);
     const saved = this.restore();
+    const initial = saved ?? createInitialFormDocument();
+    this.name = initial.name;
+    this.overrides = Object.assign(Object.create(null), initial.overrides);
     if(saved) {
-      this.name = saved.name;
-      this.overrides = Object.assign(Object.create(null), saved.overrides);
       // Autosave may be the only copy; retain replacement protection on reload.
       this.hasEdits = true;
     }
-    this.materials = readMaterials(saved?.materials);
+    this.materials = readMaterials(initial.materials);
     this.materialControls = new MaterialControls(element('materials'), materials => {
       this.materials = materials;
       this.changed();
@@ -110,7 +126,7 @@ class FormLab {
     this.materialControls.setMaterials(this.materials);
     this.editor = createEditor(
       element('editor'),
-      saved?.source ?? EXAMPLES[0].source,
+      initial.source,
       () => this.changed(),
       () => this.compile(),
       (line, column) => {
@@ -140,7 +156,7 @@ class FormLab {
     }, variants => {
       serializeDocument({...this.document(), variants});
     });
-    this.variants.setVariants(saved?.variants ?? []);
+    this.variants.setVariants(initial.variants ?? []);
     this.numeric = new NumericControls(element('parameters'), this.listeners.signal, {
       read: () => JSON.stringify(Object.fromEntries(Object.entries(this.overrides).filter(([,value]) => isPropertyOverride(value)))),
       commit: input => this.parameters.changeInput(input, 'number'),
@@ -437,52 +453,51 @@ class FormLab {
       { signal },
     );
     const select = ((element('examples')) as HTMLSelectElement);
-    EXAMPLES.forEach((example, index) => {
+    const folders = new Map<string, HTMLOptGroupElement>();
+    for(const asset of FORM_ASSETS) {
+      let group = folders.get(asset.folder);
+      if(!group) {
+        group = document.createElement('optgroup');
+        group.label = asset.folder;
+        folders.set(asset.folder, group);
+        select.append(group);
+      }
       const option = document.createElement('option');
-      option.value = String(index);
-      option.textContent = example.name;
-      select.append(option);
-    });
+      option.value = asset.path;
+      option.textContent = asset.filename;
+      option.title = asset.path;
+      group.append(option);
+    }
     select.addEventListener(
       BROWSER_EVENT.CHANGE,
       () => {
         if(select.value === '') {
           return;
         }
-        const index = Number(select.value),
-          example = EXAMPLES[index];
+        const asset = FORM_ASSETS.find(asset => asset.path === select.value);
+        if(!asset) {
+          return;
+        }
         if(
           this.hasEdits &&
           !confirm(
-            'Replace this study with an example? Save project first if you want to keep your edits.',
+            'Replace this study with an example? Save first if you want to keep your edits.',
           )
         ) {
           select.value = '';
           return;
         }
-        this.load({
-          version: 1,
-          name: example.name,
-          source: example.source,
-          overrides: {},
-        });
-        select.value = '';
+        try {
+          this.load(openFormLibraryAsset(asset));
+        } catch(error) {
+          this.status(`Could not open ${asset.path}: ${error instanceof Error ? error.message : String(error)}`, 'error');
+        } finally {
+          select.value = '';
+        }
       },
       { signal },
     );
-    click('save', () => {
-      try {
-        this.numeric.capture();
-        this.materialControls.capture();
-        const text = serializeDocument(this.document());
-        download(`${fileStem(this.name)}.formlab`, text, 'application/json');
-        this.hasEdits = false;
-        element('save-state').hidden = false;
-        element('save-state').textContent = 'Project download requested';
-      } catch (error) {
-        this.status(`Save failed: ${error instanceof Error ? error.message : String(error)}`, 'error');
-      }
-    });
+    click('save', () => this.save());
     click('open', () => input('file-input').click());
     input('file-input').addEventListener(
       BROWSER_EVENT.CHANGE,
@@ -513,7 +528,7 @@ class FormLab {
           if(
             this.hasEdits &&
             !confirm(
-              'Replace this study with the opened file? Save project first to keep your edits.',
+              'Replace this study with the opened file? Save first to keep your edits.',
             )
           ) {
             return;
@@ -530,7 +545,22 @@ class FormLab {
       },
       { signal },
     );
-    click('export', () => this.export());
+    click('export', () => this.artifactDialog.open({
+      title: 'Export', name: fileStem(this.name), formats: EXPORT_FORMATS, opener: button('export'),
+      produce: format => this.export(format)
+    }));
+    const visibilityMenu = element('panel-visibility') as HTMLDetailsElement;
+    document.addEventListener(BROWSER_EVENT.POINTERDOWN, event => {
+      if(!visibilityMenu.contains(event.target as Node)) {
+        visibilityMenu.open = false;
+      }
+    }, {signal});
+    document.addEventListener(BROWSER_EVENT.KEYDOWN, event => {
+      if(event.key === 'Escape' && visibilityMenu.open) {
+        visibilityMenu.open = false;
+        visibilityMenu.querySelector('summary')?.focus();
+      }
+    }, {signal});
     const dialog = ((
       element('reference-dialog')) as HTMLDialogElement
     );
@@ -542,19 +572,6 @@ class FormLab {
     });
     click('reference-link', () => dialog.showModal());
     click('close-help', () => dialog.close());
-    window.addEventListener(
-      BROWSER_EVENT.KEYDOWN,
-      (event) => {
-        if(
-          (event.ctrlKey || event.metaKey) &&
-          event.key.toLowerCase() === 's'
-        ) {
-          event.preventDefault();
-          button('save').click();
-        }
-      },
-      { signal },
-    );
   }
   /** @param mode */
   setMode(mode: string) {
@@ -567,17 +584,9 @@ class FormLab {
       button(id).setAttribute('aria-pressed', String(mode === value));
     }
     this.viewport.invalidate();
-    if(
-      mode === FORM_VIEW_MODE.POINTS &&
-      this.data &&
-      this.data.positions.length / 3 > 40000
-    ) {
-      element('footer-status').textContent =
-        'POINT PREVIEW SAMPLED · EXPORT CONTAINS ALL DATA';
-    } else {
-      element('footer-status').textContent =
-        'LOCAL WORKSPACE · NO CLOUD REQUIRED';
-    }
+    element('point-count').title = mode === FORM_VIEW_MODE.POINTS
+      ? 'Point preview samples at most 40,000 markers. Exports contain every point.'
+      : 'Total points in the accepted build.';
   }
   /** @param doc */
   load(doc: FormDocument) {
@@ -657,11 +666,11 @@ class FormLab {
       localStorage.setItem('joy-form-lab-v1', JSON.stringify(this.document()));
       element('save-state').hidden = false;
       element('save-state').textContent = 'Browser recovery updated';
-      element('save-state').title = 'Recovery stays in this browser. Save project downloads an editable .formlab document; it does not update an opened file on disk.';
+      element('save-state').title = 'Recovery stays in this browser. Save a .form script, or choose .formlab to include inspector overrides, materials, and variants.';
     } catch {
       element('save-state').hidden = false;
       element('save-state').textContent =
-        'Browser recovery unavailable · use Save project';
+        'Browser recovery unavailable · use Save';
     }
   }
   restore() {
@@ -675,21 +684,42 @@ class FormLab {
       return null;
     }
   }
-  export() {
-    if(!this.data) {
-      return;
-    }
-    const format = ((element('export-format')) as HTMLSelectElement)
-      .value;
-    if(format === 'glb') {
-      try {
-        download(`${fileStem(this.name)}.glb`, exportGlb(this.data), 'model/gltf-binary');
-      } catch (error) {
-        this.status(error instanceof Error ? error.message : String(error), 'error');
+  /** Save source explicitly, or retain all authored document state in a FORM LAB file. */
+  save() {
+    this.artifactDialog.open({
+      title: 'Save', name: fileStem(this.name), formats: SAVE_FORMATS, opener: button('save'),
+      produce: format => {
+        if(format === 'form') {
+          return this.editor.state.doc.toString();
+        }
+        this.numeric.capture();
+        this.materialControls.capture();
+        return serializeDocument(this.document());
+      },
+      completed: (format, contents, saved) => {
+        // A source-only save must not discard replacement protection for unsaved inspector data.
+        const current = this.document();
+        const sourceOnly = Object.keys(current.overrides).length === 0 && !current.variants?.length
+          && JSON.stringify(current.materials) === JSON.stringify(readMaterials(undefined));
+        if((format === 'formlab' && contents === serializeDocument(current))
+          || (format === 'form' && contents === current.source && sourceOnly)) {
+          this.hasEdits = false;
+        }
+        element('save-state').hidden = false;
+        element('save-state').textContent = `${format === 'form' ? 'FORM script' : 'FORM LAB document'} ${saved ? 'saved' : 'download requested'}`;
       }
-      return;
+    });
+  }
+
+  /** Capture the last accepted build; pending or failed source never replaces it. */
+  export(format: string): string | ArrayBuffer {
+    if(!this.data) {
+      throw new Error('Build geometry before exporting.');
     }
-    const text =
+    if(format === 'glb') {
+      return exportGlb(this.data);
+    }
+    return (
       format === 'obj'
         ? exportObj(this.data)
         : format === 'ply'
@@ -704,11 +734,7 @@ class FormLab {
               },
               null,
               2,
-            );
-    download(
-      `${fileStem(this.name)}.${format}`,
-      text,
-      format === 'json' ? 'application/json' : 'text/plain',
+            )
     );
   }
   /** Keep the badge tied to the geometry on screen, including failed and cancelled builds.
@@ -728,7 +754,7 @@ class FormLab {
   updateExportNote(stale: boolean) {
     element('export-note').textContent = stale
       ? 'Changes pending or build failed. Export uses the previous successful build, without the recipe.'
-      : 'Export uses the last successful build, without the recipe. Save the document to keep editable source. GLB includes materials; OBJ omits them.';
+      : 'Export uses the last successful build. Save keeps editable source; export does not.';
   }
   /** @param message @param [state] */
   status(message: string, state: string = '') {
@@ -749,6 +775,7 @@ class FormLab {
     this.disposed = true;
     this.cancelCompilation();
     this.panelLayout?.destroy();
+    this.artifactDialog.destroy();
     this.listeners.abort();
     this.parameters.destroy();
     this.materialControls.destroy();
@@ -785,6 +812,8 @@ const navigation = mountEditorNavigation({
   openButton: button('open'),
   saveButton: button('save')
 });
+// Visibility belongs beside the tool switcher; file actions remain at the right.
+document.querySelector('.joy-editor-navigation')?.after(element('panel-visibility'));
 let workspacePath = '';
 const workspaceBridge = connectWorkspaceTool({
   maximized: value => app.panelLayout.setMaximized(value),
@@ -807,7 +836,10 @@ const workspaceBridge = connectWorkspaceTool({
 void app.start();
 const components = new JoyComponentRegistry();
 if(import.meta.env.DEV) {
-  void import('../../../../src/design-mode.ts').then(({JoyDesignMode}) => {
+  void import('../../../../src/design-mode.ts').then(({JoyDesignMode, isDesignComparisonFrame}) => {
+    if(isDesignComparisonFrame()) {
+      return;
+    }
     const toggleHost = document.querySelector<HTMLElement>('.app-header nav[aria-label="Document actions"]');
     if(!toggleHost) {
       throw new Error('Design mode requires a header container.');

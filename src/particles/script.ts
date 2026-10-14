@@ -71,6 +71,31 @@ export const PARTICLE_INPUTS = Object.freeze([
   'tau',
 ]);
 
+/** Function names and accepted argument counts are shared with authoring tools. */
+export const PARTICLE_FUNCTION_ARITIES: Readonly<Record<string, readonly number[]>> = Object.freeze({
+  sin: [1],
+  cos: [1],
+  tan: [1],
+  abs: [1],
+  sqrt: [1],
+  floor: [1],
+  ceil: [1],
+  round: [1],
+  exp: [1],
+  log: [1],
+  min: [2],
+  max: [2],
+  pow: [2],
+  atan2: [2],
+  clamp: [3],
+  mix: [3],
+  smoothstep: [3],
+  rand: [0, 2],
+  noise: [1],
+  vector: [3],
+  rgba: [4]
+});
+
 /** Source location survives transport to an editor's diagnostic view. */
 export class ParticleScriptError extends Error {
   declare name: string;
@@ -364,7 +389,7 @@ class Parser {
   functionExpression(token: Token, args: Expression[]): Expression {
     if(token.text === PARTICLE_VALUE_KIND.VECTOR || token.text === 'rgba') {
       const kind = token.text === PARTICLE_VALUE_KIND.VECTOR ? PARTICLE_VALUE_KIND.VECTOR : PARTICLE_VALUE_KIND.COLOR;
-      if(args.length !== componentNames(kind).length) {
+      if(!PARTICLE_FUNCTION_ARITIES[token.text].includes(args.length)) {
         throw new ParticleScriptError(`Wrong argument count for ${token.text}`, token);
       }
       for(const argument of args) {
@@ -471,32 +496,32 @@ for(const name of  (([
   'exp',
   'log',
 ]) as const)) {
-  FUNCTIONS.set(name, { arities: [1], call: (args) => Math[name](args[0]) });
+  FUNCTIONS.set(name, { arities: [...PARTICLE_FUNCTION_ARITIES[name]], call: (args) => Math[name](args[0]) });
 }
 for(const name of  ((['min', 'max', 'pow', 'atan2']) as const)) {
   FUNCTIONS.set(name, {
-    arities: [2],
+    arities: [...PARTICLE_FUNCTION_ARITIES[name]],
     call: (args) => Math[name](args[0], args[1]),
   });
 }
 FUNCTIONS.set('clamp', {
-  arities: [3],
+  arities: [...PARTICLE_FUNCTION_ARITIES.clamp],
   call: ([value, min, max]) => Math.max(min, Math.min(max, value)),
 });
-FUNCTIONS.set('mix', { arities: [3], call: ([a, b, t]) => a + (b - a) * t });
+FUNCTIONS.set('mix', { arities: [...PARTICLE_FUNCTION_ARITIES.mix], call: ([a, b, t]) => a + (b - a) * t });
 FUNCTIONS.set('smoothstep', {
-  arities: [3],
+  arities: [...PARTICLE_FUNCTION_ARITIES.smoothstep],
   call: ([a, b, x]) => {
     const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
     return t * t * (3 - 2 * t);
   },
 });
 FUNCTIONS.set('rand', {
-  arities: [0, 2],
+  arities: [...PARTICLE_FUNCTION_ARITIES.rand],
   call: (args, random) => (args.length ? args[0] + random() * (args[1] - args[0]) : random()),
 });
 FUNCTIONS.set('noise', {
-  arities: [1],
+  arities: [...PARTICLE_FUNCTION_ARITIES.noise],
   call: ([x]) => {
     const cell = Math.floor(x);
     const t = x - cell;

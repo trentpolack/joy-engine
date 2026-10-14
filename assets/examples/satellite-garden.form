@@ -1,0 +1,17 @@
+# SATELLITE GARDEN
+project meta(name="Satellite garden", info="GEOMETRY / 004", title="A LITTLE SPACE TO PLAY.")
+
+param count = 36 meta(min=6, max=80, step=1)
+param loops = 3 meta(min=1, max=8, step=1)
+param offset = vector(0, 0, 0) meta(min=-5, max=5, step=0.1)
+param radius = 6 meta(min=2, max=10, step=0.1)
+
+repeat count as i {
+  let t = i/count
+  let a = t*tau*loops
+  let satellite = meshSphere((t*0.55) + 0.25, 16)
+  color(0.95, 0.35 + t*0.45, 0.2 + t*0.4)
+  with userData({kind: "satellite", index: i, orbit: {turns: loops, phase: t}}) {
+    instance(satellite, vector(cos(a)*radius + offset.x, (t - 0.5)*14 + offset.y, sin(a)*radius + offset.z))
+  }
+}

@@ -25,6 +25,8 @@
     "./development/preview": "./src/development/connect-editor-preview.ts",
     "./development/vite": "./src/development/vite.ts",
     "./post-processing": "./src/post-processing.ts",
+    "./scripting": "./src/scripting/index.ts",
+    "./particles/scripting": "./src/particles/scripting.ts",
     "./shaders/*": "./shaders/*",
     "./dev/widget-theme.css": "./src/browser/dev-widget-theme.css",
     "./dev/post-processing": "./src/browser/post-processing/editor.ts",

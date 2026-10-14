@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import { BROWSER_EVENT } from 'joy-engine/constants';
+import { PARTICLE_LANGUAGE_CATALOG } from 'joy-engine/particles/scripting';
 import type { StringStream } from '@codemirror/language';
 import type { EditorView } from '@codemirror/view';
 import { createScriptEditor, createScriptEditorState, StreamLanguage } from '@joy-games/joy-editor';
@@ -79,6 +80,7 @@ export class ParticleScriptEditor {
     parent.after(this.status);
     this.options = {
       parent, source: '', label, language: json ? jsonLanguage : particleLanguage,
+      ...(json ? {} : {languageInformation: PARTICLE_LANGUAGE_CATALOG}),
       readOnly: json,
       background: json ? 'var(--joy-surface)' : 'var(--joy-script)',
       onRun,

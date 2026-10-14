@@ -3,6 +3,13 @@
 .joy-panel-layout .layout-left { grid-column: 1; }
 .joy-panel-layout .layout-center { grid-column: 2; }
 .joy-panel-layout .layout-right { grid-column: 3; }
+.joy-panel-layout.layout-left-collapsed .layout-left,
+.joy-panel-layout.layout-right-collapsed .layout-right { display: none !important; }
+.joy-panel-layout.layout-center-collapsed .layout-center { display: none !important; }
+.joy-panel-layout.layout-center-collapsed { grid-template-columns: minmax(0, 1fr) 0 minmax(0, 1fr) !important; }
+.joy-panel-layout.layout-center-collapsed.layout-left-collapsed { grid-template-columns: 0 0 minmax(0, 1fr) !important; }
+.joy-panel-layout.layout-center-collapsed.layout-right-collapsed { grid-template-columns: minmax(0, 1fr) 0 0 !important; }
+.layout-panel-toggle[aria-pressed='false'] { opacity: .68; border-style: dashed; }
 .layout-divider { position: absolute; width: 10px; z-index: 8; cursor: col-resize; touch-action: none; }
 .layout-divider:hover, .layout-divider:focus-visible { background: #ed6c3970; outline: 1px solid #ed6c39; }
 .panel-resizing iframe, .panel-resizing canvas { pointer-events: none; }
