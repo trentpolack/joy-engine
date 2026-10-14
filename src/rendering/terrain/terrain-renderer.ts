@@ -10,27 +10,54 @@ import {
   GPU_VERTEX_FORMAT,
   SHADER_ENTRY_POINT
 } from '../gpu/constants.ts';
-import type { TextureFormatColor, BindingDeclaration, RenderPass, Device, ComputePipeline, Shader, RenderPipeline, VertexArray, Texture } from '@luma.gl/core';
-import type { TerrainView, TerrainSelection } from './terrain-selection.ts';
-import type { TerrainAsset } from './terrain-asset.ts';
-import { Buffer } from '@luma.gl/core';
-import { createPortableShaders } from '../gpu/gpu-device.ts';
-import { createTerrainGrid } from './terrain-grid.ts';
-import { selectTerrain, validateTerrainView } from './terrain-selection.ts';
-import { TerrainTiming } from './terrain-timing.ts';
+import type {
+  BindingDeclaration,
+  ComputePipeline,
+  Device,
+  RenderPass,
+  RenderPipeline,
+  Shader,
+  Texture,
+  TextureFormatColor,
+  VertexArray
+} from '@luma.gl/core';
+import type {
+  TerrainSelection,
+  TerrainView
+} from './terrain-selection.ts';
+import type {TerrainAsset} from './terrain-asset.ts';
+
+import {Buffer} from '@luma.gl/core';
+import {createPortableShaders} from '../gpu/gpu-device.ts';
+import {createTerrainGrid} from './terrain-grid.ts';
+import {selectTerrain, validateTerrainView} from './terrain-selection.ts';
+import {TerrainTiming} from './terrain-timing.ts';
 import wgsl from '../../../shaders/rendering/terrain/terrain.wgsl?raw';
 import vertex from '../../../shaders/rendering/terrain/terrain.vert.glsl?raw';
 import fragment from '../../../shaders/rendering/terrain/terrain.frag.glsl?raw';
 import computeSource from '../../../shaders/rendering/terrain/select.wgsl?raw';
 
+const MATRIX_COMPONENT_COUNT = 16;
+const SCENE_BUFFER_BYTES = 128;
+const PATCH_BUFFER_BYTES = 32;
+const INDIRECT_COMMAND_BYTES = 20;
+const COMPUTE_WORKGROUP_SIZE = 64;
+const WEBGL_INDEX_BYTES = 4;
+const TERRAIN_DIAGNOSTIC = {
+  MATERIAL: 0,
+  LOD_COLORS: 1,
+  GRID_OVERLAY: 2
+} as const;
+
 /**
- * Resident indexed terrain pass. Borrows device, asset and caller's depth-tested
+ * TerrainRenderer Class Definition.
+ *  Resident indexed terrain pass. Borrows device, asset, and caller's depth-tested
  * render pass. Call prepare before starting the render pass; WebGPU writes and
  * ordered compute must precede draws. Destroy before the borrowed device.
  */
 export class TerrainRenderer {
-  declare device: Device;
-  declare asset: TerrainAsset;
+  declare readonly device: Device;
+  declare readonly asset: TerrainAsset;
   declare disposed: boolean;
   declare resources: { destroy(): void; }[];
   declare grid: ReturnType<typeof createTerrainGrid>;
@@ -52,9 +79,10 @@ export class TerrainRenderer {
   declare indirect: Buffer | null;
 
   /**
-   * @param device
-   * @param asset
-   * @param [colorFormat]
+   * Create resident terrain resources and roll back all completed allocations on failure.
+   * @param device Borrowed rendering device that must outlive this renderer.
+   * @param asset Borrowed immutable terrain asset that must outlive this renderer.
+   * @param colorFormat Optional color attachment format for the render pipeline.
    */
   constructor(device: Device, asset: TerrainAsset, colorFormat?: TextureFormatColor) {
     // Borrowed dependencies outlive this renderer; only resources registered below are released here. Registration also makes partial startup safe to unwind.
@@ -84,7 +112,7 @@ export class TerrainRenderer {
     this.stats = {patches:asset.patches.length,triangles:0,maxTriangles:asset.patches.length*asset.manifest.tileCells**2*2,
       cpuMilliseconds:0,gpuMilliseconds:((null) as number | null),gpuTiming:'unsupported',
       residentCpuBytes:asset.heights.byteLength + this.grid.positions.byteLength + this.grid.indices.byteLength,
-      residentGpuBytes:0,frameUploadBytes:128,triangleCountKind:device.type === GPU_BACKEND.WEBGPU ? 'upper bound (no readback)' : 'selected'};
+      residentGpuBytes:0,frameUploadBytes:SCENE_BUFFER_BYTES,triangleCountKind:device.type === GPU_BACKEND.WEBGPU ? 'upper bound (no readback)' : 'selected'};
 
     try {
       this.timing = this.own(new TerrainTiming(device));
@@ -117,7 +145,7 @@ export class TerrainRenderer {
       this.indices = this.buffer(this.grid.indices.byteLength,Buffer.INDEX,this.grid.indices);
       this.vertexArray.setBuffer(0,this.vertices);
       this.vertexArray.setIndexBuffer(this.indices);
-      this.scene = this.buffer(128,Buffer.UNIFORM);
+      this.scene = this.buffer(SCENE_BUFFER_BYTES,Buffer.UNIFORM);
 
       // Decode the global uint16 scale here so both vertex shaders read heights
       // directly in world units. Per-patch rescaling would introduce seams.
@@ -128,8 +156,8 @@ export class TerrainRenderer {
 
       // WebGPU writes one 32-byte Patch and one 20-byte indexed draw command
       // per leaf. WebGL instead receives the same Patch fields as uniforms.
-      this.descriptors = device.type === GPU_BACKEND.WEBGPU ? this.buffer(asset.patches.length*32,Buffer.STORAGE | Buffer.COPY_SRC) : null;
-      this.indirect = device.type === GPU_BACKEND.WEBGPU ? this.buffer(asset.patches.length*20,Buffer.STORAGE | Buffer.INDIRECT | Buffer.COPY_SRC) : null;
+      this.descriptors = device.type === GPU_BACKEND.WEBGPU ? this.buffer(asset.patches.length*PATCH_BUFFER_BYTES,Buffer.STORAGE | Buffer.COPY_SRC) : null;
+      this.indirect = device.type === GPU_BACKEND.WEBGPU ? this.buffer(asset.patches.length*INDIRECT_COMMAND_BYTES,Buffer.STORAGE | Buffer.INDIRECT | Buffer.COPY_SRC) : null;
       if(device.type === GPU_BACKEND.WEBGPU) {
         // Each draw has a fixed patch ID; selection can change without uploading
         // IDs or requiring the optional indirect-first-instance feature.
@@ -174,7 +202,7 @@ export class TerrainRenderer {
         // Each WebGL draw needs its own uniform buffer: updating a single buffer
         // repeatedly before drawing would leave every patch with the last record.
         for(const patch of asset.patches) {
-          this.patchUniforms.push(this.buffer(32,Buffer.UNIFORM));
+          this.patchUniforms.push(this.buffer(PATCH_BUFFER_BYTES,Buffer.UNIFORM));
         }
       }
     } catch(error) {
@@ -189,31 +217,45 @@ export class TerrainRenderer {
    * validates shader entry points. Poll its status rather than requesting duplicate
    * compilation-info promises (the adapter already owns those diagnostics).
    */
-  async ready() {
+  async ready(): Promise<void> {
     if(this.device.type === GPU_BACKEND.WEBGL) {
       const statuses = await Promise.all(this.shaders.map(shader => shader.asyncCompilationStatus));
-      if(statuses.includes('error')) { throw new Error('Terrain GLSL compilation failed.'); }
+      if(statuses.includes('error')) {
+        throw new Error('Terrain GLSL compilation failed.');
+      }
       // WebGL's wrapper synchronizes the shared program link status at draw time.
       return;
     }
     while(this.pipeline.linkStatus === 'pending' && !this.disposed) {
       await new Promise(resolve => setTimeout(resolve,0));
     }
-    if(this.pipeline.linkStatus === 'error') { throw new Error('Terrain render pipeline validation failed.'); }
+    if(this.pipeline.linkStatus === 'error') {
+      throw new Error('Terrain render pipeline validation failed.');
+    }
   }
 
   /**
    * Update selection/morphs and enqueue compute on WebGPU. Never reads GPU data.
    * Matrix uses backend clip convention; projectionScale uses CSS pixels, so DPI
    * does not change render quality. CPU timing includes selection/submission only.
-   * @param matrix
-   * @param view
-   * @param [diagnostic] 0 material, 1 LOD colors, 2 grid overlay.
+   * @param matrix Borrowed column-major view-projection matrix using the active backend's clip convention.
+   * @param view Borrowed camera and target state; projection scale is measured in CSS pixels.
+   * @param diagnostic Diagnostic mode: 0 material, 1 LOD colors, or 2 grid overlay.
+   * @throws When the renderer is disposed or frame inputs are invalid.
    */
-  prepare(matrix: ArrayLike<number>, view: TerrainView, diagnostic: number = 0) {
-    if(this.disposed) { throw new Error('Terrain renderer disposed.'); }
+  prepare(
+    matrix: ArrayLike<number>,
+    view: TerrainView,
+    diagnostic: number = TERRAIN_DIAGNOSTIC.MATERIAL): void {
+    if(this.disposed) {
+      throw new Error('Terrain renderer disposed.');
+    }
+
     validateTerrainView(view);
-    if(matrix.length !== 16 || !Array.from(matrix).every(Number.isFinite)) { throw new Error('Invalid terrain matrix.'); }
+    if((matrix.length !== MATRIX_COMPONENT_COUNT) || !Array.from(matrix).every(Number.isFinite)) {
+      throw new Error('Invalid terrain matrix.');
+    }
+
     const start = performance.now();
     const {size,tileCells,extent,heightOffset,heightScale} = this.asset.manifest;
 
@@ -233,7 +275,7 @@ export class TerrainRenderer {
       for(const pipeline of this.compute) {
         const pass = this.device.beginComputePass();
         pass.setPipeline(pipeline);
-        pass.dispatch(Math.ceil(this.asset.patches.length/64));
+        pass.dispatch(Math.ceil(this.asset.patches.length/COMPUTE_WORKGROUP_SIZE));
         pass.end();
       }
       // Avoid readback in the frame loop; the UI labels this as an upper bound.
@@ -250,7 +292,7 @@ export class TerrainRenderer {
         this.patchUniforms[i].write(this.patchData);
         this.stats.triangles+= this.grid.ranges[selection.lod].count/3;
       });
-      this.stats.frameUploadBytes = 128 + this.patchUniforms.length*32;
+      this.stats.frameUploadBytes = SCENE_BUFFER_BYTES + this.patchUniforms.length*PATCH_BUFFER_BYTES;
     }
 
     // Submission cost and last completed GPU sample measure different work;
@@ -262,9 +304,9 @@ export class TerrainRenderer {
 
   /**
    * Draw into a borrowed pass; does not clear/submit or own its framebuffer.
-   * @param pass
+   * @param pass Borrowed active depth-tested render pass; it is not ended or submitted here.
    */
-  draw(pass: RenderPass) {
+  draw(pass: RenderPass): void {
     pass.setPipeline(this.pipeline);
     pass.setVertexArray(this.vertexArray);
 
@@ -274,14 +316,14 @@ export class TerrainRenderer {
       for(let i = 0; i < this.asset.patches.length; i++) {
         // firstInstance remains zero, avoiding the optional indirect-first-instance feature.
         pass.setBindings({scene:this.scene,heightTexture:this.heightTexture,patches:this.descriptors,drawIndex:this.patchUniforms[i]});
-        pass.drawIndexedIndirect(this.indirect,i*20);
+        pass.drawIndexedIndirect(this.indirect, i*INDIRECT_COMMAND_BYTES);
       }
     } else {
       this.selection.forEach((selection,i) => {
         pass.setBindings({scene:this.scene,heightTexture:this.heightTexture,patchUniforms:this.patchUniforms[i]});
         const range = this.grid.ranges[selection.lod];
         // luma WebGL indexed draws use firstVertex as a byte offset; WebGPU uses firstIndex.
-        pass.draw({indexCount:range.count,firstVertex:range.first*4});
+        pass.draw({indexCount: range.count, firstVertex: range.first*WEBGL_INDEX_BYTES});
       });
     }
   }
@@ -289,30 +331,44 @@ export class TerrainRenderer {
   /**
    * Release only owned resources; repeated disposal is harmless.
    */
-  destroy() {
-    if(this.disposed) { return; }
+  destroy(): void {
+    if(this.disposed) {
+      return;
+    }
     this.disposed = true;
 
     // Reverse allocation order releases dependent objects before their inputs.
     // The borrowed device and CPU heightfield remain the caller's responsibility.
-    for(const resource of this.resources.reverse()) { resource.destroy(); }
+    for(const resource of this.resources.reverse()) {
+      resource.destroy();
+    }
     this.resources.length = 0;
   }
 
   /**
-   * Register owned resources immediately so constructor rollback can release them.
-   * @private @param resource */
+   * Register an owned resource immediately so constructor rollback can release it.
+   * @param resource Newly allocated resource whose ownership transfers to this renderer.
+   * @returns The same resource for assignment at its allocation site.
+   */
   private own<T extends {
     destroy(): void;
-}>(resource: T): T { this.resources.push(resource); return resource; }
+}>(resource: T): T {
+    this.resources.push(resource);
+    return resource;
+  }
 
   /**
    * Allocate a tracked buffer with upload support; static data is written once.
-   * @private @param byteLength @param usage @param [data]
+   * @param byteLength Allocation size in bytes.
+   * @param usage Bit mask describing the buffer's GPU roles.
+   * @param data Optional borrowed initialization data written once.
+   * @returns An owned, tracked GPU buffer.
    */
   private buffer(byteLength: number, usage: number, data?: Float32Array | Uint32Array) {
     const buffer = this.own(this.device.createBuffer({byteLength,usage:usage | Buffer.COPY_DST,...((usage & Buffer.INDEX) ? {indexType:'uint32'} : {})}));
-    if(data) { buffer.write(data); }
+    if(data) {
+      buffer.write(data);
+    }
     this.stats.residentGpuBytes+= byteLength;
     return buffer;
   }

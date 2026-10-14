@@ -1,66 +1,109 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import type { Device, RenderPassProps, QuerySet } from '@luma.gl/core';
+import type {
+  Device,
+  QuerySet,
+  RenderPassProps
+} from '@luma.gl/core';
+
+const TIMESTAMP_QUERY_COUNT = 2;
+const SAMPLE_INTERVAL_MILLISECONDS = 500;
+const TIMING_STATUS = {
+  AWAITING: 'awaiting timestamp sample',
+  COMPLETE: 'render pass (compute excluded)',
+  UNSUPPORTED: 'unsupported'
+} as const;
 
 /**
- * Optional timestamp profiling for the borrowed terrain render pass. One query
- * pair is reused, with at most one asynchronous read pending and one sample per
- * 500 ms. No frame waits on results. Query-owned staging buffers are retained.
+ * TerrainTiming Class Definition.
+ *  Owns optional timestamp profiling for a borrowed terrain render pass.
+ *  One query pair is reused, at most one asynchronous read remains pending,
+ *  and no rendered frame waits for a result. Destroy before the borrowed device.
  */
-
 export class TerrainTiming {
-  declare query: QuerySet | null;
-  declare milliseconds: number | null;
-  declare status: string;
-  declare pending: boolean;
-  declare active: boolean;
-  declare lastSample: number;
-  declare disposed: boolean;
+  private query: QuerySet | null;
+  private pending = false;
+  private active = false;
+  private lastSampleMilliseconds = -Infinity;
+  private disposed = false;
 
-  /** @param device */
-  constructor(device: Device) {
-    // The caller supplies the render pass and submission; this owner only
-    // manages the query pair and the latest completed duration in milliseconds.
-    this.query = device.features.has('timestamp-query') ? device.createQuerySet({type:'timestamp',count:2}) : null;
-    this.milliseconds = ((null) as number | null);
-    this.status = this.query ? 'awaiting timestamp sample' : 'unsupported';
-    this.pending = false;
-    this.active = false;
-    this.lastSample = -Infinity;
-    this.disposed = false;
-  }
+  milliseconds: number | null = null;
+  status: string;
+
   /**
-   * Reserve a sample and return timestamp properties for the caller's next pass.
-   * @param nowMilliseconds */
-  begin(nowMilliseconds: number): Partial<RenderPassProps> {
-    // Skip instead of queueing reads: one outstanding sample bounds staging
-    // work and prevents a slow GPU from accumulating promises every frame.
-    if(!this.query || this.pending || this.active || this.disposed || nowMilliseconds - this.lastSample < 500) { return {}; }
-    this.active = true;
-    this.lastSample = nowMilliseconds;
-    return {timestampQuerySet:this.query,beginTimestampIndex:0,endTimestampIndex:1};
-  }
-  /**
-   * Call after submitting the sampled pass. Resolves without blocking rendering.
+   * Create a timing owner for a borrowed rendering device.
+   * @param device Borrowed device that must outlive this timing owner.
    */
-  async end() {
-    if(!this.active || !this.query || this.disposed) { return; }
+  constructor(device: Device) {
+    this.query = device.features.has('timestamp-query')
+      ? device.createQuerySet({
+        type: 'timestamp',
+        count: TIMESTAMP_QUERY_COUNT
+      })
+      : null;
+    this.status = this.query ? TIMING_STATUS.AWAITING : TIMING_STATUS.UNSUPPORTED;
+  }
+
+  /**
+   * Reserve a timestamp sample for the caller's next render pass.
+   * Calls made while another sample is active, pending, or inside the sampling interval are ignored.
+   * @param nowMilliseconds Monotonic frame timestamp in milliseconds.
+   * @returns Borrowed-query render-pass properties, or an empty record when no sample is due.
+   */
+  begin(nowMilliseconds: number): Partial<RenderPassProps> {
+    const insideSampleInterval = (nowMilliseconds - this.lastSampleMilliseconds) < SAMPLE_INTERVAL_MILLISECONDS;
+    if(!this.query || this.pending || this.active || this.disposed || insideSampleInterval) {
+      return {};
+    }
+
+    this.active = true;
+    this.lastSampleMilliseconds = nowMilliseconds;
+
+    return {
+      timestampQuerySet: this.query,
+      beginTimestampIndex: 0,
+      endTimestampIndex: 1
+    };
+  }
+
+  /**
+   * Read the active sample after its pass is submitted without blocking rendering.
+   * Failures become diagnostic status text; results arriving after disposal are ignored.
+   */
+  async end(): Promise<void> {
+    if(!this.active || !this.query || this.disposed) {
+      return;
+    }
+
     this.active = false;
     this.pending = true;
+
     try {
-      const value = await this.query.readTimestampDuration(0,1);
-      // A result can arrive after destroy(); never publish it into a dead owner.
-      if(!this.disposed) { this.milliseconds = value; this.status = 'render pass (compute excluded)'; }
+      const durationMilliseconds = await this.query.readTimestampDuration(0, 1);
+      if(!this.disposed) {
+        this.milliseconds = durationMilliseconds;
+        this.status = TIMING_STATUS.COMPLETE;
+      }
     } catch(error) {
-      if(!this.disposed) { this.status = `timestamp read failed: ${String(error)}`; }
-    } finally { this.pending = false; }
+      if(!this.disposed) {
+        this.status = `timestamp read failed: ${String(error)}`;
+      }
+    } finally {
+      this.pending = false;
+    }
   }
+
   /**
    * Release the owned query and its staging resources; pending results are ignored.
    */
-  destroy() {
-    if(this.disposed) { return; }
-    this.disposed = true; this.query?.destroy();
+  destroy(): void {
+    if(this.disposed) {
+      return;
+    }
+
+    this.disposed = true;
+    this.query?.destroy();
+    this.query = null;
   }
 }

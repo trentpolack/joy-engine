@@ -1,10 +1,15 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import type { TerrainAsset } from './terrain-asset.ts';
+import type {
+  TerrainAsset,
+  TerrainPatch
+} from './terrain-asset.ts';
 
-import { sampleHeightTriangle } from './terrain-asset.ts';
-export type { TerrainAsset };
+import {sampleHeightTriangle} from './terrain-asset.ts';
+
+export type {TerrainAsset};
+
 export interface TerrainView {
   eye: number[];
   projectionScale: number;
@@ -12,149 +17,276 @@ export interface TerrainView {
   target: number[];
   targetRadius: number;
 }
+
 export interface TerrainSelection {
   detail: number;
   lod: number;
   edges: number[];
 }
 
+const VECTOR_COMPONENT_COUNT = 3;
+const MINIMUM_DISTANCE = 0.01;
+const MAXIMUM_CELL_PIXELS = 32;
+
 /**
- * Validate shared CPU/compute inputs before any resource upload.
- * @param view
+ * Validate shared CPU and compute inputs before any resource upload.
+ * @param view Borrowed camera and protected-target state in world and CSS-pixel units.
+ * @throws When a vector is malformed or a scalar is outside its supported range.
  */
-export function validateTerrainView(view: TerrainView) {
-  /** @param value */
-  const vector = (value: number[]) => Array.isArray(value) && value.length === 3
-    && [0,1,2].every(i => Number.isFinite(value[i]));
-  if(!vector(view.eye) || !vector(view.target)
-    || !Number.isFinite(view.projectionScale) || view.projectionScale <= 0
-    || !Number.isFinite(view.tolerance) || view.tolerance <= 0
-    || !Number.isFinite(view.targetRadius) || view.targetRadius < 0) {
+export function validateTerrainView(view: TerrainView): void {
+  const hasValidEye = isFiniteVector3(view.eye);
+  const hasValidTarget = isFiniteVector3(view.target);
+  const hasValidProjection = Number.isFinite(view.projectionScale) && (view.projectionScale > 0);
+  const hasValidTolerance = Number.isFinite(view.tolerance) && (view.tolerance > 0);
+  const hasValidTargetRadius = Number.isFinite(view.targetRadius) && (view.targetRadius >= 0);
+
+  if(!hasValidEye
+    || !hasValidTarget
+    || !hasValidProjection
+    || !hasValidTolerance
+    || !hasValidTargetRadius) {
     throw new Error('Invalid terrain view.');
   }
 }
 
 /**
- * Select fixed quadtree leaves using conservative AABB distance and prebuilt
- * geometric errors. projectionScale is CSS viewport height/(2*tan(vertical FOV/2)).
- * Max cell size is 32 CSS pixels; target distance is horizontal world units.
- * Returns bounded descriptors; no authored heights are scanned here.
- * @param asset @param view
+ * Select fixed quadtree leaves using conservative AABB distance and prebuilt geometric errors.
+ * Projection scale is CSS viewport height divided by `2*tan(vertical FOV/2)`. Target distance is
+ * measured in horizontal world units. No authored heights are scanned or mutated.
+ * @param asset Borrowed resident terrain and its immutable patch hierarchy.
+ * @param view Borrowed camera and protected-target state.
+ * @returns New bounded descriptors with cells limited to 32 CSS pixels.
  */
 export function selectTerrain(asset: TerrainAsset, view: TerrainView): TerrainSelection[] {
   validateTerrainView(view);
-  const {size,tileCells,extent} = asset.manifest;
-  // Use the larger sample spacing so rectangular world extents respect the
-  // screen-space cell limit along both axes. No height scan is needed per frame.
-  const spacing = Math.max(...extent)/(size - 1);
-  const details = asset.patches.map(patch => {
-    // Convert the fixed leaf footprint to a world-space box. Distance to the
-    // nearest point is conservative: a large nearby patch cannot hide behind
-    // a distant center when deciding how much detail it needs.
-    const min = [patch.x/(size - 1)*extent[0] - extent[0]/2,patch.min,patch.z/(size - 1)*extent[1] - extent[1]/2];
-    const max = [min[0] + tileCells/(size - 1)*extent[0],patch.max,min[2] + tileCells/(size - 1)*extent[1]];
-    // The target pin uses horizontal distance to the footprint, independent of
-    // target elevation, so patches touching the protected region stay finest.
-    const dx = Math.max(min[0] - view.target[0],0,view.target[0] - max[0]);
-    const dz = Math.max(min[2] - view.target[2],0,view.target[2] - max[2]);
-    if(view.targetRadius > 0 && Math.hypot(dx,dz) < view.targetRadius) {
-      return 0;
-    }
-    const distance = Math.max(0.01,Math.hypot(...min.map((v,i) => Math.max(v - view.eye[i],0,view.eye[i] - max[i]))));
 
-    // Convert the allowed pixel error into world units at the nearest distance.
-    // The extra error floor limits projected cell size even on perfectly flat
-    // terrain, where geometric error alone would allow very large triangles.
-    const budget = distance/view.projectionScale*view.tolerance;
-    const errors = patch.errors.map((error,level) => Math.max(error,level === 0 ? 0 : 2**level*spacing*view.tolerance/32));
+  const {size, extent} = asset.manifest;
+  const sampleSpacing = Math.max(...extent)/(size - 1);
+  const details = asset.patches.map(patch => calculatePatchDetail(asset, patch, view, sampleSpacing));
 
-    // Larger levels mean coarser grids. Keep the last level within budget, then
-    // use the remaining budget as a morph fraction toward its parent surface.
-    let level = 0;
-    while(level < asset.maxLod && errors[level + 1] <= budget) {
-      level+= 1;
-    }
-    const detail = level === asset.maxLod ? level : level + Math.max(0,Math.min(1,(budget - errors[level])/(errors[level + 1] - errors[level])));
-    // The pin fades over one radius, so crossing its boundary cannot pop topology.
-    const fade = view.targetRadius > 0 ? Math.max(0,Math.min(1,(Math.hypot(dx,dz) - view.targetRadius)/view.targetRadius)) : 1;
-    return detail*fade*fade*(3 - 2*fade);
-  });
   return reconcileTerrainEdges(asset, details);
 }
 
 /**
- * Both sides use the coarser fractional lattice, including its continuous morph.
- * Endpoints are authored tile corners at all supported levels, so four-way
- * corners remain invariant. Arbitrary neighbor ratios are supported.
- * @param asset @param details
+ * Reconcile each patch with the coarser fractional lattice of its neighbors.
+ * Endpoints remain authored tile corners at every supported level, so four-way corners agree.
+ * @param asset Borrowed terrain whose patches use complete row-major ordering.
+ * @param details Borrowed fractional LOD values in patch order.
+ * @returns New per-patch descriptors with edges ordered -X, +X, -Z, +Z.
  */
 export function reconcileTerrainEdges(asset: TerrainAsset, details: number[]): TerrainSelection[] {
-  const axis = asset.tilesPerAxis;
-  return details.map((detail,i) => {
-    // Patches are row-major. Both sides choose max(detail), so their boundary
-    // heights agree even when their interior grids differ by several levels.
-    // Edge slots are -X, +X, -Z, +Z; outside edges keep the patch's own level.
-    const x = i % axis, z = Math.floor(i/axis);
-    return {detail,lod:Math.floor(detail),edges:[
-      Math.max(detail,x > 0 ? details[i - 1] : detail),
-      Math.max(detail,x < axis - 1 ? details[i + 1] : detail),
-      Math.max(detail,z > 0 ? details[i - axis] : detail),
-      Math.max(detail,z < axis - 1 ? details[i + axis] : detail)
-    ]};
+  const patchesPerAxis = asset.tilesPerAxis;
+
+  return details.map((detail, patchIndex) => {
+    const patchX = patchIndex % patchesPerAxis;
+    const patchZ = Math.floor(patchIndex/patchesPerAxis);
+    const negativeX = patchX > 0 ? details[patchIndex - 1] : detail;
+    const positiveX = patchX < patchesPerAxis - 1 ? details[patchIndex + 1] : detail;
+    const negativeZ = patchZ > 0 ? details[patchIndex - patchesPerAxis] : detail;
+    const positiveZ = patchZ < patchesPerAxis - 1 ? details[patchIndex + patchesPerAxis] : detail;
+
+    return {
+      detail,
+      lod: Math.floor(detail),
+      edges: [
+        Math.max(detail, negativeX),
+        Math.max(detail, positiveX),
+        Math.max(detail, negativeZ),
+        Math.max(detail, positiveZ)
+      ]
+    };
   });
 }
 
 /**
- * CPU reference for shader parity and seam validation; local coordinates in samples.
- * @param asset @param patchIndex @param x @param z @param selection
+ * Sample the CPU reference surface used for shader parity and seam validation.
+ * @param asset Borrowed resident terrain data.
+ * @param patchIndex Row-major patch index.
+ * @param x Patch-local X coordinate in samples.
+ * @param z Patch-local Z coordinate in samples.
+ * @param selection Borrowed fractional LOD and reconciled edge values.
+ * @returns World-space height on the continuously morphed triangle surface.
  */
-export function sampleMorphedHeight(asset: TerrainAsset, patchIndex: number, x: number, z: number, selection: TerrainSelection) {
+export function sampleMorphedHeight(
+  asset: TerrainAsset,
+  patchIndex: number,
+  x: number,
+  z: number,
+  selection: TerrainSelection): number {
   const cells = asset.manifest.tileCells;
-  // Boundaries follow the shared edge level; at corners take the coarsest
-  // participating edge. Tile corners are retained samples at every stride.
-  let detail = selection.detail;
-  if(x === 0) { detail = selection.edges[0]; }
-  if(x === cells) { detail = selection.edges[1]; }
-  if(z === 0) { detail = Math.max(detail,selection.edges[2]); }
-  if(z === cells) { detail = Math.max(detail,selection.edges[3]); }
-  const level = Math.floor(detail), stride = 2**level;
   const patch = asset.patches[patchIndex];
-  /** @param px @param pz @param d */
+  const edgeDetail = getEdgeDetail(x, z, cells, selection);
 
-  // Fractional detail blends two triangle surfaces, rather than bilinear
-  // texture samples. This is the same diagonal used by the indexed mesh.
-  const height = (px: number,pz: number,d: number) => {
-    const level = Math.floor(d), step = 2**level;
-    const fine = sampleHeightTriangle(asset,patch.x + px,patch.z + pz,step);
-    const coarse = sampleHeightTriangle(asset,patch.x + px,patch.z + pz,Math.min(cells,step*2));
-    return fine + (coarse - fine)*(d - level);
-  };
-  if(x === 0 || x === cells || z === 0 || z === cells) { return height(x,z,detail); }
-  /** @param px @param pz @param step */
+  if((x === 0) || (x === cells) || (z === 0) || (z === cells)) {
+    return sampleDetailHeight(asset, patch, cells, x, z, edgeDetail);
+  }
 
-  // Parent boundary vertices must already include neighbor stitching. Using
-  // raw heights here would morph interior vertices toward the wrong surface.
-  const vertex = (px: number,pz: number,step: number) => {
-    let edge = Math.log2(step);
-    if(px === 0) { edge = Math.max(edge,selection.edges[0]); }
-    if(px === cells) { edge = Math.max(edge,selection.edges[1]); }
-    if(pz === 0) { edge = Math.max(edge,selection.edges[2]); }
-    if(pz === cells) { edge = Math.max(edge,selection.edges[3]); }
-    return height(px,pz,edge);
-  };
-  /** @param step */
+  const level = Math.floor(selection.detail);
+  const fineStride = 2**level;
+  const coarseStride = Math.min(cells, fineStride*2);
+  const fineHeight = sampleMorphedSurface(asset, patch, cells, x, z, fineStride, selection);
+  const coarseHeight = sampleMorphedSurface(asset, patch, cells, x, z, coarseStride, selection);
+  const morph = selection.detail - level;
 
-  // Reconstruct the actual triangle containing the point. Clamp the cell
-  // origin at the positive boundary to keep all four samples inside the tile.
-  const surface = (step: number) => {
-    const bx = Math.min(Math.floor(x/step)*step,cells - step);
-    const bz = Math.min(Math.floor(z/step)*step,cells - step);
-    const fx = (x - bx)/step, fz = (z - bz)/step;
-    const a = vertex(bx,bz,step), b = vertex(bx + step,bz,step);
-    const c = vertex(bx,bz + step,step), d = vertex(bx + step,bz + step,step);
-    return fx >= fz ? a + (b - a)*fx + (d - b)*fz : a + (d - c)*fx + (c - a)*fz;
-  };
-  // Removed vertices converge to the actual parent triangles, including edges.
-  const fine = surface(stride), coarse = surface(Math.min(cells,stride*2));
-  return fine + (coarse - fine)*(detail - level);
+  return fineHeight + (coarseHeight - fineHeight)*morph;
+}
+
+/** Calculate one patch's fractional detail from its screen-space error budget. */
+function calculatePatchDetail(
+  asset: TerrainAsset,
+  patch: TerrainPatch,
+  view: TerrainView,
+  sampleSpacing: number): number {
+  const {size, tileCells, extent} = asset.manifest;
+  const minimum = [
+    patch.x/(size - 1)*extent[0] - extent[0]/2,
+    patch.min,
+    patch.z/(size - 1)*extent[1] - extent[1]/2
+  ];
+  const maximum = [
+    minimum[0] + tileCells/(size - 1)*extent[0],
+    patch.max,
+    minimum[2] + tileCells/(size - 1)*extent[1]
+  ];
+  const targetDistanceX = Math.max(minimum[0] - view.target[0], 0, view.target[0] - maximum[0]);
+  const targetDistanceZ = Math.max(minimum[2] - view.target[2], 0, view.target[2] - maximum[2]);
+  const targetDistance = Math.hypot(targetDistanceX, targetDistanceZ);
+
+  if((view.targetRadius > 0) && (targetDistance < view.targetRadius)) {
+    return 0;
+  }
+
+  const cameraOffsets = minimum.map((value, axis) => {
+    return Math.max(value - view.eye[axis], 0, view.eye[axis] - maximum[axis]);
+  });
+  const cameraDistance = Math.max(MINIMUM_DISTANCE, Math.hypot(...cameraOffsets));
+  const errorBudget = cameraDistance/view.projectionScale*view.tolerance;
+  const errors = patch.errors.map((error, level) => {
+    const cellError = level === 0
+      ? 0
+      : 2**level*sampleSpacing*view.tolerance/MAXIMUM_CELL_PIXELS;
+    return Math.max(error, cellError);
+  });
+
+  let level = 0;
+  while((level < asset.maxLod) && (errors[level + 1] <= errorBudget)) {
+    level+= 1;
+  }
+
+  const detail = calculateFractionalDetail(level, asset.maxLod, errorBudget, errors);
+  const targetFade = view.targetRadius > 0
+    ? clampUnit((targetDistance - view.targetRadius)/view.targetRadius)
+    : 1;
+  const smoothTargetFade = targetFade*targetFade*(3 - 2*targetFade);
+
+  return detail*smoothTargetFade;
+}
+
+/** Calculate continuous detail between a selected lattice and its parent. */
+function calculateFractionalDetail(
+  level: number,
+  maxLod: number,
+  errorBudget: number,
+  errors: number[]): number {
+  if(level === maxLod) {
+    return level;
+  }
+
+  const errorRange = errors[level + 1] - errors[level];
+  const morph = clampUnit((errorBudget - errors[level])/errorRange);
+  return level + morph;
+}
+
+/** Resolve boundary detail from the reconciled neighbor edges. */
+function getEdgeDetail(
+  x: number,
+  z: number,
+  cells: number,
+  selection: TerrainSelection): number {
+  let detail = selection.detail;
+
+  if(x === 0) {
+    detail = selection.edges[0];
+  }
+  if(x === cells) {
+    detail = selection.edges[1];
+  }
+  if(z === 0) {
+    detail = Math.max(detail, selection.edges[2]);
+  }
+  if(z === cells) {
+    detail = Math.max(detail, selection.edges[3]);
+  }
+
+  return detail;
+}
+
+/** Blend the two authored triangle lattices surrounding a fractional detail. */
+function sampleDetailHeight(
+  asset: TerrainAsset,
+  patch: TerrainPatch,
+  cells: number,
+  x: number,
+  z: number,
+  detail: number): number {
+  const level = Math.floor(detail);
+  const fineStride = 2**level;
+  const coarseStride = Math.min(cells, fineStride*2);
+  const fineHeight = sampleHeightTriangle(asset, patch.x + x, patch.z + z, fineStride);
+  const coarseHeight = sampleHeightTriangle(asset, patch.x + x, patch.z + z, coarseStride);
+
+  return fineHeight + (coarseHeight - fineHeight)*(detail - level);
+}
+
+/** Reconstruct the stitched triangle containing one patch-local coordinate. */
+function sampleMorphedSurface(
+  asset: TerrainAsset,
+  patch: TerrainPatch,
+  cells: number,
+  x: number,
+  z: number,
+  stride: number,
+  selection: TerrainSelection): number {
+  const baseX = Math.min(Math.floor(x/stride)*stride, cells - stride);
+  const baseZ = Math.min(Math.floor(z/stride)*stride, cells - stride);
+  const fractionX = (x - baseX)/stride;
+  const fractionZ = (z - baseZ)/stride;
+  const topLeft = sampleStitchedVertex(asset, patch, cells, baseX, baseZ, stride, selection);
+  const topRight = sampleStitchedVertex(asset, patch, cells, baseX + stride, baseZ, stride, selection);
+  const bottomLeft = sampleStitchedVertex(asset, patch, cells, baseX, baseZ + stride, stride, selection);
+  const bottomRight = sampleStitchedVertex(asset, patch, cells, baseX + stride, baseZ + stride, stride, selection);
+
+  return fractionX >= fractionZ
+    ? topLeft + (topRight - topLeft)*fractionX + (bottomRight - topRight)*fractionZ
+    : topLeft + (bottomRight - bottomLeft)*fractionX + (bottomLeft - topLeft)*fractionZ;
+}
+
+/** Sample a parent vertex after applying any coarser neighboring edge. */
+function sampleStitchedVertex(
+  asset: TerrainAsset,
+  patch: TerrainPatch,
+  cells: number,
+  x: number,
+  z: number,
+  stride: number,
+  selection: TerrainSelection): number {
+  const ownDetail = Math.log2(stride);
+  const edgeDetail = getEdgeDetail(x, z, cells, {
+    ...selection,
+    detail: ownDetail
+  });
+
+  return sampleDetailHeight(asset, patch, cells, x, z, edgeDetail);
+}
+
+/** Determine whether a borrowed value is a complete finite three-component vector. */
+function isFiniteVector3(value: number[]): boolean {
+  return Array.isArray(value)
+    && (value.length === VECTOR_COMPONENT_COUNT)
+    && Array.from(value).every(Number.isFinite);
+}
+
+/** Clamp a scalar to the closed normalized interval. */
+function clampUnit(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
