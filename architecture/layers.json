@@ -1,0 +1,87 @@
+{
+  "layers": {
+    "foundation": {
+      "roots": [
+        "core",
+        "vite-env"
+      ],
+      "mayImport": []
+    },
+    "simulation": {
+      "roots": [
+        "environment",
+        "gameplay",
+        "physics"
+      ],
+      "mayImport": [
+        "foundation"
+      ]
+    },
+    "content": {
+      "roots": [
+        "dcc",
+        "form",
+        "project",
+        "scripting"
+      ],
+      "mayImport": [
+        "foundation",
+        "simulation"
+      ]
+    },
+    "rendering": {
+      "roots": [
+        "particles",
+        "rendering",
+        "post-processing"
+      ],
+      "mayImport": [
+        "foundation",
+        "simulation",
+        "content"
+      ]
+    },
+    "platform": {
+      "roots": [
+        "browser",
+        "development",
+        "runtime",
+        "index",
+        "constants"
+      ],
+      "mayImport": [
+        "foundation",
+        "simulation",
+        "content",
+        "rendering"
+      ]
+    }
+  },
+  "existingViolations": [
+    "src/core/types.ts -> src/rendering/environment/pbr-environment.ts",
+    "src/core/types.ts -> src/rendering/lighting/point-lights.ts",
+    "src/core/types.ts -> src/rendering/shadows/types.ts",
+    "src/core/types.ts -> src/rendering/materials/pbr/constants.ts",
+    "src/physics/physics-body.ts -> src/rendering/geometry/constants.ts",
+    "src/gameplay/level-document.ts -> src/rendering/postprocessor/profile.ts",
+    "src/gameplay/asset-scene.ts -> src/rendering/scene/render-scene.ts",
+    "src/gameplay/asset-scene.ts -> src/rendering/scene/mesh-asset.ts",
+    "src/gameplay/level-runtime.ts -> src/rendering/geometry/constants.ts",
+    "src/gameplay/level-scene.ts -> src/rendering/geometry/constants.ts",
+    "src/gameplay/level-scene.ts -> src/rendering/lighting/point-lights.ts",
+    "src/gameplay/level-scene.ts -> src/rendering/scene/mesh-instance.ts",
+    "src/gameplay/level-scene.ts -> src/rendering/scene/mesh-asset.ts",
+    "src/gameplay/level-scene.ts -> src/rendering/scene/render-scene.ts",
+    "src/gameplay/asset-scene.ts -> src/particles/constants.ts",
+    "src/gameplay/asset-scene.ts -> src/particles/particle-effect.ts",
+    "src/gameplay/asset-scene.ts -> src/particles/rendering.ts",
+    "src/gameplay/asset-scene.ts -> src/form/parameters.ts",
+    "src/gameplay/asset-scene.ts -> src/particles/asset.ts",
+    "src/gameplay/asset-scene.ts -> src/form/compiler.ts",
+    "src/gameplay/level-scene.ts -> src/form/resources.ts",
+    "src/core/types.ts -> src/rendering/scene/scene-node.ts",
+    "src/form/materials.ts -> src/rendering/materials/pbr/constants.ts",
+    "src/form/mesh-asset.ts -> src/rendering/scene/mesh-asset.ts",
+    "src/form/resources.ts -> src/rendering/materials/pbr/constants.ts"
+  ]
+}

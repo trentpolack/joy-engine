@@ -6,9 +6,10 @@ import type { EntityRegistry } from './entity-registry.ts';
 import type { PhysicsBodyOptions, PhysicsBody } from '../physics/physics-body.ts';
 import type { PhysicsVehicleOptions, PhysicsVehicle } from '../physics/physics-vehicle.ts';
 import type { LevelData } from './level-document.ts';
-import { EntityWorld } from './entity-world.ts';
+import type {EntityWorld} from './entity-world.ts';
+import {World} from './world.ts';
 import { parseLevel } from './level-document.ts';
-import { PhysicsWorld } from '../physics/physics-world.ts';
+import type {PhysicsWorld} from '../physics/physics-world.ts';
 
 export interface LevelRuntimeOptions {
   registry: EntityRegistry;
@@ -23,6 +24,7 @@ export interface LevelRuntimeOptions {
  */
 export class LevelRuntime {
   declare level: LevelData;
+  declare simulation: World;
   declare world: EntityWorld;
   declare physics: PhysicsWorld;
   declare ownsPhysics: boolean;
@@ -39,9 +41,10 @@ export class LevelRuntime {
     if(this.level.entities.some(entity => entity.template)) {
       throw new Error('Resolve linked objects with resolveLevelObjects before creating LevelRuntime.');
     }
-    this.world = new EntityWorld({registry});
-    this.physics = physics ?? new PhysicsWorld();
-    this.ownsPhysics = !physics;
+    this.simulation = new World({entities: {registry}, physicsWorld: physics});
+    this.world = this.simulation.entities;
+    this.physics = this.simulation.physics;
+    this.ownsPhysics = this.simulation.ownsPhysics;
 
     this.bodies = new Map();
 
@@ -199,13 +202,10 @@ export class LevelRuntime {
     }
     this.destroyed = true;
     try {
-      this.world.destroy();
+      this.simulation.destroy();
     } finally {
       this.vehicles.clear();
       this.bodies.clear();
-      if(this.ownsPhysics) {
-        this.physics.destroy();
-      }
     }
   }
 }

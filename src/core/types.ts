@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+import type {SceneNode} from '../rendering/scene/scene-node.ts';
 import type {PbrEnvironment} from '../rendering/environment/pbr-environment.ts';
 import type {PointLight} from '../rendering/lighting/point-lights.ts';
 import type {ShadowCameraFrame, ShadowOptions} from '../rendering/shadows/types.ts';
@@ -99,17 +100,44 @@ export interface MeshAssetData {
   metadata?: Readonly<Record<string, unknown>>;
 }
 
-/** Mutable instance settings. Euler angles are radians, applied X then Y then Z. */
-export interface MeshInstanceOptions {
+/** Column-major affine basis columns followed by XYZ translation; supports shear. */
+export type AffineTransform = readonly [number, number, number, number, number, number, number, number, number, number, number, number];
+
+/** Conservative axis-aligned bounds in the coordinate space of the consuming API. */
+export interface GeometryBounds {
+  readonly min: readonly number[];
+  readonly max: readonly number[];
+}
+
+/** Local transform settings. Euler radians apply X, then Y, then Z. Parenting preserves local values. */
+export interface SceneNodeOptions {
+  parent?: SceneNode | null;
   position?: readonly number[];
   rotation?: readonly number[];
   scale?: readonly number[];
+  visible?: boolean;
+}
+
+/** Mesh presentation settings; the scene borrows the asset and owns the node. */
+export interface MeshInstanceOptions extends SceneNodeOptions {
   tint?: readonly number[];
   opacity?: number;
-  visible?: boolean;
+  /** Solid geometry casts and receives shadows by default. Transparent geometry never casts opaque shadows. */
+  castsShadow?: boolean;
+  receivesShadow?: boolean;
   pass?: 'auto' | 'opaque' | 'transparent';
   /** Perceptual surface roughness for screen-space effects, zero polished to one matte. */
   sceneRoughness?: number;
+}
+
+/** Resident terrain settings. Tolerance is CSS pixels; targetRadius is world units. */
+export interface TerrainInstanceOptions extends SceneNodeOptions {
+  castsShadow?: boolean;
+  receivesShadow?: boolean;
+  tolerance?: number;
+  targetRadius?: number;
+  /** Zero is normal shading; positive values select the terrain adapter diagnostic. */
+  diagnostic?: number;
 }
 
 /** Ordered X/Y/Z components in the coordinate space documented by the consuming API. */

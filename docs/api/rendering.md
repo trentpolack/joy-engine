@@ -379,7 +379,8 @@ render(
     sceneFrame: SceneEffectsFrame = {},
     atmosphereUniforms: Float32Array<ArrayBuffer> | null = null,
     attachmentFrame: SceneAttachmentFrame | null = null,
-    lightFrame: SceneLightFrame | null = null): void
+    lightFrame: SceneLightFrame | null = null,
+    nativeGeometry: readonly NativeSceneGeometry[] = []): void
 ```
 Submit opaque geometry, then sorted translucent geometry; clear even if empty. CPU arrays and records remain unchanged. Borrowed textures must outlive submission. Missing optional pass support, invalid uniform size, and GPU failures throw. Submission failure invalidates temporal history before rethrowing.
 
@@ -997,53 +998,193 @@ constructor(data: MeshAssetData)
 - **param** data Local Y-up geometry.
 
 
-## MeshInstance
-Import from `joy-engine`. [Source](../../src/rendering/scene/mesh-instance.ts)
+## TerrainInstance
+Import from `joy-engine`. [Source](../../src/rendering/scene/terrain-instance.ts)
 
-Mutable presentation state borrowing an immutable MeshAsset. No simulation state.
+Scene-owned resident geometry node. Authored heights and GPU resources remain borrowed.
 
 ### constructor
 ```ts
-constructor(asset: MeshAsset, options: MeshInstanceOptions = {})
+constructor(asset: TerrainAsset, options: TerrainInstanceOptions = {}, scene: RenderScene | null = null)
 ```
-- **param** asset
-- **param** [options]
 
 ### set
 ```ts
-set(options: MeshInstanceOptions)
+override set(options: TerrainInstanceOptions)
 ```
-Copy supplied settings; omitted fields retain their previous value. Distances are world units; rotations use XYZ Euler radians. Zero scale is supported.
+Update local transforms and pass/LOD policy atomically, preserving borrowed geometry.
 
-- **param** options
+
+
+## SceneNode
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-node.ts)
+
+Scene-owned transform node. Mutable local arrays support direct edits; world data is read-only.
+
+### constructor
+```ts
+constructor(options: SceneNodeOptions = {}, scene: RenderScene | null = null)
+```
+
+### identity
+```ts
+get identity(): SceneNode
+```
+Stable identity shared by geometry and temporal-history adapters.
+
+
+### parent
+```ts
+get parent(): SceneNode | null
+```
+
+### children
+```ts
+get children(): ReadonlySet<SceneNode>
+```
+
+### removed
+```ts
+get removed(): boolean
+```
+
+### transformRevision
+```ts
+get transformRevision(): number
+```
+Current own-transform revision, including direct local array edits.
+
+
+### worldRevision
+```ts
+get worldRevision(): number
+```
+
+### worldTransform
+```ts
+get worldTransform(): AffineTransform
+```
+Current world affine transform; translation is at indices 9–11. Removed nodes are invalid.
+
+
+### worldVisible
+```ts
+get worldVisible(): boolean
+```
+
+### set
+```ts
+set(options: SceneNodeOptions)
+```
+Copy local settings. Failed parent validation leaves all settings and hierarchy unchanged.
+
+
+### setParent
+```ts
+setParent(parent: SceneNode | null)
+```
+Reparent within the owning scene, preserving local transforms; reject cycles atomically.
+
+
+### updateWorldTransform
+```ts
+updateWorldTransform()
+```
+- **internal** Update after the parent during the scene's single hierarchy traversal.
+
+### preparedWorldState
+```ts
+preparedWorldState()
+```
+- **internal** Read cached world data after the scene traversal, without walking ancestors again.
+
+### invalidate
+```ts
+invalidate()
+```
+- **internal** The scene removes descendants before releasing this node's hierarchy references.
+
+
+## prepareSceneGeometry
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-geometry.ts)
+
+```ts
+function prepareSceneGeometry(scene: RenderScene): PreparedSceneGeometry[]
+```
+Traverse world transforms once, then collect visible geometry independently of camera culling.
+
+
+
+## MeshInstance
+Import from `joy-engine`. [Source](../../src/rendering/scene/mesh-instance.ts)
+
+Geometry-bearing node borrowing an immutable MeshAsset. No simulation or GPU state.
+
+### constructor
+```ts
+constructor(asset: MeshAsset, options: MeshInstanceOptions = {}, scene: RenderScene | null = null)
+```
+
+### set
+```ts
+override set(options: MeshInstanceOptions)
+```
+Copy supplied local and presentation settings; omitted fields retain their previous values.
+
 
 
 ## RenderScene
 Import from `joy-engine`. [Source](../../src/rendering/scene/render-scene.ts)
 
-Owns presentation instances; assets are borrowed and remain valid after removal.
+Owns a transform hierarchy and presentation instances; all geometry assets remain borrowed.
 
-### constructor
+### nodes
 ```ts
-constructor()
+get nodes(): ReadonlySet<SceneNode>
 ```
+
+### roots
+```ts
+get roots(): ReadonlySet<SceneNode>
+```
+
+### instances
+```ts
+get instances(): ReadonlySet<MeshInstance>
+```
+
+### terrainInstances
+```ts
+get terrainInstances(): ReadonlySet<TerrainInstance>
+```
+
+### createNode
+```ts
+createNode(options: SceneNodeOptions = {}, parent: SceneNode | null = options.parent ?? null)
+```
+Create a transform-only node; the explicit parent overrides options.parent when provided.
+
 
 ### createMesh
 ```ts
-createMesh(asset: MeshAsset, options?: MeshInstanceOptions)
+createMesh(asset: MeshAsset, options: MeshInstanceOptions = {})
 ```
-Create mutable presentation state owned by this scene and borrowing the supplied asset.
+Create scene-owned presentation state borrowing the supplied asset.
 
-- **param** asset
-- **param** [options]
+
+### createTerrain
+```ts
+createTerrain(asset: TerrainAsset, options: TerrainInstanceOptions = {})
+```
+Create a resident terrain node; the renderer owns its device-specific adapter resources.
+
 
 ### remove
 ```ts
-remove(instance: MeshInstance)
+remove(node: SceneNode)
 ```
-Remove an owned instance; repeated removal is harmless.
+Remove an owned node and its full subtree; repeated or foreign removal is harmless.
 
-- **param** instance
 
 ### createCollection
 ```ts
@@ -1056,7 +1197,7 @@ Create a scene-owned keyed collection for synchronizing simulation views.
 ```ts
 clear()
 ```
-Release instance references; collections remain reusable until scene destruction.
+Invalidate owned nodes and release references without releasing borrowed assets.
 
 
 ### destroy
@@ -1065,6 +1206,24 @@ destroy()
 ```
 Idempotent disposal. The scene owns no GPU resources or simulation objects.
 
+
+### registerNode
+```ts
+registerNode(node: SceneNode)
+```
+- **internal** Register a fully constructed geometry node owned by this scene.
+
+### updateRootNode
+```ts
+updateRootNode(node: SceneNode)
+```
+- **internal** Maintain roots after a validated parent change.
+
+### updateWorldTransforms
+```ts
+updateWorldTransforms()
+```
+- **internal** Update ancestors before descendants in one iterative scene traversal.
 
 ### assertAlive
 ```ts
@@ -1401,6 +1560,13 @@ draw(pass: RenderPass): void
 Draw into a borrowed pass; does not clear/submit or own its framebuffer.
 
 - **param** pass Borrowed active depth-tested render pass; it is not ended or submitted here.
+
+### drawGeometry
+```ts
+drawGeometry(pass: RenderPass, pipeline: RenderPipeline, bindings: Record<string, Binding>): void
+```
+Record resident indexed geometry with a borrowed scene or shadow pipeline.
+
 
 ### destroy
 ```ts

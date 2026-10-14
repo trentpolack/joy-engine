@@ -13,6 +13,8 @@ export {PlayerController, AIController} from './player-controller.ts';
 export {EntityRegistry} from './entity-registry.ts';
 export {EntityWorld} from './entity-world.ts';
 export type {EntityWorldOptions} from './entity-world.ts';
+export {World} from './world.ts';
+export type {WorldOptions, WorldStep} from './world.ts';
 export {copyEntityDefinition} from './entity-definition.ts';
 export {searchGrid, traceGridRoute} from './grid-navigation.ts';
 export type {GridRoute, GridSearchOptions} from './grid-navigation.ts';

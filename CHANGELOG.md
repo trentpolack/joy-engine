@@ -3,6 +3,15 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-14-2026
+### Runtime Architecture
+- Added a headless `World` owner for deterministic entity and physics updates, with rendering left behind an application-owned integration boundary.
+- Added enforced source dependency layers with an explicit, shrinking allowlist for existing migration violations.
+- Migrated `LevelRuntime` onto the headless world composition while preserving its authored update and physics synchronization order.
+
+### Terrain Rendering
+- Migrated resident terrain into scene ownership with hierarchical transforms and shared indexed GPU geometry across color, shadow, motion, and surface passes.
+- Kept terrain heightfields and LOD selections GPU-resident while sharing scene lighting, shadow maps, depth, normal/roughness, and velocity attachments.
+
 ### Scene Rendering
 - Added a deeply immutable `FrameView` shared by scene lighting, atmosphere, effects, and shadows, with separate pass contexts for light cameras and render targets. The low-level `SceneLightFrame` now takes `{view, casters}`; direct callers preserve renderer shadow settings with `renderer.createFrameView`.
 - Applied the canonical rendering conventions across frame snapshots, scene orchestration, effects, surfaces, and shadows, with explicit ownership, documented contracts, and cohesive preparation stages while preserving submission order and temporal history behavior.

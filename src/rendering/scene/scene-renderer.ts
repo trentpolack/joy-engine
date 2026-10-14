@@ -23,6 +23,9 @@ import type { SceneTemporalSnapshot } from './scene-temporal.ts';
 import type { SceneAttachmentFrame } from './scene-effect-attachments.ts';
 import type { FrameView } from './frame-view.ts';
 import type { WorldRay } from '../camera/projection.ts';
+import type {NativeSceneGeometry} from './native-geometry.ts';
+import type {TerrainInstance} from './terrain-instance.ts';
+import type {PreparedTerrainPacket} from './scene-geometry.ts';
 
 import { GPU_BACKEND } from '../gpu/constants.ts';
 import { normalizeSceneEffectsOptions } from './scene-effect-config.ts';
@@ -42,6 +45,7 @@ import {
 } from '../lighting/point-lights.ts';
 import { createAtmosphereRenderUniforms } from '../environment/atmosphere-rendering.ts';
 import { gpuBackendFromQuery } from '../gpu/gpu-device.ts';
+import {TerrainScenePass} from '../terrain/terrain-scene-pass.ts';
 import { prepareSceneFrame } from './prepare-frame.ts';
 import wgsl from '../../../shaders/rendering/scene/scene.wgsl?raw';
 import vertex from '../../../shaders/rendering/scene/scene.vert.glsl?raw';
@@ -144,6 +148,7 @@ export class SceneRenderer {
   private temporalSnapshot: SceneTemporalSnapshot | null = null;
   private previousCamera: PreviousSceneCamera | null = null;
   private frameIndex = 0;
+  private readonly terrainAdapters = new Map<TerrainInstance, TerrainScenePass>();
 
   /**
    * Configure a scene renderer without allocating GPU resources.
@@ -287,6 +292,12 @@ export class SceneRenderer {
       opaqueTriangles: frame.opaqueTriangles,
       transparentTriangles: frame.transparentTriangles
     });
+    const nativeGeometry = this.prepareTerrainGeometry(
+      queues.terrainPackets,
+      view.camera.rasterViewProjectionMatrix,
+      view.camera.eye,
+      this.height*Math.abs(view.camera.projectionMatrix[5])/2
+    );
     const uniforms = createPointLightUniforms(
       view.camera.rasterViewProjectionMatrix,
       view.lighting.lights,
@@ -294,7 +305,7 @@ export class SceneRenderer {
       view.environment
     );
     const atmosphereUniforms = this.prepareAtmosphere(view);
-    const effects = this.prepareEffects(scene, frame, view, queues, effectsEnabled, time);
+    const effects = this.prepareEffects(scene, frame, view, queues, nativeGeometry, effectsEnabled, time);
 
     try {
       this.renderer.render(
@@ -308,7 +319,8 @@ export class SceneRenderer {
         effects.frame,
         atmosphereUniforms,
         effects.attachments,
-        {view, casters: queues.shadowCasters}
+        {view, casters: queues.shadowCasters, receivesShadowRanges: queues.receivesShadowRanges},
+        nativeGeometry
       );
     } catch(error) {
       if(effectsEnabled) {
@@ -388,8 +400,71 @@ export class SceneRenderer {
 
     this.resetHistory();
     this.destroyed = true;
+    for(const adapter of this.terrainAdapters.values()) {
+      adapter.destroy();
+    }
+    this.terrainAdapters.clear();
     this.renderer?.destroy();
     this.renderer = null;
+  }
+
+  /** Prepare resident terrain adapters before any render pass opens. */
+  private prepareTerrainGeometry(
+    packets: readonly PreparedTerrainPacket[],
+    matrix: ArrayLike<number>,
+    eye: readonly number[],
+    projectionScale: number): NativeSceneGeometry[] {
+    const renderer = this.renderer!;
+    const active = new Set(packets.map(packet => packet.instance));
+    for(const [instance, adapter] of this.terrainAdapters) {
+      if(!active.has(instance)) {
+        adapter.destroy();
+        this.terrainAdapters.delete(instance);
+      }
+    }
+
+    const geometry: NativeSceneGeometry[] = [];
+    for(const packet of packets) {
+      if(!packet.visible && !packet.castsShadow) {
+        continue;
+      }
+      const instance = packet.instance;
+      const previous = this.terrainAdapters.get(instance);
+      const adapter = previous ?? new TerrainScenePass(
+        renderer.device,
+        instance.asset,
+        renderer.postprocessor?.format,
+        this.options.shadows
+      );
+      if(!previous) {
+        this.terrainAdapters.set(instance, adapter);
+      }
+      try {
+        adapter.prepare(matrix, packet.worldTransform, {
+          eye: Array.from(eye),
+          target: Array.from(this.camera.target),
+          projectionScale,
+          tolerance: instance.tolerance,
+          targetRadius: instance.targetRadius
+        }, instance.diagnostic);
+      } catch(error) {
+        if(!previous) {
+          adapter.destroy();
+          this.terrainAdapters.delete(instance);
+        }
+        throw error;
+      }
+      geometry.push({
+        visible: packet.visible,
+        castsShadow: packet.castsShadow,
+        receivesShadow: packet.receivesShadow,
+        draw: (pass, bindings, shadowed, additive) => adapter.draw(pass, bindings, shadowed, additive),
+        drawShadow: (pass, lightMatrix) => adapter.drawShadow(pass, lightMatrix),
+        drawSurface: (pass, viewProjection, viewMatrix) => adapter.drawSurface(pass, viewProjection, viewMatrix),
+        drawMotion: (pass, motionFrame) => adapter.drawMotion(pass, motionFrame)
+      });
+    }
+    return geometry;
   }
 
   /**
@@ -495,6 +570,7 @@ export class SceneRenderer {
     frame: SceneFrameOptions,
     view: FrameView,
     queues: SceneQueues,
+    nativeGeometry: readonly NativeSceneGeometry[],
     enabled: boolean,
     time: number): PreparedSceneEffects {
     if(!enabled) {
@@ -555,7 +631,8 @@ export class SceneRenderer {
         height: view.viewport.height
       },
       view,
-      surfaceRoughness: queues.surfaceRoughness
+      surfaceRoughness: queues.surfaceRoughness,
+      nativeGeometry
     };
 
     return {frame: effectsFrame, attachments, temporal};

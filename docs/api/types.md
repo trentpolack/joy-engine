@@ -246,6 +246,30 @@ interface EntityWorldOptions {
 ```
 
 
+## WorldOptions
+Import from `joy-engine`. [Source](../../src/gameplay/world.ts)
+
+```ts
+interface WorldOptions {
+  entities?: EntityWorldOptions;
+  physics?: PhysicsWorldOptions;
+  /** Borrowed solver; when present, physics options are invalid and the caller retains ownership. */
+  physicsWorld?: PhysicsWorld;
+}
+```
+
+
+## WorldStep
+Import from `joy-engine`. [Source](../../src/gameplay/world.ts)
+
+```ts
+interface WorldStep {
+  readonly elapsedSeconds: number;
+  readonly physicsSteps: number;
+}
+```
+
+
 ## GridRoute
 Import from `joy-engine`. [Source](../../src/gameplay/grid-navigation.ts)
 
@@ -619,7 +643,7 @@ interface RendererDiagnostics {
   resources: Record<string, {active: number | null; created: number | null}> | null;
   /** Existing scene culling counts for this renderer's most recent rendered frame. */
   scene?: {visible: number; culled: number};
-  /** Per-renderer recorded shadow work; shared lights may occur in both colored and PBR passes. */
+  /** Per-renderer recorded shadow work; all geometry adapters share each recorded light view. */
   shadows?: {available: boolean; castingPointLights: number; castingDirectionalLights: number; batches: number; views: number};
 }
 ```
@@ -1079,6 +1103,73 @@ World-space camera and lighting for a material pass. RGB light values are linear
 
 
 
+## SceneGeometrySnapshot
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-geometry.ts)
+
+```ts
+interface SceneGeometrySnapshot {
+  readonly kind: 'mesh' | 'terrain';
+  readonly identity: SceneNode;
+  readonly node: SceneNode;
+  readonly localBounds: GeometryBounds;
+  readonly worldBounds: GeometryBounds;
+  readonly worldTransform: AffineTransform;
+  readonly worldRevision: number;
+  readonly coverage: 'opaque' | 'transparent';
+  readonly castsShadow: boolean;
+  readonly receivesShadow: boolean;
+}
+```
+Representation-independent world snapshot consumed by color, depth, and shadow adapters.
+
+
+
+## PreparedMeshGeometry
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-geometry.ts)
+
+```ts
+interface PreparedMeshGeometry extends SceneGeometrySnapshot {
+  readonly kind: typeof SCENE_GEOMETRY_KIND.MESH;
+  readonly instance: MeshInstance;
+  readonly asset: MeshAsset;
+}
+```
+Mesh adapter data borrows authored asset channels without copying them.
+
+
+
+## PreparedTerrainGeometry
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-geometry.ts)
+
+```ts
+interface PreparedTerrainGeometry extends SceneGeometrySnapshot {
+  readonly kind: typeof SCENE_GEOMETRY_KIND.TERRAIN;
+  readonly instance: TerrainInstance;
+  readonly asset: TerrainAsset;
+}
+```
+Resident terrain snapshot retains indexed authored geometry outside the CPU triangle queues.
+
+
+
+## PreparedTerrainPacket
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-geometry.ts)
+
+```ts
+interface PreparedTerrainPacket extends PreparedTerrainGeometry {
+  readonly visible: boolean;
+}
+```
+
+
+## PreparedSceneGeometry
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-geometry.ts)
+
+```ts
+type PreparedSceneGeometry = PreparedMeshGeometry | PreparedTerrainGeometry;
+```
+
+
 ## PointLight
 Import from `joy-engine`. [Source](../../src/rendering/lighting/point-lights.ts)
 
@@ -1117,23 +1208,78 @@ Local Y-up indexed mesh input. Optional attributes are empty or vertex-aligned.
 
 
 
+## AffineTransform
+Import from `joy-engine`. [Source](../../src/core/types.ts)
+
+```ts
+type AffineTransform = readonly [number, number, number, number, number, number, number, number, number, number, number, number];
+```
+Column-major affine basis columns followed by XYZ translation; supports shear.
+
+
+
+## GeometryBounds
+Import from `joy-engine`. [Source](../../src/core/types.ts)
+
+```ts
+interface GeometryBounds {
+  readonly min: readonly number[];
+  readonly max: readonly number[];
+}
+```
+Conservative axis-aligned bounds in the coordinate space of the consuming API.
+
+
+
+## SceneNodeOptions
+Import from `joy-engine`. [Source](../../src/core/types.ts)
+
+```ts
+interface SceneNodeOptions {
+  parent?: SceneNode | null;
+  position?: readonly number[];
+  rotation?: readonly number[];
+  scale?: readonly number[];
+  visible?: boolean;
+}
+```
+Local transform settings. Euler radians apply X, then Y, then Z. Parenting preserves local values.
+
+
+
 ## MeshInstanceOptions
 Import from `joy-engine`. [Source](../../src/core/types.ts)
 
 ```ts
-interface MeshInstanceOptions {
-  position?: readonly number[];
-  rotation?: readonly number[];
-  scale?: readonly number[];
+interface MeshInstanceOptions extends SceneNodeOptions {
   tint?: readonly number[];
   opacity?: number;
-  visible?: boolean;
+  /** Solid geometry casts and receives shadows by default. Transparent geometry never casts opaque shadows. */
+  castsShadow?: boolean;
+  receivesShadow?: boolean;
   pass?: 'auto' | 'opaque' | 'transparent';
   /** Perceptual surface roughness for screen-space effects, zero polished to one matte. */
   sceneRoughness?: number;
 }
 ```
-Mutable instance settings. Euler angles are radians, applied X then Y then Z.
+Mesh presentation settings; the scene borrows the asset and owns the node.
+
+
+
+## TerrainInstanceOptions
+Import from `joy-engine`. [Source](../../src/core/types.ts)
+
+```ts
+interface TerrainInstanceOptions extends SceneNodeOptions {
+  castsShadow?: boolean;
+  receivesShadow?: boolean;
+  tolerance?: number;
+  targetRadius?: number;
+  /** Zero is normal shading; positive values select the terrain adapter diagnostic. */
+  diagnostic?: number;
+}
+```
+Resident terrain settings. Tolerance is CSS pixels; targetRadius is world units.
 
 
 
@@ -1486,6 +1632,8 @@ interface SceneLightFrame {
    * Input remains caller-owned and must be valid until preparation returns.
    */
   casters: number[] | Float32Array;
+  /** Camera-visible opaque runs; omitted means every colored receiver accepts shadows. */
+  receivesShadowRanges?: readonly {firstVertex: number; vertexCount: number; receivesShadow: boolean}[];
 }
 ```
 SceneLightFrame Interface Definition. Shared immutable view and borrowed caster geometry for one default lit-triangle preparation. Preparation copies geometry into owned GPU storage and leaves this record and its inputs unchanged.

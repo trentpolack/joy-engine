@@ -45,6 +45,23 @@ test('surface attachment preserves opaque coverage, authored roughness and borro
   assert.ok(device.resources.every(value => value.destroyCount === 1));
 });
 
+test('surface attachment records resident geometry inside the shared depth pass', () => {
+  const device = createDevice();
+  const depth = resource({width: 32, height: 24, format: 'depth24plus'});
+  const surfaces = new SceneSurfaces(device);
+  const calls = [];
+
+  surfaces.render([], identity, identity, depth, undefined, pass => {
+    calls.push(pass);
+    pass.draw({indexCount: 6});
+  });
+
+  assert.equal(calls[0], device.passes[0]);
+  assert.deepEqual(device.passes[0].draws, [{indexCount: 6}]);
+  assert.equal(device.passes[0].ended, true);
+  surfaces.destroy();
+});
+
 test('surface resize rolls back incomplete attachments and rebinds replacement depth at the same size', () => {
   const device = createDevice();
   const surfaces = new SceneSurfaces(device);

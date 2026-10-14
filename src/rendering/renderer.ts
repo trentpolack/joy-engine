@@ -57,6 +57,8 @@ import {
   SHADER_ENTRY_POINT
 } from './gpu/constants.ts';
 import { SceneLitPass } from './shadows/scene-lit-pass.ts';
+import {SceneShadowPass} from './shadows/scene-shadow-pass.ts';
+import type {NativeSceneGeometry} from './scene/native-geometry.ts';
 import { createRenderPassContext } from './scene/render-pass-context.ts';
 import { createFrameView } from './scene/frame-view.ts';
 import { readGpuDiagnostics } from './gpu/gpu-diagnostics.ts';
@@ -186,6 +188,9 @@ export class GpuTriangleRenderer {
   declare readonly atmosphere: AtmospherePass | null;
   declare sceneEffects: SceneEffects | null;
   private litShadowPass: SceneLitPass | null = null;
+  private shadowPass: SceneShadowPass | null = null;
+  private shadowAllocationKey = '';
+  private shadowFrameActive = false;
   private sceneAttachments: SceneEffectAttachments | null = null;
 
   // Owned framebuffer borrows effect color and opaque depth; it never destroys them.
@@ -396,7 +401,7 @@ export class GpuTriangleRenderer {
       return null;
     }
     const snapshot = readGpuDiagnostics(this.device, options);
-    const lit = this.litShadowPass?.shadows.stats;
+    const lit = this.shadowFrameActive ? this.shadowPass?.shadows.stats : null;
     const pbr = this.pbr?.shadowStats;
     snapshot.shadows = {
       available: this.backend === GPU_BACKEND.WEBGPU && this.shadowOptions !== false,
@@ -576,7 +581,8 @@ export class GpuTriangleRenderer {
     sceneFrame: SceneEffectsFrame = {},
     atmosphereUniforms: Float32Array<ArrayBuffer> | null = null,
     attachmentFrame: SceneAttachmentFrame | null = null,
-    lightFrame: SceneLightFrame | null = null): void {
+    lightFrame: SceneLightFrame | null = null,
+    nativeGeometry: readonly NativeSceneGeometry[] = []): void {
     if(atmosphereUniforms && !this.atmosphere) {
       throw new Error('Atmosphere uniforms require atmosphere at renderer creation.');
     }
@@ -586,7 +592,7 @@ export class GpuTriangleRenderer {
 
     // Merge material streams only when PBR and caller geometry share the transparent phase.
     const mixedTransparency = Boolean(materialFrame && (transparentVertices.length || transparentDraws.length));
-    const shadows = this.prepareSceneLighting(materialFrame, mixedTransparency, lightFrame, uniformData);
+    const shadows = this.prepareSceneLighting(materialFrame, mixedTransparency, lightFrame, uniformData, nativeGeometry);
     let processedScene: Texture | undefined;
 
     // Pass targets and raster camera overrides remain separate from the immutable main view.
@@ -612,7 +618,9 @@ export class GpuTriangleRenderer {
       vertices.length/FLOATS_PER_VERTEX,
       Boolean(lightFrame && shadows !== false),
       materialFrame,
-      atmosphereUniforms
+      atmosphereUniforms,
+      lightFrame,
+      nativeGeometry
     );
 
     // Resolve depth-dependent effects on opaque color, then reuse its depth for transparency.
@@ -746,7 +754,8 @@ export class GpuTriangleRenderer {
     materialFrame: PbrFrame | null,
     mixedTransparency: boolean,
     lightFrame: SceneLightFrame | null,
-    uniformData: Float32Array<ArrayBuffer>): ShadowOptions | false | undefined {
+    uniformData: Float32Array<ArrayBuffer>,
+    nativeGeometry: readonly NativeSceneGeometry[]): ShadowOptions | false | undefined {
     if(materialFrame) {
       if(!this.pbr) {
         throw new Error('Material frames require pbr at renderer creation.');
@@ -758,13 +767,29 @@ export class GpuTriangleRenderer {
       this.pbr.prepare(preparedMaterialFrame, mixedTransparency, lightFrame?.casters);
     }
     const shadows = this.shadowOptions === false ? false : lightFrame?.view.shadows;
-    if(lightFrame && this.backend === GPU_BACKEND.WEBGPU && shadows !== false) {
-      this.litShadowPass ??= new SceneLitPass(this.device, shadows, this.postprocessor?.format);
-      this.litShadowPass.prepare(
-        lightFrame,
-        uniformData,
-        materialFrame ? (pass, matrix) => this.pbr?.drawShadow(pass, matrix) : undefined
-      );
+    this.shadowFrameActive = Boolean(lightFrame && this.backend === GPU_BACKEND.WEBGPU && shadows !== false);
+    if(lightFrame && this.backend === GPU_BACKEND.WEBGPU && shadows) {
+      const {normalBias, shadowDistance, ...allocationOptions} = shadows;
+      const allocationKey = JSON.stringify(allocationOptions);
+      if(!this.shadowPass || this.shadowAllocationKey !== allocationKey) {
+        const replacement = new SceneShadowPass(this.device, shadows);
+        this.shadowPass?.destroy();
+        this.shadowPass = replacement;
+        this.shadowAllocationKey = allocationKey;
+      }
+      this.shadowPass.shadows.setReceiverOptions({normalBias, shadowDistance});
+      const batches = this.shadowPass.prepare(lightFrame, (pass, matrix) => {
+        if(materialFrame) {
+          this.pbr?.drawShadow(pass, matrix);
+        }
+        for(const geometry of nativeGeometry) {
+          if(geometry.castsShadow) {
+            geometry.drawShadow(pass, matrix);
+          }
+        }
+      });
+      this.litShadowPass ??= new SceneLitPass(this.device, this.postprocessor?.format);
+      this.litShadowPass.prepare(lightFrame.view.camera, uniformData, batches);
     }
     return shadows;
   }
@@ -783,7 +808,9 @@ export class GpuTriangleRenderer {
     opaqueVertexCount: number,
     useShadowPass: boolean,
     materialFrame: PbrFrame | null,
-    atmosphereUniforms: Float32Array<ArrayBuffer> | null): void {
+    atmosphereUniforms: Float32Array<ArrayBuffer> | null,
+    lightFrame: SceneLightFrame | null,
+    nativeGeometry: readonly NativeSceneGeometry[]): void {
     if(atmosphereUniforms) {
       this.atmosphere?.draw(renderPass, atmosphereUniforms);
     }
@@ -797,6 +824,18 @@ export class GpuTriangleRenderer {
     }
     if(materialFrame) {
       this.pbr?.draw(renderPass, false);
+    }
+    for(const geometry of nativeGeometry) {
+      if(!geometry.visible) {
+        continue;
+      }
+      if(lightFrame && this.shadowFrameActive && this.litShadowPass && geometry.receivesShadow) {
+        this.litShadowPass.drawNative(renderPass, (pass, bindings, additive) => {
+          geometry.draw(pass, bindings, true, additive);
+        });
+      } else {
+        geometry.draw(renderPass, {uniforms: this.uniformBuffer}, false, false);
+      }
     }
   }
 
@@ -947,6 +986,7 @@ export class GpuTriangleRenderer {
     }
     this.resourcesReleased = true;
     this.litShadowPass?.destroy();
+    this.shadowPass?.destroy();
     this.atmosphere?.destroy();
     this.pbr?.destroy();
     this.textured?.destroy();

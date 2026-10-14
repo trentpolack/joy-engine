@@ -10,6 +10,7 @@ import type { SceneEffectsFrame } from './scene-effects.ts';
 import type { SceneMotionFrame } from './scene-motion.ts';
 import type { SceneVolumeLightCamera } from '../lighting/scene-volume-lights.ts';
 import type { getSceneEffectsRequirements } from './scene-effect-config.ts';
+import type { NativeSceneGeometry } from './native-geometry.ts';
 
 import { SceneMotionPass } from './scene-motion.ts';
 import { SceneSurfaces } from './scene-surfaces.ts';
@@ -26,6 +27,7 @@ export interface SceneAttachmentFrame {
   motion: SceneMotionFrame;
   readonly view: FrameView;
   surfaceRoughness: ArrayLike<number>;
+  nativeGeometry: readonly NativeSceneGeometry[];
 }
 
 /**
@@ -111,7 +113,18 @@ export class SceneEffectAttachments {
     }
 
     this.motion ??= new SceneMotionPass(this.device);
-    outputFrame.taaVelocityTexture = this.motion.render(inputs.motion);
+    outputFrame.taaVelocityTexture = this.motion.render(inputs.motion, pass => {
+      for(const geometry of inputs.nativeGeometry) {
+        if(geometry.visible) {
+          geometry.drawMotion(pass, {
+            currentViewProjection: inputs.motion.currentViewProjection,
+            previousViewProjection: inputs.motion.previousViewProjection,
+            rasterViewProjection: inputs.motion.rasterViewProjection ?? inputs.motion.currentViewProjection,
+            velocityJitterDelta: inputs.motion.velocityJitterDelta ?? [0, 0]
+          });
+        }
+      }
+    });
     outputFrame.velocityTexture = this.motion.jitteredVelocityTexture ?? undefined;
   }
 
@@ -141,7 +154,14 @@ export class SceneEffectAttachments {
       rasterViewProjection,
       inputs.view.camera.viewMatrix,
       depth,
-      inputs.surfaceRoughness
+      inputs.surfaceRoughness,
+      pass => {
+        for(const geometry of inputs.nativeGeometry) {
+          if(geometry.visible) {
+            geometry.drawSurface(pass, rasterViewProjection, inputs.view.camera.viewMatrix);
+          }
+        }
+      }
     );
   }
 

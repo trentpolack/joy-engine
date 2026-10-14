@@ -2,8 +2,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   Entity, Character, PlayerCharacter, Controller, PlayerController, AIController,
-  EntityRegistry, EntityWorld, EntityComponent, ComponentRegistry, EntitySystem
+  EntityRegistry, EntityWorld, EntityComponent, ComponentRegistry, EntitySystem, World
 } from '../src/gameplay/index.ts';
+
+test('World runs entities and physics without browser or rendering hosts', () => {
+  const world = new World({physics: {fixedStep: 0.25, maxSubSteps: 2}});
+  const calls = [];
+  world.entities.addSystem(Object.assign(new EntitySystem(), {
+    update(elapsedSeconds) {
+      calls.push(elapsedSeconds);
+    }
+  }));
+
+  assert.deepEqual(world.update(0.5), {elapsedSeconds: 0.5, physicsSteps: 2});
+  assert.deepEqual(calls, [0.5]);
+  assert.equal(typeof globalThis.document, 'undefined');
+
+  world.destroy();
+  world.destroy();
+  assert.throws(() => world.update(0), /destroyed/);
+});
 
 test('exclusive possession transfers clear both characters and controllers, including destruction', () => {
   const first = new PlayerCharacter({id: 'first'});

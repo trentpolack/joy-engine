@@ -418,6 +418,35 @@ Dispose every entity even if individual cleanup fails; report all errors after r
 
 
 
+## World
+Import from `joy-engine`. [Source](../../src/gameplay/world.ts)
+
+Owns headless entity simulation and physics without importing browser or rendering facilities. Physics advances before entity systems, allowing systems to consume the completed solver state. A presentation integration may borrow this world, but the world never owns that integration.
+
+### constructor
+```ts
+constructor(options: WorldOptions = {})
+```
+Create independent simulation owners. Options are borrowed and copied by each subsystem.
+
+
+### update
+```ts
+update(elapsedSeconds: number): WorldStep
+```
+Advance physics and entities by finite, nonnegative simulation seconds.
+
+- **param** elapsedSeconds Simulation delta in seconds.
+- **returns** An owned immutable summary of completed work.
+
+### destroy
+```ts
+destroy(): void
+```
+Release entities before their borrowed physics state, and make repeated destruction harmless.
+
+
+
 ## copyEntityDefinition
 Import from `joy-engine`. [Source](../../src/gameplay/entity-definition.ts)
 

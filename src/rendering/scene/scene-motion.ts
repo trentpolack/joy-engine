@@ -11,7 +11,7 @@ import {
   GPU_VERTEX_FORMAT,
   SHADER_ENTRY_POINT
 } from '../gpu/constants.ts';
-import type { Device, Framebuffer, RenderPipeline, Shader, VertexArray } from '@luma.gl/core';
+import type { Device, Framebuffer, RenderPass, RenderPipeline, Shader, VertexArray } from '@luma.gl/core';
 import { Buffer, Texture } from '@luma.gl/core';
 import { DynamicGpuBuffer } from '../gpu/dynamic-gpu-buffer.ts';
 import { FLOATS_PER_VERTEX } from '../geometry/geometry.ts';
@@ -120,7 +120,7 @@ export class SceneMotionPass {
    * Camera matrices are column-major and unjittered; rasterViewProjection may contain jitter.
    * Returns the owned unjittered motion texture for upstream TAA and motion blur. No submit.
    */
-  render(frame: SceneMotionFrame): Texture {
+  render(frame: SceneMotionFrame, drawNative?: (pass: RenderPass) => void): Texture {
     if(this.destroyed || !this.pipeline || !this.vertexArray || !this.uniforms) {
       throw new Error('SceneMotionPass is destroyed.');
     }
@@ -144,6 +144,7 @@ export class SceneMotionPass {
       pass.setBindings({uniforms: this.uniforms});
       pass.setVertexArray(this.vertexArray);
       pass.draw({vertexCount: frame.vertices.length/FLOATS_PER_VERTEX});
+      drawNative?.(pass);
     } finally {
       pass.end();
     }

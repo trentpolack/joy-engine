@@ -63,6 +63,8 @@ export interface SceneLightFrame {
    * Input remains caller-owned and must be valid until preparation returns.
    */
   casters: number[] | Float32Array;
+  /** Camera-visible opaque runs; omitted means every colored receiver accepts shadows. */
+  receivesShadowRanges?: readonly {firstVertex: number; vertexCount: number; receivesShadow: boolean}[];
 }
 
 /**

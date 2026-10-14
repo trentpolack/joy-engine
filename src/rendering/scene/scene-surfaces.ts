@@ -15,6 +15,7 @@ import type {
   Framebuffer,
   RenderPipeline,
   Shader,
+  RenderPass,
   VertexArray
 } from '@luma.gl/core';
 import {
@@ -130,7 +131,8 @@ export class SceneSurfaces {
     viewProjection: readonly number[] | Float32Array,
     viewMatrix: readonly number[] | Float32Array,
     depthTexture: Texture,
-    roughness?: ArrayLike<number>): Texture {
+    roughness?: ArrayLike<number>,
+    drawNative?: (pass: RenderPass) => void): Texture {
     if(this.destroyed || !this.pipeline || !this.vertexArray || !this.vertices || !this.uniforms) {
       throw new Error('SceneSurfaces is destroyed.');
     }
@@ -167,6 +169,7 @@ export class SceneSurfaces {
       if(vertexCount > 0) {
         pass.draw({vertexCount});
       }
+      drawNative?.(pass);
     } finally {
       pass.end();
     }

@@ -37,6 +37,8 @@ export { PlayerController, AIController } from './gameplay/player-controller.ts'
 export { EntityRegistry } from './gameplay/entity-registry.ts';
 export { EntityWorld } from './gameplay/entity-world.ts';
 export type { EntityWorldOptions } from './gameplay/entity-world.ts';
+export { World } from './gameplay/world.ts';
+export type { WorldOptions, WorldStep } from './gameplay/world.ts';
 export { copyEntityDefinition } from './gameplay/entity-definition.ts';
 export { searchGrid, traceGridRoute } from './gameplay/grid-navigation.ts';
 export type { GridRoute, GridSearchOptions } from './gameplay/grid-navigation.ts';
@@ -146,13 +148,17 @@ export type { PbrFrame } from './core/types.ts';
 export { DEFAULT_PBR_LIGHTING } from './rendering/materials/pbr/pbr-material-pass.ts';
 
 export { MeshAsset } from './rendering/scene/mesh-asset.ts';
+export { TerrainInstance } from './rendering/scene/terrain-instance.ts';
+export { SceneNode } from './rendering/scene/scene-node.ts';
+export { prepareSceneGeometry } from './rendering/scene/scene-geometry.ts';
+export type { SceneGeometrySnapshot, PreparedMeshGeometry, PreparedTerrainGeometry, PreparedTerrainPacket, PreparedSceneGeometry } from './rendering/scene/scene-geometry.ts';
 export { MeshInstance } from './rendering/scene/mesh-instance.ts';
 export { RenderScene } from './rendering/scene/render-scene.ts';
 export type { PointLight } from './rendering/lighting/point-lights.ts';
 export { SceneRenderer } from './rendering/scene/scene-renderer.ts';
 export { projectToViewport, screenRay, intersectRayPlane } from './rendering/camera/projection.ts';
 export type { MeshAssetData } from './core/types.ts';
-export type { MeshInstanceOptions } from './core/types.ts';
+export type { AffineTransform, GeometryBounds, SceneNodeOptions, MeshInstanceOptions, TerrainInstanceOptions } from './core/types.ts';
 export type { SceneRendererOptions } from './rendering/scene/scene-renderer.ts';
 export type { SceneFrameOptions } from './rendering/scene/scene-renderer.ts';
 export { createFrameView } from './rendering/scene/frame-view.ts';
