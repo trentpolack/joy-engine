@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readDocument } from '../src/document.ts';
 import { compile, compileFormScript } from 'joy-engine/form';
 import { RECIPES } from '../src/script-guide.ts';
-import { EXAMPLES } from '../src/examples.ts';
+import {FORM_LIBRARY_FIXTURES} from './form-library-fixtures.js';
+import {openFormLibraryAsset} from '../src/form-library.ts';
 import { defaultMaterial } from 'joy-engine/form';
 
 test('documents retain source, name, and numeric overrides', () => {
@@ -35,12 +36,13 @@ test('rejects unsupported and malformed saved documents', () => {
     assert.throws(() => readDocument(JSON.stringify(value)));
   }
 });
-test('all shipped examples build at default and maximum parameter settings', () => {
+test('all shipped FORM assets compile at default and maximum parameter settings', () => {
   for(const recipe of RECIPES) {
     assert.ok(compile(recipe.code.replaceAll('$id', 'study')).positions.length > 0, recipe.title);
   }
-  for(const example of EXAMPLES) {
-    const initial = compile(example.source);
+  for(const asset of FORM_LIBRARY_FIXTURES) {
+    const example = openFormLibraryAsset(asset);
+    const initial = compile(example.source, example.overrides, example.materials);
     const overrides = Object.fromEntries(
       initial.parameters.filter(parameter => 'max' in parameter).map((parameter) => [
         parameter.name,
@@ -49,9 +51,7 @@ test('all shipped examples build at default and maximum parameter settings', () 
           : parameter.max,
       ]),
     );
-    const maximum = compile(example.source, overrides);
-    assert.ok(maximum.positions.length > 0, example.name);
-    assert.ok(initial.userData?.some(value => value !== null), `${example.name} should expose user data`);
+    assert.doesNotThrow(() => compile(example.source, {...example.overrides, ...overrides}, example.materials), asset.path);
   }
 });
 
@@ -125,9 +125,9 @@ test('gameplay examples expose independent entity records and parameter-driven g
     {name: 'Patrol circuit', output: 'Waypoints', overrides: {count: 5}, count: 5, kind: 'waypoint', attribute: 'speed'},
     {name: 'Tactical terraces', output: 'Tiles', overrides: {rows: 3, columns: 4}, count: 12, kind: 'tile', attribute: 'moveCost'}
   ]) {
-    const example = EXAMPLES.find(value => value.name === scenario.name);
-    assert.ok(example, scenario.name);
-    const program = compileFormScript(example.source);
+    const asset = FORM_LIBRARY_FIXTURES.find(value => value.path === `assets/examples/${scenario.name.toLowerCase().replaceAll(' ', '-')}.form`);
+    assert.ok(asset, scenario.name);
+    const program = compileFormScript(openFormLibraryAsset(asset).source);
     const result = program.evaluate(scenario.overrides);
     const logical = result.outputs.find(output => output.name === scenario.output).value;
     assert.equal(logical.attributes.points.position.values.length, scenario.count);

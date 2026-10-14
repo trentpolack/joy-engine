@@ -606,26 +606,6 @@ dd {
   color: var(--orange);
 }
 
-.app-footer {
-  height: 36px;
-  padding: 0 28px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 15px;
-  font:
-    8px ui-monospace,
-    monospace;
-  letter-spacing: 1px;
-  color: var(--muted);
-  border-top: 1px solid var(--line);
-}
-
-.app-footer b {
-  color: var(--orange);
-  font-weight: 900;
-}
-
 .gpu-error {
   position: absolute;
   left: 10%;
@@ -827,14 +807,6 @@ code {
   }
   .output-summary {
     border-right: 0;
-  }
-  .app-footer {
-    padding: 12px 15px;
-    height: auto;
-    font-size: 7px;
-  }
-  .app-footer > span:last-child {
-    display: none;
   }
   .reference-grid {
     grid-template-columns: 1fr;
@@ -1038,12 +1010,6 @@ input[type='range']::-moz-range-thumb {
 }
 dialog {
   border: 1px solid var(--orange);
-}
-.app-footer {
-  flex: none;
-}
-.app-footer a {
-  text-decoration: none;
 }
 
 @media (max-width: 930px) {
@@ -1582,7 +1548,7 @@ h1 { font-size: 27px; letter-spacing: -1px; }
 .example-picker { gap: 8px; }
 .panel-heading { min-height: 44px; padding: 8px 12px; gap: 8px; }
 .run-controls { gap: 8px; }
-.cm-editor { font-size: 13px; }
+.cm-editor { font-size: 12px; }
 .cm-scroller { line-height: 1.65; }
 .cm-content { padding: 12px 0 !important; }
 .editor-bottom { padding: 6px 12px; align-items: center; flex-wrap: wrap; }
@@ -1606,18 +1572,63 @@ h1 { font-size: 27px; letter-spacing: -1px; }
 .parameter-component label { font-size: 11px; }
 .parameter .color-swatch { width: 28px; min-width: 28px; height: 24px; }
 .inspector > .export-panel #export-note { font: 11px/1.4 Archivo, sans-serif; }
-.app-footer { height: 26px; padding: 6px 16px; }
 
 /* Below three-pane widths, scroll complete panels rather than clipping the inspector. */
 @media (min-width: 681px) and (max-width: 930px) {
-  #app .workbench { grid-template-columns: minmax(240px, .9fr) minmax(280px, 1.3fr) !important; grid-template-rows: minmax(440px, 65dvh) auto !important; }
-  #app .workbench .editor-panel { grid-column: 1 !important; grid-row: 1 !important; height: auto; }
-  #app .workbench .preview-panel { grid-column: 2 !important; grid-row: 1 !important; height: auto; }
-  #app .workbench .inspector { grid-column: 1 / -1 !important; grid-row: 2 !important; height: auto; min-height: 360px; display: flex; flex-direction: column; }
+  #app .workbench { grid-template-columns: repeat(var(--visible-panel-count, 3), minmax(0, 1fr)) !important; grid-template-rows: minmax(440px, 75dvh) !important; }
+  #app .workbench > .editor-panel, #app .workbench > .preview-panel, #app .workbench > .inspector { grid-column: auto !important; grid-row: 1 !important; height: auto; min-width: 0; }
   #app .inspector-content { overflow: visible; }
-  #parameters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
-  #parameters > .parameter { margin: 0; }
 }
+
+/* One compact header vocabulary; file choices live in a dialog, panel choices in View. */
+.app-header .joy-editor-navigation { margin-left: 0; }
+.app-header .joy-editor-menu { left: 0; right: auto; }
+.app-header nav[aria-label='Document actions'] { margin-left: auto; align-items: center; gap: 6px; }
+.app-header nav[aria-label='Document actions'] button,
+.app-header .joy-editor-switcher summary,
+.panel-visibility > summary {
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--text);
+  font: 700 12px/1 Archivo, sans-serif;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.app-header nav[aria-label='Document actions'] button:not(.joy-design-toggle):not(:disabled):hover,
+.app-header .joy-editor-switcher > summary:hover,
+.app-header .joy-editor-switcher[open] > summary,
+.panel-visibility > summary:hover,
+.panel-visibility[open] > summary { border-color: var(--orange); color: var(--orange-hover); }
+.joy-editor-switcher summary > .joy-editor-grid { display: none; }
+.app-header .joy-editor-switcher summary > span:not(.joy-editor-grid) { display: inline; }
+.project-bar .example-picker, .project-bar .example-picker select { font: 12px Archivo, sans-serif; letter-spacing: 0; }
+.panel-visibility { position: relative; flex: 0 0 auto; }
+.panel-visibility > summary { list-style: none; cursor: pointer; }
+.panel-visibility > summary::-webkit-details-marker { display: none; }
+#panel-visibility-controls { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 170px; padding: 6px; border: 1px solid var(--line); background: var(--background); box-shadow: 0 8px 24px #0005; }
+#panel-visibility-controls button { display: flex; width: 100%; align-items: center; gap: 10px; border: 0; background: transparent; text-align: left; }
+#panel-visibility-controls button::before { content: '✓'; width: 14px; color: var(--orange); }
+#panel-visibility-controls button[aria-pressed='false'] { opacity: 1; color: var(--muted); }
+#panel-visibility-controls button[aria-pressed='false']::before { content: ''; }
+#app .workbench > [hidden] { display: none !important; }
+#app.lab-workspace-maximized > .app-header { display: flex; }
+.joy-hosted #app > .app-header { display: flex !important; height: 44px; min-height: 44px; padding: 6px 12px; }
+.joy-hosted .app-header .brand, .joy-hosted .app-header #save { display: none; }
+.artifact-dialog { width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 24px; box-sizing: border-box; border: 1px solid var(--orange); background: var(--background); color: var(--text); }
+.artifact-dialog::backdrop { background: #0d1626b8; }
+.artifact-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.artifact-heading h2 { margin: 0; color: var(--orange); font: 400 22px 'Archivo Black', sans-serif; }
+.artifact-dialog label { display: grid; gap: 8px; margin-top: 18px; color: var(--text); font: 700 12px Archivo, sans-serif; }
+.artifact-dialog input, .artifact-dialog select { box-sizing: border-box; width: 100%; min-height: 38px; padding: 9px; border: 1px solid var(--line); border-radius: 0; background: var(--surface); color: var(--text); font: 13px Archivo, sans-serif; }
+.artifact-dialog p { margin: 10px 0 0; color: var(--muted); font: 12px/1.6 Archivo, sans-serif; }
+.artifact-dialog #artifact-error { color: var(--danger); }
+.artifact-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
+.artifact-actions .primary { background: var(--orange); color: var(--background); border-color: var(--orange); }
+.artifact-dialog [hidden] { display: none; }
 @media (max-width: 930px) {
   .joy-hosted body { height: auto; overflow: auto; }
   .joy-hosted #app { height: auto; min-height: 100dvh; overflow: visible; }
@@ -1625,7 +1636,9 @@ h1 { font-size: 27px; letter-spacing: -1px; }
   .layout-divider { display: none; }
 }
 @media (max-width: 680px) {
-  .app-header { height: auto; min-height: 58px; padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
+  .app-header { position: relative; height: auto; min-height: 58px; padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
+  .app-header .joy-editor-navigation { position: static; }
+  .app-header .joy-editor-menu { left: 12px; right: 12px; width: auto; }
   .app-header nav[aria-label='Document actions'] { margin-left: auto; }
   .app-header nav[aria-label='Document actions'] button { font-size: 11px; padding: 7px 9px; }
   .project-bar { padding: 8px 12px; }

@@ -15,6 +15,19 @@ const FONT_DIRECTORIES = [
 ];
 
 const EDITOR_ICON_PATH = fileURLToPath(new URL('../../assets/favicon.png', import.meta.url));
+const FORM_ASSET_DIRECTORIES = ['examples', 'form'].map(folder => fileURLToPath(new URL(`../../../assets/${folder}/`, import.meta.url)));
+
+/** Vite watches imported external files, but new siblings require their owning directories. */
+const formLibraryWatchPlugin = {
+  name: 'form-library-assets',
+  /**
+   * Let Vite invalidate glob imports when external asset files are added or removed.
+   * @param {import('vite').ViteDevServer} server
+   */
+  configureServer(server) {
+    server.watcher.add(FORM_ASSET_DIRECTORIES);
+  }
+};
 
 export default defineConfig({
   root: fileURLToPath(new URL('./site', import.meta.url)),
@@ -24,5 +37,5 @@ export default defineConfig({
     }
   },
   build: {outDir: '../dist', emptyOutDir: true},
-  plugins: [createFaviconPlugin({iconPath: EDITOR_ICON_PATH}), createEditorPolicyPlugin('form-lab'), createDesignModePlugin()]
+  plugins: [createFaviconPlugin({iconPath: EDITOR_ICON_PATH}), createEditorPolicyPlugin('form-lab'), createDesignModePlugin(), formLibraryWatchPlugin]
 });

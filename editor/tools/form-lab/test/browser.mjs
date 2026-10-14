@@ -39,6 +39,11 @@ async function capture(name) {
   });
   captures.push(name);
 }
+async function openExport(format) {
+  await page.locator('#export').click();
+  await page.locator('#artifact-format').selectOption(format);
+  await page.locator('#artifact-destination').selectOption('download');
+}
 async function edit(source) {
   const editor = page.locator('.cm-content');
   await editor.click();
@@ -79,13 +84,21 @@ try {
   );
   await expect(page.locator('#backend')).toContainText('WEBGL 2');
   await expect(page.locator('#gpu-error')).toBeHidden();
+  await expect(page.locator('#examples optgroup[label="assets/examples"]')).toHaveCount(1);
+  await expect(page.locator('#examples optgroup[label="assets/form/structures"]')).toHaveCount(1);
+  await page.locator('#examples').selectOption('assets/form/structures/cottage.formlab');
+  await expect(page.getByRole('spinbutton', {name: 'height value', exact: true})).toHaveValue('3.5');
+  await expect(page.locator('#preview-status')).toHaveAttribute('data-state', 'generated');
+  await capture('engine-library-cottage');
+  await page.locator('#examples').selectOption('assets/examples/wave-study.form');
+  await expect(page.locator('#triangle-count')).toHaveText('8,192');
   await page.locator('#document-name').fill('Suite study');
   await page.locator('#document-name').press('Tab');
   await expect(page.locator('#editor-filename')).toHaveText('suite-study.form');
   await expect(page.locator('.cm-content')).toContainText('name="Suite study"');
   await expect(page.locator('#preview-status')).toHaveAttribute('data-state','generated');
   await expect(page.locator('#scene-title')).toHaveText('MAKE\nSOME WAVES.');
-  await expect(page.locator('#export')).toContainText('EXPORT DATA');
+  await expect(page.locator('#export')).toHaveText('Export');
   await expect(page.locator('#export')).toHaveCSS('box-shadow', 'none');
   const optionBounds = await page.locator('.preview-bottom').boundingBox();
   const resultBounds = await page.locator('.generation').boundingBox();
@@ -244,13 +257,13 @@ try {
     page.getByRole('spinbutton', { name: 'height value' }),
   ).toHaveValue('5');
   await expect(page.locator('#diagnostic')).toContainText('Built successfully');
-  await page.locator('#examples').selectOption('1');
+  await page.locator('#examples').selectOption('assets/examples/orbital-bloom.form');
   await expect(page.locator('#point-count')).toHaveText('16,000');
   await capture('02-orbital-bloom');
-  await page.locator('#examples').selectOption('2');
+  await page.locator('#examples').selectOption('assets/examples/pocket-city.form');
   await expect(page.locator('#triangle-count')).toHaveText('1,452');
   await capture('03-pocket-city');
-  await page.locator('#examples').selectOption('3');
+  await page.locator('#examples').selectOption('assets/examples/satellite-garden.form');
   await expect(page.locator('#diagnostic')).toContainText('Built successfully');
   await capture('04-satellite-garden');
   await page.locator('#live').uncheck();
@@ -286,9 +299,9 @@ try {
     colorBefore,
     'typed edits change rendered geometry',
   );
-  await page.locator('#export-format').selectOption('json');
+  await openExport('json');
   const typedDownload = page.waitForEvent('download');
-  await page.locator('#export').click();
+  await page.locator('#artifact-write').click();
   const typedPath = fileURLToPath(new URL('typed-geometry.json', directory));
   await (await typedDownload).saveAs(typedPath);
   const typedGeometry = JSON.parse(await readFile(typedPath, 'utf8'));
@@ -310,7 +323,6 @@ try {
     page.getByRole('spinbutton', { name: 'tint A value', exact: true }),
   ).toHaveValue('1');
   await expect(page.locator('#param-tint-a')).toHaveCSS('--range-fill', '100%');
-  await page.locator('#export-format').selectOption('obj');
   await edit('point(0,0,0)\npoint(missing,0,0)');
   await expect(page.locator('#diagnostic')).toContainText('Line 2');
   await page.locator('#error-location').click();
@@ -328,12 +340,16 @@ try {
   await expect(page.locator('#triangle-count')).toHaveText('12');
   await page.locator('#run').click();
   await expect(page.locator('#triangle-count')).toHaveText('0');
+  await openExport('obj');
   const downloadPromise = page.waitForEvent('download');
-  await page.locator('#export').click();
+  await page.locator('#artifact-write').click();
   const download = await downloadPromise;
   await download.saveAs(fileURLToPath(new URL('export.obj', directory)));
   const savePromise = page.waitForEvent('download');
   await page.locator('#save').click();
+  await page.locator('#artifact-format').selectOption('formlab');
+  await page.locator('#artifact-destination').selectOption('download');
+  await page.locator('#artifact-write').click();
   const saved = await savePromise;
   const savePath = fileURLToPath(new URL('saved.formlab', directory));
   await saved.saveAs(savePath);
@@ -347,7 +363,7 @@ try {
   await capture('06-language-reference');
   await page.keyboard.press('Escape');
   const beforeReplace = confirmations;
-  await page.locator('#examples').selectOption('0');
+  await page.locator('#examples').selectOption('assets/examples/wave-study.form');
   assert.equal(
     confirmations,
     beforeReplace + 1,
@@ -366,9 +382,9 @@ try {
   await page.getByRole('spinbutton', { name: '__proto__ value' }).fill('7');
   await page.keyboard.press('Tab');
   await expect(page.locator('#diagnostic')).toContainText('Built successfully');
-  await page.locator('#export-format').selectOption('json');
+  await openExport('json');
   const prototypeDownload = page.waitForEvent('download');
-  await page.locator('#export').click();
+  await page.locator('#artifact-write').click();
   const prototypePath = fileURLToPath(
     new URL('prototype-parameter.json', directory),
   );
@@ -377,7 +393,7 @@ try {
     JSON.parse(await readFile(prototypePath, 'utf8')).positions[0],
     7,
   );
-  await page.locator('#examples').selectOption('0');
+  await page.locator('#examples').selectOption('assets/examples/wave-study.form');
   await expect(page.locator('#triangle-count')).toHaveText('8,192');
   await edit(
     'project meta(name="Metadata study", info="AUTHORED INFO", title="SCRIPT TITLE")\nparam radius = 2 meta(min=1,max=5,step=0.1)\npoint(radius,0,0)',
@@ -392,10 +408,10 @@ try {
   await expect(page.locator('#scene-title')).toHaveText('SCRIPT TITLE');
   await expect(page.locator('#document-name')).toHaveValue('Metadata study');
   await capture('project-metadata');
-  await page.locator('#examples').selectOption('0');
+  await page.locator('#examples').selectOption('assets/examples/wave-study.form');
   await expect(page.locator('#triangle-count')).toHaveText('8,192');
   // Resource overrides exercise the same recipe inputs a runtime caller supplies.
-  await page.locator('#examples').selectOption({label: 'Parametric bridge'});
+  await page.locator('#examples').selectOption('assets/examples/parametric-bridge.form');
   await expect(page.locator('#document-name')).toHaveValue('Parametric bridge');
   await expect(page.locator('#diagnostic')).toContainText('Built successfully');
   await expect(page.getByLabel('plank mesh source')).toHaveValue('current');
@@ -428,7 +444,7 @@ try {
   await expect(page.locator('#preview-status')).toHaveAttribute('data-state','generated');
   await page.reload();
   await expect(page.getByLabel('plank mesh source')).toContainText('replacement.glb');
-  await page.locator('#examples').selectOption({label: 'Terrain workshop'});
+  await page.locator('#examples').selectOption('assets/examples/terrain-workshop.form');
   await expect(page.locator('#document-name')).toHaveValue('Terrain workshop');
   await expect(page.locator('#preview-status')).toHaveAttribute('data-state','generated');
   await expect(page.locator('#output-select')).toContainText('Terrain');
@@ -469,11 +485,11 @@ try {
   await expect(page.locator('#output-select')).toBeDisabled();
   await expect(page.locator('#output-select')).not.toContainText('recipe_1');
   await expect(page.locator('#attribute-table tbody tr')).toHaveCount(0);
-  await page.locator('#examples').selectOption({label:'Vessel workshop'});
+  await page.locator('#examples').selectOption('assets/examples/vessel-workshop.form');
   await expect(page.locator('#output-select')).toContainText('Vessel');
   await expect(page.locator('#preview-status')).toHaveAttribute('data-state','generated');
   await capture('profile-workshop');
-  await page.locator('#examples').selectOption({label:'Path workshop'});
+  await page.locator('#examples').selectOption('assets/examples/path-workshop.form');
   await expect(page.locator('#output-select')).toContainText('Pipe');
   await expect(page.locator('#preview-status')).toHaveAttribute('data-state','generated');
   await capture('path-workshop');
@@ -482,7 +498,7 @@ try {
     {name: 'Patrol circuit', output: 'Waypoints', kind: 'waypoint', attribute: 'speed', capture: 'patrol-circuit'},
     {name: 'Tactical terraces', output: 'Tiles', kind: 'tile', attribute: 'moveCost', capture: 'tactical-terraces'}
   ]) {
-    await page.locator('#examples').selectOption({label: study.name});
+    await page.locator('#examples').selectOption(`assets/examples/${study.name.toLowerCase().replaceAll(' ', '-')}.form`);
     await expect(page.locator('#output-select')).toContainText(study.output);
     await expect(page.locator('#preview-status')).toHaveAttribute('data-state','generated');
     await page.locator('#attribute-panel').evaluate(panel => {
@@ -511,7 +527,7 @@ try {
   await expect(page.locator('#attribute-summary')).toContainText('4 points');
   await expect(page.locator('#output-select')).not.toContainText('Bad');
 
-  await page.locator('#examples').selectOption('0');
+  await page.locator('#examples').selectOption('assets/examples/wave-study.form');
   await expect(page.locator('#triangle-count')).toHaveText('8,192');
   for(const [name, width, height, density] of [
     ['tablet', 820, 1180, 1],

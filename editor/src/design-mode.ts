@@ -7,6 +7,9 @@ import {applyJoyComponentClasses} from './components.ts';
 const DESIGN_ENDPOINT = '/__joy-design/css';
 const TOKEN_PREFIX = '--joy-';
 const DESIGN_CONTROLS = '.joy-design-panel, .joy-design-toggle';
+const COMPARISON_QUERY = 'joy-compare-tools';
+const COMPARISON_FRAME_QUERY = 'joy-comparison-frame';
+const SUPPRESS_HOVER_ATTRIBUTE = 'data-joy-hover-suppressed';
 
 export interface DesignModeOptions {
   /** Borrowed header container; the launcher participates in its normal layout. */
@@ -23,6 +26,8 @@ export class JoyDesignMode {
   readonly outline = document.createElement('div');
   readonly toggle = document.createElement('button');
   readonly content = document.createElement('div');
+  readonly modeLabel = document.createElement('div');
+  comparison: HTMLDivElement | null = null;
   selected: HTMLElement | null = null;
 
   constructor(private readonly options: DesignModeOptions) {
@@ -44,33 +49,42 @@ export class JoyDesignMode {
     close.addEventListener('click', () => this.setOpen(false), {signal: this.listeners.signal});
     heading.append(title, close);
 
-    const instructions = document.createElement('p');
-    instructions.textContent = 'Select an element in the workspace to inspect its classes, CSS source, and Joy tokens. Press Escape to exit.';
+    this.modeLabel.className = 'joy-design-mode-label';
+    this.modeLabel.textContent = 'DESIGN MODE – Escape to Exit';
+    this.modeLabel.hidden = true;
     const compare = document.createElement('button');
     compare.type = 'button';
     compare.className = 'joy-button joy-button--quiet';
     compare.textContent = 'COMPARE TOOLS';
-    compare.hidden = !this.options.compareUrls?.length;
+    compare.hidden = !this.options.compareUrls?.length || !new URLSearchParams(window.location.search).has(COMPARISON_QUERY);
     compare.addEventListener('click', () => this.showComparison(), {signal: this.listeners.signal});
-    this.panel.append(heading, instructions, compare, this.content);
+    this.panel.append(heading, compare, this.content);
 
     this.toggle.className = 'joy-button joy-button--primary joy-design-toggle';
     this.toggle.type = 'button';
     this.toggle.textContent = 'DESIGN';
     this.toggle.setAttribute('aria-expanded', 'false');
-    this.toggle.addEventListener('click', () => this.setOpen(this.panel.hidden === true), {signal: this.listeners.signal});
+    this.toggle.addEventListener('click', () => {
+      this.toggle.removeAttribute(SUPPRESS_HOVER_ATTRIBUTE);
+      this.setOpen(this.toggle.getAttribute('aria-expanded') !== 'true');
+    }, {signal: this.listeners.signal});
+    const restoreHover = () => this.toggle.removeAttribute(SUPPRESS_HOVER_ATTRIBUTE);
+    this.toggle.addEventListener('pointerleave', restoreHover, {signal: this.listeners.signal});
+    this.toggle.addEventListener('pointerdown', restoreHover, {signal: this.listeners.signal});
     this.options.toggleHost.append(this.toggle);
-    document.body.append(this.outline, this.panel);
+    document.body.append(this.outline, this.panel, this.modeLabel);
     document.addEventListener('keydown', event => {
-      if(event.key === 'Escape' && !this.panel.hidden) {
+      if(event.key === 'Escape' && this.toggle.getAttribute('aria-expanded') === 'true') {
         event.preventDefault();
         event.stopPropagation();
         this.setOpen(false);
+        // Escape exits the active presentation even when the pointer is still on the launcher.
+        this.toggle.toggleAttribute(SUPPRESS_HOVER_ATTRIBUTE, this.toggle.matches(':hover'));
         this.toggle.focus();
       }
     }, {capture: true, signal: this.listeners.signal});
     window.addEventListener('resize', () => {
-      if(!this.panel.hidden) {
+      if(this.toggle.getAttribute('aria-expanded') === 'true') {
         this.positionPanel();
         this.updateOutline();
       }
@@ -79,7 +93,7 @@ export class JoyDesignMode {
     // Cancel the subsequent click as well, so inspecting a link or button cannot
     // navigate away or invoke document actions after pointerdown is intercepted.
     document.addEventListener('click', event => {
-      if(!this.panel.hidden && event.target instanceof HTMLElement && !event.target.closest(DESIGN_CONTROLS)) {
+      if(this.toggle.getAttribute('aria-expanded') === 'true' && event.target instanceof HTMLElement && !event.target.closest(DESIGN_CONTROLS)) {
         event.preventDefault();
         event.stopPropagation();
       }
@@ -93,14 +107,17 @@ export class JoyDesignMode {
     this.listeners.abort();
     this.panel.remove();
     this.outline.remove();
+    this.modeLabel.remove();
+    this.comparison?.remove();
     this.toggle.remove();
   }
 
   private setOpen(open: boolean): void {
-    this.panel.hidden = !open;
+    this.panel.hidden = true;
+    this.modeLabel.hidden = !open;
+    document.documentElement.classList.toggle('joy-design-mode-active', open);
     this.toggle.setAttribute('aria-expanded', String(open));
     if(open) {
-      this.positionPanel();
       return;
     }
     this.selected = null;
@@ -109,13 +126,11 @@ export class JoyDesignMode {
   }
 
   private positionPanel(): void {
-    const bounds = this.toggle.getBoundingClientRect();
-    this.panel.style.top = `${bounds.bottom + 8}px`;
-    this.panel.style.maxHeight = `${Math.max(0, window.innerHeight - bounds.bottom - 20)}px`;
+    this.panel.style.maxHeight = `${Math.max(0, window.innerHeight - 48)}px`;
   }
 
   private select(event: PointerEvent): void {
-    if(this.panel.hidden || !(event.target instanceof HTMLElement) || event.target.closest(DESIGN_CONTROLS)) {
+    if(this.toggle.getAttribute('aria-expanded') !== 'true' || !(event.target instanceof HTMLElement) || event.target.closest(DESIGN_CONTROLS)) {
       return;
     }
     event.preventDefault();
@@ -141,7 +156,7 @@ export class JoyDesignMode {
     const selected = this.selected;
     const match = await findSourceRule(selected);
     // Closing or selecting again can invalidate an in-flight stylesheet lookup.
-    if(this.listeners.signal.aborted || this.panel.hidden || this.selected !== selected) {
+    if(this.listeners.signal.aborted || this.toggle.getAttribute('aria-expanded') !== 'true' || this.selected !== selected) {
       return;
     }
     const tokens = readTokens();
@@ -156,6 +171,8 @@ export class JoyDesignMode {
       tokenList.append(Object.assign(document.createElement('code'), {textContent: name}), Object.assign(document.createElement('span'), {textContent: value}));
     }
     this.content.append(title, details, tokenList);
+    this.panel.hidden = false;
+    this.positionPanel();
     this.enableDrag(match);
   }
 
@@ -173,17 +190,31 @@ export class JoyDesignMode {
   }
 
   private showComparison(): void {
+    if(this.comparison) {
+      return;
+    }
     const comparison = document.createElement('div');
     comparison.className = 'joy-design-compare';
     for(const url of this.options.compareUrls ?? []) {
       const frame = document.createElement('iframe');
-      frame.src = url;
+      const frameUrl = new URL(url, window.location.href);
+      frameUrl.searchParams.set(COMPARISON_FRAME_QUERY, '1');
+      frame.src = frameUrl.href;
       frame.title = url;
       comparison.append(frame);
     }
-    comparison.addEventListener('dblclick', () => comparison.remove(), {once: true});
+    comparison.addEventListener('dblclick', () => {
+      comparison.remove();
+      this.comparison = null;
+    }, {once: true});
+    this.comparison = comparison;
     document.body.append(comparison);
   }
+}
+
+/** Comparison frames intentionally omit design controls so comparison cannot recurse. */
+export function isDesignComparisonFrame(): boolean {
+  return new URLSearchParams(window.location.search).has(COMPARISON_FRAME_QUERY);
 }
 
 interface SourceRule { href: string; selector: string; source: string; }

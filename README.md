@@ -22,6 +22,7 @@ npm run docs:api  # regenerate docs/api from the public exports
 | `joy-engine` | Browser runtime: rendering, particles, gameplay, physics, input and audio. |
 | `joy-engine/constants` | Data-only constants, safe for workers, editors and game runtime. |
 | `joy-engine/form`, `joy-engine/levels`, `joy-engine/objects`, `joy-engine/project-manifest` | Asset document parsers and compilers for authoring tools and Node tests. |
+| `joy-engine/scripting`, `joy-engine/particles/scripting` | Editor-neutral scripting contracts and built-in particle language information for authoring integrations. |
 | `joy-engine/post-processing` | Node-safe post-processing configuration helpers (see below). |
 | `joy-engine/development`, `joy-engine/development/editor`, `joy-engine/development/preview`, `joy-engine/dev/*` | Development-only in-game overlays and the editor preview bridge. |
 | `joy-engine/development/vite` | Node-only Vite plugins: config tuning and post-processing persistence, shared favicon. |

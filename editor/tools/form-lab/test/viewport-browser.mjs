@@ -55,7 +55,7 @@ try {
     });
     assert.ok(colors > 32, `${backend}: viewport must contain rendered geometry, received ${colors} colors`);
     assert.deepEqual(errors, [], `${backend}: shader compilation and rendering must succeed`);
-    await page.locator('#examples').selectOption({label: 'Material studio'});
+    await page.locator('#examples').selectOption('assets/examples/material-studio.form');
     await expect(page.locator('#preview-status')).toHaveAttribute('data-state', 'generated');
     await expect(page.locator('#gpu-error')).toBeHidden();
     await page.locator('#frame').click();
@@ -65,6 +65,9 @@ try {
     async function savedDocument() {
       const downloading = page.waitForEvent('download');
       await page.locator('#save').click();
+      await page.locator('#artifact-format').selectOption('formlab');
+      await page.locator('#artifact-destination').selectOption('download');
+      await page.locator('#artifact-write').click();
       return JSON.parse(await readFile(await (await downloading).path(), 'utf8'));
     }
     const beforeLighting = await savedDocument();

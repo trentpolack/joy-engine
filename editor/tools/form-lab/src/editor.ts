@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import { FORM_ATTRIBUTE_DOMAIN, FORM_COMMAND, FORM_KEYWORD } from 'joy-engine/constants';
+import { FORM_LANGUAGE_CATALOG } from 'joy-engine/form';
 import type { StringStream } from '@codemirror/language';
 import { createScriptEditor, StreamLanguage } from '@joy-games/joy-editor';
 
@@ -118,6 +119,7 @@ export function createEditor(parent: HTMLElement, source: string, onChange: () =
     parent,
     source,
     language: formLanguage,
+    languageInformation: FORM_LANGUAGE_CATALOG,
     label: 'Form script editor',
     onChange,
     onRun,

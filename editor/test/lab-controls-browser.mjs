@@ -32,6 +32,11 @@ async function openLab(name) {
 async function exported(page) {
   const pending = page.waitForEvent('download');
   await page.locator('#save').click();
+  if(await page.locator('#artifact-dialog').count()) {
+    await page.locator('#artifact-format').selectOption('formlab');
+    await page.locator('#artifact-destination').selectOption('download');
+    await page.locator('#artifact-write').click();
+  }
   const download = await pending;
   return JSON.parse(await readFile(await download.path(), 'utf8'));
 }
@@ -50,7 +55,7 @@ try {
   await form.getByLabel('tint R value', {exact: true}).press('Tab');
   await form.locator('#live').check();
   checks.push('FORM rejected picker preserves accepted color and invalid draft with Live off');
-  await form.locator('#examples').selectOption({label: 'Material studio'});
+  await form.locator('#examples').selectOption('assets/examples/material-studio.form');
   await expect(form.locator('#preview-status')).toHaveAttribute('data-state', 'generated');
   const material = form.locator('[data-resource-parameter="polished"]');
   const initialPicker = await material.getByLabel('polished color picker', {exact: true}).inputValue();
