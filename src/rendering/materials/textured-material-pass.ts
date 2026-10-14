@@ -3,7 +3,7 @@
 
 import { GPU_BACKEND, GPU_COMPARE, GPU_TEXTURE_FORMAT, GPU_TOPOLOGY, GPU_VERTEX_FORMAT, SHADER_ENTRY_POINT } from '../gpu/constants.ts';
 import type { Texture, TextureFormatColor, RenderPass, Device, Shader, RenderPipeline, VertexArray } from '@luma.gl/core';
-import type { TriangleShaderSources } from './gpu-triangle-renderer.ts';
+import type { TriangleShaderSources } from '../renderer.ts';
 import { Buffer } from '@luma.gl/core';
 import { DynamicGpuBuffer } from '../gpu/dynamic-gpu-buffer.ts';
 import { createPortableShaders } from '../gpu/gpu-device.ts';
@@ -16,7 +16,7 @@ export interface TransparentDraw {
 /** Optional textured material owned by GpuTriangleRenderer. Borrows its device,
  * scene uniform buffer and render pass; never clears or resolves the scene.
  */
-export class TexturedTriangles {
+export class TexturedMaterialPass {
   declare device: Device;
   declare shaders: ReturnType<typeof createPortableShaders>;
   declare pipeline: RenderPipeline;
@@ -29,9 +29,9 @@ export class TexturedTriangles {
    */
   constructor(device: Device, sources: TriangleShaderSources, colorFormat: TextureFormatColor | undefined) {
     this.device = device;
-    this.shaders = createPortableShaders(device, sources, 'textured-triangles');
+    this.shaders = createPortableShaders(device, sources, 'textured-material-pass');
     this.pipeline = device.createRenderPipeline({
-      id: 'textured-triangles', vs: this.shaders.vertex, fs: this.shaders.fragment,
+      id: 'textured-material-pass', vs: this.shaders.vertex, fs: this.shaders.fragment,
       vertexEntryPoint: SHADER_ENTRY_POINT.VERTEX, fragmentEntryPoint: SHADER_ENTRY_POINT.FRAGMENT, topology: GPU_TOPOLOGY.TRIANGLE_LIST,
       bufferLayout: [{ name: 'vertices', byteStride: 36, attributes: [
         { attribute: 'position', format: GPU_VERTEX_FORMAT.FLOAT32X3, byteOffset: 0 },

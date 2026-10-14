@@ -5,7 +5,7 @@ import { SCENE_EFFECT, SCENE_REPROJECTION } from './constants.ts';
 import { GPU_BACKEND, GPU_TEXTURE_FORMAT } from '../gpu/constants.ts';
 import type { Texture, Device } from '@luma.gl/core';
 import type { ShaderPassRendererRenderOptions } from '@luma.gl/engine';
-import type { SceneVolumeLightBindings } from './scene-volume-lights.ts';
+import type { SceneVolumeLightBindings } from '../lighting/scene-volume-lights.ts';
 import type { SceneEffectsOptions, NormalizedSceneEffectsOptions } from './scene-effect-config.ts';
 import { ShaderPassRenderer } from '../gpu/shader-pass-renderer.ts';
 import {

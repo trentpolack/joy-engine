@@ -3,7 +3,7 @@
 
 import { PARTICLE_RENDERER } from './constants.ts';
 import { GPU_ADDRESS_MODE, GPU_FILTER } from '../rendering/gpu/constants.ts';
-import type { GpuTriangleRenderer } from '../rendering/renderers/gpu-triangle-renderer.ts';
+import type { GpuTriangleRenderer } from '../rendering/renderer.ts';
 import type { CompiledParticleEffect } from './asset.ts';
 import type { Device } from '@luma.gl/core';
 import { Texture } from '@luma.gl/core';

@@ -17,7 +17,7 @@ export interface FieldMetadata {
   step?: number;
   choices?: string[];
 }
-const UNITS = {mass: 'kg', radius: 'm', halfExtents: 'm', size: 'm', position: 'm', lifetime: 's', duration: 's', range: 'm', speed: 'm/s'};
+const UNITS = {mass: 'kg', radius: 'm', halfExtents: 'm', size: 'm', position: 'm', lifetime: 's', duration: 's', range: 'm', speed: 'm/s', intensity: 'linear'};
 
 /**
  * Render nested component data as ordinary controls. The document owner commits history.

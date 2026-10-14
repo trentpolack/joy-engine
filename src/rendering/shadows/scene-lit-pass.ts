@@ -5,7 +5,7 @@ import {Buffer} from '@luma.gl/core';
 import type {Device, RenderPass, RenderPipeline, TextureFormatColor, VertexArray} from '@luma.gl/core';
 import {shadow} from '@luma.gl/experimental';
 import {createPortableShaders} from '../gpu/gpu-device.ts';
-import {POINT_LIGHT_UNIFORM_BYTES} from '../pbr/point-lights.ts';
+import {POINT_LIGHT_UNIFORM_BYTES} from '../lighting/point-lights.ts';
 import {SceneShadows} from './scene-shadows.ts';
 import type {PreparedShadowBatch} from './scene-shadows.ts';
 import {ShadowCasters} from './shadow-casters.ts';

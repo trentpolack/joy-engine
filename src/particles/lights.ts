@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import type {PointLight} from '../rendering/pbr/point-lights.ts';
+import type {PointLight} from '../rendering/lighting/point-lights.ts';
 import type { ParticleEffect } from './particle-effect.ts';
 
 export interface ParticlePointLight extends PointLight {

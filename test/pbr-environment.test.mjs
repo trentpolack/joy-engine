@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {PBREnvironmentGenerator} from '@luma.gl/experimental';
-import {PbrEnvironment} from '../src/rendering/pbr/pbr-environment.ts';
+import {PbrEnvironment} from '../src/rendering/environment/pbr-environment.ts';
 
 test('environment replacement is atomic and cleanup leaves the borrowed source alive', t => {
   const generated = [];

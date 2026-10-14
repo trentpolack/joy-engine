@@ -72,7 +72,7 @@ export { requireElement } from './browser/dom.ts';
 export { DevTools } from './browser/diagnostics/dev-tools.ts';
 export type { DevToolsOptions } from './browser/diagnostics/dev-tools.ts';
 export type { RendererDiagnostics, RendererDiagnosticOptions, RendererDiagnosticSource } from './rendering/gpu/gpu-diagnostics.ts';
-export { GpuTriangleRenderer } from './rendering/renderers/gpu-triangle-renderer.ts';
+export { GpuTriangleRenderer } from './rendering/renderer.ts';
 export { calculateBackingPixelRatio } from './rendering/display.ts';
 export { createTopDownOrthographicMatrix, sortTopDownTransparentTriangles } from './rendering/camera/top-down-camera.ts';
 export { DynamicGpuBuffer } from './rendering/gpu/dynamic-gpu-buffer.ts';
@@ -132,7 +132,7 @@ export { DEFAULT_PARTICLE_TEXTURE } from "./particles/texture-source.ts";
 
 export { collectParticleLights } from './particles/lights.ts';
 export { createParticleRenderMetrics } from './particles/rendering.ts';
-export { LIT_TRIANGLE_SHADERS, createPointLightUniforms, POINT_LIGHT_UNIFORM_BYTES } from './rendering/pbr/point-lights.ts';
+export { LIT_TRIANGLE_SHADERS, createPointLightUniforms, POINT_LIGHT_UNIFORM_BYTES } from './rendering/lighting/point-lights.ts';
 
 export type { ParticlePointLight } from './particles/lights.ts';
 export type { ParticleProfile } from './particles/profile.ts';
@@ -143,12 +143,12 @@ export type { PbrMaterial } from './core/types.ts';
 export type { PbrMesh } from './core/types.ts';
 export type { PbrFrame } from './core/types.ts';
 
-export { DEFAULT_PBR_LIGHTING } from './rendering/pbr/pbr-triangles.ts';
+export { DEFAULT_PBR_LIGHTING } from './rendering/materials/pbr/pbr-material-pass.ts';
 
 export { MeshAsset } from './rendering/scene/mesh-asset.ts';
 export { MeshInstance } from './rendering/scene/mesh-instance.ts';
 export { RenderScene } from './rendering/scene/render-scene.ts';
-export type { PointLight } from './rendering/pbr/point-lights.ts';
+export type { PointLight } from './rendering/lighting/point-lights.ts';
 export { SceneRenderer } from './rendering/scene/scene-renderer.ts';
 export { projectToViewport, screenRay, intersectRayPlane } from './rendering/camera/projection.ts';
 export type { MeshAssetData } from './core/types.ts';
@@ -175,5 +175,5 @@ export type { TerrainView } from './rendering/terrain/terrain-selection.ts';
 export type { TerrainSelection } from './rendering/terrain/terrain-selection.ts';
 
 export type {ShadowOptions, ShadowCameraFrame, SceneLightFrame} from './rendering/shadows/types.ts';
-export {PbrEnvironment} from './rendering/pbr/pbr-environment.ts';
-export type {PbrEnvironmentOptions, PbrEnvironmentPixels} from './rendering/pbr/pbr-environment.ts';
+export {PbrEnvironment} from './rendering/environment/pbr-environment.ts';
+export type {PbrEnvironmentOptions, PbrEnvironmentPixels} from './rendering/environment/pbr-environment.ts';

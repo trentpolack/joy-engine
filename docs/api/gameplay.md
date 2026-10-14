@@ -572,7 +572,7 @@ Release retained scene instances and their owned scene resources.
 ## LevelRuntime
 Import from `joy-engine`. [Source](../../src/gameplay/level-runtime.ts)
 
-Instantiates a copied level. Owns entities and their physics handles; a supplied physics world is borrowed. `physics` components use local collider dimensions; entity scale is applied once at construction. `vehicle` components use the PhysicsWorld vehicle contract, in chassis-local meters. Physics handles are attached during construction; later EntityWorld spawns require their own setup.
+Instantiates a copied level. Owns entities and their physics handles; a supplied physics world is borrowed. `physics` components use local collider dimensions; entity scale is applied once at construction. `vehicle` components use the PhysicsWorld vehicle contract, in chassis-local meters. Spawn through this owner so authored and dynamically created entities receive the same physics setup.
 
 ### constructor
 ```ts
@@ -580,6 +580,14 @@ constructor(level: LevelData, {registry, physics}: LevelRuntimeOptions)
 ```
 - **param** level
 - **param** options
+
+### spawn
+```ts
+spawn(definition: Parameters<EntityWorld['spawn']>[0])
+```
+Create an entity and attach every runtime-owned physics handle. Failed setup removes the entity and releases partial resources before reporting the error.
+
+- **param** definition Copied authored or dynamically generated entity definition.
 
 ### step
 ```ts

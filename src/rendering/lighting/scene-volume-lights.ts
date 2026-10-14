@@ -4,7 +4,7 @@
 import { GPU_BACKEND } from '../gpu/constants.ts';
 import { Buffer } from '@luma.gl/core';
 import type { Device } from '@luma.gl/core';
-import type { PointLight } from '../pbr/point-lights.ts';
+import type { PointLight } from './point-lights.ts';
 
 export interface SceneVolumeLightOptions {
   /** Stable input-order retention. Hard ceiling: 32 point lights. */

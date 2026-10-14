@@ -235,7 +235,7 @@ Append a butt-ended thick segment as two triangles. Width is the full thickness 
 
 
 ## GpuTriangleRenderer
-Import from `joy-engine`. [Source](../../src/rendering/renderers/gpu-triangle-renderer.ts)
+Import from `joy-engine`. [Source](../../src/rendering/renderer.ts)
 
 Depth-tested 3D triangle rendering through luma.gl's portable Device API. Games provide world-space vertices, camera uniforms, and matching shaders. Opaque triangles write depth. Translucent triangles use straight-alpha source-over blending and test against opaque depth without writing it. The caller supplies translucent triangles already sorted back-to-front for its camera. Both batches share one framebuffer and one clear per frame.
 
@@ -872,7 +872,7 @@ Return a borrowed frame; unchanged cameras reuse the same bounded array.
 
 
 ## LIT_TRIANGLE_SHADERS
-Import from `joy-engine`. [Source](../../src/rendering/pbr/point-lights.ts)
+Import from `joy-engine`. [Source](../../src/rendering/lighting/point-lights.ts)
 
 ```ts
 const LIT_TRIANGLE_SHADERS
@@ -882,7 +882,7 @@ Flat, double-sided diffuse lighting for XYZ/RGBA opaque triangles. Normals come 
 
 
 ## createPointLightUniforms
-Import from `joy-engine`. [Source](../../src/rendering/pbr/point-lights.ts)
+Import from `joy-engine`. [Source](../../src/rendering/lighting/point-lights.ts)
 
 ```ts
 function createPointLightUniforms(matrix: ArrayLike<number>, lights: readonly PointLight[], ambient: number = 0.3, environment: EnvironmentFrame | null = null)
@@ -897,7 +897,7 @@ Own a camera/tint/light uniform snapshot for one frame. Distances are world unit
 
 
 ## POINT_LIGHT_UNIFORM_BYTES
-Import from `joy-engine`. [Source](../../src/rendering/pbr/point-lights.ts)
+Import from `joy-engine`. [Source](../../src/rendering/lighting/point-lights.ts)
 
 ```ts
 const POINT_LIGHT_UNIFORM_BYTES
@@ -905,7 +905,7 @@ const POINT_LIGHT_UNIFORM_BYTES
 
 
 ## DEFAULT_PBR_LIGHTING
-Import from `joy-engine`. [Source](../../src/rendering/pbr/pbr-triangles.ts)
+Import from `joy-engine`. [Source](../../src/rendering/materials/pbr/pbr-material-pass.ts)
 
 ```ts
 const DEFAULT_PBR_LIGHTING
@@ -1295,7 +1295,7 @@ Release only owned resources; repeated disposal is harmless.
 
 
 ## PbrEnvironment
-Import from `joy-engine`. [Source](../../src/rendering/pbr/pbr-environment.ts)
+Import from `joy-engine`. [Source](../../src/rendering/environment/pbr-environment.ts)
 
 Owns luma-generated irradiance, filtered reflection, and BRDF textures. Source textures and the device are borrowed. Prepare submits integration work; call during setup or environment replacement, never from ordinary frame rendering.
 

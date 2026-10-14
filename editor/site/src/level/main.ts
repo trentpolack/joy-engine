@@ -111,7 +111,7 @@ class LevelEditor {
           this.document.select(object.entity.id);
         }
         element('authoring-kind').textContent = this.objectMode ? 'OBJECT' : 'LEVEL';
-        for(const id of ['add-box', 'add-sphere', 'instance-picker', 'add-instance', 'duplicate', 'delete', 'save-object']) {
+        for(const id of ['add-box', 'add-sphere', 'add-light', 'add-empty', 'instance-picker', 'add-instance', 'duplicate', 'delete', 'save-object']) {
           element(id).hidden = this.objectMode;
         }
         void this.refreshAssets();
@@ -175,6 +175,38 @@ class LevelEditor {
       this.document.select(id);
       this.refresh();
       this.status('Primitive added. Use MOVE and click the ground to place it.');
+    });
+  }
+
+  /** Add an entity without assuming a render or physics implementation. */
+  addEmpty() {
+    this.addEntity('Entity', {});
+  }
+
+  /** Add an editable point light and a small visible authoring marker. */
+  addLight() {
+    this.addEntity('Point Light', {
+      light: {enabled: true, color: [1, 0.88, 0.7], intensity: 4, range: 12, castsShadow: true},
+      render: {shape: PRIMITIVE_SHAPE.SPHERE, size: [0.25, 0.25, 0.25], color: [1, 0.72, 0.3]}
+    });
+  }
+
+  /** Create a generic authored entity at the snapped camera target. */
+  private addEntity(name: string, components: Record<string, JsonRecord>) {
+    this.attempt(() => {
+      this.applyComponents();
+      const id = crypto.randomUUID();
+      const target = this.viewport.camera.target;
+      const snap = this.viewport.snap;
+      const position = target.map(value => snap > 0 ? Math.round(value/snap)*snap : value);
+      this.document.transact(draft => {
+        draft.entities.push({id, name, type: ENTITY_TYPE.ENTITY, tags: [],
+          transform: {position: [position[0], name === 'Point Light' ? 3 : 0, position[2]], rotation: [0, 0, 0], scale: [1, 1, 1]},
+          components: structuredClone(components)});
+      });
+      this.document.select(id);
+      this.refresh();
+      this.status(`${name} added. Components define its runtime behavior.`);
     });
   }
 
@@ -534,6 +566,7 @@ class LevelEditor {
 
     const value: JsonRecord = kind === 'mesh' ? {asset: mesh?.path ?? '', parameters: {}} :
       kind === 'render' ? {shape: PRIMITIVE_SHAPE.BOX, size: [1, 1, 1], color: [0.93, 0.42, 0.22]} :
+      kind === 'light' ? {enabled: true, color: [1, 0.88, 0.7], intensity: 4, range: 12, castsShadow: true} :
       kind === 'effect' ? {asset: effect?.path ?? '', enabled: true, loop: true, seed: 7777, parameters: {}} :
       kind === 'physics' ? {shape: PRIMITIVE_SHAPE.BOX, mass: 0, halfExtents: [0.5, 0.5, 0.5]} : {};
     this.changeProperty([name], value);
@@ -684,6 +717,8 @@ class LevelEditor {
     }));
     click('add-box', () => this.add(PRIMITIVE_SHAPE.BOX));
     click('add-sphere', () => this.add(PRIMITIVE_SHAPE.SPHERE));
+    click('add-light', () => this.addLight());
+    click('add-empty', () => this.addEmpty());
     click('duplicate', () => this.duplicate());
     click('delete', () => this.remove());
     click('undo', () => this.history(false));

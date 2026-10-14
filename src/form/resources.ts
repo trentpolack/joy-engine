@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import { FORM_VALUE_KIND } from './constants.ts';
-import { MATERIAL_ALPHA_MODE } from '../rendering/pbr/constants.ts';
+import { MATERIAL_ALPHA_MODE } from '../rendering/materials/pbr/constants.ts';
 import type { Material } from './materials.ts';
 import { GeometryBuilder } from './geometry.ts';
 import { defaultMaterial, readMaterials } from './materials.ts';

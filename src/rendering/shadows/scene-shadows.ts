@@ -6,7 +6,7 @@ import type {Binding, Device} from '@luma.gl/core';
 import {ShaderInputs} from '@luma.gl/engine';
 import {ShadowMapRenderer, shadow} from '@luma.gl/experimental';
 import type {ShadowRenderView, ShadowShaderProps} from '@luma.gl/experimental';
-import type {PointLight} from '../pbr/point-lights.ts';
+import type {PointLight} from '../lighting/point-lights.ts';
 import type {AtmosphereLight} from '../../environment/environment-system.ts';
 import {prepareShadowLightBatches} from './shadow-light-batches.ts';
 import type {ShadowLightBatch} from './shadow-light-batches.ts';

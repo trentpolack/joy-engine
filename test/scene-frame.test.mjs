@@ -6,9 +6,9 @@ import { OrbitCamera } from '../src/rendering/camera/orbit-camera.ts';
 import { screenRay, projectToViewport, intersectRayPlane } from '../src/rendering/camera/projection.ts';
 import { SceneRenderer } from '../src/rendering/scene/scene-renderer.ts';
 import { EnvironmentSystem } from '../src/environment/environment-system.ts';
-import { POINT_LIGHT_UNIFORM_BYTES } from '../src/rendering/pbr/point-lights.ts';
+import { POINT_LIGHT_UNIFORM_BYTES } from '../src/rendering/lighting/point-lights.ts';
 import { RenderScene } from '../src/rendering/scene/render-scene.ts';
-import { GpuTriangleRenderer } from '../src/rendering/renderers/gpu-triangle-renderer.ts';
+import { GpuTriangleRenderer } from '../src/rendering/renderer.ts';
 import { createFormMeshAsset } from '../src/form/mesh-asset.ts';
 
 const bounds = {left: 40, top: 30, width: 800, height: 500};

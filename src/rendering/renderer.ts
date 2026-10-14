@@ -1,33 +1,33 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import {SceneLitPass} from '../shadows/scene-lit-pass.ts';
-import type {SceneLightFrame, ShadowOptions} from '../shadows/types.ts';
-import { GPU_BACKEND, GPU_COMPARE, GPU_TEXTURE_FORMAT, GPU_TOPOLOGY, GPU_VERTEX_FORMAT, SHADER_ENTRY_POINT } from '../gpu/constants.ts';
-import type { RendererDiagnosticOptions, RendererDiagnostics } from '../gpu/gpu-diagnostics.ts';
-import { readGpuDiagnostics } from '../gpu/gpu-diagnostics.ts';
-import type { SceneEffectsOptions, SceneEffectsFrame } from '../scene/scene-effects.ts';
-import type { GpuDeviceOptions } from '../gpu/gpu-device.ts';
+import {SceneLitPass} from './shadows/scene-lit-pass.ts';
+import type {SceneLightFrame, ShadowOptions} from './shadows/types.ts';
+import { GPU_BACKEND, GPU_COMPARE, GPU_TEXTURE_FORMAT, GPU_TOPOLOGY, GPU_VERTEX_FORMAT, SHADER_ENTRY_POINT } from './gpu/constants.ts';
+import type { RendererDiagnosticOptions, RendererDiagnostics } from './gpu/gpu-diagnostics.ts';
+import { readGpuDiagnostics } from './gpu/gpu-diagnostics.ts';
+import type { SceneEffectsOptions, SceneEffectsFrame } from './scene/scene-effects.ts';
+import type { GpuDeviceOptions } from './gpu/gpu-device.ts';
 import type { RenderPipelineProps, Framebuffer, Texture, Device, CanvasContext, Shader, RenderPipeline, VertexArray } from '@luma.gl/core';
-import type { PbrMesh, Color, PbrFrame } from '../../core/types.ts';
-import type { TransparentDraw } from './textured-triangles.ts';
-import type { PbrTransparentRange } from '../pbr/pbr-triangles.ts';
-import type { PostProcessingConfig } from '../postprocessor/config.ts';
-import { AtmospherePass } from '../environment/atmosphere-pass.ts';
-import {PbrEnvironment} from '../pbr/pbr-environment.ts';
-import type {PbrEnvironmentPixels, PbrEnvironmentOptions} from '../pbr/pbr-environment.ts';
-import { PbrTriangles } from '../pbr/pbr-triangles.ts';
-import { TexturedTriangles } from './textured-triangles.ts';
-import { Postprocessor } from '../postprocessor/postprocessor.ts';
-import type {SceneAttachmentFrame} from '../scene/scene-effect-attachments.ts';
-import {SceneEffectAttachments} from '../scene/scene-effect-attachments.ts';
-import {getSceneEffectsRequirements} from '../scene/scene-effect-config.ts';
-import { SceneEffects } from '../scene/scene-effects.ts';
+import type { PbrMesh, Color, PbrFrame } from '../core/types.ts';
+import type { TransparentDraw } from './materials/textured-material-pass.ts';
+import type { PbrTransparentRange } from './materials/pbr/pbr-material-pass.ts';
+import type { PostProcessingConfig } from './postprocessor/config.ts';
+import { AtmospherePass } from './environment/atmosphere-pass.ts';
+import {PbrEnvironment} from './environment/pbr-environment.ts';
+import type {PbrEnvironmentPixels, PbrEnvironmentOptions} from './environment/pbr-environment.ts';
+import { PbrMaterialPass } from './materials/pbr/pbr-material-pass.ts';
+import { TexturedMaterialPass } from './materials/textured-material-pass.ts';
+import { Postprocessor } from './postprocessor/postprocessor.ts';
+import type {SceneAttachmentFrame} from './scene/scene-effect-attachments.ts';
+import {SceneEffectAttachments} from './scene/scene-effect-attachments.ts';
+import {getSceneEffectsRequirements} from './scene/scene-effect-config.ts';
+import { SceneEffects } from './scene/scene-effects.ts';
 import { Buffer } from '@luma.gl/core';
-import { DynamicGpuBuffer } from '../gpu/dynamic-gpu-buffer.ts';
-import { createGpuCanvasDevice, createPortableShaders } from '../gpu/gpu-device.ts';
-import { FLOATS_PER_VERTEX } from '../geometry/geometry.ts';
-import { addPostProcessingShaders, createPostProcessingUniforms, normalizePostProcessingConfig } from '../postprocessor/config.ts';
+import { DynamicGpuBuffer } from './gpu/dynamic-gpu-buffer.ts';
+import { createGpuCanvasDevice, createPortableShaders } from './gpu/gpu-device.ts';
+import { FLOATS_PER_VERTEX } from './geometry/geometry.ts';
+import { addPostProcessingShaders, createPostProcessingUniforms, normalizePostProcessingConfig } from './postprocessor/config.ts';
 
 export interface TriangleShaderSources {
   wgsl: string;
@@ -78,10 +78,10 @@ export class GpuTriangleRenderer {
   declare atmosphere: AtmospherePass | null;
   declare resourcesReleased: boolean;
   declare destroyed: boolean;
-  declare pbr: PbrTriangles | null;
+  declare pbr: PbrMaterialPass | null;
   private litShadowPass: SceneLitPass | null = null;
   private readonly shadowOptions: ShadowOptions | false;
-  declare textured: TexturedTriangles | null;
+  declare textured: TexturedMaterialPass | null;
   declare opaqueShaders: { vertex: Shader; fragment: Shader; } | null;
   declare shaders: ReturnType<typeof createPortableShaders>;
   declare pipeline: RenderPipeline;
@@ -141,14 +141,14 @@ export class GpuTriangleRenderer {
     this.resourcesReleased = false;
     this.destroyed = false;
     this.shadowOptions = shadows;
-    this.pbr = pbr ? new PbrTriangles(device, this.postprocessor?.format) : null;
+    this.pbr = pbr ? new PbrMaterialPass(device, this.postprocessor?.format) : null;
     // Templates need a fragment output even when this renderer draws directly to
     // the canvas. Fully authored caller shaders require no template expansion.
     const needsShaderExpansion = postProcessing || shaderSources.wgsl?.includes('JOY_POST_APPLY_MACRO');
     const resolvedShaderSources = needsShaderExpansion
       ? addPostProcessingShaders(shaderSources, {includeUniforms: Boolean(this.postProcessing)})
       : shaderSources;
-    this.textured = texturedShaderSources ? new TexturedTriangles(
+    this.textured = texturedShaderSources ? new TexturedMaterialPass(
       device, texturedShaderSources,
       this.postprocessor?.format,
     ) : null;

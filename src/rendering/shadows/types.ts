@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import type {PointLight} from '../pbr/point-lights.ts';
+import type {PointLight} from '../lighting/point-lights.ts';
 import type {AtmosphereLight} from '../../environment/environment-system.ts';
 
 /** Quality and bias in world units (normal bias), depth units, and world-space shadow distance. */

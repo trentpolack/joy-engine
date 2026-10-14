@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPointLightUniforms, POINT_LIGHT_UNIFORM_BYTES } from '../src/rendering/pbr/point-lights.ts';
+import { createPointLightUniforms, POINT_LIGHT_UNIFORM_BYTES } from '../src/rendering/lighting/point-lights.ts';
 
 const matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 const light = { x: 1, y: 2, z: 3, range: 40, r: 4, g: 5, b: 6 };

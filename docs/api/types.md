@@ -1080,7 +1080,7 @@ World-space camera and lighting for a material pass. RGB light values are linear
 
 
 ## PointLight
-Import from `joy-engine`. [Source](../../src/rendering/pbr/point-lights.ts)
+Import from `joy-engine`. [Source](../../src/rendering/lighting/point-lights.ts)
 
 ```ts
 interface PointLight {
@@ -1336,7 +1336,7 @@ Borrowed lighting/caster data for the default lit triangle pass.
 
 
 ## PbrEnvironmentOptions
-Import from `joy-engine`. [Source](../../src/rendering/pbr/pbr-environment.ts)
+Import from `joy-engine`. [Source](../../src/rendering/environment/pbr-environment.ts)
 
 ```ts
 type PbrEnvironmentOptions = Omit<PreparePBREnvironmentOptions, 'source' | 'intensity' | 'rotation'>;
@@ -1344,7 +1344,7 @@ type PbrEnvironmentOptions = Omit<PreparePBREnvironmentOptions, 'source' | 'inte
 
 
 ## PbrEnvironmentPixels
-Import from `joy-engine`. [Source](../../src/rendering/pbr/pbr-environment.ts)
+Import from `joy-engine`. [Source](../../src/rendering/environment/pbr-environment.ts)
 
 ```ts
 interface PbrEnvironmentPixels {

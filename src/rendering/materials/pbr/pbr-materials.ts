@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import { GPU_ADDRESS_MODE, GPU_FILTER, GPU_TEXTURE_FORMAT } from '../gpu/constants.ts';
+import { GPU_ADDRESS_MODE, GPU_FILTER, GPU_TEXTURE_FORMAT } from '../../gpu/constants.ts';
 import { MATERIAL_ALPHA_MODE } from './constants.ts';
-import type { PbrMaterial } from '../../core/types.ts';
+import type { PbrMaterial } from '../../../core/types.ts';
 import type { Device } from '@luma.gl/core';
 import { Buffer, Texture } from '@luma.gl/core';
 

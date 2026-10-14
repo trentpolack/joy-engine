@@ -193,7 +193,7 @@ export class LevelViewport {
           ambient: 0.65,
           transparentTriangles: [...(grid?.triangles ?? []), ...this.levelScene.particles(basis)],
           clearColor: [0.045, 0.065, 0.10, 1],
-          lights: [{x: 8, y: 18, z: 12, r: 1, g: 0.88, b: 0.73, range: 80}],
+          lights: this.levelScene.level.lights,
           timeSeconds:now/1000, deltaTimeSeconds:seconds
         });
       } catch(error) {

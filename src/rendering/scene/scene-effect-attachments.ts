@@ -5,15 +5,15 @@ import type {
   Device,
   Texture
 } from '@luma.gl/core';
-import type {PointLight} from '../pbr/point-lights.ts';
+import type {PointLight} from '../lighting/point-lights.ts';
 import type {SceneEffectsFrame} from './scene-effects.ts';
 import type {SceneMotionFrame} from './scene-motion.ts';
-import type {SceneVolumeLightCamera} from './scene-volume-lights.ts';
+import type {SceneVolumeLightCamera} from '../lighting/scene-volume-lights.ts';
 import type {getSceneEffectsRequirements} from './scene-effect-config.ts';
 
 import {SceneMotionPass} from './scene-motion.ts';
 import {SceneSurfaces} from './scene-surfaces.ts';
-import {SceneVolumeLights} from './scene-volume-lights.ts';
+import {SceneVolumeLights} from '../lighting/scene-volume-lights.ts';
 
 type SceneAttachmentRequirements = ReturnType<typeof getSceneEffectsRequirements>;
 

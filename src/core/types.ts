@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import type {PbrEnvironment} from '../rendering/pbr/pbr-environment.ts';
-import type {PointLight} from '../rendering/pbr/point-lights.ts';
+import type {PbrEnvironment} from '../rendering/environment/pbr-environment.ts';
+import type {PointLight} from '../rendering/lighting/point-lights.ts';
 import type {ShadowCameraFrame, ShadowOptions} from '../rendering/shadows/types.ts';
-import { MATERIAL_ALPHA_MODE } from '../rendering/pbr/constants.ts';
+import { MATERIAL_ALPHA_MODE } from '../rendering/materials/pbr/constants.ts';
 
 /** Shared numeric contracts. Units and gameplay meaning belong to each caller. */
 export interface Vector2 {

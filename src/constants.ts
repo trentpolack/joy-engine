@@ -18,7 +18,7 @@ export {
 // Rendering (lighting/material) constants.
 export {
   MATERIAL_ALPHA_MODE
-} from './rendering/pbr/constants.ts';
+} from './rendering/materials/pbr/constants.ts';
 
 // Rendering (geometry) constants.
 export {
