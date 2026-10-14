@@ -1,0 +1,62 @@
+# HARVEST GROVE
+project meta(name="Harvest grove", info="GAMEPLAY / RESOURCES", title="GROW SOMETHING USEFUL.")
+
+param rows = 4 meta(min=2, max=6, step=1)
+param columns = 5 meta(min=2, max=6, step=1)
+param spacing = 3.5 meta(min=3, max=5, step=0.1)
+param jitter = 0.5 meta(min=0, max=0.8, step=0.05)
+param random_seed = 42 meta(min=1, max=9999, step=1)
+param reserve = 30 meta(min=5, max=100, step=5)
+param regrowSeconds = 45 meta(min=5, max=120, step=5)
+param harvestedFraction = 0 meta(min=0, max=1, step=0.05)
+
+# Each point marks a tree's position. Its ID lets a game keep track of that tree.
+let nodes = geometry()
+addAttribute(nodes, "points", "remaining", 0)
+addAttribute(nodes, "points", "scale", vector(1,1,1))
+seed(random_seed)
+repeat rows as row {
+  repeat columns as column {
+    let px = (column - (columns - 1)/2)*spacing + (rand() - 0.5)*jitter
+    let pz = (row - (rows - 1)/2)*spacing + (rand() - 0.5)*jitter
+    let size = 0.75 + rand()*0.5
+    let id = addPoint(nodes, vector(px, 0, pz))
+    let resourceData = {
+      kind: "resource-node",
+      id: id,
+      resource: "timber",
+      capacity: reserve,
+      regrowSeconds: regrowSeconds
+    }
+    setUserData(nodes, id, resourceData)
+    setAttribute(nodes, "points", "remaining", id, reserve)
+    setAttribute(nodes, "points", "scale", id, vector(size,size,size))
+  }
+}
+wrangle points in nodes as node {
+  # Preview harvesting every tree. A game can harvest individual trees instead.
+  node.remaining = node.remaining*(1 - harvestedFraction)
+}
+inspect("Resource nodes", nodes)
+
+# Choose "Resource nodes" to inspect each tree's data.
+# A game can reduce remaining as wood is collected, then refill it to capacity
+# after regrowSeconds. Keep that progress in the game; rerunning this script starts fresh.
+
+let trunk = box(0.35, 1.5, 0.35)
+translate(trunk, vector(0,0.75,0))
+color(trunk, rgba(0.38,0.21,0.12,1))
+output("Trunks", instances(trunk, nodes))
+let crown = geometry(deform(meshBox(1.9,2.4,1.9), x*(0.7 - y*0.4), y + 2.2, z*(0.7 - y*0.4)))
+color(crown, rgba(0.25,0.65,0.43,1))
+let foliage = copy(nodes)
+wrangle points in foliage as tree {
+  # Harvested trees keep a little foliage so they're still easy to find.
+  tree.scale = tree.scale*(0.25 + 0.75*tree.remaining/reserve)
+}
+output("Canopies", instances(crown, foliage))
+let ground = box(columns*spacing,0.2,rows*spacing)
+translate(ground,vector(0,-0.15,0))
+color(ground,rgba(0.16,0.24,0.23,1))
+output("Ground",ground)
+

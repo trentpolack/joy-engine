@@ -18,10 +18,15 @@
             <h1>FORM LAB<span id="tool-version" class="version"></span></h1>
           </div>
         </div>
+        <details id="panel-visibility" class="panel-visibility">
+          <summary>View</summary>
+          <div id="panel-visibility-controls" role="group" aria-label="Visible panels"></div>
+        </details>
         <nav aria-label="Document actions">
-          <button id="open">Open</button
-          ><button id="save">Save project <span>↗</span></button
-          ><button id="help" class="square" aria-label="Language reference">
+          <button id="open" hidden>Open</button>
+          <button id="save" title="Save a FORM script or FORM LAB document (Ctrl/Command+S)">Save</button>
+          <button id="export" disabled>Export</button>
+          <button id="help" class="square" aria-label="Language reference">
             ?
           </button>
         </nav>
@@ -29,7 +34,7 @@
       <div class="project-bar">
         <span class="project-dot" aria-hidden="true"></span>
         <label class="asset-name"
-          ><span class="sr-only">Study name</span
+          ><span class="sr-only">File name</span
           ><input id="document-name" maxlength="120" value="Wave study"
         /></label>
         <span class="project-format">FORM STUDY / .FORMLAB</span
@@ -158,7 +163,7 @@
             <section id="parameters-section" data-inspector-panel="parameters" role="tabpanel" aria-labelledby="parameters-tab">
             <label class="parameter-search"><span class="sr-only">Find parameter</span><input id="parameter-search" type="search" placeholder="Find a parameter…" aria-label="Find parameter" /></label>
             <p class="section-kicker">WATCH SMALL CHANGES TAKE SHAPE.</p>
-            <p id="override-state" class="numeric-guidance">Save project downloads source, parameter overrides, and materials together. Browser recovery stays in this browser.</p>
+            <p id="override-state" class="numeric-guidance">Save a .form script, or choose .formlab to keep overrides, materials, and variants. Browser recovery stays in this browser.</p>
             <div class="property-history"><button id="property-undo" disabled>Undo property</button><button id="property-redo" disabled>Redo property</button></div>
             <details class="tuning-help"><summary>Tuning keys &amp; defaults</summary><p class="numeric-guidance">Type a value · Shift + arrows fine · Alt + arrows coarse. Reset returns to the script default; source has separate editor undo. Color channels are linear RGBA; A controls opacity.</p></details>
             <div id="parameters"></div>
@@ -178,24 +183,8 @@
               <div id="preview-lighting" class="preview-lighting-controls"></div>
             </section>
           </div>
-            <div class="export-panel">
-              <h3>TAKE IT WITH YOU</h3>
-              <label for="export-format">EXPORT FORMAT</label
-              ><select id="export-format">
-                <option value="glb">GLB · Geometry + materials</option>
-                <option value="obj">OBJ · Geometry + points</option>
-                <option value="json">JSON · All data</option></select
-              ><button id="export" class="export-button" disabled>
-                EXPORT DATA <span>↓</span>
-              </button>
-              <p title="Lighting and background are editor-only. GLB retains authored materials; OBJ omits materials." id="export-note">Exports the last successful build.</p>
-            </div>
         </aside>
       </section>
-      <footer class="app-footer">
-        <span><a href="../../"><b>JOY-GAMES</b></a> / FORM LAB</span>
-        <span id="footer-status">LOCAL WORKSPACE · NO CLOUD REQUIRED</span>
-      </footer>
     </main>
     <input
       id="file-input"
@@ -203,6 +192,28 @@
       accept=".formlab,.form,.txt,.json"
       hidden
     />
+    <dialog id="artifact-dialog" class="artifact-dialog" aria-labelledby="artifact-title">
+      <form id="artifact-form">
+        <div class="artifact-heading">
+          <h2 id="artifact-title">Save</h2>
+          <button type="button" id="artifact-close" aria-label="Close file dialog">✕</button>
+        </div>
+        <label>Format<select id="artifact-format"></select></label>
+        <p id="artifact-description"></p>
+        <label>File name<input id="artifact-name" required maxlength="160" autocomplete="off" /></label>
+        <label id="artifact-destination-field">Save to<select id="artifact-destination">
+          <option value="picker">Choose a location…</option>
+          <option value="download">Browser downloads</option>
+        </select></label>
+        <p id="artifact-location-note"></p>
+        <p id="export-note" hidden>Exports the last successful build.</p>
+        <p id="artifact-error" role="alert" hidden></p>
+        <div class="artifact-actions">
+          <button type="button" id="artifact-cancel">Cancel</button>
+          <button type="submit" id="artifact-write" class="primary">Save</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="reference-dialog">
       <div class="dialog-header">
         <div>

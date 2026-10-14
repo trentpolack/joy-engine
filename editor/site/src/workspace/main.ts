@@ -1476,7 +1476,10 @@ const workspace = new JoyWorkspace();
 const components = new JoyComponentRegistry();
 void workspace.start();
 if(import.meta.env.DEV) {
-  void import('../../../src/design-mode.ts').then(({JoyDesignMode}) => {
+  void import('../../../src/design-mode.ts').then(({JoyDesignMode, isDesignComparisonFrame}) => {
+    if(isDesignComparisonFrame()) {
+      return;
+    }
     const toggleHost = document.querySelector<HTMLElement>('.workspace-header');
     if(!toggleHost) {
       throw new Error('Design mode requires a header container.');

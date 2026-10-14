@@ -21,6 +21,7 @@
     "capture": "node test/browser.mjs",
     "test:worker-browser": "node test/worker-budget-browser.mjs",
     "test:viewport-browser": "node test/viewport-browser.mjs",
+    "test:authoring-browser": "node test/authoring-ui-browser.mjs",
     "desktop": "npm run build && electron desktop/main.cjs",
     "desktop:pack": "npm run build && electron-packager . \"Form Lab\" --out=release --overwrite --ignore=\"^/(site|test|release)$\""
   },

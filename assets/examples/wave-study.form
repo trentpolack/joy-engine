@@ -1,0 +1,27 @@
+# WAVE STUDY
+project meta(name="Wave study", info="SURFACE STUDY / 001", title="MAKE SOME WAVES.")
+
+# A little math. A little landscape.
+param height = 2.4 meta(min=0, max=5, step=0.1)
+param frequency = 0.55 meta(min=0.1, max=1.5, step=0.05)
+param resolution = 64 meta(min=8, max=120, step=1)
+param tint = rgba(0.93, 0.42, 0.22, 1)
+
+with userData({kind: "terrain", study: "wave"}) {
+  color(tint)
+  surface(resolution, resolution, 24, 24,
+    sin(x*frequency)*cos(z*frequency)*height
+  )
+}
+
+# A scattering of warm points above the surface.
+seed(19)
+with userData({kind: "accent", study: "wave"}) {
+  color(1, 0.82, 0.4)
+  repeat 500 as i {
+    let px = (rand() - 0.5)*24
+    let pz = (rand() - 0.5)*24
+    let py = sin(px*frequency)*cos(pz*frequency)*height
+    point(px, py + 0.18, pz)
+  }
+}

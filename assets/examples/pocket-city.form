@@ -1,0 +1,21 @@
+# POCKET CITY
+project meta(name="Pocket city", info="GEOMETRY / 003", title="SMALL CITY. BIG IDEAS.")
+
+param blocks = 11 meta(min=3, max=18, step=1)
+param height = 8 meta(min=1, max=16, step=0.5)
+param spacing = 1.8 meta(min=1.2, max=3, step=0.1)
+param random_seed = 21 meta(min=1, max=99, step=1)
+
+seed(random_seed)
+repeat blocks as x {
+  repeat blocks as z {
+    let h = ((rand()^2)*height) + 0.5
+    let px = (x - ((blocks - 1)/2))*spacing
+    let pz = (z - ((blocks - 1)/2))*spacing
+    let building = meshBox(1, h, 1)
+    color(0.5 + h/height*0.45, 0.35 + rand()*0.2, 0.25)
+    with userData({kind: "building", grid: {x: x, z: z}, height: h}) {
+      instance(building, vector(px, h/2, pz))
+    }
+  }
+}

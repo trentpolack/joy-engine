@@ -31,7 +31,7 @@ export class VariantControls {
       <select id="variant-select" aria-label="Saved variants"></select>
       <div class="variant-actions"><button id="variant-apply">Apply</button><button id="variant-rename">Rename</button><button id="variant-delete">Delete</button></div>
       <p id="variant-status" role="status"></p>
-      <p class="variant-intro">Apply replaces current overrides. Rename uses the name above. Your script and global material palette are shared by every variant. Save project to keep them together.</p>`;
+      <p class="variant-intro">Apply replaces current overrides. Rename uses the name above. Your script and global material palette are shared by every variant. Save to keep them together.</p>`;
     this.name = ((parent.querySelector('#variant-name')) as HTMLInputElement);
     this.select = ((parent.querySelector('#variant-select')) as HTMLSelectElement);
     this.status = ((parent.querySelector('#variant-status')) as HTMLElement);
