@@ -3,6 +3,10 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-14-2026
+### Scene Rendering
+- Added a deeply immutable `FrameView` shared by scene lighting, atmosphere, effects, and shadows, with separate pass contexts for light cameras and render targets. The low-level `SceneLightFrame` now takes `{view, casters}`; direct callers preserve renderer shadow settings with `renderer.createFrameView`.
+- Applied the canonical rendering conventions across frame snapshots, scene orchestration, effects, surfaces, and shadows, with explicit ownership, documented contracts, and cohesive preparation stages while preserving submission order and temporal history behavior.
+
 ### Scene Frame Readability
 - Reorganized camera matrix, jitter, queue planning, queue assembly, terrain asset validation, terrain selection, timing, and rendering code around named stages and fully documented ownership contracts, preserving rendering behavior and typed-array queue performance.
 

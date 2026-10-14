@@ -155,6 +155,17 @@ export type { MeshAssetData } from './core/types.ts';
 export type { MeshInstanceOptions } from './core/types.ts';
 export type { SceneRendererOptions } from './rendering/scene/scene-renderer.ts';
 export type { SceneFrameOptions } from './rendering/scene/scene-renderer.ts';
+export { createFrameView } from './rendering/scene/frame-view.ts';
+export type {
+  FrameView,
+  FrameViewOptions,
+  FrameCamera,
+  FrameViewport
+} from './rendering/scene/frame-view.ts';
+export type {
+  RenderPassContext,
+  PassCamera
+} from './rendering/scene/render-pass-context.ts';
 
 export { InputManager } from './browser/input/input-manager.ts';
 export type { InputAction } from './browser/input/input-manager.ts';

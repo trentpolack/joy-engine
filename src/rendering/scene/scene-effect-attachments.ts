@@ -5,15 +5,15 @@ import type {
   Device,
   Texture
 } from '@luma.gl/core';
-import type {PointLight} from '../lighting/point-lights.ts';
-import type {SceneEffectsFrame} from './scene-effects.ts';
-import type {SceneMotionFrame} from './scene-motion.ts';
-import type {SceneVolumeLightCamera} from '../lighting/scene-volume-lights.ts';
-import type {getSceneEffectsRequirements} from './scene-effect-config.ts';
+import type { FrameView } from './frame-view.ts';
+import type { SceneEffectsFrame } from './scene-effects.ts';
+import type { SceneMotionFrame } from './scene-motion.ts';
+import type { SceneVolumeLightCamera } from '../lighting/scene-volume-lights.ts';
+import type { getSceneEffectsRequirements } from './scene-effect-config.ts';
 
-import {SceneMotionPass} from './scene-motion.ts';
-import {SceneSurfaces} from './scene-surfaces.ts';
-import {SceneVolumeLights} from '../lighting/scene-volume-lights.ts';
+import { SceneMotionPass } from './scene-motion.ts';
+import { SceneSurfaces } from './scene-surfaces.ts';
+import { SceneVolumeLights } from '../lighting/scene-volume-lights.ts';
 
 type SceneAttachmentRequirements = ReturnType<typeof getSceneEffectsRequirements>;
 
@@ -24,9 +24,8 @@ type SceneAttachmentRequirements = ReturnType<typeof getSceneEffectsRequirements
  */
 export interface SceneAttachmentFrame {
   motion: SceneMotionFrame;
-  viewMatrix: Float32Array<ArrayBuffer>;
+  readonly view: FrameView;
   surfaceRoughness: ArrayLike<number>;
-  lights: readonly PointLight[];
 }
 
 /**
@@ -40,6 +39,10 @@ export class SceneEffectAttachments {
 
   private readonly device: Device;
 
+  /**
+   * Borrow the device; optional attachment owners are allocated only when requested.
+   * @param device Shared device whose lifetime must cover this attachment owner.
+   */
   constructor(device: Device) {
     this.device = device;
   }
@@ -59,7 +62,7 @@ export class SceneEffectAttachments {
   /**
    * Prepare required attachments in motion, surface, and lighting order.
    * Borrows inputs and depth; returns a shallow frame copy with instance-owned attachments.
-   * The caller's frame record is unchanged. Missing required camera data throws.
+   * The caller's frame record and shared FrameView are unchanged.
    * @param requirements Attachments required by the enabled scene effects.
    * @param depth Scene-owned depth texture for surface and volume lighting.
    * @param frame SceneEffectsFrame to copy and update with owned attachments.
@@ -131,11 +134,12 @@ export class SceneEffectAttachments {
     }
 
     this.surfaces ??= new SceneSurfaces(this.device);
-    const rasterViewProjection = new Float32Array(inputs.motion.rasterViewProjection ?? inputs.motion.currentViewProjection);
+    const rasterViewProjection = inputs.view.camera.rasterViewProjectionMatrix;
 
-    outputFrame.normalTexture = this.surfaces.render(inputs.motion.vertices as number[] | Float32Array,
+    outputFrame.normalTexture = this.surfaces.render(
+      inputs.motion.vertices as number[] | Float32Array,
       rasterViewProjection,
-      inputs.viewMatrix,
+      inputs.view.camera.viewMatrix,
       depth,
       inputs.surfaceRoughness
     );
@@ -143,7 +147,7 @@ export class SceneEffectAttachments {
 
   /**
    * Update outputFrame's borrowed lighting bindings, or release their owned storage.
-   * Validate camera completeness before creating volume-light resources.
+   * Camera and lights come from the same immutable view used by the scene passes.
    * @param requirements SceneEffectRequirements from the scene's effect config.
    * @param depth Texture with the scene's depth buffer.
    * @param inputs SceneAttachmentFrame with borrowed lighting inputs.
@@ -159,23 +163,19 @@ export class SceneEffectAttachments {
       this.volume = null;
       return;
     }
-    
-    if(!outputFrame.projectionMatrix || (outputFrame.nearPlane === undefined) || (outputFrame.farPlane === undefined)) {
-      throw new Error('Clustered lighting requires a complete perspective camera snapshot.');
-    }
 
     this.volume ??= new SceneVolumeLights(this.device);
 
     // Use clip planes from the same snapshot as the frame's projection matrix.
     const camera: SceneVolumeLightCamera = {
-      viewMatrix: inputs.viewMatrix,
-      projectionMatrix: outputFrame.projectionMatrix,
-      nearPlane: outputFrame.nearPlane,
-      farPlane: outputFrame.farPlane,
+      viewMatrix: inputs.view.camera.viewMatrix,
+      projectionMatrix: inputs.view.camera.rasterProjectionMatrix,
+      nearPlane: inputs.view.camera.nearPlane,
+      farPlane: inputs.view.camera.farPlane,
       width: depth.width,
       height: depth.height
     };
 
-    outputFrame.clusteredLighting = this.volume.update(inputs.lights, camera);
+    outputFrame.clusteredLighting = this.volume.update(inputs.view.lighting.lights, camera);
   }
 }

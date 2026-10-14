@@ -689,8 +689,8 @@ type SceneEffectsFrame = {
   nearPlane?: number;
   farPlane?: number;
   projection?: 'perspective' | 'orthographic';
-  currentJitter?: [number, number];
-  previousJitter?: [number, number];
+  currentJitter?: readonly [number, number];
+  previousJitter?: readonly [number, number];
   directionalLightDirectionView?: readonly [number, number, number];
   directionalLightColor?: readonly [number, number, number];
   clusteredLighting?: SceneVolumeLightBindings;
@@ -1142,17 +1142,23 @@ Import from `joy-engine`. [Source](../../src/rendering/scene/scene-renderer.ts)
 
 ```ts
 interface SceneRendererOptions {
-  /** WebGPU geometric shadows default to enabled. WebGL 2 retains illumination without shadows. */
+  /**
+   * WebGPU geometric shadows default to enabled. WebGL 2 retains illumination without shadows.
+   */
   shadows?: ShadowOptions | false;
   camera?: OrbitCamera;
   atmosphere?: boolean;
   pixelRatio?: number;
   postProcessing?: Partial<PostProcessingConfig> | false;
   device?: GpuDeviceOptions;
-  /** Individual WebGPU effect opt-ins. Opaque scene effects precede transparency and HDR display processing. */
+  /**
+   * Individual WebGPU effect opt-ins. Opaque scene effects precede transparency and HDR display processing.
+   */
   sceneEffects?: SceneEffectsOptions;
 }
 ```
+Construction settings; the renderer borrows its canvas and camera and owns GPU resources.
+
 
 
 ## SceneFrameOptions
@@ -1168,12 +1174,141 @@ interface SceneFrameOptions {
   opaqueTriangles?: readonly number[];
   transparentTriangles?: readonly number[];
   culling?: boolean;
-  /** Seconds since the preceding rendered frame, for exposure adaptation. */
+  /**
+   * Seconds since the preceding rendered frame, for exposure adaptation.
+   */
   deltaTimeSeconds?: number;
-  /** Explicit camera cut, teleport, procedural topology change or other discontinuity. */
+  /**
+   * Explicit camera cut, teleport, procedural topology change or other discontinuity.
+   */
   resetHistory?: boolean;
 }
 ```
+Borrowed scene inputs for one submission; time is in seconds and geometry is world-space.
+
+
+
+## FrameView
+Import from `joy-engine`. [Source](../../src/rendering/scene/frame-view.ts)
+
+```ts
+interface FrameView {
+  readonly camera: FrameCamera;
+  readonly viewport: FrameViewport;
+  readonly lighting: {
+    readonly lights: readonly Readonly<PointLight>[];
+    readonly ambient: number;
+    readonly directional: Immutable<AtmosphereLight> | null;
+  };
+  readonly environment: Immutable<EnvironmentFrame> | null;
+  readonly shadows: Readonly<ShadowOptions> | false;
+}
+```
+One owned, deeply immutable CPU snapshot per scene submission. Matrices, light records, environment, and shadow settings are copied before any feature runs. World space is Y-up, distances are world units, and lighting is linear RGB. No render target or pass override belongs here; features retain this same snapshot for the duration of the submission.
+
+
+
+## FrameViewOptions
+Import from `joy-engine`. [Source](../../src/rendering/scene/frame-view.ts)
+
+```ts
+interface FrameViewOptions {
+  camera: ShadowCameraFrame & {
+    eye: readonly number[];
+    backward: readonly number[];
+  };
+  viewport: {
+    cssWidth: number;
+    cssHeight: number;
+    pixelRatio: number;
+  };
+  jitter?: readonly [number, number];
+  lights?: readonly PointLight[];
+  ambient?: number;
+  environment?: EnvironmentFrame;
+  /** Explicit direct light for low-level scenes without an atmosphere. Omission uses the environment. */
+  directional?: AtmosphereLight | null;
+  shadows?: ShadowOptions | false;
+}
+```
+Borrowed CPU inputs copied during view creation; subsequent caller edits cannot alter the view.
+
+
+
+## FrameCamera
+Import from `joy-engine`. [Source](../../src/rendering/scene/frame-view.ts)
+
+```ts
+interface FrameCamera {
+  readonly viewMatrix: readonly number[];
+  readonly projectionMatrix: readonly number[];
+  readonly viewProjectionMatrix: readonly number[];
+  readonly rasterProjectionMatrix: readonly number[];
+  readonly rasterViewProjectionMatrix: readonly number[];
+  readonly inverseViewMatrix: readonly number[] | null;
+  readonly inverseProjectionMatrix: readonly number[] | null;
+  readonly inverseViewProjectionMatrix: readonly number[] | null;
+  readonly inverseRasterViewProjectionMatrix: readonly number[] | null;
+  readonly nearPlane: number;
+  readonly farPlane: number;
+  readonly eye: Readonly<Vector3>;
+  readonly backward: Readonly<Vector3>;
+  /** Top-left UV units. The inverse projection reconstructs jittered raster depth. */
+  readonly jitter: readonly [number, number];
+}
+```
+Column-major camera snapshots. Unjittered matrices drive culling and shadow fitting.
+
+
+
+## FrameViewport
+Import from `joy-engine`. [Source](../../src/rendering/scene/frame-view.ts)
+
+```ts
+interface FrameViewport {
+  readonly cssWidth: number;
+  readonly cssHeight: number;
+  readonly pixelRatio: number;
+  readonly width: number;
+  readonly height: number;
+}
+```
+CSS dimensions preserve the view; width and height are physical backing pixels.
+
+
+
+## RenderPassContext
+Import from `joy-engine`. [Source](../../src/rendering/scene/render-pass-context.ts)
+
+```ts
+interface RenderPassContext {
+  readonly camera: PassCamera | null;
+  readonly target: Framebuffer;
+  readonly viewport: Readonly<{
+    width: number;
+    height: number;
+  }>;
+  readonly renderPass: RenderPass;
+}
+```
+Borrowed GPU handles and camera overrides for one recorded pass. This context owns no resources; the caller ends the pass, and the target owner destroys its attachments. Shadow cameras and intermediate targets never replace any part of the shared FrameView. A null camera supports low-level callers that supply only custom packed shader uniforms.
+
+
+
+## PassCamera
+Import from `joy-engine`. [Source](../../src/rendering/scene/render-pass-context.ts)
+
+```ts
+interface PassCamera {
+  readonly viewMatrix: readonly number[];
+  readonly projectionMatrix: readonly number[];
+  readonly viewProjectionMatrix: readonly number[];
+  readonly nearPlane: number;
+  readonly farPlane: number;
+}
+```
+Pass-local column-major transforms and clip distances in world units.
+
 
 
 ## InputAction
@@ -1291,16 +1426,37 @@ Import from `joy-engine`. [Source](../../src/rendering/shadows/types.ts)
 
 ```ts
 interface ShadowOptions {
+  /**
+   * Shadow sampling quality preset; omitted uses the named default.
+   */
   quality?: 'low' | 'balanced' | 'cinematic';
+  /**
+   * Directional depth-map width and height in pixels; omitted uses the backend quality preset.
+   */
   directionalMapSize?: number;
+  /**
+   * Point-light cube-face width and height in pixels; omitted uses the backend quality preset.
+   */
   pointMapSize?: number;
+  /**
+   * Receiver displacement along its world-space normal, in world units.
+   */
   normalBias?: number;
+  /**
+   * Constant caster raster bias in backend depth units.
+   */
   depthBias?: number;
+  /**
+   * Caster depth bias scaled by the depth slope; dimensionless.
+   */
   depthBiasSlopeScale?: number;
+  /**
+   * Maximum directional shadow distance from the camera, in world units.
+   */
   shadowDistance?: number;
 }
 ```
-Quality and bias in world units (normal bias), depth units, and world-space shadow distance.
+ShadowOptions Interface Definition. Caller-owned configuration copied by shadow resource owners. Biases and distance must be finite and nonnegative when configuring SceneShadows.
 
 
 
@@ -1315,7 +1471,7 @@ interface ShadowCameraFrame {
   farPlane: number;
 }
 ```
-Borrowed column-major world-to-view and WebGPU projection matrices; clip distances are world units.
+ShadowCameraFrame Interface Definition. Borrowed column-major world-to-view and WebGPU projection matrices, unchanged by preparation. Each matrix contains 16 values; clip distances are in world units and remain valid for the call.
 
 
 
@@ -1324,14 +1480,15 @@ Import from `joy-engine`. [Source](../../src/rendering/shadows/types.ts)
 
 ```ts
 interface SceneLightFrame {
-  camera: ShadowCameraFrame;
-  lights: readonly PointLight[];
-  directional: AtmosphereLight | null;
-  /** Complete opaque XYZ/RGBA caster triangles, including objects outside the camera frustum. */
+  readonly view: FrameView;
+  /**
+   * Complete opaque world-space XYZ/RGBA caster triangles, including objects outside the camera frustum.
+   * Input remains caller-owned and must be valid until preparation returns.
+   */
   casters: number[] | Float32Array;
 }
 ```
-Borrowed lighting/caster data for the default lit triangle pass.
+SceneLightFrame Interface Definition. Shared immutable view and borrowed caster geometry for one default lit-triangle preparation. Preparation copies geometry into owned GPU storage and leaves this record and its inputs unchanged.
 
 
 

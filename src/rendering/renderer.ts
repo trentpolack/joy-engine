@@ -1,41 +1,101 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import {SceneLitPass} from './shadows/scene-lit-pass.ts';
-import type {SceneLightFrame, ShadowOptions} from './shadows/types.ts';
-import { GPU_BACKEND, GPU_COMPARE, GPU_TEXTURE_FORMAT, GPU_TOPOLOGY, GPU_VERTEX_FORMAT, SHADER_ENTRY_POINT } from './gpu/constants.ts';
-import type { RendererDiagnosticOptions, RendererDiagnostics } from './gpu/gpu-diagnostics.ts';
-import { readGpuDiagnostics } from './gpu/gpu-diagnostics.ts';
-import type { SceneEffectsOptions, SceneEffectsFrame } from './scene/scene-effects.ts';
+import type {
+  RenderPipelineProps,
+  Framebuffer,
+  Texture,
+  Device,
+  CanvasContext,
+  Shader,
+  RenderPipeline,
+  RenderPass,
+  VertexArray
+} from '@luma.gl/core';
+import type {
+  PbrMesh,
+  Color,
+  PbrFrame
+} from '../core/types.ts';
+import type {
+  FrameView,
+  FrameViewOptions
+} from './scene/frame-view.ts';
+import type {
+  PassCamera,
+  RenderPassContext
+} from './scene/render-pass-context.ts';
+import type {
+  SceneLightFrame,
+  ShadowOptions
+} from './shadows/types.ts';
+import type {
+  RendererDiagnosticOptions,
+  RendererDiagnostics
+} from './gpu/gpu-diagnostics.ts';
+import type {
+  SceneEffectsOptions,
+  SceneEffectsFrame
+} from './scene/scene-effects.ts';
 import type { GpuDeviceOptions } from './gpu/gpu-device.ts';
-import type { RenderPipelineProps, Framebuffer, Texture, Device, CanvasContext, Shader, RenderPipeline, VertexArray } from '@luma.gl/core';
-import type { PbrMesh, Color, PbrFrame } from '../core/types.ts';
 import type { TransparentDraw } from './materials/textured-material-pass.ts';
 import type { PbrTransparentRange } from './materials/pbr/pbr-material-pass.ts';
 import type { PostProcessingConfig } from './postprocessor/config.ts';
+import type {
+  PbrEnvironmentPixels,
+  PbrEnvironmentOptions
+} from './environment/pbr-environment.ts';
+import type { SceneAttachmentFrame } from './scene/scene-effect-attachments.ts';
+
+import { Buffer } from '@luma.gl/core';
+import {
+  GPU_BACKEND,
+  GPU_COMPARE,
+  GPU_TEXTURE_FORMAT,
+  GPU_TOPOLOGY,
+  GPU_VERTEX_FORMAT,
+  SHADER_ENTRY_POINT
+} from './gpu/constants.ts';
+import { SceneLitPass } from './shadows/scene-lit-pass.ts';
+import { createRenderPassContext } from './scene/render-pass-context.ts';
+import { createFrameView } from './scene/frame-view.ts';
+import { readGpuDiagnostics } from './gpu/gpu-diagnostics.ts';
 import { AtmospherePass } from './environment/atmosphere-pass.ts';
-import {PbrEnvironment} from './environment/pbr-environment.ts';
-import type {PbrEnvironmentPixels, PbrEnvironmentOptions} from './environment/pbr-environment.ts';
+import { PbrEnvironment } from './environment/pbr-environment.ts';
 import { PbrMaterialPass } from './materials/pbr/pbr-material-pass.ts';
 import { TexturedMaterialPass } from './materials/textured-material-pass.ts';
 import { Postprocessor } from './postprocessor/postprocessor.ts';
-import type {SceneAttachmentFrame} from './scene/scene-effect-attachments.ts';
-import {SceneEffectAttachments} from './scene/scene-effect-attachments.ts';
-import {getSceneEffectsRequirements} from './scene/scene-effect-config.ts';
+import { SceneEffectAttachments } from './scene/scene-effect-attachments.ts';
+import { getSceneEffectsRequirements } from './scene/scene-effect-config.ts';
 import { SceneEffects } from './scene/scene-effects.ts';
-import { Buffer } from '@luma.gl/core';
 import { DynamicGpuBuffer } from './gpu/dynamic-gpu-buffer.ts';
-import { createGpuCanvasDevice, createPortableShaders } from './gpu/gpu-device.ts';
+import {
+  createGpuCanvasDevice,
+  createPortableShaders
+} from './gpu/gpu-device.ts';
 import { FLOATS_PER_VERTEX } from './geometry/geometry.ts';
-import { addPostProcessingShaders, createPostProcessingUniforms, normalizePostProcessingConfig } from './postprocessor/config.ts';
+import {
+  addPostProcessingShaders,
+  createPostProcessingUniforms,
+  normalizePostProcessingConfig
+} from './postprocessor/config.ts';
 
+/**
+ * Borrowed shader sources defining matching WebGPU and WebGL triangle programs.
+ */
 export interface TriangleShaderSources {
   wgsl: string;
   glsl: {
-      vertex: string;
-      fragment: string;
+    vertex: string;
+    fragment: string;
   };
 }
+
+/**
+ * Construction settings; optional passes remain tied to this renderer's device.
+ * Buffer sizes are bytes. Scene effects require explicitly enabled post-processing.
+ * Shader strings and options are borrowed during construction; live settings are copied.
+ */
 export interface RendererOptions {
   shaderSources: TriangleShaderSources;
   texturedShaderSources?: TriangleShaderSources;
@@ -51,6 +111,47 @@ export interface RendererOptions {
 }
 
 /**
+ * Colored vertex-buffer command with average world-space depth along camera backward.
+ */
+export interface ColoredRange {
+  kind: 'colored';
+  firstVertex: number;
+  vertexCount: number;
+  depth: number;
+}
+
+/**
+ * Textured vertex-buffer command; texture ownership stays with its material source.
+ */
+export interface TexturedRange {
+  kind: 'textured';
+  texture: Texture;
+  firstVertex: number;
+  vertexCount: number;
+  depth: number;
+}
+
+/**
+ * PBR index-buffer command borrowing its material from the prepared material pass.
+ */
+export type MaterialRange = {
+  kind: 'pbr';
+} & PbrTransparentRange;
+
+/**
+ * Commands borrowing existing GPU streams for one transparent scene pass.
+ */
+export type TransparentRange = ColoredRange | TexturedRange | MaterialRange;
+
+// Stable command identifiers preserve each source stream's material bindings.
+const TRANSPARENT_RANGE_KIND = {
+  COLORED: 'colored',
+  TEXTURED: 'textured',
+  PBR: 'pbr'
+} as const;
+const POST_PROCESSING_SHADER_MACRO = 'JOY_POST_APPLY_MACRO';
+
+/**
  * Depth-tested 3D triangle rendering through luma.gl's portable Device API.
  * Games provide world-space vertices, camera uniforms, and matching shaders.
  *
@@ -60,41 +161,58 @@ export interface RendererOptions {
  * its camera. Both batches share one framebuffer and one clear per frame.
  */
 export class GpuTriangleRenderer {
-  declare device: Device;
-  declare canvasContext: CanvasContext;
-  declare backend: typeof GPU_BACKEND.WEBGL | typeof GPU_BACKEND.WEBGPU | "null" | "unknown";
+  // Owned device roots; all dependent passes and buffers are released first.
+  declare readonly device: Device;
+  declare readonly canvasContext: CanvasContext;
+  declare readonly backend: typeof GPU_BACKEND.WEBGL | typeof GPU_BACKEND.WEBGPU | "null" | "unknown";
+
+  // Fixed geometry resources; buffer storage can grow without replacing its owner.
+  declare readonly sceneUniformBufferSize: number;
+  declare readonly opaqueShaders: {
+    vertex: Shader;
+    fragment: Shader;
+  } | null;
+  declare readonly shaders: ReturnType<typeof createPortableShaders>;
+  declare readonly pipeline: RenderPipeline;
+  declare readonly transparentPipeline: RenderPipeline;
+  declare readonly vertexArray: VertexArray;
+  declare readonly uniformBuffer: Buffer;
+  declare readonly vertexBuffer: DynamicGpuBuffer;
+
+  // Optional owned passes borrow the device. Effects and attachments can be replaced.
+  declare readonly postprocessor: Postprocessor | null;
+  declare readonly pbr: PbrMaterialPass | null;
+  declare readonly textured: TexturedMaterialPass | null;
+  declare readonly atmosphere: AtmospherePass | null;
+  declare sceneEffects: SceneEffects | null;
+  private litShadowPass: SceneLitPass | null = null;
+  private sceneAttachments: SceneEffectAttachments | null = null;
+
+  // Owned framebuffer borrows effect color and opaque depth; it never destroys them.
+  private compositeFramebuffer: Framebuffer | null = null;
+  private compositeTexture: Texture | null = null;
+  private compositeDepth: Texture | null = null;
+
+  // Authored configuration stays distinct from mutable surface and lifecycle state.
+  declare postProcessing: PostProcessingConfig | null;
+  private readonly shadowOptions: ShadowOptions | false;
   declare width: number;
   declare height: number;
   declare drawingBufferWidth: number;
   declare drawingBufferHeight: number;
-  declare sceneUniformBufferSize: number;
-  declare postProcessing: PostProcessingConfig | null;
-  declare postprocessor: Postprocessor | null;
-  declare sceneEffects: SceneEffects | null;
-  private sceneAttachments: SceneEffectAttachments | null = null;
-  private compositeFramebuffer: Framebuffer | null = null;
-  private compositeTexture: Texture | null = null;
-  private compositeDepth: Texture | null = null;
-  declare atmosphere: AtmospherePass | null;
   declare resourcesReleased: boolean;
   declare destroyed: boolean;
-  declare pbr: PbrMaterialPass | null;
-  private litShadowPass: SceneLitPass | null = null;
-  private readonly shadowOptions: ShadowOptions | false;
-  declare textured: TexturedMaterialPass | null;
-  declare opaqueShaders: { vertex: Shader; fragment: Shader; } | null;
-  declare shaders: ReturnType<typeof createPortableShaders>;
-  declare pipeline: RenderPipeline;
-  declare transparentPipeline: RenderPipeline;
-  declare vertexArray: VertexArray;
-  declare uniformBuffer: Buffer;
-  declare vertexBuffer: DynamicGpuBuffer;
 
   /**
-   * @param canvas Canvas dedicated to GPU rendering.
-   * @param options Backend-specific shader sources.
+   * Create a renderer and transfer its device/canvas ownership to the result.
+   * Failed construction destroys the newly created roots before rejecting.
+   * @param canvas Borrowed DOM canvas dedicated to GPU rendering; never removed here.
+   * @param options Shader sources, optional features, and device creation settings.
+   * @returns An owned renderer; its caller must destroy it after dependent environments.
    */
-  static async create(canvas: HTMLCanvasElement, options: RendererOptions): Promise<GpuTriangleRenderer> {
+  static async create(
+    canvas: HTMLCanvasElement,
+    options: RendererOptions): Promise<GpuTriangleRenderer> {
     const device = await createGpuCanvasDevice(canvas, options.device);
     const canvasContext = ((device.canvasContext) as CanvasContext);
     try {
@@ -107,11 +225,28 @@ export class GpuTriangleRenderer {
   }
 
   /**
-   * @param device
-   * @param canvasContext
-   * @param options
+   * Initialize owned geometry and optional scene passes in dependency order.
+   * Direct construction transfers device roots on success; callers handle failed roots.
+   * Invalid scene-effect settings and GPU allocation failures throw synchronously.
+   * @param device Device owned by this renderer after successful construction.
+   * @param canvasContext Canvas context owned alongside the device.
+   * @param options Borrowed shaders and feature settings; buffer capacities are bytes.
    */
-  constructor(device: Device, canvasContext: CanvasContext, { shaderSources, texturedShaderSources, opaqueShaderSources, uniformBufferSize = 16, initialVertexBufferSize = 64*1024, postProcessing, sceneEffects, pbr = false, atmosphere = false, shadows = {} }: RendererOptions) {
+  constructor(
+    device: Device,
+    canvasContext: CanvasContext,
+    {
+      shaderSources,
+      texturedShaderSources,
+      opaqueShaderSources,
+      uniformBufferSize = 16,
+      initialVertexBufferSize = 64*1024,
+      postProcessing,
+      sceneEffects,
+      pbr = false,
+      atmosphere = false,
+      shadows = {}
+    }: RendererOptions) {
     if(sceneEffects && !postProcessing) {
       throw new Error('Scene effects require an offscreen post-processing scene.');
     }
@@ -140,20 +275,25 @@ export class GpuTriangleRenderer {
     this.atmosphere = null;
     this.resourcesReleased = false;
     this.destroyed = false;
-    this.shadowOptions = shadows;
+    this.shadowOptions = shadows === false ? false : Object.freeze({ ...shadows });
     this.pbr = pbr ? new PbrMaterialPass(device, this.postprocessor?.format) : null;
     // Templates need a fragment output even when this renderer draws directly to
     // the canvas. Fully authored caller shaders require no template expansion.
-    const needsShaderExpansion = postProcessing || shaderSources.wgsl?.includes('JOY_POST_APPLY_MACRO');
+    const needsShaderExpansion = postProcessing || shaderSources.wgsl?.includes(POST_PROCESSING_SHADER_MACRO);
     const resolvedShaderSources = needsShaderExpansion
-      ? addPostProcessingShaders(shaderSources, {includeUniforms: Boolean(this.postProcessing)})
+      ? addPostProcessingShaders(shaderSources, {
+        includeUniforms: Boolean(this.postProcessing)
+      })
       : shaderSources;
     this.textured = texturedShaderSources ? new TexturedMaterialPass(
-      device, texturedShaderSources,
-      this.postprocessor?.format,
+      device,
+      texturedShaderSources,
+      this.postprocessor?.format
     ) : null;
 
-    this.opaqueShaders = opaqueShaderSources ? createPortableShaders(device, opaqueShaderSources, 'lit-opaque-triangles') : null;
+    this.opaqueShaders = opaqueShaderSources
+      ? createPortableShaders(device, opaqueShaderSources, 'lit-opaque-triangles')
+      : null;
     this.shaders = createPortableShaders(device, resolvedShaderSources, 'triangle-renderer');
 
     const pipelineOptions: RenderPipelineProps = {
@@ -166,8 +306,16 @@ export class GpuTriangleRenderer {
         name: 'vertices',
         byteStride: FLOATS_PER_VERTEX*Float32Array.BYTES_PER_ELEMENT,
         attributes: [
-          { attribute: 'position', format: GPU_VERTEX_FORMAT.FLOAT32X3, byteOffset: 0 },
-          { attribute: 'color', format: GPU_VERTEX_FORMAT.FLOAT32X4, byteOffset: 12 }
+          {
+            attribute: 'position',
+            format: GPU_VERTEX_FORMAT.FLOAT32X3,
+            byteOffset: 0
+          },
+          {
+            attribute: 'color',
+            format: GPU_VERTEX_FORMAT.FLOAT32X4,
+            byteOffset: 12
+          }
         ]
       }],
       // Explicit format is required even when a pipeline only reads depth.
@@ -177,7 +325,10 @@ export class GpuTriangleRenderer {
     this.pipeline = device.createRenderPipeline({
       id: 'triangle-opaque-pipeline',
       ...pipelineOptions,
-      ...(this.opaqueShaders ? { vs: this.opaqueShaders.vertex, fs: this.opaqueShaders.fragment } : {}),
+      ...(this.opaqueShaders ? {
+        vs: this.opaqueShaders.vertex,
+        fs: this.opaqueShaders.fragment
+      } : {}),
       parameters: {
         depthWriteEnabled: true,
         depthCompare: GPU_COMPARE.LESS_EQUAL,
@@ -208,7 +359,9 @@ export class GpuTriangleRenderer {
     });
     // Derive the allocation from the packed shader tail so new effects cannot
     // make scene uploads exceed the GPU buffer's capacity.
-    const postProcessingUniformBytes = this.postProcessing ? createPostProcessingUniforms(this.postProcessing, 0, 0, 0).byteLength : 0;
+    const postProcessingUniformBytes = this.postProcessing
+      ? createPostProcessingUniforms(this.postProcessing, 0, 0, 0).byteLength
+      : 0;
     this.uniformBuffer = device.createBuffer({
       id: 'triangle-uniforms',
       byteLength: uniformBufferSize + postProcessingUniformBytes,
@@ -234,7 +387,9 @@ export class GpuTriangleRenderer {
 
   /**
    * Copy requested luma counters on demand. Scope is all luma devices in this realm,
-   * not this renderer alone. Returns null after disposal; performs no GPU readback.
+   * not this renderer alone. Performs no GPU readback.
+   * @param options Counters to sample; disabled groups are omitted from the snapshot.
+   * @returns A new diagnostic snapshot, or null after this renderer is destroyed.
    */
   getDiagnostics(options: RendererDiagnosticOptions = {}): RendererDiagnostics | null {
     if(this.destroyed) {
@@ -253,9 +408,26 @@ export class GpuTriangleRenderer {
     return snapshot;
   }
 
-  /** Upload a world-space material mesh; await readiness before displaying new document data.
-   * Requires pbr at creation. The renderer owns buffers/textures and copies input data.
-   * @param mesh */
+  /**
+   * Build the shared immutable view using this renderer's fixed shadow configuration.
+   * Call once per submission before preparing features; input camera and light records are copied.
+   * Shadow quality, map sizes, and biases remain fixed for this renderer's lifetime.
+   * @param options Borrowed camera, light, environment, and frame-timing inputs.
+   * @returns A new immutable CPU snapshot; environment GPU bindings remain borrowed.
+   */
+  createFrameView(options: Omit<FrameViewOptions, 'shadows'>): FrameView {
+    return createFrameView({
+      ...options,
+      shadows: this.shadowOptions
+    });
+  }
+
+  /**
+   * Upload a world-space material mesh; await readiness before displaying new document data.
+   * Requires PBR at creation. Failed upload preserves the previous accepted mesh.
+   * @param mesh Borrowed geometry and material data copied into renderer-owned resources.
+   * @returns Whether the mesh was installed; false if superseded or already disposed.
+   */
   async setMaterialMesh(mesh: PbrMesh): Promise<boolean> {
     if(!this.pbr) {
       throw new Error('Material meshes require pbr at renderer creation.');
@@ -266,8 +438,14 @@ export class GpuTriangleRenderer {
   /**
    * Prepare original equirectangular pixels through luma. The caller owns the result
    * and must destroy it before this renderer/device; ordinary frames borrow it.
+   * Invalid pixels, unsupported preparation, or a destroyed renderer throw.
+   * @param pixels Borrowed RGBA equirectangular pixels; float RGB represents linear HDR.
+   * @param options Borrowed environment integration settings.
+   * @returns An owned prepared environment; failed preparation releases its allocations.
    */
-  createMaterialEnvironment(pixels: PbrEnvironmentPixels, options: PbrEnvironmentOptions = {}) {
+  createMaterialEnvironment(
+    pixels: PbrEnvironmentPixels,
+    options: PbrEnvironmentOptions = {}): PbrEnvironment {
     if(this.destroyed) {
       throw new Error('Cannot prepare an environment on a destroyed renderer.');
     }
@@ -287,19 +465,26 @@ export class GpuTriangleRenderer {
    * Invalid settings throw before modifying the last working configuration.
    * @param config Borrowed settings, copied on success.
    */
-  setPostProcessingConfig(config: Partial<PostProcessingConfig>) {
+  setPostProcessingConfig(config: Partial<PostProcessingConfig>): void {
     if(!this.postprocessor) {
       throw new Error('Live post-processing requires postProcessing at renderer creation.');
     }
     this.postProcessing = normalizePostProcessingConfig(config);
   }
 
-  /** Replace the optional scene graph atomically; failed configuration retains the previous graph. */
-  setSceneEffectsConfig(config: SceneEffectsOptions) {
+  /**
+   * Replace the optional scene graph atomically; failed construction retains the previous graph.
+   * Requires a live offscreen scene. Successful replacement releases attachments and history.
+   * @param config Borrowed effect settings; the graph uses the renderer's color format.
+   */
+  setSceneEffectsConfig(config: SceneEffectsOptions): void {
     if(this.destroyed || !this.postprocessor) {
       throw new Error('Scene effects require a live offscreen scene renderer.');
     }
-    const replacement = new SceneEffects(this.device, {...config, colorFormat: this.postprocessor.format});
+    const replacement = new SceneEffects(this.device, {
+      ...config,
+      colorFormat: this.postprocessor.format
+    });
     this.destroyCompositeFramebuffer();
     this.sceneEffects?.destroy();
     this.sceneEffects = replacement;
@@ -308,19 +493,28 @@ export class GpuTriangleRenderer {
     this.destroyCompositeFramebuffer();
   }
 
-  resetSceneHistory() {
+  /**
+   * Invalidate owned temporal history after a camera cut or scene replacement.
+   * Has no effect when scene effects are disabled.
+   */
+  resetSceneHistory(): void {
     this.sceneEffects?.resetHistory();
   }
 
+  /**
+   * Read the current auxiliary volume-light statistics without allocating GPU resources.
+   * @returns Borrowed statistics owned by the attachment pass, or null before it exists.
+   */
   get sceneVolumeStats() {
     return this.sceneAttachments?.volumeStats ?? null;
   }
 
   /**
    * Bind the interleaved stream using each backend's vertex-array semantics.
-   * @param [buffer]
+   * The allocation remains owned by its source; this method only replaces vertex bindings.
+   * @param buffer Borrowed buffer, defaulting to the renderer's current geometry allocation.
    */
-  bindVertexBuffer(buffer: Buffer = this.vertexBuffer?.buffer) {
+  bindVertexBuffer(buffer: Buffer = this.vertexBuffer?.buffer): void {
     // WebGPU binds a buffer slot; WebGL binds individual attribute locations.
     // Both attributes must be rebound when the shared allocation grows.
     if(!buffer) {
@@ -340,7 +534,10 @@ export class GpuTriangleRenderer {
    * @param height Logical height in CSS pixels.
    * @param pixelRatio Backing pixels per CSS pixel.
    */
-  resize(width: number, height: number, pixelRatio: number) {
+  resize(
+    width: number,
+    height: number,
+    pixelRatio: number): void {
     this.width = width;
     this.height = height;
     this.drawingBufferWidth = Math.max(1, Math.round(width*pixelRatio));
@@ -351,28 +548,145 @@ export class GpuTriangleRenderer {
 
   /**
    * Submit opaque geometry, then sorted translucent geometry; clear even if empty.
-   * @param vertices Triangle list of x, y, z, r, g, b, a values.
-   * @param uniformData Caller-defined values fitting the configured uniform buffer.
-   * @param clearColor Frame background.
-   * @param transparentVertices Back-to-front x/y/z/RGBA triangles.
-   * @param timeSeconds Animation time used by temporal post effects.
-   * @param transparentDraws
-   * Additional globally sorted material runs (XYZ/RGBA, or XYZ/RGBA/UV with texture).
-   * Borrowed textures must outlive submission. Requires texturedShaderSources for texture runs.
+   * CPU arrays and records remain unchanged. Borrowed textures must outlive submission.
+   * Missing optional pass support, invalid uniform size, and GPU failures throw.
+   * Submission failure invalidates temporal history before rethrowing.
+   * @param vertices Borrowed world-space triangle list of x, y, z, r, g, b, a values.
+   * @param uniformData Borrowed scene values matching the configured uniform byte size.
+   * @param clearColor Borrowed RGBA frame background.
+   * @param transparentVertices Borrowed back-to-front world-space XYZ/RGBA triangles.
+   * @param timeSeconds Animation time in seconds used by temporal post effects.
+   * @param transparentDraws Additional globally sorted XYZ/RGBA or XYZ/RGBA/UV material runs; textures require texturedShaderSources.
    * @param materialFrame Camera/lighting for the optional PBR mesh. Null hides it.
-   * @param [sceneFrame] Borrowed motion/camera inputs for requested scene effects. Depth defaults to this scene's owned attachment. Callers must supply real velocities and projection jitter; reset history after camera cuts or scene replacement.
+   * @param sceneFrame Borrowed effect inputs; depth defaults to the owned scene attachment.
+   * Supply real velocities and projection jitter; reset history after cuts or scene replacement.
    * @param [atmosphereUniforms] Optional packed background snapshot. Requires atmosphere at creation; null hides it.
+   * @param [attachmentFrame] Borrowed geometry and shared FrameView for auxiliary scene attachments.
+   * @param lightFrame Shared immutable view and complete shadow casters. Pass cameras/targets remain local.
+   * Standalone views must retain this renderer's construction-time shadow configuration.
    */
-  render(vertices: number[] | Float32Array, uniformData: Float32Array<ArrayBuffer>, clearColor: Color, transparentVertices: number[] | Float32Array = [], timeSeconds: number = 0, transparentDraws: readonly TransparentDraw[] = [], materialFrame: PbrFrame | null = null, sceneFrame: SceneEffectsFrame = {}, atmosphereUniforms: Float32Array<ArrayBuffer> | null = null, attachmentFrame: SceneAttachmentFrame | null = null, lightFrame: SceneLightFrame | null = null) {
+  render(
+    vertices: number[] | Float32Array,
+    uniformData: Float32Array<ArrayBuffer>,
+    clearColor: Color,
+    transparentVertices: number[] | Float32Array = [],
+    timeSeconds: number = 0,
+    transparentDraws: readonly TransparentDraw[] = [],
+    materialFrame: PbrFrame | null = null,
+    sceneFrame: SceneEffectsFrame = {},
+    atmosphereUniforms: Float32Array<ArrayBuffer> | null = null,
+    attachmentFrame: SceneAttachmentFrame | null = null,
+    lightFrame: SceneLightFrame | null = null): void {
     if(atmosphereUniforms && !this.atmosphere) {
       throw new Error('Atmosphere uniforms require atmosphere at renderer creation.');
     }
+
+    this.prepareVertexStreams(vertices, transparentVertices, transparentDraws);
+    this.prepareFrameUniforms(uniformData, timeSeconds);
+
+    // Merge material streams only when PBR and caller geometry share the transparent phase.
+    const mixedTransparency = Boolean(materialFrame && (transparentVertices.length || transparentDraws.length));
+    const shadows = this.prepareSceneLighting(materialFrame, mixedTransparency, lightFrame, uniformData);
+    let processedScene: Texture | undefined;
+
+    // Pass targets and raster camera overrides remain separate from the immutable main view.
+    const camera = lightFrame?.view.camera;
+    const passCamera: PassCamera | null = camera ? Object.freeze({
+      viewMatrix: camera.viewMatrix,
+      projectionMatrix: camera.rasterProjectionMatrix,
+      viewProjectionMatrix: camera.rasterViewProjectionMatrix,
+      nearPlane: camera.nearPlane,
+      farPlane: camera.farPlane
+    }) : null;
+    const target = this.postprocessor?.sceneFramebuffer ?? this.canvasContext.getCurrentFramebuffer({
+      depthStencilFormat: GPU_TEXTURE_FORMAT.DEPTH24PLUS
+    });
+    let context = createRenderPassContext(this.device.beginRenderPass({
+      framebuffer: target,
+      clearColor: [clearColor[0], clearColor[1], clearColor[2], clearColor[3]],
+      clearDepth: 1
+    }), target, passCamera);
+
+    this.drawOpaqueScene(
+      context.renderPass,
+      vertices.length/FLOATS_PER_VERTEX,
+      Boolean(lightFrame && shadows !== false),
+      materialFrame,
+      atmosphereUniforms
+    );
+
+    // Resolve depth-dependent effects on opaque color, then reuse its depth for transparency.
+    // Particles retain crisp coverage and need no fabricated velocity.
+    if(this.sceneEffects && this.postprocessor) {
+      processedScene = this.resolveSceneEffects(
+        context,
+        sceneFrame,
+        attachmentFrame,
+        this.sceneEffects,
+        this.postprocessor
+      );
+      context = createRenderPassContext(this.device.beginRenderPass({
+        framebuffer: this.compositeFramebuffer!,
+        clearColor: false,
+        clearDepth: false
+      }), this.compositeFramebuffer!, passCamera);
+    }
+
+    this.drawTransparentScene(
+      context.renderPass,
+      vertices,
+      transparentVertices,
+      transparentDraws,
+      materialFrame,
+      mixedTransparency
+    );
+    context.renderPass.end();
+
+    if(this.postprocessor && this.postProcessing) {
+      this.postprocessor.render(this.postProcessing, timeSeconds, processedScene);
+    }
+    try {
+      this.device.submit();
+    } catch(error) {
+      this.sceneEffects?.resetHistory();
+      throw error;
+    }
+  }
+
+  /**
+   * Release owned passes, buffers, shaders, canvas context, and device in dependency order.
+   * Repeated destruction is harmless. Caller-owned environments must be destroyed first.
+   */
+  destroy(): void {
+    if(this.destroyed) {
+      return;
+    }
+    this.destroyed = true;
+    this.releaseResources();
+    this.canvasContext.destroy();
+    this.device.destroy();
+  }
+
+  /**
+   * Validate texture support, pack colored streams, and upload each geometry source once.
+   * Textured preparation precedes colored upload, preserving allocation/failure order.
+   * @param vertices Borrowed opaque world-space XYZ/RGBA triangle stream.
+   * @param transparentVertices Borrowed sorted world-space XYZ/RGBA triangle stream.
+   * @param transparentDraws Borrowed sorted colored or textured material runs.
+   */
+  private prepareVertexStreams(
+    vertices: number[] | Float32Array,
+    transparentVertices: number[] | Float32Array,
+    transparentDraws: readonly TransparentDraw[]): void {
     // Upload once; draw ranges select the two materials without reallocating
     // buffers or resetting depth between the opaque and translucent stages.
     if(!this.textured && transparentDraws.some(draw => draw.texture)) {
       throw new Error('Textured draws require texturedShaderSources at renderer creation.');
     }
-    const additionalLength = transparentDraws.reduce((total, draw) => total + (draw.texture ? 0 : draw.vertices.length), 0);
+    const additionalLength = transparentDraws.reduce(
+      (total, draw) => total + (draw.texture ? 0 : draw.vertices.length),
+      0
+    );
     const vertexData = new Float32Array(vertices.length + transparentVertices.length + additionalLength);
     vertexData.set(vertices);
     vertexData.set(transparentVertices, vertices.length);
@@ -388,6 +702,17 @@ export class GpuTriangleRenderer {
     if(vertexData.length > 0) {
       this.vertexBuffer.write(vertexData);
     }
+  }
+
+  /**
+   * Validate the scene prefix and upload a copy with the optional post-processing tail.
+   * The caller's uniform array remains unchanged; invalid byte length throws before upload.
+   * @param uniformData Borrowed scene uniforms matching the construction-time byte size.
+   * @param timeSeconds Animation time in seconds for temporal post-processing uniforms.
+   */
+  private prepareFrameUniforms(
+    uniformData: Float32Array<ArrayBuffer>,
+    timeSeconds: number): void {
     const sceneUniformBufferSize = this.sceneUniformBufferSize ?? uniformData.byteLength;
     if(uniformData.byteLength !== sceneUniformBufferSize) {
       throw new RangeError(`Expected ${sceneUniformBufferSize} bytes of scene uniforms, received ${uniformData.byteLength}.`);
@@ -397,7 +722,7 @@ export class GpuTriangleRenderer {
         this.postProcessing,
         this.drawingBufferWidth,
         this.drawingBufferHeight,
-        timeSeconds,
+        timeSeconds
       );
       const combinedUniforms = new Float32Array(uniformData.length + postProcessingUniforms.length);
       combinedUniforms.set(uniformData);
@@ -406,79 +731,167 @@ export class GpuTriangleRenderer {
     } else {
       this.uniformBuffer.write(uniformData);
     }
+  }
 
-    // Merge material streams only when PBR and caller geometry share the transparent phase.
-    const mixedTransparency = Boolean(materialFrame && (transparentVertices.length || transparentDraws.length));
+  /**
+   * Prepare PBR geometry before shadow views so material casters share recorded matrices.
+   * Missing PBR support throws before shadow work. Shadow resources are created lazily.
+   * @param materialFrame Borrowed camera/lighting for PBR; null leaves the mesh hidden.
+   * @param mixedTransparency Whether to prepare per-triangle PBR sorting ranges.
+   * @param lightFrame Borrowed immutable scene view and complete world-space casters.
+   * @param uniformData Borrowed packed scene uniforms for colored shadow receivers.
+   * @returns This frame's shadow settings, or undefined when no view supplies them.
+   */
+  private prepareSceneLighting(
+    materialFrame: PbrFrame | null,
+    mixedTransparency: boolean,
+    lightFrame: SceneLightFrame | null,
+    uniformData: Float32Array<ArrayBuffer>): ShadowOptions | false | undefined {
     if(materialFrame) {
       if(!this.pbr) {
         throw new Error('Material frames require pbr at renderer creation.');
       }
-      this.pbr.prepare({...materialFrame, shadows: this.shadowOptions === false ? false : (materialFrame.shadows ?? this.shadowOptions)},
-        mixedTransparency, lightFrame?.casters);
+      const preparedMaterialFrame: PbrFrame = {
+        ...materialFrame,
+        shadows: this.shadowOptions === false ? false : (materialFrame.shadows ?? this.shadowOptions)
+      };
+      this.pbr.prepare(preparedMaterialFrame, mixedTransparency, lightFrame?.casters);
     }
-    if(lightFrame && this.backend === GPU_BACKEND.WEBGPU && this.shadowOptions !== false) {
-      this.litShadowPass ??= new SceneLitPass(this.device, this.shadowOptions, this.postprocessor?.format);
-      this.litShadowPass.prepare(lightFrame, uniformData, materialFrame ? (pass, matrix) => this.pbr?.drawShadow(pass, matrix) : undefined);
+    const shadows = this.shadowOptions === false ? false : lightFrame?.view.shadows;
+    if(lightFrame && this.backend === GPU_BACKEND.WEBGPU && shadows !== false) {
+      this.litShadowPass ??= new SceneLitPass(this.device, shadows, this.postprocessor?.format);
+      this.litShadowPass.prepare(
+        lightFrame,
+        uniformData,
+        materialFrame ? (pass, matrix) => this.pbr?.drawShadow(pass, matrix) : undefined
+      );
     }
-    let processedScene: Texture | undefined;
-    let renderPass = this.device.beginRenderPass({
-      // CanvasContext owns and resizes the depth attachment with the surface.
-      framebuffer: this.postprocessor?.sceneFramebuffer ?? this.canvasContext.getCurrentFramebuffer({ depthStencilFormat: GPU_TEXTURE_FORMAT.DEPTH24PLUS }),
-      clearColor: [clearColor[0], clearColor[1], clearColor[2], clearColor[3]],
-      clearDepth: 1
-    });
+    return shadows;
+  }
+
+  /**
+   * Record background, colored opaque geometry, and PBR opaque geometry in that order.
+   * Borrows the open pass and leaves it open for scene effects or transparency.
+   * @param renderPass Caller-owned pass targeting the scene's color and depth.
+   * @param opaqueVertexCount Number of colored vertices, including zero for an empty scene.
+   * @param useShadowPass Whether this frame requests the prepared colored lighting pass.
+   * @param materialFrame Borrowed PBR frame; null hides the material mesh.
+   * @param atmosphereUniforms Borrowed packed background uniforms; null hides the sky.
+   */
+  private drawOpaqueScene(
+    renderPass: RenderPass,
+    opaqueVertexCount: number,
+    useShadowPass: boolean,
+    materialFrame: PbrFrame | null,
+    atmosphereUniforms: Float32Array<ArrayBuffer> | null): void {
     if(atmosphereUniforms) {
       this.atmosphere?.draw(renderPass, atmosphereUniforms);
     }
-    if(lightFrame && this.litShadowPass) {
-      this.litShadowPass.draw(renderPass, this.vertexArray, vertices.length/FLOATS_PER_VERTEX);
+    if(useShadowPass && this.litShadowPass) {
+      this.litShadowPass.draw(renderPass, this.vertexArray, opaqueVertexCount);
     } else {
-    renderPass.setPipeline(this.pipeline);
-    renderPass.setBindings({ uniforms: this.uniformBuffer });
-    renderPass.setVertexArray(this.vertexArray);
-    renderPass.draw({ vertexCount: vertices.length/FLOATS_PER_VERTEX });
+      renderPass.setPipeline(this.pipeline);
+      renderPass.setBindings({ uniforms: this.uniformBuffer });
+      renderPass.setVertexArray(this.vertexArray);
+      renderPass.draw({ vertexCount: opaqueVertexCount });
     }
     if(materialFrame) {
       this.pbr?.draw(renderPass, false);
     }
-    // Resolve depth-dependent effects on opaque color, then composite translucent geometry
-    // against the original opaque depth. Particles retain crisp coverage and need no fabricated velocity.
-    if(this.sceneEffects && this.postprocessor) {
-      renderPass.end();
-      const scene = this.postprocessor.targets[0];
-      let effectsFrame: SceneEffectsFrame = {depthTexture: scene.depth, ...sceneFrame};
-      if(this.backend === GPU_BACKEND.WEBGPU && attachmentFrame) {
-        this.sceneAttachments ??= new SceneEffectAttachments(this.device);
-        effectsFrame = this.sceneAttachments.prepare(getSceneEffectsRequirements(this.sceneEffects.configuration),
-          scene.depth, effectsFrame, attachmentFrame);
-      }
-      processedScene = this.sceneEffects.render(scene.texture, effectsFrame);
-      if(this.compositeTexture !== processedScene || this.compositeDepth !== scene.depth) {
-        this.destroyCompositeFramebuffer();
-        this.compositeFramebuffer = this.device.createFramebuffer({
-          id: 'scene-effects-transparency-composite', width: scene.texture.width, height: scene.texture.height,
-          colorAttachments: [processedScene], depthStencilAttachment: scene.depth
-        });
-        this.compositeTexture = processedScene;
-        this.compositeDepth = scene.depth;
-      }
-      renderPass = this.device.beginRenderPass({framebuffer: this.compositeFramebuffer!, clearColor: false, clearDepth: false});
+  }
+
+  /**
+   * End opaque recording, prepare auxiliary attachments, and resolve effects before transparency.
+   * Requires live effects and post-processing passes, checked by the frame control path.
+   * Reuse the composite framebuffer only while both borrowed attachments remain identical.
+   * @param context Borrowed opaque pass context; this method ends its render pass.
+   * @param sceneFrame Borrowed effect inputs copied before auxiliary attachments are added.
+   * @param attachmentFrame Borrowed geometry/view inputs, or null to use supplied textures.
+   * @param sceneEffects Borrowed live effect graph from the frame control path.
+   * @param postprocessor Borrowed live offscreen target owner from the frame control path.
+   * @returns Effect-owned processed color, valid until the next render/resize or destruction.
+   */
+  private resolveSceneEffects(
+    context: RenderPassContext,
+    sceneFrame: SceneEffectsFrame,
+    attachmentFrame: SceneAttachmentFrame | null,
+    sceneEffects: SceneEffects,
+    postprocessor: Postprocessor): Texture {
+    context.renderPass.end();
+    const scene = postprocessor.targets[0];
+    let effectsFrame: SceneEffectsFrame = {
+      depthTexture: scene.depth,
+      ...sceneFrame
+    };
+    if(this.backend === GPU_BACKEND.WEBGPU && attachmentFrame) {
+      this.sceneAttachments ??= new SceneEffectAttachments(this.device);
+      effectsFrame = this.sceneAttachments.prepare(
+        getSceneEffectsRequirements(sceneEffects.configuration),
+        scene.depth,
+        effectsFrame,
+        attachmentFrame
+      );
     }
+    const processedScene = sceneEffects.render(scene.texture, effectsFrame);
+    if(this.compositeTexture !== processedScene || this.compositeDepth !== scene.depth) {
+      this.destroyCompositeFramebuffer();
+      this.compositeFramebuffer = this.device.createFramebuffer({
+        id: 'scene-effects-transparency-composite',
+        width: scene.texture.width,
+        height: scene.texture.height,
+        colorAttachments: [processedScene],
+        depthStencilAttachment: scene.depth
+      });
+      this.compositeTexture = processedScene;
+      this.compositeDepth = scene.depth;
+    }
+    return processedScene;
+  }
+
+  /**
+   * Record transparency against opaque depth without clearing or ending the borrowed pass.
+   * Mixed PBR runs sort globally; other callers retain their supplied ordering.
+   * @param renderPass Caller-owned open pass targeting opaque or processed scene color.
+   * @param vertices Borrowed opaque stream, used only for colored vertex offsets.
+   * @param transparentVertices Borrowed back-to-front colored world-space triangles.
+   * @param transparentDraws Borrowed additional sorted colored/textured material runs.
+   * @param materialFrame Borrowed PBR frame, or null to hide material transparency.
+   * @param mixedTransparency Whether caller and PBR streams share a global ordering.
+   */
+  private drawTransparentScene(
+    renderPass: RenderPass,
+    vertices: number[] | Float32Array,
+    transparentVertices: number[] | Float32Array,
+    transparentDraws: readonly TransparentDraw[],
+    materialFrame: PbrFrame | null,
+    mixedTransparency: boolean): void {
     if(mixedTransparency && materialFrame && this.pbr) {
       const sorted = collectTransparentRanges(
-        materialFrame.backward, vertices.length/FLOATS_PER_VERTEX,
-        transparentVertices, transparentDraws, this.pbr.transparentRanges
+        materialFrame.backward,
+        vertices.length/FLOATS_PER_VERTEX,
+        transparentVertices,
+        transparentDraws,
+        this.pbr.transparentRanges
       );
       for(const range of sorted) {
-        if(range.kind === 'pbr') {
+        if(range.kind === TRANSPARENT_RANGE_KIND.PBR) {
           this.pbr.drawRange(renderPass, range, true);
-        } else if(range.kind === 'textured') {
-          this.textured?.draw(renderPass, this.uniformBuffer, range.texture, range.firstVertex, range.vertexCount);
+        } else if(range.kind === TRANSPARENT_RANGE_KIND.TEXTURED) {
+          this.textured?.draw(
+            renderPass,
+            this.uniformBuffer,
+            range.texture,
+            range.firstVertex,
+            range.vertexCount
+          );
         } else {
           renderPass.setPipeline(this.transparentPipeline);
-          renderPass.setBindings({uniforms: this.uniformBuffer});
+          renderPass.setBindings({ uniforms: this.uniformBuffer });
           renderPass.setVertexArray(this.vertexArray);
-          renderPass.draw({firstVertex: range.firstVertex, vertexCount: range.vertexCount});
+          renderPass.draw({
+            firstVertex: range.firstVertex,
+            vertexCount: range.vertexCount
+          });
         }
       }
     } else {
@@ -511,41 +924,24 @@ export class GpuTriangleRenderer {
         this.pbr?.draw(renderPass, true);
       }
     }
-    renderPass.end();
-    if(this.postprocessor && this.postProcessing) {
-      this.postprocessor.render(this.postProcessing, timeSeconds, processedScene);
-    }
-    try {
-      this.device.submit();
-    } catch(error) {
-      this.sceneEffects?.resetHistory();
-      throw error;
-    }
-  }
-
-  /** Release luma.gl resources when the owning game is disposed. */
-  destroy() {
-    if(this.destroyed) {
-      return;
-    }
-    this.destroyed = true;
-    this.releaseResources();
-    this.canvasContext.destroy();
-    this.device.destroy();
   }
 
   /**
-   * Release dependent allocations before the canvas/device roots, including failed atmosphere setup.
-   * @private
+   * Release the owned composite framebuffer and forget its borrowed attachment identities.
+   * Effect color and opaque depth remain owned by their original passes.
    */
-  private destroyCompositeFramebuffer() {
+  private destroyCompositeFramebuffer(): void {
     this.compositeFramebuffer?.destroy();
     this.compositeFramebuffer = null;
     this.compositeTexture = null;
     this.compositeDepth = null;
   }
 
-  private releaseResources() {
+  /**
+   * Release dependent allocations before device roots, including failed atmosphere setup.
+   * Repeated calls do nothing; shared shader objects are destroyed only once per program.
+   */
+  private releaseResources(): void {
     if(this.resourcesReleased) {
       return;
     }
@@ -575,34 +971,22 @@ export class GpuTriangleRenderer {
   }
 }
 
-export interface ColoredRange {
-  kind: 'colored';
-  firstVertex: number;
-  vertexCount: number;
-  depth: number;
-}
-export interface TexturedRange {
-  kind: 'textured';
-  texture: Texture;
-  firstVertex: number;
-  vertexCount: number;
-  depth: number;
-}
-export type MaterialRange = {
-    kind: 'pbr';
-} & PbrTransparentRange;
-export type TransparentRange = ColoredRange | TexturedRange | MaterialRange;
-
-/** Merge borrowed colored, textured and PBR streams in world-space camera order.
- * Existing callers without a material frame retain their supplied ordering.
- * @param backward Camera direction toward the viewer.
- * @param opaqueVertexCount Offset preceding the colored transparent stream.
- * @param vertices Colored transparent triangles.
- * @param draws
- * @param materialRanges
+/**
+ * Merge borrowed colored, textured, and PBR streams in world-space camera order.
+ * Input records remain unchanged; only newly allocated commands are sorted and coalesced.
+ * @param backward World-space camera direction toward the viewer.
+ * @param opaqueVertexCount Vertex offset preceding the colored transparent stream.
+ * @param vertices Borrowed world-space XYZ/RGBA transparent triangles.
+ * @param draws Borrowed additional colored/textured triangle runs in supplied order.
+ * @param materialRanges Borrowed PBR commands whose depths use the same camera direction.
+ * @returns New back-to-front commands borrowing source GPU/material bindings.
  */
-function collectTransparentRanges(backward: readonly number[], opaqueVertexCount: number, vertices: number[] | Float32Array, draws: readonly TransparentDraw[], materialRanges: readonly PbrTransparentRange[]): TransparentRange[] {
-
+function collectTransparentRanges(
+  backward: readonly number[],
+  opaqueVertexCount: number,
+  vertices: number[] | Float32Array,
+  draws: readonly TransparentDraw[],
+  materialRanges: readonly PbrTransparentRange[]): TransparentRange[] {
   const ranges: TransparentRange[] = [];
   appendTransparentRanges(ranges, vertices, opaqueVertexCount, backward);
   let coloredOffset = opaqueVertexCount + vertices.length/FLOATS_PER_VERTEX;
@@ -617,7 +1001,10 @@ function collectTransparentRanges(backward: readonly number[], opaqueVertexCount
     }
   }
   for(const range of materialRanges) {
-    ranges.push({kind: 'pbr', ...range});
+    ranges.push({
+      kind: TRANSPARENT_RANGE_KIND.PBR,
+      ...range
+    });
   }
   ranges.sort((a, b) => a.depth - b.depth);
 
@@ -632,42 +1019,66 @@ function collectTransparentRanges(backward: readonly number[], opaqueVertexCount
   return merged;
 }
 
-/** Append one command per triangle; sorting later can split a supplied material run.
- * @param ranges @param vertices
- * @param firstVertex @param backward
- * @param [texture]
+/**
+ * Append one new command per triangle so sorting can split a supplied material run.
+ * @param ranges Caller-owned output list mutated by appending commands.
+ * @param vertices Borrowed world-space XYZ/RGBA, or XYZ/RGBA/UV when textured.
+ * @param firstVertex Source buffer vertex offset preceding this run.
+ * @param backward World-space camera direction toward the viewer for average depth.
+ * @param texture Borrowed texture binding; omitted for colored commands.
  */
-function appendTransparentRanges(ranges: TransparentRange[], vertices: number[] | Float32Array, firstVertex: number, backward: readonly number[], texture?: Texture) {
+function appendTransparentRanges(
+  ranges: TransparentRange[],
+  vertices: number[] | Float32Array,
+  firstVertex: number,
+  backward: readonly number[],
+  texture?: Texture): void {
   const stride = texture ? 9 : FLOATS_PER_VERTEX;
   for(let offset = 0; offset < vertices.length; offset+= stride*3) {
     let depth = 0;
     for(let corner = 0; corner < 3; corner++) {
       const index = offset + corner*stride;
-      depth+= vertices[index]*backward[0] + vertices[index + 1]*backward[1] + vertices[index + 2]*backward[2];
+      depth+= (vertices[index]*backward[0]) + (vertices[index + 1]*backward[1]) + (vertices[index + 2]*backward[2]);
     }
-    const range = {firstVertex: firstVertex + offset/stride, vertexCount: 3, depth: depth/3};
-    ranges.push(texture ? {kind: 'textured', texture, ...range} : {kind: 'colored', ...range});
+    const range = {
+      firstVertex: firstVertex + offset/stride,
+      vertexCount: 3,
+      depth: depth/3
+    };
+    ranges.push(texture ? {
+      kind: TRANSPARENT_RANGE_KIND.TEXTURED,
+      texture,
+      ...range
+    } : {
+      kind: TRANSPARENT_RANGE_KIND.COLORED,
+      ...range
+    });
   }
 }
 
-/** Coalesce only adjacent, contiguous ranges with identical material bindings.
- * @param previous @param next
+/**
+ * Coalesce only adjacent, contiguous ranges with identical material bindings.
+ * @param previous Caller-owned preceding command; its count is extended on success.
+ * @param next Borrowed following command, unchanged by this operation.
+ * @returns Whether the previous command now includes the following range.
  */
-function mergeTransparentRange(previous: TransparentRange, next: TransparentRange) {
-  if(previous.kind === 'pbr' && next.kind === 'pbr') {
-    if(previous.material === next.material && previous.firstIndex + previous.indexCount === next.firstIndex) {
+function mergeTransparentRange(
+  previous: TransparentRange,
+  next: TransparentRange): boolean {
+  if(previous.kind === TRANSPARENT_RANGE_KIND.PBR && next.kind === TRANSPARENT_RANGE_KIND.PBR) {
+    if(previous.material === next.material && (previous.firstIndex + previous.indexCount) === next.firstIndex) {
       previous.indexCount+= next.indexCount;
       return true;
     }
     return false;
   }
-  if(previous.kind === 'pbr' || next.kind === 'pbr' || previous.kind !== next.kind) {
+  if(previous.kind === TRANSPARENT_RANGE_KIND.PBR || next.kind === TRANSPARENT_RANGE_KIND.PBR || previous.kind !== next.kind) {
     return false;
   }
-  if(previous.kind === 'textured' && next.kind === 'textured' && previous.texture !== next.texture) {
+  if(previous.kind === TRANSPARENT_RANGE_KIND.TEXTURED && next.kind === TRANSPARENT_RANGE_KIND.TEXTURED && previous.texture !== next.texture) {
     return false;
   }
-  if(previous.firstVertex + previous.vertexCount !== next.firstVertex) {
+  if((previous.firstVertex + previous.vertexCount) !== next.firstVertex) {
     return false;
   }
   previous.vertexCount+= next.vertexCount;
