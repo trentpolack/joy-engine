@@ -3,6 +3,9 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-14-2026
+### PARTICLE LAB
+- Framed each opened particle document to its simulated world-space bounds, so game-scale effects remain readable while reset restores that document-specific view.
+
 ### FORM LAB
 - Kept all four DESIGN MODE frame edges visible above editor panels without blocking selection or changing the layout.
 - Preserved unfinished PARTICLE LAB scripts in browser recovery, and kept FORM LAB exports paired with the preview that successfully acquired GPU resources.

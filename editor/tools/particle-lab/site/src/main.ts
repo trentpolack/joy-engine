@@ -53,6 +53,7 @@ class ParticleLab {
   declare speed: number;
   declare duration: number;
   declare replayWindowSeconds: number;
+  declare frameNextEffect: boolean;
   declare previewFps: number;
   declare simulationMilliseconds: number;
   declare telemetryTimestamp: number;
@@ -90,6 +91,7 @@ class ParticleLab {
     this.speed = 1;
     this.duration = 6;
     this.replayWindowSeconds = 0;
+    this.frameNextEffect = true;
     this.previewFps = 0;
     this.simulationMilliseconds = 0;
     this.telemetryTimestamp = 0;
@@ -280,6 +282,7 @@ class ParticleLab {
       this.asset = copyExample(Number(this.elements.examples.value));
       this.collapsedParameters.clear();
       this.selectedEmitter = 0;
+      this.frameNextEffect = true;
       this.refreshAll();
       this.apply();
     }, { signal });
@@ -379,6 +382,10 @@ class ParticleLab {
       this.selectedEmitter = Math.min(this.selectedEmitter, this.asset.emitters.length - 1);
       this.duration = calculateDuration(this.asset);
       this.viewport.setEffect(nextEffect);
+      if(this.frameNextEffect) {
+        this.viewport.frameEffect(true);
+        this.frameNextEffect = false;
+      }
       previousEffect?.destroy();
 
       this.refreshTimeline();
@@ -1143,6 +1150,7 @@ class ParticleLab {
       this.asset = candidate;
       this.collapsedParameters.clear();
       this.selectedEmitter = 0;
+      this.frameNextEffect = true;
       this.refreshAll();
       this.apply();
     } catch(error) {
@@ -1409,6 +1417,7 @@ const workspaceBridge = connectWorkspaceTool({
     application.asset = asset;
     application.collapsedParameters.clear();
     application.selectedEmitter = 0;
+    application.frameNextEffect = true;
     application.refreshAll();
     void application.apply();
   },

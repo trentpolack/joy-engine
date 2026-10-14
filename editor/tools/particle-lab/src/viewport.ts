@@ -55,6 +55,12 @@ export interface PreviewStatistics {
 
 export type PreviewPerformanceMode = 'disabled' | 'overview' | 'detailed';
 
+interface CameraHome {
+  target: number[];
+  distance: number;
+  radius: number;
+}
+
 const POST_PROCESSING = {
   toneMapper:  (('agx') as const),
   exposure: 1.05,
@@ -85,6 +91,7 @@ export class ParticleViewport {
   declare performanceMode: PreviewPerformanceMode;
   declare effect: ParticleEffect | null;
   declare camera: OrbitCamera;
+  declare cameraHome: CameraHome;
   declare dragging: boolean;
   declare disposed: boolean;
   declare listeners: AbortController;
@@ -116,6 +123,7 @@ export class ParticleViewport {
     this.camera = new OrbitCamera();
     this.camera.distance = 650;
     this.camera.radius = 250;
+    this.cameraHome = this.captureCameraHome();
     this.dragging = false;
     this.disposed = false;
     this.listeners = new AbortController();
@@ -327,12 +335,14 @@ export class ParticleViewport {
 
   resetCamera() {
     this.camera = new OrbitCamera();
-    this.camera.distance = 650;
-    this.camera.radius = 250;
+    this.camera.target = [...this.cameraHome.target];
+    this.camera.distance = this.cameraHome.distance;
+    this.camera.radius = this.cameraHome.radius;
     this.render();
   }
 
-  frameEffect() {
+  /** Fit the current particle volume, optionally making that view the document's reset camera. */
+  frameEffect(rememberAsHome: boolean = false) {
     const positions = [];
     for(const particle of this.effect?.particles ?? []) {
       positions.push(
@@ -353,7 +363,19 @@ export class ParticleViewport {
       1,
       this.canvas.clientHeight / Math.max(1, this.canvas.clientWidth),
     );
+    if(rememberAsHome) {
+      this.cameraHome = this.captureCameraHome();
+    }
     this.render();
+  }
+
+  /** Capture the framing values reset restores without retaining the camera's mutable target. */
+  private captureCameraHome(): CameraHome {
+    return {
+      target: [...this.camera.target],
+      distance: this.camera.distance,
+      radius: this.camera.radius
+    };
   }
 
   /** A matte ground surface shows attached lights independently of grid lines. */
