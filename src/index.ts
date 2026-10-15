@@ -19,6 +19,8 @@ export { AudioBank } from './browser/audio-bank.ts';
 export type { SoundDefinition } from './browser/audio-bank.ts';
 export type { AudioBankOptions } from './browser/audio-bank.ts';
 export { startGameLoop } from './runtime/game-loop.ts';
+export { GameShell } from './runtime/game-shell.ts';
+export type { GameShellFrame, GameShellOptions, GameShellPhase, GameShellResource } from './runtime/game-shell.ts';
 export { EnvironmentSystem } from './environment/environment-system.ts';
 export { createEnvironmentLighting, createEnvironmentUniforms, ENVIRONMENT_UNIFORM_BYTES } from './rendering/environment/environment-uniforms.ts';
 export { ATMOSPHERE_RENDER_UNIFORM_BYTES, ATMOSPHERE_SHADERS, createAtmosphereRenderUniforms } from './rendering/environment/atmosphere-rendering.ts';
@@ -37,15 +39,20 @@ export { PlayerController, AIController } from './gameplay/player-controller.ts'
 export { EntityRegistry } from './gameplay/entity-registry.ts';
 export { EntityWorld } from './gameplay/entity-world.ts';
 export type { EntityWorldOptions } from './gameplay/entity-world.ts';
+export { World } from './gameplay/world.ts';
+export type { WorldOptions, WorldStep } from './gameplay/world.ts';
 export { copyEntityDefinition } from './gameplay/entity-definition.ts';
+export { ComponentSchemaCatalog, isComponentFieldActive } from './gameplay/component-schema.ts';
+export type { ComponentSchema, ComponentFieldSchema, ComponentFieldKind, ComponentFieldCondition, ComponentPreset, ComponentIssue, ComponentSchemaCatalogOptions } from './gameplay/component-schema.ts';
+export { BUILT_IN_COMPONENT_SCHEMAS, RENDER_COMPONENT_DEFAULTS, LIGHT_COMPONENT_DEFAULTS, EFFECT_COMPONENT_DEFAULTS } from './gameplay/built-in-component-schemas.ts';
 export { searchGrid, traceGridRoute } from './gameplay/grid-navigation.ts';
 export type { GridRoute, GridSearchOptions } from './gameplay/grid-navigation.ts';
 export { LevelDocument, parseLevel, serializeLevel } from './gameplay/level-document.ts';
 export { LevelScene } from './gameplay/level-scene.ts';
 export { LevelRuntime } from './gameplay/level-runtime.ts';
 export { PhysicsWorld } from './physics/physics-world.ts';
-export { PhysicsBody } from './physics/physics-body.ts';
-export { PhysicsVehicle } from './physics/physics-vehicle.ts';
+export { PhysicsBody, PHYSICS_BODY_DEFAULTS } from './physics/physics-body.ts';
+export { PhysicsVehicle, PHYSICS_VEHICLE_DEFAULTS, PHYSICS_WHEEL_DEFAULTS } from './physics/physics-vehicle.ts';
 export type { EntityDefinition } from './gameplay/types.ts';
 export type { EntityOptions } from './gameplay/types.ts';
 export type { EntityTransform } from './gameplay/types.ts';
@@ -72,21 +79,17 @@ export { requireElement } from './browser/dom.ts';
 export { DevTools } from './browser/diagnostics/dev-tools.ts';
 export type { DevToolsOptions } from './browser/diagnostics/dev-tools.ts';
 export type { RendererDiagnostics, RendererDiagnosticOptions, RendererDiagnosticSource } from './rendering/gpu/gpu-diagnostics.ts';
-export { GpuTriangleRenderer } from './rendering/renderers/gpu-triangle-renderer.ts';
+export { GpuTriangleRenderer } from './rendering/renderer.ts';
 export { calculateBackingPixelRatio } from './rendering/display.ts';
 export { createTopDownOrthographicMatrix, sortTopDownTransparentTriangles } from './rendering/camera/top-down-camera.ts';
 export { DynamicGpuBuffer } from './rendering/gpu/dynamic-gpu-buffer.ts';
 export { createGpuCanvasDevice, createPortableShaders, gpuBackendFromQuery } from './rendering/gpu/gpu-device.ts';
-export * from './rendering/scene/effects.ts';
 export { ShaderPassRenderer } from './rendering/gpu/shader-pass-renderer.ts';
-export { GLSLShaderAssembler, WGSLShaderAssembler } from '@luma.gl/shadertools';
 export { SceneEffects } from './rendering/scene/scene-effects.ts';
 export { agxToneMapping, animatedGrain, antialias, linearExposure, vignetteBlur } from './rendering/postprocessor/supplemental-passes.ts';
 export type { SceneEffectsOptions } from './rendering/scene/scene-effect-config.ts';
 export type { SceneEffectsFrame } from './rendering/scene/scene-effects.ts';
-export type { GpuBackend } from './rendering/gpu/gpu-device.ts';
-export type { ShaderPass } from '@luma.gl/shadertools';
-export type { ShaderPassPipeline } from '@luma.gl/shadertools';
+export type { GpuBackend, GpuDevice } from './rendering/gpu/gpu-device.ts';
 export {
   DEFAULT_POST_PROCESSING,
   POST_PROCESSING_SCHEMA,
@@ -132,7 +135,7 @@ export { DEFAULT_PARTICLE_TEXTURE } from "./particles/texture-source.ts";
 
 export { collectParticleLights } from './particles/lights.ts';
 export { createParticleRenderMetrics } from './particles/rendering.ts';
-export { LIT_TRIANGLE_SHADERS, createPointLightUniforms, POINT_LIGHT_UNIFORM_BYTES } from './rendering/pbr/point-lights.ts';
+export { LIT_TRIANGLE_SHADERS, createPointLightUniforms, POINT_LIGHT_UNIFORM_BYTES } from './rendering/lighting/point-lights.ts';
 
 export type { ParticlePointLight } from './particles/lights.ts';
 export type { ParticleProfile } from './particles/profile.ts';
@@ -143,18 +146,33 @@ export type { PbrMaterial } from './core/types.ts';
 export type { PbrMesh } from './core/types.ts';
 export type { PbrFrame } from './core/types.ts';
 
-export { DEFAULT_PBR_LIGHTING } from './rendering/pbr/pbr-triangles.ts';
+export { DEFAULT_PBR_LIGHTING } from './rendering/materials/pbr/pbr-material-pass.ts';
 
 export { MeshAsset } from './rendering/scene/mesh-asset.ts';
+export { TerrainInstance } from './rendering/scene/terrain-instance.ts';
+export { SceneNode } from './rendering/scene/scene-node.ts';
+export { prepareSceneGeometry } from './rendering/scene/scene-geometry.ts';
+export type { SceneGeometrySnapshot, PreparedMeshGeometry, PreparedTerrainGeometry, PreparedTerrainPacket, PreparedSceneGeometry } from './rendering/scene/scene-geometry.ts';
 export { MeshInstance } from './rendering/scene/mesh-instance.ts';
 export { RenderScene } from './rendering/scene/render-scene.ts';
-export type { PointLight } from './rendering/pbr/point-lights.ts';
+export type { PointLight } from './rendering/lighting/point-lights.ts';
 export { SceneRenderer } from './rendering/scene/scene-renderer.ts';
 export { projectToViewport, screenRay, intersectRayPlane } from './rendering/camera/projection.ts';
 export type { MeshAssetData } from './core/types.ts';
-export type { MeshInstanceOptions } from './core/types.ts';
+export type { AffineTransform, GeometryBounds, SceneNodeOptions, MeshInstanceOptions, TerrainInstanceOptions } from './core/types.ts';
 export type { SceneRendererOptions } from './rendering/scene/scene-renderer.ts';
 export type { SceneFrameOptions } from './rendering/scene/scene-renderer.ts';
+export { createFrameView } from './rendering/scene/frame-view.ts';
+export type {
+  FrameView,
+  FrameViewOptions,
+  FrameCamera,
+  FrameViewport
+} from './rendering/scene/frame-view.ts';
+export type {
+  RenderPassContext,
+  PassCamera
+} from './rendering/scene/render-pass-context.ts';
 
 export { InputManager } from './browser/input/input-manager.ts';
 export type { InputAction } from './browser/input/input-manager.ts';
@@ -175,5 +193,5 @@ export type { TerrainView } from './rendering/terrain/terrain-selection.ts';
 export type { TerrainSelection } from './rendering/terrain/terrain-selection.ts';
 
 export type {ShadowOptions, ShadowCameraFrame, SceneLightFrame} from './rendering/shadows/types.ts';
-export {PbrEnvironment} from './rendering/pbr/pbr-environment.ts';
-export type {PbrEnvironmentOptions, PbrEnvironmentPixels} from './rendering/pbr/pbr-environment.ts';
+export {PbrEnvironment} from './rendering/environment/pbr-environment.ts';
+export type {PbrEnvironmentOptions, PbrEnvironmentPixels} from './rendering/environment/pbr-environment.ts';

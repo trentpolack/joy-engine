@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import { MATERIAL_ALPHA_MODE } from '../rendering/pbr/constants.ts';
+import { MATERIAL_ALPHA_MODE } from '../rendering/materials/pbr/constants.ts';
 import { FORM_MATERIAL } from './constants.ts';
 import { DOCUMENT_LIMITS } from './document-limits.ts';
 

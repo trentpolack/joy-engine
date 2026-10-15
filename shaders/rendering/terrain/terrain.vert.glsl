@@ -1,7 +1,7 @@
+#version 300 es
+
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
-
-#version 300 es
 
 precision highp float;
 
@@ -34,6 +34,9 @@ layout(std140) uniform patchUniforms {
 };
 
 uniform highp sampler2D heightTexture;
+#ifdef JOY_SCENE
+layout(std140) uniform terrainModel { mat4 model; };
+#endif
 out vec3 worldPosition;
 out vec3 diagnostic;
 
@@ -137,6 +140,10 @@ void main() {
 
   // Sample-space X/Z map to centered world extents; height is already world Y.
   worldPosition = vec3((p.x/(geometry.x - 1.0) - 0.5)*geometry.z, h, (p.y/(geometry.x - 1.0) - 0.5)*geometry.w);
+
+#ifdef JOY_SCENE
+  worldPosition = (model*vec4(worldPosition, 1.0)).xyz;
+#endif
 
   // Count cells at the current integer LOD for the diagnostic grid overlay.
   diagnostic = vec3(gridPosition/exp2(floor(base.z)), base.z);

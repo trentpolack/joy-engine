@@ -7,7 +7,7 @@
   "author": "Trent Polack",
   "license": "MIT",
   "gameSite": {
-    "category": "app",
+    "category": "tool",
     "title": "PARTICLE LAB",
     "description": "Author deterministic, layered particle effects with scripts, child emitters, and a live GPU preview.",
     "status": "Creative tool",

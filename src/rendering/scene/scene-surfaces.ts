@@ -10,8 +10,18 @@ import {
   GPU_VERTEX_FORMAT,
   SHADER_ENTRY_POINT
 } from '../gpu/constants.ts';
-import type { Device, Framebuffer, RenderPipeline, Shader, VertexArray } from '@luma.gl/core';
-import { Buffer, Texture } from '@luma.gl/core';
+import type {
+  Device,
+  Framebuffer,
+  RenderPipeline,
+  Shader,
+  RenderPass,
+  VertexArray
+} from '@luma.gl/core';
+import {
+  Buffer,
+  Texture
+} from '@luma.gl/core';
 import { DynamicGpuBuffer } from '../gpu/dynamic-gpu-buffer.ts';
 import { FLOATS_PER_VERTEX } from '../geometry/geometry.ts';
 import wgsl from '../../../shaders/rendering/scene/scene-surfaces.wgsl?raw';
@@ -19,6 +29,7 @@ import wgsl from '../../../shaders/rendering/scene/scene-surfaces.wgsl?raw';
 const SURFACE_FORMAT = GPU_TEXTURE_FORMAT.RGBA16FLOAT;
 const SURFACE_VERTEX_FLOATS = 4;
 const MATRIX_FLOATS = 16;
+const SURFACE_DEPTH_COMPARE = 'equal';
 
 /**
  * Owns the WebGPU normal/roughness attachment used by luma screen-space effects.
@@ -27,29 +38,29 @@ const MATRIX_FLOATS = 16;
  * roughness. Existing vertex-color surfaces remain matte unless explicitly authored.
  */
 export class SceneSurfaces {
-  private declare device: Device;
-  private declare shader: Shader | null;
-  private declare pipeline: RenderPipeline | null;
-  private declare vertexArray: VertexArray | null;
-  private declare vertices: DynamicGpuBuffer | null;
-  private declare uniforms: Buffer | null;
-  private declare texture: Texture | null;
-  private declare framebuffer: Framebuffer | null;
-  private declare depth: Texture | null;
-  declare destroyed: boolean;
+  // Borrowed device and scene depth; neither is destroyed by this owner.
+  private readonly device: Device;
+  private depth: Texture | null = null;
 
-  /** @param device Borrowed WebGPU device shared with the scene renderer. */
+  // Owned pipeline and upload resources.
+  private shader: Shader | null = null;
+  private pipeline: RenderPipeline | null = null;
+  private vertexArray: VertexArray | null = null;
+  private vertices: DynamicGpuBuffer | null = null;
+  private uniforms: Buffer | null = null;
+
+  // Owned normal/roughness target; replaced transactionally when depth changes.
+  private texture: Texture | null = null;
+  private framebuffer: Framebuffer | null = null;
+  destroyed = false;
+
+  /**
+   * Allocate the surface pipeline, releasing completed resources if initialization fails.
+   * @param device Borrowed WebGPU device shared with the scene renderer.
+   * @throws If the backend is unsupported or GPU resource creation fails.
+   */
   constructor(device: Device) {
     this.device = device;
-    this.shader = null;
-    this.pipeline = null;
-    this.vertexArray = null;
-    this.vertices = null;
-    this.uniforms = null;
-    this.texture = null;
-    this.framebuffer = null;
-    this.depth = null;
-    this.destroyed = false;
 
     if(device.type !== GPU_BACKEND.WEBGPU) {
       throw new Error('SceneSurfaces requires the WebGPU backend.');
@@ -58,11 +69,15 @@ export class SceneSurfaces {
     try {
       this.shader = device.createShader({id: 'scene-surfaces', source: wgsl, language: 'wgsl'});
       this.pipeline = device.createRenderPipeline({
-        id: 'scene-surfaces', vs: this.shader, fs: this.shader,
-        vertexEntryPoint: SHADER_ENTRY_POINT.VERTEX, fragmentEntryPoint: SHADER_ENTRY_POINT.FRAGMENT,
+        id: 'scene-surfaces',
+        vs: this.shader,
+        fs: this.shader,
+        vertexEntryPoint: SHADER_ENTRY_POINT.VERTEX,
+        fragmentEntryPoint: SHADER_ENTRY_POINT.FRAGMENT,
         topology: GPU_TOPOLOGY.TRIANGLE_LIST,
         bufferLayout: [{
-          name: 'vertices', byteStride: SURFACE_VERTEX_FLOATS*Float32Array.BYTES_PER_ELEMENT,
+          name: 'vertices',
+          byteStride: SURFACE_VERTEX_FLOATS*Float32Array.BYTES_PER_ELEMENT,
           attributes: [
             {attribute: 'position', format: GPU_VERTEX_FORMAT.FLOAT32X3, byteOffset: 0},
             {attribute: 'roughness', format: 'float32', byteOffset: 12}
@@ -70,18 +85,25 @@ export class SceneSurfaces {
         }],
         colorAttachmentFormats: [SURFACE_FORMAT],
         depthStencilAttachmentFormat: GPU_TEXTURE_FORMAT.DEPTH24PLUS,
-        parameters: {depthWriteEnabled: false, depthCompare: 'equal', blend: false}
+        parameters: {
+          depthWriteEnabled: false,
+          depthCompare: SURFACE_DEPTH_COMPARE,
+          blend: false
+        }
       });
       this.vertexArray = device.createVertexArray({
-        id: 'scene-surface-vertices', shaderLayout: this.pipeline.shaderLayout,
+        id: 'scene-surface-vertices',
+        shaderLayout: this.pipeline.shaderLayout,
         bufferLayout: this.pipeline.bufferLayout
       });
       this.vertices = new DynamicGpuBuffer(device, {
-        id: 'scene-surface-vertices', usage: Buffer.VERTEX | Buffer.COPY_DST,
+        id: 'scene-surface-vertices',
+        usage: Buffer.VERTEX | Buffer.COPY_DST,
         onReplace: buffer => this.vertexArray?.setBuffer(0, buffer)
       });
       this.uniforms = device.createBuffer({
-        id: 'scene-surface-uniforms', byteLength: MATRIX_FLOATS*2*Float32Array.BYTES_PER_ELEMENT,
+        id: 'scene-surface-uniforms',
+        byteLength: MATRIX_FLOATS*2*Float32Array.BYTES_PER_ELEMENT,
         usage: Buffer.UNIFORM | Buffer.COPY_DST
       });
     } catch(error) {
@@ -95,10 +117,22 @@ export class SceneSurfaces {
    * Inputs are borrowed; opaque vertices are the exact world XYZ/RGBA scene queue.
    * Matrices are column-major; viewProjection must include the scene's current jitter.
    * roughness has one [0, 1] perceptual value per vertex, defaulting to 1 (matte).
-   * Returns a borrowed texture valid until resize or destroy. Caller submits GPU work.
+   * Caller submits GPU work; this method records and ends its own render pass.
+   * @param vertices Borrowed world XYZ/RGBA triangles, unchanged by preparation.
+   * @param viewProjection Borrowed column-major raster matrix including current jitter.
+   * @param viewMatrix Borrowed column-major world-to-view matrix.
+   * @param depthTexture Borrowed completed scene depth; never written or destroyed here.
+   * @param roughness Borrowed per-vertex perceptual roughness in [0, 1]; omission uses 1.
+   * @returns A borrowed normal/roughness texture valid until target replacement or destruction.
+   * @throws If this owner is destroyed, inputs are invalid, or GPU work fails.
    */
-  render(vertices: number[] | Float32Array, viewProjection: Float32Array,
-    viewMatrix: Float32Array, depthTexture: Texture, roughness?: ArrayLike<number>): Texture {
+  render(
+    vertices: number[] | Float32Array,
+    viewProjection: readonly number[] | Float32Array,
+    viewMatrix: readonly number[] | Float32Array,
+    depthTexture: Texture,
+    roughness?: ArrayLike<number>,
+    drawNative?: (pass: RenderPass) => void): Texture {
     if(this.destroyed || !this.pipeline || !this.vertexArray || !this.vertices || !this.uniforms) {
       throw new Error('SceneSurfaces is destroyed.');
     }
@@ -111,19 +145,8 @@ export class SceneSurfaces {
       throw new RangeError('Scene surfaces need finite 4×4 view and view/projection matrices.');
     }
 
-    const packed = new Float32Array(vertexCount*SURFACE_VERTEX_FLOATS);
-    for(let vertex = 0; vertex < vertexCount; vertex++) {
-      const source = vertex*FLOATS_PER_VERTEX;
-      const target = vertex*SURFACE_VERTEX_FLOATS;
-      const value = roughness?.[vertex] ?? 1;
-      if(!Number.isFinite(value) || value < 0 || value > 1) {
-        throw new RangeError('Surface roughness must be finite and between zero and one.');
-      }
-      packed.set([vertices[source], vertices[source + 1], vertices[source + 2], value], target);
-    }
-    if(!packed.every(Number.isFinite)) {
-      throw new RangeError('Surface positions must fit finite float32 world coordinates.');
-    }
+    const packed = packSurfaceVertices(vertices, vertexCount, roughness);
+
     this.resize(depthTexture);
     this.vertices.write(packed);
     const uniformData = new Float32Array(MATRIX_FLOATS*2);
@@ -135,7 +158,9 @@ export class SceneSurfaces {
       framebuffer: this.framebuffer,
       // A finite neutral normal avoids normalize(0) in neighborhood filters.
       // Background validity comes from the shared clear-depth value of 1.
-      clearColor: [0.5, 0.5, 1, 1], clearDepth: false, depthReadOnly: true
+      clearColor: [0.5, 0.5, 1, 1],
+      clearDepth: false,
+      depthReadOnly: true
     });
     try {
       pass.setPipeline(this.pipeline);
@@ -144,6 +169,7 @@ export class SceneSurfaces {
       if(vertexCount > 0) {
         pass.draw({vertexCount});
       }
+      drawNative?.(pass);
     } finally {
       pass.end();
     }
@@ -153,6 +179,8 @@ export class SceneSurfaces {
   /**
    * Match a borrowed depth attachment's dimensions and identity without destroying it.
    * Transactional allocation leaves the last working target usable on failure.
+   * @param depthTexture Borrowed depth24plus target with positive integer pixel dimensions.
+   * @throws If this owner is destroyed, the depth attachment is invalid, or allocation fails.
    */
   resize(depthTexture: Texture) {
     if(this.destroyed) {
@@ -169,12 +197,24 @@ export class SceneSurfaces {
     let framebuffer: Framebuffer;
     try {
       texture = this.device.createTexture({
-        id: 'scene-normal-roughness', width, height, format: SURFACE_FORMAT,
+        id: 'scene-normal-roughness',
+        width,
+        height,
+        format: SURFACE_FORMAT,
         usage: Texture.RENDER | Texture.SAMPLE,
-        sampler: {minFilter: GPU_FILTER.NEAREST, magFilter: GPU_FILTER.NEAREST, addressModeU: GPU_ADDRESS_MODE.CLAMP_TO_EDGE, addressModeV: GPU_ADDRESS_MODE.CLAMP_TO_EDGE}
+        sampler: {
+          minFilter: GPU_FILTER.NEAREST,
+          magFilter: GPU_FILTER.NEAREST,
+          addressModeU: GPU_ADDRESS_MODE.CLAMP_TO_EDGE,
+          addressModeV: GPU_ADDRESS_MODE.CLAMP_TO_EDGE
+        }
       });
       framebuffer = this.device.createFramebuffer({
-        id: 'scene-surfaces', width, height, colorAttachments: [texture], depthStencilAttachment: depthTexture
+        id: 'scene-surfaces',
+        width,
+        height,
+        colorAttachments: [texture],
+        depthStencilAttachment: depthTexture
       });
     } catch(error) {
       texture?.destroy();
@@ -187,7 +227,9 @@ export class SceneSurfaces {
     this.depth = depthTexture;
   }
 
-  /** Release owned attachments and pipeline once; the scene device/depth remain alive. */
+  /**
+   * Release owned attachments and pipeline once; the borrowed scene device/depth remain alive.
+   */
   destroy() {
     if(this.destroyed) {
       return;
@@ -204,4 +246,32 @@ export class SceneSurfaces {
     this.framebuffer = null;
     this.texture = null;
   }
+}
+
+/**
+ * Copy positions and perceptual roughness into the surface pass's owned upload layout.
+ * @param vertices Borrowed complete world-space XYZ/RGBA triangles.
+ * @param vertexCount Validated number of vertices in the source queue.
+ * @param roughness Borrowed per-vertex values, or undefined to use matte surfaces.
+ * @returns An owned float32 buffer with XYZ/roughness records in source order.
+ * @throws If roughness is outside [0, 1] or positions cannot fit finite float32 coordinates.
+ */
+function packSurfaceVertices(
+  vertices: number[] | Float32Array,
+  vertexCount: number,
+  roughness?: ArrayLike<number>): Float32Array<ArrayBuffer> {
+  const packed = new Float32Array(vertexCount*SURFACE_VERTEX_FLOATS);
+  for(let vertex = 0; vertex < vertexCount; vertex++) {
+    const source = vertex*FLOATS_PER_VERTEX;
+    const target = vertex*SURFACE_VERTEX_FLOATS;
+    const value = roughness?.[vertex] ?? 1;
+    if(!Number.isFinite(value) || value < 0 || value > 1) {
+      throw new RangeError('Surface roughness must be finite and between zero and one.');
+    }
+    packed.set([vertices[source], vertices[source + 1], vertices[source + 2], value], target);
+  }
+  if(!packed.every(Number.isFinite)) {
+    throw new RangeError('Surface positions must fit finite float32 world coordinates.');
+  }
+  return packed;
 }

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { PbrTriangles } from '../src/rendering/pbr/pbr-triangles.ts';
+import { PbrMaterialPass } from '../src/rendering/materials/pbr/pbr-material-pass.ts';
 import { GpuTriangleRenderer } from 'joy-engine';
 import {SceneShadows} from '../src/rendering/shadows/scene-shadows.ts';
 import {prepareShadowLightBatches} from '../src/rendering/shadows/shadow-light-batches.ts';
@@ -61,15 +61,15 @@ function mesh(source = null, alphaMode = 'OPAQUE') {
 
 test('PBR scene releases partial startup resources when pipeline creation fails', () => {
   const renderer = gpu();
-  renderer.fail('pbr-transparent');
-  assert.throws(() => new PbrTriangles(renderer.device), /GPU allocation failed/);
+  renderer.fail('pbr-material-transparent');
+  assert.throws(() => new PbrMaterialPass(renderer.device), /GPU allocation failed/);
   assert.ok(renderer.allocations.length > 0);
   assert.ok(renderer.allocations.every(resource => resource.destroyed === 1));
 });
 
 test('PBR mesh allocation failure preserves active draw resources and frees pending buffers', async t => {
   const renderer = gpu();
-  const scene = new PbrTriangles(renderer.device);
+  const scene = new PbrMaterialPass(renderer.device);
   t.after(() => scene.destroy());
   await scene.setMesh(mesh());
   const activeVertices = scene.vertices;
@@ -88,7 +88,7 @@ test('PBR mesh allocation failure preserves active draw resources and frees pend
 
 test('PBR mesh and materials stay paired when a synchronous update is superseded by a failed image load', async t => {
   const renderer = gpu();
-  const scene = new PbrTriangles(renderer.device);
+  const scene = new PbrMaterialPass(renderer.device);
   t.after(() => scene.destroy());
   await scene.setMesh(mesh());
   t.mock.method(globalThis, 'fetch', async () => { throw new Error('Image load failed'); });
@@ -106,7 +106,7 @@ test('PBR mesh and materials stay paired when a synchronous update is superseded
 
 test('destroying a PBR scene during image loading releases active and pending mesh allocations once', async t => {
   const renderer = gpu();
-  const scene = new PbrTriangles(renderer.device);
+  const scene = new PbrMaterialPass(renderer.device);
   t.after(() => scene.destroy());
   await scene.setMesh(mesh());
   let rejectImage;
@@ -121,7 +121,7 @@ test('destroying a PBR scene during image loading releases active and pending me
 
 test('PBR transparent triangles are sorted back-to-front without depth writes', async t => {
   const renderer = gpu();
-  const scene = new PbrTriangles(renderer.device);
+  const scene = new PbrMaterialPass(renderer.device);
   t.after(() => scene.destroy());
   const data = mesh(null, 'BLEND');
   data.positions.push(0, 0, -4, 1, 0, -4, 0, 1, -4);
@@ -151,7 +151,7 @@ test('PBR transparent triangles are sorted back-to-front without depth writes', 
 
 test('mixed PBR, colored and textured transparency shares depth order and coalesces adjacent ranges', async t => {
   const gpuResources = gpu();
-  const scene = new PbrTriangles(gpuResources.device);
+  const scene = new PbrMaterialPass(gpuResources.device);
   t.after(() => scene.destroy());
   const data = mesh(null, 'BLEND');
   data.positions = [0, 0, -3, 1, 0, -3, 0, 1, -3, 0, 0, -2, 1, 0, -2, 0, 1, -2];
@@ -216,7 +216,7 @@ test('PBR light batches composite each transparent triangle completely and apply
   t.mock.method(SceneShadows.prototype, 'prepare', (_camera, lights) =>
     prepareShadowLightBatches(lights).map(group => ({...group, bindings: {}})));
   const renderer = gpu();
-  const scene = new PbrTriangles(renderer.device, 'rgba16float');
+  const scene = new PbrMaterialPass(renderer.device, 'rgba16float');
   t.after(() => scene.destroy());
   const data = mesh(null, 'BLEND');
   data.positions.push(0, 0, -4, 1, 0, -4, 0, 1, -4);

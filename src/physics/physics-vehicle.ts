@@ -29,6 +29,34 @@ export interface PhysicsVehicleOptions {
   brakeForce?: number;
   frictionSlip?: number;
 }
+/**
+ * Values a vehicle assumes for omitted options. Forces are newtons and steering is radians.
+ * Wheel `frictionSlip` defaults to the vehicle's own value rather than a constant.
+ */
+export const PHYSICS_VEHICLE_DEFAULTS = Object.freeze({
+  engineForce: 400,
+  maxSteer: 0.45,
+  brakeForce: 20,
+  frictionSlip: 5
+});
+
+/**
+ * Values a wheel assumes for omitted options. Lengths are chassis-local meters.
+ */
+export const PHYSICS_WHEEL_DEFAULTS = Object.freeze({
+  radius: 0.35,
+  steering: false,
+  driven: false,
+  brake: false,
+  suspensionRestLength: 0.3,
+  suspensionStiffness: 30,
+  dampingCompression: 4.4,
+  dampingRelaxation: 2.3,
+  maxSuspensionTravel: 0.3,
+  maxSuspensionForce: 100000,
+  rollInfluence: 0.01
+});
+
 export interface PhysicsVehicleInput {
   throttle?: number;
   steer?: number;
@@ -58,10 +86,10 @@ export class PhysicsVehicle {
    */
   constructor(world: PhysicsWorld, chassis: PhysicsBody, config: PhysicsVehicleOptions, capability?: symbol) {
     world.assertFactoryCapability(capability, 'createVehicle');
-    this.engineForce = finiteNumber(config.engineForce ?? 400, 'engineForce', 0);
-    this.maxSteer = finiteNumber(config.maxSteer ?? 0.45, 'maxSteer', 0, Math.PI/2);
-    this.brakeForce = finiteNumber(config.brakeForce ?? 20, 'brakeForce', 0);
-    const frictionSlip = finiteNumber(config.frictionSlip ?? 5, 'frictionSlip', 0);
+    this.engineForce = finiteNumber(config.engineForce ?? PHYSICS_VEHICLE_DEFAULTS.engineForce, 'engineForce', 0);
+    this.maxSteer = finiteNumber(config.maxSteer ?? PHYSICS_VEHICLE_DEFAULTS.maxSteer, 'maxSteer', 0, Math.PI/2);
+    this.brakeForce = finiteNumber(config.brakeForce ?? PHYSICS_VEHICLE_DEFAULTS.brakeForce, 'brakeForce', 0);
+    const frictionSlip = finiteNumber(config.frictionSlip ?? PHYSICS_VEHICLE_DEFAULTS.frictionSlip, 'frictionSlip', 0);
     if(!Array.isArray(config.wheels) || config.wheels.length === 0) {
       throw new TypeError('A vehicle requires at least one wheel.');
     }
@@ -179,17 +207,17 @@ function validateWheel(wheel: PhysicsWheelOptions, frictionSlip: number) {
 
   return {
     position: vector(wheel.position, 'wheel.position'),
-    radius: finiteNumber(wheel.radius ?? 0.35, 'wheel.radius', Number.EPSILON),
-    steering: wheel.steering ?? false,
-    driven: wheel.driven ?? false,
-    brake: wheel.brake ?? false,
-    suspensionRestLength: finiteNumber(wheel.suspensionRestLength ?? 0.3, 'wheel.suspensionRestLength', 0),
-    suspensionStiffness: finiteNumber(wheel.suspensionStiffness ?? 30, 'wheel.suspensionStiffness', 0),
-    dampingCompression: finiteNumber(wheel.dampingCompression ?? 4.4, 'wheel.dampingCompression', 0),
-    dampingRelaxation: finiteNumber(wheel.dampingRelaxation ?? 2.3, 'wheel.dampingRelaxation', 0),
-    maxSuspensionTravel: finiteNumber(wheel.maxSuspensionTravel ?? 0.3, 'wheel.maxSuspensionTravel', 0),
-    maxSuspensionForce: finiteNumber(wheel.maxSuspensionForce ?? 100000, 'wheel.maxSuspensionForce', 0),
+    radius: finiteNumber(wheel.radius ?? PHYSICS_WHEEL_DEFAULTS.radius, 'wheel.radius', Number.EPSILON),
+    steering: wheel.steering ?? PHYSICS_WHEEL_DEFAULTS.steering,
+    driven: wheel.driven ?? PHYSICS_WHEEL_DEFAULTS.driven,
+    brake: wheel.brake ?? PHYSICS_WHEEL_DEFAULTS.brake,
+    suspensionRestLength: finiteNumber(wheel.suspensionRestLength ?? PHYSICS_WHEEL_DEFAULTS.suspensionRestLength, 'wheel.suspensionRestLength', 0),
+    suspensionStiffness: finiteNumber(wheel.suspensionStiffness ?? PHYSICS_WHEEL_DEFAULTS.suspensionStiffness, 'wheel.suspensionStiffness', 0),
+    dampingCompression: finiteNumber(wheel.dampingCompression ?? PHYSICS_WHEEL_DEFAULTS.dampingCompression, 'wheel.dampingCompression', 0),
+    dampingRelaxation: finiteNumber(wheel.dampingRelaxation ?? PHYSICS_WHEEL_DEFAULTS.dampingRelaxation, 'wheel.dampingRelaxation', 0),
+    maxSuspensionTravel: finiteNumber(wheel.maxSuspensionTravel ?? PHYSICS_WHEEL_DEFAULTS.maxSuspensionTravel, 'wheel.maxSuspensionTravel', 0),
+    maxSuspensionForce: finiteNumber(wheel.maxSuspensionForce ?? PHYSICS_WHEEL_DEFAULTS.maxSuspensionForce, 'wheel.maxSuspensionForce', 0),
     frictionSlip: finiteNumber(wheel.frictionSlip ?? frictionSlip, 'wheel.frictionSlip', 0),
-    rollInfluence: finiteNumber(wheel.rollInfluence ?? 0.01, 'wheel.rollInfluence', 0, 1)
+    rollInfluence: finiteNumber(wheel.rollInfluence ?? PHYSICS_WHEEL_DEFAULTS.rollInfluence, 'wheel.rollInfluence', 0, 1)
   };
 }

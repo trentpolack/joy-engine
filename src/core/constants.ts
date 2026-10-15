@@ -3,6 +3,7 @@
 
 /**
  * Authored primitive shape names shared by level rendering and physics.
+ * Foundation-owned so simulation, content and rendering can all name shapes without upward imports.
  */
 export const PRIMITIVE_SHAPE = Object.freeze({
   BOX: 'box',

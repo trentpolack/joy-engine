@@ -155,6 +155,16 @@ Reject solver access after either the body or its owner is disposed.
 - **internal**
 
 
+## PHYSICS_BODY_DEFAULTS
+Import from `joy-engine`. [Source](../../src/physics/physics-body.ts)
+
+```ts
+const PHYSICS_BODY_DEFAULTS
+```
+Values a body assumes for omitted options. Lengths are meters, mass is kilograms and damping is a per-second velocity fraction in [0, 1]. Authoring schemas read these so tools display the same defaults.
+
+
+
 ## PhysicsVehicle
 Import from `joy-engine`. [Source](../../src/physics/physics-vehicle.ts)
 
@@ -204,6 +214,26 @@ Tire contacts recorded during the most recent fixed step.
 destroy()
 ```
 Remove the solver's pre-step callback while retaining the borrowed chassis. Idempotent.
+
+
+
+## PHYSICS_VEHICLE_DEFAULTS
+Import from `joy-engine`. [Source](../../src/physics/physics-vehicle.ts)
+
+```ts
+const PHYSICS_VEHICLE_DEFAULTS
+```
+Values a vehicle assumes for omitted options. Forces are newtons and steering is radians. Wheel `frictionSlip` defaults to the vehicle's own value rather than a constant.
+
+
+
+## PHYSICS_WHEEL_DEFAULTS
+Import from `joy-engine`. [Source](../../src/physics/physics-vehicle.ts)
+
+```ts
+const PHYSICS_WHEEL_DEFAULTS
+```
+Values a wheel assumes for omitted options. Lengths are chassis-local meters.
 
 
 

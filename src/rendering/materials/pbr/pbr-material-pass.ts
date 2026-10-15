@@ -3,23 +3,23 @@
 
 import {ibl} from '@luma.gl/shadertools';
 import {shadow} from '@luma.gl/experimental';
-import {SceneShadows} from '../shadows/scene-shadows.ts';
-import {ShadowCasters} from '../shadows/shadow-casters.ts';
-import type {ShadowOptions} from '../shadows/types.ts';
-import {prepareShadowLightBatches} from '../shadows/shadow-light-batches.ts';
-import {DEFAULT_SHADOW_OPTIONS} from '../shadows/types.ts';
-import casterWgsl from '../../../shaders/rendering/shadows/pbr-caster.wgsl?raw';
-import { GPU_BACKEND, GPU_COMPARE, GPU_TEXTURE_FORMAT, GPU_TOPOLOGY, GPU_VERTEX_FORMAT, SHADER_ENTRY_POINT } from '../gpu/constants.ts';
+import {SceneShadows} from '../../shadows/scene-shadows.ts';
+import {ShadowCasters} from '../../shadows/shadow-casters.ts';
+import type {ShadowOptions} from '../../shadows/types.ts';
+import {prepareShadowLightBatches} from '../../shadows/shadow-light-batches.ts';
+import {DEFAULT_SHADOW_OPTIONS} from '../../shadows/types.ts';
+import casterWgsl from '../../../../shaders/rendering/shadows/pbr-caster.wgsl?raw';
+import { GPU_BACKEND, GPU_COMPARE, GPU_TEXTURE_FORMAT, GPU_TOPOLOGY, GPU_VERTEX_FORMAT, SHADER_ENTRY_POINT } from '../../gpu/constants.ts';
 import { MATERIAL_ALPHA_MODE } from './constants.ts';
 import type { TextureFormatColor, RenderPipelineProps, RenderPass, Device, Binding, Shader, RenderPipeline, VertexArray } from '@luma.gl/core';
-import type { PbrMesh, PbrFrame, PbrMaterial } from '../../core/types.ts';
+import type { PbrMesh, PbrFrame, PbrMaterial } from '../../../core/types.ts';
 import { Buffer, Texture } from '@luma.gl/core';
-import { createPortableShaders } from '../gpu/gpu-device.ts';
-import { preparePbrGeometry } from '../geometry/pbr-geometry.ts';
+import { createPortableShaders } from '../../gpu/gpu-device.ts';
+import { preparePbrGeometry } from '../../geometry/pbr-geometry.ts';
 import { PbrMaterialSet } from './pbr-materials.ts';
-import wgsl from '../../../shaders/rendering/pbr/pbr.wgsl?raw';
-import vertex from '../../../shaders/rendering/pbr/pbr.vert.glsl?raw';
-import fragment from '../../../shaders/rendering/pbr/pbr.frag.glsl?raw';
+import wgsl from '../../../../shaders/rendering/pbr/pbr.wgsl?raw';
+import vertex from '../../../../shaders/rendering/pbr/pbr.vert.glsl?raw';
+import fragment from '../../../../shaders/rendering/pbr/pbr.frag.glsl?raw';
 
 export interface PbrTransparentRange {
   material: number;
@@ -36,7 +36,7 @@ export const DEFAULT_PBR_LIGHTING = Object.freeze({
 });
 
 /** Optional material pass. Owns geometry, shaders and textures; borrows device and scene pass. */
-export class PbrTriangles {
+export class PbrMaterialPass {
   declare device: Device;
   declare displayResolve: boolean;
   declare disposed: boolean;
@@ -106,12 +106,12 @@ export class PbrTriangles {
       };
       this.pipelineOptions = options;
       this.opaquePipeline = device.createRenderPipeline({
-        ...options, id: 'pbr-opaque',
+        ...options, id: 'pbr-material-opaque',
         parameters: {depthWriteEnabled: true, depthCompare: GPU_COMPARE.LESS_EQUAL, blend: false, cullMode: 'none'}
       });
       allocated.push(this.opaquePipeline);
       this.transparentPipeline = device.createRenderPipeline({
-        ...options, id: 'pbr-transparent',
+        ...options, id: 'pbr-material-transparent',
         parameters: {
           depthWriteEnabled: false, depthCompare: GPU_COMPARE.LESS_EQUAL, cullMode: 'none', blend: true,
           blendColorOperation: 'add', blendAlphaOperation: 'add',
@@ -466,4 +466,3 @@ export class PbrTriangles {
   }
 
 }
-

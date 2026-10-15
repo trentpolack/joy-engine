@@ -18,12 +18,12 @@ export {
 // Rendering (lighting/material) constants.
 export {
   MATERIAL_ALPHA_MODE
-} from './rendering/pbr/constants.ts';
+} from './rendering/materials/pbr/constants.ts';
 
-// Rendering (geometry) constants.
+// Shared primitive shape names (rendering and physics).
 export {
   PRIMITIVE_SHAPE
-} from './rendering/geometry/constants.ts';
+} from './core/constants.ts';
 
 // Renderer (postprocessing) constants.
 export {
@@ -45,7 +45,12 @@ export {
 // Gameplay constants.
 export {
   ENTITY_TYPE,
-  TRANSFORM_PROPERTY
+  TRANSFORM_PROPERTY,
+  COMPONENT_TYPE,
+  COMPONENT_PRESET,
+  COMPONENT_FIELD_KIND,
+  COMPONENT_CATEGORY,
+  COMPONENT_ASSET_KIND
 } from './gameplay/constants.ts';
 
 // Editor preview constants.

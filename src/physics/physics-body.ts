@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import { PRIMITIVE_SHAPE } from '../rendering/geometry/constants.ts';
+import { PRIMITIVE_SHAPE } from '../core/constants.ts';
 import type { PhysicsWorld } from './physics-world.ts';
 import type { PhysicsVehicle } from './physics-vehicle.ts';
 import {Body, Box, Material, Plane, Quaternion, Sphere, Vec3} from 'cannon-es';
@@ -19,6 +19,20 @@ export interface PhysicsBodyOptions {
   linearDamping?: number;
   angularDamping?: number;
 }
+/**
+ * Values a body assumes for omitted options. Lengths are meters, mass is kilograms and damping is a
+ * per-second velocity fraction in [0, 1]. Authoring schemas read these so tools display the same defaults.
+ */
+export const PHYSICS_BODY_DEFAULTS = Object.freeze({
+  mass: 0,
+  halfExtents: Object.freeze([0.5, 0.5, 0.5]),
+  radius: 0.5,
+  friction: 0.5,
+  restitution: 0,
+  linearDamping: 0.01,
+  angularDamping: 0.1
+});
+
 export interface PhysicsTransform {
   position?: readonly number[];
   rotation?: readonly number[];
@@ -42,13 +56,13 @@ export class PhysicsBody {
    */
   constructor(world: PhysicsWorld, options: PhysicsBodyOptions, capability?: symbol) {
     world.assertFactoryCapability(capability, 'createBody');
-    const mass = finiteNumber(options.mass ?? 0, 'mass', 0);
-    const friction = finiteNumber(options.friction ?? 0.5, 'friction', 0);
-    const restitution = finiteNumber(options.restitution ?? 0, 'restitution', 0, 1);
+    const mass = finiteNumber(options.mass ?? PHYSICS_BODY_DEFAULTS.mass, 'mass', 0);
+    const friction = finiteNumber(options.friction ?? PHYSICS_BODY_DEFAULTS.friction, 'friction', 0);
+    const restitution = finiteNumber(options.restitution ?? PHYSICS_BODY_DEFAULTS.restitution, 'restitution', 0, 1);
     const position = vector(options.position ?? [0, 0, 0], 'position');
     const rotation = vector(options.rotation ?? [0, 0, 0], 'rotation');
-    const linearDamping = finiteNumber(options.linearDamping ?? 0.01, 'linearDamping', 0, 1);
-    const angularDamping = finiteNumber(options.angularDamping ?? 0.1, 'angularDamping', 0, 1);
+    const linearDamping = finiteNumber(options.linearDamping ?? PHYSICS_BODY_DEFAULTS.linearDamping, 'linearDamping', 0, 1);
+    const angularDamping = finiteNumber(options.angularDamping ?? PHYSICS_BODY_DEFAULTS.angularDamping, 'angularDamping', 0, 1);
     const shape = createShape(options);
     if(options.shape === PRIMITIVE_SHAPE.PLANE && mass !== 0) {
       throw new RangeError('Infinite planes must be static (mass 0).');
@@ -193,7 +207,7 @@ export class PhysicsBody {
 function createShape(options: PhysicsBodyOptions) {
   switch(options.shape) {
     case PRIMITIVE_SHAPE.BOX: {
-      const halfExtents = vector(options.halfExtents ?? [0.5, 0.5, 0.5], 'halfExtents');
+      const halfExtents = vector(options.halfExtents ?? PHYSICS_BODY_DEFAULTS.halfExtents, 'halfExtents');
       for(const extent of halfExtents.toArray()) {
         if(extent <= 0) {
           throw new RangeError('Box halfExtents must be positive.');
@@ -202,7 +216,7 @@ function createShape(options: PhysicsBodyOptions) {
       return new Box(halfExtents);
     }
     case PRIMITIVE_SHAPE.SPHERE: {
-      const radius = finiteNumber(options.radius ?? 0.5, 'radius', Number.EPSILON);
+      const radius = finiteNumber(options.radius ?? PHYSICS_BODY_DEFAULTS.radius, 'radius', Number.EPSILON);
       return new Sphere(radius);
     }
     case PRIMITIVE_SHAPE.PLANE:

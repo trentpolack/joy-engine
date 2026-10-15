@@ -417,3 +417,11 @@ footer {
 .property-vector { border: 0; padding: 0; margin: 14px 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .property-vector legend { color: var(--joy-muted); font-size: 9px; margin-bottom: 8px; }
 .property-vector input { padding: 7px 3px; font-size: 11px; }
+
+/* Schema-described components: description, advisory issues, and fields the schema flags. */
+.component-group > summary small { color: var(--joy-muted); font-weight: 400; text-transform: none; }
+.component-description { margin: 0 0 10px; color: var(--joy-muted); font-size: 10px; line-height: 1.4; }
+.property-issues { margin: 0 0 10px; padding: 6px 8px 6px 20px; border-left: 2px solid var(--joy-danger); color: var(--joy-text); font-size: 10px; line-height: 1.4; }
+.has-issue > label, .has-issue > legend { color: var(--joy-danger); }
+.inactive { opacity: 0.5; }
+.schema-add select { width: auto; flex: 1; }

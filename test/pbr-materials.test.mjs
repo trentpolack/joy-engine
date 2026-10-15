@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { PbrMaterialSet } from '../src/rendering/pbr/pbr-materials.ts';
+import { PbrMaterialSet } from '../src/rendering/materials/pbr/pbr-materials.ts';
 
 function deferred() {
   let resolve;

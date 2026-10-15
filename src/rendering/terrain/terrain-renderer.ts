@@ -16,6 +16,7 @@ import type {
   Device,
   RenderPass,
   RenderPipeline,
+  Binding,
   Shader,
   Texture,
   TextureFormatColor,
@@ -33,6 +34,7 @@ import {createTerrainGrid} from './terrain-grid.ts';
 import {selectTerrain, validateTerrainView} from './terrain-selection.ts';
 import {TerrainTiming} from './terrain-timing.ts';
 import wgsl from '../../../shaders/rendering/terrain/terrain.wgsl?raw';
+import geometry from '../../../shaders/rendering/terrain/terrain-geometry.wgsl?raw';
 import vertex from '../../../shaders/rendering/terrain/terrain.vert.glsl?raw';
 import fragment from '../../../shaders/rendering/terrain/terrain.frag.glsl?raw';
 import computeSource from '../../../shaders/rendering/terrain/select.wgsl?raw';
@@ -119,7 +121,7 @@ export class TerrainRenderer {
 
       // Build the portable draw pipeline once. WGSL can share a shader object
       // across stages, so register each distinct object only once for cleanup.
-      const shaders = createPortableShaders(device,{wgsl,glsl:{vertex,fragment}},'terrain');
+      const shaders = createPortableShaders(device,{wgsl: geometry + wgsl,glsl:{vertex,fragment}},'terrain');
       this.resources.push(...new Set(Object.values(shaders)));
       this.shaders.push(...new Set(Object.values(shaders)));
       this.pipeline = this.own(device.createRenderPipeline({
@@ -307,7 +309,12 @@ export class TerrainRenderer {
    * @param pass Borrowed active depth-tested render pass; it is not ended or submitted here.
    */
   draw(pass: RenderPass): void {
-    pass.setPipeline(this.pipeline);
+    this.drawGeometry(pass, this.pipeline, {});
+  }
+
+  /** Record resident indexed geometry with a borrowed scene or shadow pipeline. */
+  drawGeometry(pass: RenderPass, pipeline: RenderPipeline, bindings: Record<string, Binding>): void {
+    pass.setPipeline(pipeline);
     pass.setVertexArray(this.vertexArray);
 
     // Bind a descriptor ID per draw, then let the GPU-authored command choose
@@ -315,12 +322,12 @@ export class TerrainRenderer {
     if(this.descriptors && this.indirect) {
       for(let i = 0; i < this.asset.patches.length; i++) {
         // firstInstance remains zero, avoiding the optional indirect-first-instance feature.
-        pass.setBindings({scene:this.scene,heightTexture:this.heightTexture,patches:this.descriptors,drawIndex:this.patchUniforms[i]});
+        pass.setBindings({...bindings,scene:this.scene,heightTexture:this.heightTexture,patches:this.descriptors,drawIndex:this.patchUniforms[i]});
         pass.drawIndexedIndirect(this.indirect, i*INDIRECT_COMMAND_BYTES);
       }
     } else {
       this.selection.forEach((selection,i) => {
-        pass.setBindings({scene:this.scene,heightTexture:this.heightTexture,patchUniforms:this.patchUniforms[i]});
+        pass.setBindings({...bindings,scene:this.scene,heightTexture:this.heightTexture,patchUniforms:this.patchUniforms[i]});
         const range = this.grid.ranges[selection.lod];
         // luma WebGL indexed draws use firstVertex as a byte offset; WebGPU uses firstIndex.
         pass.draw({indexCount: range.count, firstVertex: range.first*WEBGL_INDEX_BYTES});

@@ -1,7 +1,7 @@
+#version 300 es
+
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
-
-#version 300 es
 
 precision highp float;
 

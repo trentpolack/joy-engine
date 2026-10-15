@@ -96,3 +96,18 @@ test('level presentation retains instances and combines full render size with tr
   scene.destroy();
   scene.destroy();
 });
+
+test('level presentation derives world-space renderer lights from generic entities', () => {
+  const scene = new LevelScene();
+  const definition = structuredClone(entity);
+  definition.transform.position = [3, 4, 5];
+  definition.components.light = {color: [0.5, 0.25, 0.125], intensity: 4, range: 12, castsShadow: false};
+  scene.sync([definition]);
+  assert.deepEqual(scene.lights, [{x: 3, y: 4, z: 5, r: 2, g: 1, b: 0.5, range: 12, castsShadow: false}]);
+  definition.components.light.enabled = false;
+  scene.sync([definition]);
+  assert.deepEqual(scene.lights, []);
+  definition.components.light = {color: [1, -1, 1], intensity: 1, range: 10};
+  assert.throws(() => scene.sync([definition]), /nonnegative/);
+  scene.destroy();
+});

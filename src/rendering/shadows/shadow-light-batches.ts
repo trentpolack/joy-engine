@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import type {PointLight} from '../pbr/point-lights.ts';
-import {MAX_POINT_LIGHTS} from '../pbr/point-lights.ts';
+import type {PointLight} from '../lighting/point-lights.ts';
+import {MAX_POINT_LIGHTS} from '../lighting/point-lights.ts';
 
 export const SHADOW_LIGHTS_PER_BATCH = 4;
 

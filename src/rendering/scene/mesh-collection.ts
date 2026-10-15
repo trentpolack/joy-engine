@@ -60,7 +60,7 @@ export class MeshCollection {
       throw new Error('Mesh collection update is not open.');
     }
     for(const [key, instance] of this.entries) {
-      if(!this.seen.has(key)) {
+      if(!this.seen.has(key) || !this.scene.instances.has(instance)) {
         this.scene.remove(instance);
         this.entries.delete(key);
       }

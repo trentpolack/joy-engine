@@ -6,7 +6,7 @@ import { KEY_CODE } from '../input/constants.ts';
 import { POST_PROCESSING_KEY, TONE_MAPPER } from '../../rendering/postprocessor/constants.ts';
 import type { PostProcessingProfile as Profile } from '../../rendering/postprocessor/profile.ts';
 import type { PostProcessingConfig } from '../../rendering/postprocessor/config.ts';
-import type { GpuTriangleRenderer } from '../../rendering/renderers/gpu-triangle-renderer.ts';
+import type { GpuTriangleRenderer } from '../../rendering/renderer.ts';
 import { PostProcessingSession } from '../../rendering/postprocessor/session.ts';
 import { resolvePostProcessingProfile } from '../../rendering/postprocessor/profile.ts';
 import { normalizePostProcessingConfig } from '../../rendering/postprocessor/config.ts';

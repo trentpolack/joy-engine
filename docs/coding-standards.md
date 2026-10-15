@@ -124,6 +124,7 @@ Apply the demonstrated principles:
 - Follow the demonstrated formatting, spacing, and comment layout.
 - Fully document function contracts, including parameter meaning, mutation, ownership, resource validity, failure behavior, and return values.
 - Use readonly members for dependencies assigned during construction and never replaced.
+- NOTE: An issue with this diff is the `{MODULE}` import having no spaces (unintentional change); singel module imports can be one-lined but spaces around the module name (i.e., `{ MODULE }`).
 
 Before completing a change, compare the changed code against this reference. Adapt the principles to the responsibility of each module.
 

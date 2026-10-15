@@ -2,38 +2,31 @@
 // Licensed under the MIT License.
 
 import {Buffer} from '@luma.gl/core';
-import type {Device, RenderPass, RenderPipeline, TextureFormatColor, VertexArray} from '@luma.gl/core';
-import {shadow} from '@luma.gl/experimental';
+import type {Binding, Device, RenderPass, RenderPipeline, TextureFormatColor, VertexArray} from '@luma.gl/core';
+import {sceneShadowModule as shadow} from './scene-shadow-module.ts';
 import {createPortableShaders} from '../gpu/gpu-device.ts';
-import {POINT_LIGHT_UNIFORM_BYTES} from '../pbr/point-lights.ts';
-import {SceneShadows} from './scene-shadows.ts';
+import {POINT_LIGHT_UNIFORM_BYTES} from '../lighting/point-lights.ts';
 import type {PreparedShadowBatch} from './scene-shadows.ts';
-import {ShadowCasters} from './shadow-casters.ts';
-import type {SceneLightFrame, ShadowOptions} from './types.ts';
+import type {ShadowCameraFrame} from './types.ts';
 import wgsl from '../../../shaders/rendering/shadows/lit-shadow.wgsl?raw';
+import lighting from '../../../shaders/rendering/scene/scene-lighting.wgsl?raw';
 
 /** Owns shadowed vertex-color lighting; borrows the main scene's geometry and pass. */
 export class SceneLitPass {
-  readonly shadows: SceneShadows;
-  private readonly casters: ShadowCasters;
   private readonly shaders: ReturnType<typeof createPortableShaders>;
   private readonly opaque: RenderPipeline;
   private readonly additive: RenderPipeline;
   private readonly receiver: Buffer;
   private readonly uniforms: Buffer[] = [];
-  private batches: PreparedShadowBatch[] = [];
+  private batches: readonly PreparedShadowBatch[] = [];
   private disposed = false;
   private readonly device: Device;
 
-  constructor(device: Device, options: ShadowOptions = {}, colorFormat?: TextureFormatColor) {
+  constructor(device: Device, colorFormat?: TextureFormatColor) {
     this.device = device;
     const allocated: {destroy(): void}[] = [];
     try {
-      this.shadows = new SceneShadows(device, options);
-      allocated.push(this.shadows);
-      this.casters = new ShadowCasters(device, options);
-      allocated.push(this.casters);
-      this.shaders = createPortableShaders(device, {wgsl, glsl: {vertex: '', fragment: ''}, modules: [shadow]}, 'lit-shadow');
+      this.shaders = createPortableShaders(device, {wgsl: lighting + wgsl, glsl: {vertex: '', fragment: ''}, modules: [shadow], defines: {JOY_SHADOWS: true}}, 'lit-shadow');
       allocated.push(this.shaders.vertex);
       const pipelineOptions = {
         vs: this.shaders.vertex, fs: this.shaders.fragment, vertexEntryPoint: 'vertexMain', fragmentEntryPoint: 'fragmentMain',
@@ -62,11 +55,10 @@ export class SceneLitPass {
     }
   }
 
-  /** Record maps and snapshot each direct-light group; ambient/directional irradiance stays in group zero. */
-  prepare(frame: SceneLightFrame, source: Float32Array, drawMaterials?: (pass: RenderPass, matrix: Buffer) => void) {
-    this.casters.prepare(frame.casters);
-    this.batches = this.shadows.prepare(frame.camera, frame.lights, frame.directional, view => this.casters.draw(view, drawMaterials));
-    this.receiver.write(new Float32Array(Array.from(frame.camera.viewMatrix)));
+  /** Borrow frame maps and snapshot each direct-light group; indirect illumination stays in group zero. */
+  prepare(camera: ShadowCameraFrame, source: Float32Array, batches: readonly PreparedShadowBatch[]) {
+    this.batches = batches;
+    this.receiver.write(new Float32Array(Array.from(camera.viewMatrix)));
     for(const [index, batch] of this.batches.entries()) {
       const values = source.slice(0, POINT_LIGHT_UNIFORM_BYTES/4);
       values[20] = batch.lights.length;
@@ -88,12 +80,19 @@ export class SceneLitPass {
   }
 
   /** Draw opaque triangles once for base illumination, then accumulate remaining direct-light groups. */
-  draw(pass: RenderPass, vertexArray: VertexArray, vertexCount: number) {
+  draw(pass: RenderPass, vertexArray: VertexArray, vertexCount: number, firstVertex: number = 0) {
     for(const [index, batch] of this.batches.entries()) {
       pass.setPipeline(index === 0 ? this.opaque : this.additive);
       pass.setVertexArray(vertexArray);
       pass.setBindings({uniforms: this.uniforms[index], receiver: this.receiver, ...batch.bindings});
-      pass.draw({vertexCount});
+      pass.draw({vertexCount, firstVertex});
+    }
+  }
+
+  /** Native adapters borrow the same per-batch lighting snapshots and maps. */
+  drawNative(pass: RenderPass, draw: (pass: RenderPass, bindings: Record<string, Binding>, additive: boolean) => void) {
+    for(const [index, batch] of this.batches.entries()) {
+      draw(pass, {uniforms: this.uniforms[index], receiver: this.receiver, ...batch.bindings}, index > 0);
     }
   }
 
@@ -102,8 +101,6 @@ export class SceneLitPass {
       return;
     }
     this.disposed = true;
-    this.shadows.destroy();
-    this.casters.destroy();
     for(const buffer of this.uniforms) {
       buffer.destroy();
     }

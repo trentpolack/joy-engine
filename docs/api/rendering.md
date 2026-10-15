@@ -235,50 +235,88 @@ Append a butt-ended thick segment as two triangles. Width is the full thickness 
 
 
 ## GpuTriangleRenderer
-Import from `joy-engine`. [Source](../../src/rendering/renderers/gpu-triangle-renderer.ts)
+Import from `joy-engine`. [Source](../../src/rendering/renderer.ts)
 
 Depth-tested 3D triangle rendering through luma.gl's portable Device API. Games provide world-space vertices, camera uniforms, and matching shaders. Opaque triangles write depth. Translucent triangles use straight-alpha source-over blending and test against opaque depth without writing it. The caller supplies translucent triangles already sorted back-to-front for its camera. Both batches share one framebuffer and one clear per frame.
 
 ### create
 ```ts
-static async create(canvas: HTMLCanvasElement, options: RendererOptions): Promise<GpuTriangleRenderer>
+static async create(
+    canvas: HTMLCanvasElement,
+    options: RendererOptions): Promise<GpuTriangleRenderer>
 ```
-- **param** canvas Canvas dedicated to GPU rendering.
-- **param** options Backend-specific shader sources.
+Create a renderer and transfer its device/canvas ownership to the result. Failed construction destroys the newly created roots before rejecting.
+
+- **param** canvas Borrowed DOM canvas dedicated to GPU rendering; never removed here.
+- **param** options Shader sources, optional features, and device creation settings.
+- **returns** An owned renderer; its caller must destroy it after dependent environments.
 
 ### constructor
 ```ts
-constructor(device: Device, canvasContext: CanvasContext, { shaderSources, texturedShaderSources, opaqueShaderSources, uniformBufferSize = 16, initialVertexBufferSize = 64*1024, postProcessing, sceneEffects, pbr = false, atmosphere = false, shadows = {} }: RendererOptions)
+constructor(
+    device: Device,
+    canvasContext: CanvasContext,
+    {
+      shaderSources,
+      texturedShaderSources,
+      opaqueShaderSources,
+      uniformBufferSize = 16,
+      initialVertexBufferSize = 64*1024,
+      postProcessing,
+      sceneEffects,
+      pbr = false,
+      atmosphere = false,
+      shadows = {}
+    }: RendererOptions)
 ```
-- **param** device
-- **param** canvasContext
-- **param** options
+Initialize owned geometry and optional scene passes in dependency order. Direct construction transfers device roots on success; callers handle failed roots. Invalid scene-effect settings and GPU allocation failures throw synchronously.
+
+- **param** device Device owned by this renderer after successful construction.
+- **param** canvasContext Canvas context owned alongside the device.
+- **param** options Borrowed shaders and feature settings; buffer capacities are bytes.
 
 ### getDiagnostics
 ```ts
 getDiagnostics(options: RendererDiagnosticOptions = {}): RendererDiagnostics | null
 ```
-Copy requested luma counters on demand. Scope is all luma devices in this realm, not this renderer alone. Returns null after disposal; performs no GPU readback.
+Copy requested luma counters on demand. Scope is all luma devices in this realm, not this renderer alone. Performs no GPU readback.
 
+- **param** options Counters to sample; disabled groups are omitted from the snapshot.
+- **returns** A new diagnostic snapshot, or null after this renderer is destroyed.
+
+### createFrameView
+```ts
+createFrameView(options: Omit<FrameViewOptions, 'shadows'>): FrameView
+```
+Build the shared immutable view using this renderer's fixed shadow configuration. Call once per submission before preparing features; input camera and light records are copied. Shadow quality, map sizes, and biases remain fixed for this renderer's lifetime.
+
+- **param** options Borrowed camera, light, environment, and frame-timing inputs.
+- **returns** A new immutable CPU snapshot; environment GPU bindings remain borrowed.
 
 ### setMaterialMesh
 ```ts
 async setMaterialMesh(mesh: PbrMesh): Promise<boolean>
 ```
-Upload a world-space material mesh; await readiness before displaying new document data. Requires pbr at creation. The renderer owns buffers/textures and copies input data.
+Upload a world-space material mesh; await readiness before displaying new document data. Requires PBR at creation. Failed upload preserves the previous accepted mesh.
 
-- **param** mesh
+- **param** mesh Borrowed geometry and material data copied into renderer-owned resources.
+- **returns** Whether the mesh was installed; false if superseded or already disposed.
 
 ### createMaterialEnvironment
 ```ts
-createMaterialEnvironment(pixels: PbrEnvironmentPixels, options: PbrEnvironmentOptions = {})
+createMaterialEnvironment(
+    pixels: PbrEnvironmentPixels,
+    options: PbrEnvironmentOptions = {}): PbrEnvironment
 ```
-Prepare original equirectangular pixels through luma. The caller owns the result and must destroy it before this renderer/device; ordinary frames borrow it.
+Prepare original equirectangular pixels through luma. The caller owns the result and must destroy it before this renderer/device; ordinary frames borrow it. Invalid pixels, unsupported preparation, or a destroyed renderer throw.
 
+- **param** pixels Borrowed RGBA equirectangular pixels; float RGB represents linear HDR.
+- **param** options Borrowed environment integration settings.
+- **returns** An owned prepared environment; failed preparation releases its allocations.
 
 ### setPostProcessingConfig
 ```ts
-setPostProcessingConfig(config: Partial<PostProcessingConfig>)
+setPostProcessingConfig(config: Partial<PostProcessingConfig>): void
 ```
 Replace authored settings for the next frame without reallocating GPU resources. Requires postProcessing at creation; omitted fields reset to engine defaults. Invalid settings throw before modifying the last working configuration.
 
@@ -286,32 +324,41 @@ Replace authored settings for the next frame without reallocating GPU resources.
 
 ### setSceneEffectsConfig
 ```ts
-setSceneEffectsConfig(config: SceneEffectsOptions)
+setSceneEffectsConfig(config: SceneEffectsOptions): void
 ```
-Replace the optional scene graph atomically; failed configuration retains the previous graph.
+Replace the optional scene graph atomically; failed construction retains the previous graph. Requires a live offscreen scene. Successful replacement releases attachments and history.
 
+- **param** config Borrowed effect settings; the graph uses the renderer's color format.
 
 ### resetSceneHistory
 ```ts
-resetSceneHistory()
+resetSceneHistory(): void
 ```
+Invalidate owned temporal history after a camera cut or scene replacement. Has no effect when scene effects are disabled.
+
 
 ### sceneVolumeStats
 ```ts
 get sceneVolumeStats()
 ```
+Read the current auxiliary volume-light statistics without allocating GPU resources.
+
+- **returns** Borrowed statistics owned by the attachment pass, or null before it exists.
 
 ### bindVertexBuffer
 ```ts
-bindVertexBuffer(buffer: Buffer = this.vertexBuffer?.buffer)
+bindVertexBuffer(buffer: Buffer = this.vertexBuffer?.buffer): void
 ```
-Bind the interleaved stream using each backend's vertex-array semantics.
+Bind the interleaved stream using each backend's vertex-array semantics. The allocation remains owned by its source; this method only replaces vertex bindings.
 
-- **param** [buffer]
+- **param** buffer Borrowed buffer, defaulting to the renderer's current geometry allocation.
 
 ### resize
 ```ts
-resize(width: number, height: number, pixelRatio: number)
+resize(
+    width: number,
+    height: number,
+    pixelRatio: number): void
 ```
 Resize the backing surface without changing the caller's logical geometry.
 
@@ -321,25 +368,39 @@ Resize the backing surface without changing the caller's logical geometry.
 
 ### render
 ```ts
-render(vertices: number[] | Float32Array, uniformData: Float32Array<ArrayBuffer>, clearColor: Color, transparentVertices: number[] | Float32Array = [], timeSeconds: number = 0, transparentDraws: readonly TransparentDraw[] = [], materialFrame: PbrFrame | null = null, sceneFrame: SceneEffectsFrame = {}, atmosphereUniforms: Float32Array<ArrayBuffer> | null = null, attachmentFrame: SceneAttachmentFrame | null = null, lightFrame: SceneLightFrame | null = null)
+render(
+    vertices: number[] | Float32Array,
+    uniformData: Float32Array<ArrayBuffer>,
+    clearColor: Color,
+    transparentVertices: number[] | Float32Array = [],
+    timeSeconds: number = 0,
+    transparentDraws: readonly TransparentDraw[] = [],
+    materialFrame: PbrFrame | null = null,
+    sceneFrame: SceneEffectsFrame = {},
+    atmosphereUniforms: Float32Array<ArrayBuffer> | null = null,
+    attachmentFrame: SceneAttachmentFrame | null = null,
+    lightFrame: SceneLightFrame | null = null,
+    nativeGeometry: readonly NativeSceneGeometry[] = []): void
 ```
-Submit opaque geometry, then sorted translucent geometry; clear even if empty.
+Submit opaque geometry, then sorted translucent geometry; clear even if empty. CPU arrays and records remain unchanged. Borrowed textures must outlive submission. Missing optional pass support, invalid uniform size, and GPU failures throw. Submission failure invalidates temporal history before rethrowing.
 
-- **param** vertices Triangle list of x, y, z, r, g, b, a values.
-- **param** uniformData Caller-defined values fitting the configured uniform buffer.
-- **param** clearColor Frame background.
-- **param** transparentVertices Back-to-front x/y/z/RGBA triangles.
-- **param** timeSeconds Animation time used by temporal post effects.
-- **param** transparentDraws Additional globally sorted material runs (XYZ/RGBA, or XYZ/RGBA/UV with texture). Borrowed textures must outlive submission. Requires texturedShaderSources for texture runs.
+- **param** vertices Borrowed world-space triangle list of x, y, z, r, g, b, a values.
+- **param** uniformData Borrowed scene values matching the configured uniform byte size.
+- **param** clearColor Borrowed RGBA frame background.
+- **param** transparentVertices Borrowed back-to-front world-space XYZ/RGBA triangles.
+- **param** timeSeconds Animation time in seconds used by temporal post effects.
+- **param** transparentDraws Additional globally sorted XYZ/RGBA or XYZ/RGBA/UV material runs; textures require texturedShaderSources.
 - **param** materialFrame Camera/lighting for the optional PBR mesh. Null hides it.
-- **param** [sceneFrame] Borrowed motion/camera inputs for requested scene effects. Depth defaults to this scene's owned attachment. Callers must supply real velocities and projection jitter; reset history after camera cuts or scene replacement.
+- **param** sceneFrame Borrowed effect inputs; depth defaults to the owned scene attachment. Supply real velocities and projection jitter; reset history after cuts or scene replacement.
 - **param** [atmosphereUniforms] Optional packed background snapshot. Requires atmosphere at creation; null hides it.
+- **param** [attachmentFrame] Borrowed geometry and shared FrameView for auxiliary scene attachments.
+- **param** lightFrame Shared immutable view and complete shadow casters. Pass cameras/targets remain local. Standalone views must retain this renderer's construction-time shadow configuration.
 
 ### destroy
 ```ts
-destroy()
+destroy(): void
 ```
-Release luma.gl resources when the owning game is disposed.
+Release owned passes, buffers, shaders, canvas context, and device in dependency order. Repeated destruction is harmless. Caller-owned environments must be destroyed first.
 
 
 
@@ -442,7 +503,7 @@ Release the current allocation; the borrowed device remains alive.
 Import from `joy-engine`. [Source](../../src/rendering/gpu/gpu-device.ts)
 
 ```ts
-async function createGpuCanvasDevice(canvas: HTMLCanvasElement | OffscreenCanvas, options: GpuDeviceOptions = {}): Promise<Device>
+async function createGpuCanvasDevice(canvas: HTMLCanvasElement | OffscreenCanvas, options: GpuDeviceOptions = {}): Promise<GpuDevice>
 ```
 Create the repository's portable luma.gl device and its default canvas context. Backend registration stays explicit so bundlers include only the adapters the engine supports. A WebGL retry handles browsers that expose WebGPU while failing adapter acquisition; callers can disable it when WebGPU is required.
 
@@ -475,60 +536,6 @@ Resolve an explicit development backend from a URL query. Unknown or absent valu
 - **param** search
 
 
-## bloom
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## bloomShaderPassPipeline
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## createBloomShaderPassPipeline
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## brightnessContrast
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## denoise
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## gaussianBlur
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## hueSaturation
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## noise
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## sepia
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## tiltShift
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## toneMapping
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## vibrance
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## vignette
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## fxaa
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## createMotionBlurShaderPassPipeline
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## createOutlineShaderPassPipeline
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## createSSAOShaderPassPipeline
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## createTAAShaderPassPipeline
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
 ## ShaderPassRenderer
 Import from `joy-engine`. [Source](../../src/rendering/gpu/shader-pass-renderer.ts)
 
@@ -558,12 +565,6 @@ Release pass resources before their borrowed sampler.
 
 
 
-## GLSLShaderAssembler
-Re-exported from `@luma.gl/shadertools` through `joy-engine`. The underlying package owns its API.
-
-## WGSLShaderAssembler
-Re-exported from `@luma.gl/shadertools` through `joy-engine`. The underlying package owns its API.
-
 ## SceneEffects
 Import from `joy-engine`. [Source](../../src/rendering/scene/scene-effects.ts)
 
@@ -573,39 +574,50 @@ Owns optional upstream scene effects and temporal targets. The device and frame 
 ```ts
 constructor(device: Device, options: SceneEffectsOptions = {})
 ```
+Create enabled WebGPU stages, releasing completed stages if initialization fails.
+
+- **param** device Borrowed rendering device; this owner never destroys it.
+- **param** options Effect configuration copied and normalized for this instance.
 
 ### render
 ```ts
 render(sourceTexture: Texture, frame: SceneEffectsFrame = {}): Texture
 ```
-Validate every attachment before resizing or mutating history, then execute scene-linear passes.
+Validate every attachment before resizing or mutating history, then execute scene-linear passes. A failed stage invalidates history for the entire frame and rethrows the original error.
 
+- **param** sourceTexture Borrowed scene color texture matching the configured color format.
+- **param** frame Borrowed attachments, camera matrices, and timing in seconds for this submission.
+- **returns** Borrowed output owned by this instance, valid until the next render, resize, reset, or destroy. Callers must not destroy it. When disabled, returns the caller's borrowed source unchanged.
 
 ### resize
 ```ts
-resize(width: number, height: number)
+resize(width: number, height: number): void
 ```
-Resize owned targets and invalidate history. Drawing-buffer dimensions are positive integer pixels.
+Resize owned targets and invalidate history when drawing-buffer dimensions change.
 
+- **param** width Positive integer drawing-buffer width in pixels.
+- **param** height Positive integer drawing-buffer height in pixels.
 
 ### resetHistory
 ```ts
-resetHistory()
+resetHistory(): void
 ```
-Invalidate history for camera cuts, visibility changes, or resumed rendering.
+Invalidate owned history for camera cuts, visibility changes, or resumed rendering. Throws after destruction; borrowed frame resources remain alive.
 
 
 ### destroy
 ```ts
-destroy()
+destroy(): void
 ```
-Release owned resources; borrowed source, attachments, buffers, and device remain alive.
+Release owned stages in reverse submission order; repeated destruction is harmless. Borrowed source, attachments, buffers, and device remain alive.
 
 
 ### assertAlive
 ```ts
-#assertAlive()
+#assertAlive(): void
 ```
+Reject operations after owned rendering resources have been destroyed.
+
 
 
 ## agxToneMapping
@@ -657,12 +669,6 @@ const vignetteBlur
 Blends an independently blurred scene into the frame near the vignette edge. The renderer borrows `blurredTexture`; its creator retains ownership.
 
 
-
-## ShaderPass
-Re-exported from `@luma.gl/shadertools` through `joy-engine`. The underlying package owns its API.
-
-## ShaderPassPipeline
-Re-exported from `@luma.gl/shadertools` through `joy-engine`. The underlying package owns its API.
 
 ## DEFAULT_POST_PROCESSING
 Import from `joy-engine`. [Source](../../src/rendering/postprocessor/config.ts)
@@ -872,7 +878,7 @@ Return a borrowed frame; unchanged cameras reuse the same bounded array.
 
 
 ## LIT_TRIANGLE_SHADERS
-Import from `joy-engine`. [Source](../../src/rendering/pbr/point-lights.ts)
+Import from `joy-engine`. [Source](../../src/rendering/lighting/point-lights.ts)
 
 ```ts
 const LIT_TRIANGLE_SHADERS
@@ -882,7 +888,7 @@ Flat, double-sided diffuse lighting for XYZ/RGBA opaque triangles. Normals come 
 
 
 ## createPointLightUniforms
-Import from `joy-engine`. [Source](../../src/rendering/pbr/point-lights.ts)
+Import from `joy-engine`. [Source](../../src/rendering/lighting/point-lights.ts)
 
 ```ts
 function createPointLightUniforms(matrix: ArrayLike<number>, lights: readonly PointLight[], ambient: number = 0.3, environment: EnvironmentFrame | null = null)
@@ -897,7 +903,7 @@ Own a camera/tint/light uniform snapshot for one frame. Distances are world unit
 
 
 ## POINT_LIGHT_UNIFORM_BYTES
-Import from `joy-engine`. [Source](../../src/rendering/pbr/point-lights.ts)
+Import from `joy-engine`. [Source](../../src/rendering/lighting/point-lights.ts)
 
 ```ts
 const POINT_LIGHT_UNIFORM_BYTES
@@ -905,7 +911,7 @@ const POINT_LIGHT_UNIFORM_BYTES
 
 
 ## DEFAULT_PBR_LIGHTING
-Import from `joy-engine`. [Source](../../src/rendering/pbr/pbr-triangles.ts)
+Import from `joy-engine`. [Source](../../src/rendering/materials/pbr/pbr-material-pass.ts)
 
 ```ts
 const DEFAULT_PBR_LIGHTING
@@ -926,53 +932,193 @@ constructor(data: MeshAssetData)
 - **param** data Local Y-up geometry.
 
 
-## MeshInstance
-Import from `joy-engine`. [Source](../../src/rendering/scene/mesh-instance.ts)
+## TerrainInstance
+Import from `joy-engine`. [Source](../../src/rendering/scene/terrain-instance.ts)
 
-Mutable presentation state borrowing an immutable MeshAsset. No simulation state.
+Scene-owned resident geometry node. Authored heights and GPU resources remain borrowed.
 
 ### constructor
 ```ts
-constructor(asset: MeshAsset, options: MeshInstanceOptions = {})
+constructor(asset: TerrainAsset, options: TerrainInstanceOptions = {}, scene: RenderScene | null = null)
 ```
-- **param** asset
-- **param** [options]
 
 ### set
 ```ts
-set(options: MeshInstanceOptions)
+override set(options: TerrainInstanceOptions)
 ```
-Copy supplied settings; omitted fields retain their previous value. Distances are world units; rotations use XYZ Euler radians. Zero scale is supported.
+Update local transforms and pass/LOD policy atomically, preserving borrowed geometry.
 
-- **param** options
+
+
+## SceneNode
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-node.ts)
+
+Scene-owned transform node. Mutable local arrays support direct edits; world data is read-only.
+
+### constructor
+```ts
+constructor(options: SceneNodeOptions = {}, scene: RenderScene | null = null)
+```
+
+### identity
+```ts
+get identity(): SceneNode
+```
+Stable identity shared by geometry and temporal-history adapters.
+
+
+### parent
+```ts
+get parent(): SceneNode | null
+```
+
+### children
+```ts
+get children(): ReadonlySet<SceneNode>
+```
+
+### removed
+```ts
+get removed(): boolean
+```
+
+### transformRevision
+```ts
+get transformRevision(): number
+```
+Current own-transform revision, including direct local array edits.
+
+
+### worldRevision
+```ts
+get worldRevision(): number
+```
+
+### worldTransform
+```ts
+get worldTransform(): AffineTransform
+```
+Current world affine transform; translation is at indices 9–11. Removed nodes are invalid.
+
+
+### worldVisible
+```ts
+get worldVisible(): boolean
+```
+
+### set
+```ts
+set(options: SceneNodeOptions)
+```
+Copy local settings. Failed parent validation leaves all settings and hierarchy unchanged.
+
+
+### setParent
+```ts
+setParent(parent: SceneNode | null)
+```
+Reparent within the owning scene, preserving local transforms; reject cycles atomically.
+
+
+### updateWorldTransform
+```ts
+updateWorldTransform()
+```
+- **internal** Update after the parent during the scene's single hierarchy traversal.
+
+### preparedWorldState
+```ts
+preparedWorldState()
+```
+- **internal** Read cached world data after the scene traversal, without walking ancestors again.
+
+### invalidate
+```ts
+invalidate()
+```
+- **internal** The scene removes descendants before releasing this node's hierarchy references.
+
+
+## prepareSceneGeometry
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-geometry.ts)
+
+```ts
+function prepareSceneGeometry(scene: RenderScene): PreparedSceneGeometry[]
+```
+Traverse world transforms once, then collect visible geometry independently of camera culling.
+
+
+
+## MeshInstance
+Import from `joy-engine`. [Source](../../src/rendering/scene/mesh-instance.ts)
+
+Geometry-bearing node borrowing an immutable MeshAsset. No simulation or GPU state.
+
+### constructor
+```ts
+constructor(asset: MeshAsset, options: MeshInstanceOptions = {}, scene: RenderScene | null = null)
+```
+
+### set
+```ts
+override set(options: MeshInstanceOptions)
+```
+Copy supplied local and presentation settings; omitted fields retain their previous values.
+
 
 
 ## RenderScene
 Import from `joy-engine`. [Source](../../src/rendering/scene/render-scene.ts)
 
-Owns presentation instances; assets are borrowed and remain valid after removal.
+Owns a transform hierarchy and presentation instances; all geometry assets remain borrowed.
 
-### constructor
+### nodes
 ```ts
-constructor()
+get nodes(): ReadonlySet<SceneNode>
 ```
+
+### roots
+```ts
+get roots(): ReadonlySet<SceneNode>
+```
+
+### instances
+```ts
+get instances(): ReadonlySet<MeshInstance>
+```
+
+### terrainInstances
+```ts
+get terrainInstances(): ReadonlySet<TerrainInstance>
+```
+
+### createNode
+```ts
+createNode(options: SceneNodeOptions = {}, parent: SceneNode | null = options.parent ?? null)
+```
+Create a transform-only node; the explicit parent overrides options.parent when provided.
+
 
 ### createMesh
 ```ts
-createMesh(asset: MeshAsset, options?: MeshInstanceOptions)
+createMesh(asset: MeshAsset, options: MeshInstanceOptions = {})
 ```
-Create mutable presentation state owned by this scene and borrowing the supplied asset.
+Create scene-owned presentation state borrowing the supplied asset.
 
-- **param** asset
-- **param** [options]
+
+### createTerrain
+```ts
+createTerrain(asset: TerrainAsset, options: TerrainInstanceOptions = {})
+```
+Create a resident terrain node; the renderer owns its device-specific adapter resources.
+
 
 ### remove
 ```ts
-remove(instance: MeshInstance)
+remove(node: SceneNode)
 ```
-Remove an owned instance; repeated removal is harmless.
+Remove an owned node and its full subtree; repeated or foreign removal is harmless.
 
-- **param** instance
 
 ### createCollection
 ```ts
@@ -985,7 +1131,7 @@ Create a scene-owned keyed collection for synchronizing simulation views.
 ```ts
 clear()
 ```
-Release instance references; collections remain reusable until scene destruction.
+Invalidate owned nodes and release references without releasing borrowed assets.
 
 
 ### destroy
@@ -994,6 +1140,24 @@ destroy()
 ```
 Idempotent disposal. The scene owns no GPU resources or simulation objects.
 
+
+### registerNode
+```ts
+registerNode(node: SceneNode)
+```
+- **internal** Register a fully constructed geometry node owned by this scene.
+
+### updateRootNode
+```ts
+updateRootNode(node: SceneNode)
+```
+- **internal** Maintain roots after a validated parent change.
+
+### updateWorldTransforms
+```ts
+updateWorldTransforms()
+```
+- **internal** Update ancestors before descendants in one iterative scene traversal.
 
 ### assertAlive
 ```ts
@@ -1011,8 +1175,11 @@ Owns GPU frame preparation and disposal; borrows camera, scenes and transient ge
 ```ts
 constructor(canvas: HTMLCanvasElement, options: SceneRendererOptions = {})
 ```
-- **param** canvas
-- **param** [options]
+Configure a scene renderer without allocating GPU resources.
+
+- **param** canvas Borrowed canvas; its CSS dimensions determine the visible view.
+- **param** options Borrowed settings copied into this owner; camera remains borrowed.
+- **throws** If requested effects are invalid or the offscreen display path is disabled.
 
 ### initialize
 ```ts
@@ -1020,21 +1187,26 @@ async initialize()
 ```
 Initialize once; destruction during startup releases the late GPU result.
 
+- **returns** Completion of the shared initialization attempt.
+- **throws** If this owner was destroyed or GPU initialization fails.
 
 ### ready
 ```ts
 get ready()
 ```
+- **returns** Whether an initialized GPU renderer is available and this owner is alive.
 
 ### backend
 ```ts
 get backend()
 ```
+- **returns** The active backend, or null before initialization and after disposal.
 
 ### colorFormat
 ```ts
 get colorFormat()
 ```
+- **returns** The offscreen color format, or null when no offscreen target is available.
 
 ### postProcessingConfig
 ```ts
@@ -1054,6 +1226,7 @@ Backend requirements and requested effect availability; null before initializati
 ```ts
 get sceneVolumeStats()
 ```
+- **returns** Borrowed clustered-lighting statistics, or null while that pass is inactive.
 
 ### setSceneEffectsConfig
 ```ts
@@ -1061,6 +1234,8 @@ setSceneEffectsConfig(config: SceneEffectsOptions)
 ```
 Replace individual opt-ins atomically; preserves the working graph if validation fails.
 
+- **param** config Borrowed effect settings copied after successful graph replacement.
+- **throws** If initialization is incomplete or effect validation/allocation fails.
 
 ### resetHistory
 ```ts
@@ -1075,6 +1250,8 @@ getDiagnostics(options: RendererDiagnosticOptions = {}): RendererDiagnostics | n
 ```
 Copy requested global luma counters and this scene's last culling counts. No sampling runs unless called; returns null before initialization or after disposal.
 
+- **param** options Selects optional global luma counters for this sample.
+- **returns** An owned diagnostic snapshot, or null when the GPU renderer is unavailable.
 
 ### render
 ```ts
@@ -1082,8 +1259,8 @@ render(scene: RenderScene, frame: SceneFrameOptions = {}): boolean
 ```
 Render in seconds. Canvas dimensions are CSS pixels; backing density never changes view. Atmosphere must be enabled at construction. A borrowed environment frame drives both background and directional/skylight irradiance; omitting it hides the sky. Transient triangles are a borrowed escape hatch for bespoke procedural feedback/particles.
 
-- **param** scene
-- **param** [frame]
+- **param** scene Borrowed scene; preparing its queues may refresh instance geometry caches.
+- **param** frame Borrowed per-frame geometry, lighting, environment, and timing inputs.
 - **returns** Whether the frame was rendered; false if the renderer is not ready or the canvas is hidden.
 
 ### screenRay
@@ -1092,8 +1269,8 @@ screenRay(clientX: number, clientY: number): WorldRay | null
 ```
 Client CSS pixels to a world ray; independent of backing pixel density.
 
-- **param** clientX
-- **param** clientY
+- **param** clientX Horizontal client position in CSS pixels.
+- **param** clientY Vertical client position in CSS pixels.
 - **returns** World ray or null if the canvas is hidden or has no area.
 
 ### pickGround
@@ -1102,9 +1279,9 @@ pickGround(x: number, y: number, height: number = 0): readonly number[] | null
 ```
 Pick a horizontal plane at world-space height.
 
-- **param** x
-- **param** y
-- **param** [height]
+- **param** x Horizontal client position in CSS pixels.
+- **param** y Vertical client position in CSS pixels.
+- **param** height Horizontal plane height in world units.
 - **returns** World position or null if the canvas is hidden, has no area, or the ray is parallel to the plane.
 
 ### project
@@ -1113,7 +1290,7 @@ project(position: readonly number[]): Vector2 | null
 ```
 World position to canvas-local CSS pixels, or null behind camera/when hidden.
 
-- **param** position
+- **param** position Borrowed XYZ position in world units; never modified.
 - **returns** Canvas-local CSS pixels or null if the position is behind the camera or the canvas is hidden.
 
 ### setPostProcessingConfig
@@ -1122,7 +1299,8 @@ setPostProcessingConfig(config: Partial<PostProcessingConfig>)
 ```
 Set postprocessing configuration. Must be called after initialization and before rendering.
 
-- **param** config
+- **param** config Borrowed replacement display settings; omitted fields reset to defaults.
+- **throws** If initialization is incomplete or settings are invalid.
 
 ### destroy
 ```ts
@@ -1173,6 +1351,18 @@ Intersect a forward ray with dot(normal, point) + offset = 0 in world units.
 - **param** offset
 
 
+## createFrameView
+Import from `joy-engine`. [Source](../../src/rendering/scene/frame-view.ts)
+
+```ts
+function createFrameView(options: FrameViewOptions): FrameView
+```
+Copy borrowed configuration once, compute shared camera transforms, and freeze all CPU data. Plain frozen arrays deliberately replace typed arrays: a readonly typed-array wrapper still exposes mutating methods and a writable backing buffer. GPU upload buffers remain pass-owned.
+
+- **param** options Borrowed camera, viewport, lighting, environment, and shadow configuration.
+- **returns** An owned immutable view; singular camera transforms have null inverse matrices.
+
+
 ## loadTerrain
 Import from `joy-engine`. [Source](../../src/rendering/terrain/terrain-asset.ts)
 
@@ -1181,7 +1371,9 @@ async function loadTerrain(url: string | URL): Promise<TerrainAsset>
 ```
 Load a caller-owned resident heightfield. Binary is uint16 little endian, row-major; source row zero maps to negative world Z, columns to positive X. Scales are explicit world units; camera LOD never changes this data.
 
-- **param** url
+- **param** url URL of the terrain manifest, resolved against the current page when relative.
+- **returns** A caller-owned terrain asset containing copied height samples.
+- **throws** When either request fails or the downloaded asset is invalid.
 
 
 ## decodeTerrain
@@ -1192,8 +1384,10 @@ function decodeTerrain(manifest: TerrainManifest, binary: ArrayBuffer): TerrainA
 ```
 Validate before GPU allocation and decode portable little-endian samples. Copies binary input; consumers must treat returned data as immutable.
 
-- **param** manifest
-- **param** binary
+- **param** manifest Borrowed manifest describing the heightfield and patch hierarchy.
+- **param** binary Borrowed little-endian height payload; it is not retained or mutated.
+- **returns** A caller-owned terrain asset with copied height samples.
+- **throws** When dimensions, metadata, patches, or binary length are invalid.
 
 
 ## sampleTerrain
@@ -1204,9 +1398,10 @@ function sampleTerrain(asset: TerrainAsset, worldX: number, worldZ: number)
 ```
 Stable collision/gameplay sample, independent of camera and render topology. Clamps to landscape bounds. Uses the same diagonal triangle surface at stride 1.
 
-- **param** asset
-- **param** worldX
-- **param** worldZ
+- **param** asset Borrowed resident terrain data.
+- **param** worldX World-space X coordinate.
+- **param** worldZ World-space Z coordinate.
+- **returns** Interpolated world-space height at the clamped coordinate.
 
 
 ## selectTerrain
@@ -1215,10 +1410,11 @@ Import from `joy-engine`. [Source](../../src/rendering/terrain/terrain-selection
 ```ts
 function selectTerrain(asset: TerrainAsset, view: TerrainView): TerrainSelection[]
 ```
-Select fixed quadtree leaves using conservative AABB distance and prebuilt geometric errors. projectionScale is CSS viewport height/(2*tan(vertical FOV/2)). Max cell size is 32 CSS pixels; target distance is horizontal world units. Returns bounded descriptors; no authored heights are scanned here.
+Select fixed quadtree leaves using conservative AABB distance and prebuilt geometric errors. Projection scale is CSS viewport height divided by `2*tan(vertical FOV/2)`. Target distance is measured in horizontal world units. No authored heights are scanned or mutated.
 
-- **param** asset
-- **param** view
+- **param** asset Borrowed resident terrain and its immutable patch hierarchy.
+- **param** view Borrowed camera and protected-target state.
+- **returns** New bounded descriptors with cells limited to 32 CSS pixels.
 
 
 ## reconcileTerrainEdges
@@ -1227,75 +1423,95 @@ Import from `joy-engine`. [Source](../../src/rendering/terrain/terrain-selection
 ```ts
 function reconcileTerrainEdges(asset: TerrainAsset, details: number[]): TerrainSelection[]
 ```
-Both sides use the coarser fractional lattice, including its continuous morph. Endpoints are authored tile corners at all supported levels, so four-way corners remain invariant. Arbitrary neighbor ratios are supported.
+Reconcile each patch with the coarser fractional lattice of its neighbors. Endpoints remain authored tile corners at every supported level, so four-way corners agree.
 
-- **param** asset
-- **param** details
+- **param** asset Borrowed terrain whose patches use complete row-major ordering.
+- **param** details Borrowed fractional LOD values in patch order.
+- **returns** New per-patch descriptors with edges ordered -X, +X, -Z, +Z.
 
 
 ## sampleMorphedHeight
 Import from `joy-engine`. [Source](../../src/rendering/terrain/terrain-selection.ts)
 
 ```ts
-function sampleMorphedHeight(asset: TerrainAsset, patchIndex: number, x: number, z: number, selection: TerrainSelection)
+function sampleMorphedHeight(
+  asset: TerrainAsset,
+  patchIndex: number,
+  x: number,
+  z: number,
+  selection: TerrainSelection): number
 ```
-CPU reference for shader parity and seam validation; local coordinates in samples.
+Sample the CPU reference surface used for shader parity and seam validation.
 
-- **param** asset
-- **param** patchIndex
-- **param** x
-- **param** z
-- **param** selection
+- **param** asset Borrowed resident terrain data.
+- **param** patchIndex Row-major patch index.
+- **param** x Patch-local X coordinate in samples.
+- **param** z Patch-local Z coordinate in samples.
+- **param** selection Borrowed fractional LOD and reconciled edge values.
+- **returns** World-space height on the continuously morphed triangle surface.
 
 
 ## TerrainRenderer
 Import from `joy-engine`. [Source](../../src/rendering/terrain/terrain-renderer.ts)
 
-Resident indexed terrain pass. Borrows device, asset and caller's depth-tested render pass. Call prepare before starting the render pass; WebGPU writes and ordered compute must precede draws. Destroy before the borrowed device.
+TerrainRenderer Class Definition. Resident indexed terrain pass. Borrows device, asset, and caller's depth-tested render pass. Call prepare before starting the render pass; WebGPU writes and ordered compute must precede draws. Destroy before the borrowed device.
 
 ### constructor
 ```ts
 constructor(device: Device, asset: TerrainAsset, colorFormat?: TextureFormatColor)
 ```
-- **param** device
-- **param** asset
-- **param** [colorFormat]
+Create resident terrain resources and roll back all completed allocations on failure.
+
+- **param** device Borrowed rendering device that must outlive this renderer.
+- **param** asset Borrowed immutable terrain asset that must outlive this renderer.
+- **param** colorFormat Optional color attachment format for the render pipeline.
 
 ### ready
 ```ts
-async ready()
+async ready(): Promise<void>
 ```
 Await pipeline validation before first use; native WebGPU pipeline creation validates shader entry points. Poll its status rather than requesting duplicate compilation-info promises (the adapter already owns those diagnostics).
 
 
 ### prepare
 ```ts
-prepare(matrix: ArrayLike<number>, view: TerrainView, diagnostic: number = 0)
+prepare(
+    matrix: ArrayLike<number>,
+    view: TerrainView,
+    diagnostic: number = TERRAIN_DIAGNOSTIC.MATERIAL): void
 ```
 Update selection/morphs and enqueue compute on WebGPU. Never reads GPU data. Matrix uses backend clip convention; projectionScale uses CSS pixels, so DPI does not change render quality. CPU timing includes selection/submission only.
 
-- **param** matrix
-- **param** view
-- **param** [diagnostic] 0 material, 1 LOD colors, 2 grid overlay.
+- **param** matrix Borrowed column-major view-projection matrix using the active backend's clip convention.
+- **param** view Borrowed camera and target state; projection scale is measured in CSS pixels.
+- **param** diagnostic Diagnostic mode: 0 material, 1 LOD colors, or 2 grid overlay.
+- **throws** When the renderer is disposed or frame inputs are invalid.
 
 ### draw
 ```ts
-draw(pass: RenderPass)
+draw(pass: RenderPass): void
 ```
 Draw into a borrowed pass; does not clear/submit or own its framebuffer.
 
-- **param** pass
+- **param** pass Borrowed active depth-tested render pass; it is not ended or submitted here.
+
+### drawGeometry
+```ts
+drawGeometry(pass: RenderPass, pipeline: RenderPipeline, bindings: Record<string, Binding>): void
+```
+Record resident indexed geometry with a borrowed scene or shadow pipeline.
+
 
 ### destroy
 ```ts
-destroy()
+destroy(): void
 ```
 Release only owned resources; repeated disposal is harmless.
 
 
 
 ## PbrEnvironment
-Import from `joy-engine`. [Source](../../src/rendering/pbr/pbr-environment.ts)
+Import from `joy-engine`. [Source](../../src/rendering/environment/pbr-environment.ts)
 
 Owns luma-generated irradiance, filtered reflection, and BRDF textures. Source textures and the device are borrowed. Prepare submits integration work; call during setup or environment replacement, never from ordinary frame rendering.
 

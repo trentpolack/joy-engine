@@ -23,7 +23,7 @@ function mesh(source = null, alphaMode = 'OPAQUE') {
   };
 }
 
-// The engine half of this scenario (PbrTriangles keeps the accepted upload when a newer
+// The engine half of this scenario (PbrMaterialPass keeps the accepted upload when a newer
 // image load fails) is covered in joy-engine/test/pbr-triangles.test.mjs. This case owns
 // the editor half: CPU point/grid data must stay paired with the accepted mesh.
 test('FORM LAB retains matching point data when a newer image load fails after a successful mesh commit', async () => {

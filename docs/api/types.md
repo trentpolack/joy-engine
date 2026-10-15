@@ -133,6 +133,64 @@ interface AudioBankOptions {
 ```
 
 
+## GameShellFrame
+Import from `joy-engine`. [Source](../../src/runtime/game-shell.ts)
+
+```ts
+interface GameShellFrame<TConfiguration, TRenderer, TInput> {
+  configuration: TConfiguration;
+  renderer: TRenderer;
+  input: TInput;
+  devTools: DevTools;
+  elapsedSeconds: number;
+  timeSeconds: number;
+  timestampMilliseconds: number;
+}
+```
+
+
+## GameShellOptions
+Import from `joy-engine`. [Source](../../src/runtime/game-shell.ts)
+
+```ts
+interface GameShellOptions<TConfiguration, TRenderer extends GameShellResource, TInput extends GameShellResource> {
+  title: string;
+  development: boolean;
+  createConfiguration(): TConfiguration;
+  createRenderer(configuration: TConfiguration): Promise<TRenderer>;
+  createInput(renderer: TRenderer, configuration: TConfiguration): TInput;
+  initialize?(shell: GameShell<TConfiguration, TRenderer, TInput>): Promise<void> | void;
+  input?: GameShellPhase<TConfiguration, TRenderer, TInput>;
+  simulation?: GameShellPhase<TConfiguration, TRenderer, TInput>;
+  presentation?: GameShellPhase<TConfiguration, TRenderer, TInput>;
+  render: GameShellPhase<TConfiguration, TRenderer, TInput>;
+  afterFrame?: GameShellPhase<TConfiguration, TRenderer, TInput>;
+  dispose?(shell: GameShell<TConfiguration, TRenderer, TInput>): void;
+  fail(error: unknown): void;
+  maximumFrameSeconds?: number;
+}
+```
+
+
+## GameShellPhase
+Import from `joy-engine`. [Source](../../src/runtime/game-shell.ts)
+
+```ts
+type GameShellPhase<TConfiguration, TRenderer, TInput> =
+  (frame: GameShellFrame<TConfiguration, TRenderer, TInput>) => void;
+```
+
+
+## GameShellResource
+Import from `joy-engine`. [Source](../../src/runtime/game-shell.ts)
+
+```ts
+interface GameShellResource {
+  destroy(): void;
+}
+```
+
+
 ## EnvironmentOptions
 Import from `joy-engine`. [Source](../../src/environment/environment-system.ts)
 
@@ -242,6 +300,150 @@ Import from `joy-engine`. [Source](../../src/gameplay/entity-world.ts)
 interface EntityWorldOptions {
   registry?: EntityRegistry;
   componentRegistry?: ComponentRegistry;
+}
+```
+
+
+## WorldOptions
+Import from `joy-engine`. [Source](../../src/gameplay/world.ts)
+
+```ts
+interface WorldOptions {
+  entities?: EntityWorldOptions;
+  physics?: PhysicsWorldOptions;
+  /** Borrowed solver; when present, physics options are invalid and the caller retains ownership. */
+  physicsWorld?: PhysicsWorld;
+}
+```
+
+
+## WorldStep
+Import from `joy-engine`. [Source](../../src/gameplay/world.ts)
+
+```ts
+interface WorldStep {
+  readonly elapsedSeconds: number;
+  readonly physicsSteps: number;
+}
+```
+
+
+## ComponentSchema
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+interface ComponentSchema {
+  readonly type: string;
+  readonly label: string;
+  readonly description: string;
+  /** Display group, normally a `COMPONENT_CATEGORY` value. */
+  readonly category: string;
+  readonly fields: readonly ComponentFieldSchema[];
+  /** Starting records offered when adding the component; at least one is required. */
+  readonly presets: readonly ComponentPreset[];
+  /** Component types this component needs on the same entity. */
+  readonly requires?: readonly string[];
+}
+```
+Authoring contract for one component type. Schemas describe authored JSON for tools and validation; runtime behavior stays with the systems that interpret the component. Fields outside the schema remain valid custom data and round-trip unchanged.
+
+
+
+## ComponentFieldSchema
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+interface ComponentFieldSchema {
+  /** Own property name inside the component record. */
+  readonly name: string;
+  readonly kind: ComponentFieldKind;
+  /** Inspector label; the field name is used when omitted. */
+  readonly label?: string;
+  /** One sentence of authoring help. */
+  readonly description?: string;
+  /** Display unit for numbers and vectors, such as `m`, `kg` or `s`. */
+  readonly unit?: string;
+  /** Runtime value for an omitted field. Absent means omission carries no implied value. */
+  readonly default?: JsonValue;
+  /** Report omission (or an empty asset path) as an issue. */
+  readonly required?: boolean;
+  /** Inclusive lower bound, or exclusive when `minExclusive` is true. */
+  readonly min?: number;
+  readonly minExclusive?: boolean;
+  /** Inclusive upper bound. */
+  readonly max?: number;
+  /** Suggested control increment; validation does not quantize to it. */
+  readonly step?: number;
+  readonly integer?: boolean;
+  /** Accepted values for `choice` fields. */
+  readonly choices?: readonly string[];
+  /** Workspace asset kinds (file extensions without the dot) accepted by `asset` fields. */
+  readonly assetKinds?: readonly string[];
+  /** Fields of each record item in a `list` field. */
+  readonly items?: readonly ComponentFieldSchema[];
+  readonly when?: ComponentFieldCondition;
+}
+```
+One authored field inside a component record. Numbers, vectors and colors share bounds per channel. `default` is the value the runtime assumes when the field is omitted; it is never written for the author.
+
+
+
+## ComponentFieldKind
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+type ComponentFieldKind = typeof COMPONENT_FIELD_KIND[keyof typeof COMPONENT_FIELD_KIND];
+```
+
+
+## ComponentFieldCondition
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+interface ComponentFieldCondition {
+  readonly field: string;
+  readonly equals: readonly string[];
+}
+```
+Show a field only while a sibling choice holds one of the listed values, e.g. box half extents only while `shape` is `box`.
+
+
+
+## ComponentPreset
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+interface ComponentPreset {
+  readonly id: string;
+  readonly label: string;
+  readonly data: JsonRecord;
+}
+```
+A named starting record offered when an author adds a component, e.g. a box collider or a FORM mesh. Preset ids are unique across a catalog.
+
+
+
+## ComponentIssue
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+interface ComponentIssue {
+  readonly component: string;
+  readonly field: string | null;
+  readonly message: string;
+}
+```
+One advisory validation result. `field` is a dotted path inside the component record (`wheels.2.radius`), or null for whole-component problems.
+
+
+
+## ComponentSchemaCatalogOptions
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+interface ComponentSchemaCatalogOptions {
+  /** Register the engine's built-in schemas first; defaults to true. */
+  builtIns?: boolean;
 }
 ```
 
@@ -619,7 +821,7 @@ interface RendererDiagnostics {
   resources: Record<string, {active: number | null; created: number | null}> | null;
   /** Existing scene culling counts for this renderer's most recent rendered frame. */
   scene?: {visible: number; culled: number};
-  /** Per-renderer recorded shadow work; shared lights may occur in both colored and PBR passes. */
+  /** Per-renderer recorded shadow work; all geometry adapters share each recorded light view. */
   shadows?: {available: boolean; castingPointLights: number; castingDirectionalLights: number; batches: number; views: number};
 }
 ```
@@ -689,8 +891,8 @@ type SceneEffectsFrame = {
   nearPlane?: number;
   farPlane?: number;
   projection?: 'perspective' | 'orthographic';
-  currentJitter?: [number, number];
-  previousJitter?: [number, number];
+  currentJitter?: readonly [number, number];
+  previousJitter?: readonly [number, number];
   directionalLightDirectionView?: readonly [number, number, number];
   directionalLightColor?: readonly [number, number, number];
   clusteredLighting?: SceneVolumeLightBindings;
@@ -710,6 +912,16 @@ Import from `joy-engine`. [Source](../../src/rendering/gpu/gpu-device.ts)
 ```ts
 type GpuBackend = typeof GPU_BACKEND.BEST_AVAILABLE | typeof GPU_BACKEND.WEBGPU | typeof GPU_BACKEND.WEBGL;
 ```
+
+
+## GpuDevice
+Import from `joy-engine`. [Source](../../src/rendering/gpu/gpu-device.ts)
+
+```ts
+type GpuDevice = Device;
+```
+Engine name for the portable GPU device returned by `createGpuCanvasDevice`. Consumers pass it to engine owners such as `TerrainRenderer` and `SceneEffects` and destroy it after them; naming it here keeps the backend package out of consumer code.
+
 
 
 ## PostProcessingProfile
@@ -1079,8 +1291,75 @@ World-space camera and lighting for a material pass. RGB light values are linear
 
 
 
+## SceneGeometrySnapshot
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-geometry.ts)
+
+```ts
+interface SceneGeometrySnapshot {
+  readonly kind: 'mesh' | 'terrain';
+  readonly identity: SceneNode;
+  readonly node: SceneNode;
+  readonly localBounds: GeometryBounds;
+  readonly worldBounds: GeometryBounds;
+  readonly worldTransform: AffineTransform;
+  readonly worldRevision: number;
+  readonly coverage: 'opaque' | 'transparent';
+  readonly castsShadow: boolean;
+  readonly receivesShadow: boolean;
+}
+```
+Representation-independent world snapshot consumed by color, depth, and shadow adapters.
+
+
+
+## PreparedMeshGeometry
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-geometry.ts)
+
+```ts
+interface PreparedMeshGeometry extends SceneGeometrySnapshot {
+  readonly kind: typeof SCENE_GEOMETRY_KIND.MESH;
+  readonly instance: MeshInstance;
+  readonly asset: MeshAsset;
+}
+```
+Mesh adapter data borrows authored asset channels without copying them.
+
+
+
+## PreparedTerrainGeometry
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-geometry.ts)
+
+```ts
+interface PreparedTerrainGeometry extends SceneGeometrySnapshot {
+  readonly kind: typeof SCENE_GEOMETRY_KIND.TERRAIN;
+  readonly instance: TerrainInstance;
+  readonly asset: TerrainAsset;
+}
+```
+Resident terrain snapshot retains indexed authored geometry outside the CPU triangle queues.
+
+
+
+## PreparedTerrainPacket
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-geometry.ts)
+
+```ts
+interface PreparedTerrainPacket extends PreparedTerrainGeometry {
+  readonly visible: boolean;
+}
+```
+
+
+## PreparedSceneGeometry
+Import from `joy-engine`. [Source](../../src/rendering/scene/scene-geometry.ts)
+
+```ts
+type PreparedSceneGeometry = PreparedMeshGeometry | PreparedTerrainGeometry;
+```
+
+
 ## PointLight
-Import from `joy-engine`. [Source](../../src/rendering/pbr/point-lights.ts)
+Import from `joy-engine`. [Source](../../src/rendering/lighting/point-lights.ts)
 
 ```ts
 interface PointLight {
@@ -1117,23 +1396,78 @@ Local Y-up indexed mesh input. Optional attributes are empty or vertex-aligned.
 
 
 
+## AffineTransform
+Import from `joy-engine`. [Source](../../src/core/types.ts)
+
+```ts
+type AffineTransform = readonly [number, number, number, number, number, number, number, number, number, number, number, number];
+```
+Column-major affine basis columns followed by XYZ translation; supports shear.
+
+
+
+## GeometryBounds
+Import from `joy-engine`. [Source](../../src/core/types.ts)
+
+```ts
+interface GeometryBounds {
+  readonly min: readonly number[];
+  readonly max: readonly number[];
+}
+```
+Conservative axis-aligned bounds in the coordinate space of the consuming API.
+
+
+
+## SceneNodeOptions
+Import from `joy-engine`. [Source](../../src/core/types.ts)
+
+```ts
+interface SceneNodeOptions {
+  parent?: SceneNode | null;
+  position?: readonly number[];
+  rotation?: readonly number[];
+  scale?: readonly number[];
+  visible?: boolean;
+}
+```
+Local transform settings. Euler radians apply X, then Y, then Z. Parenting preserves local values.
+
+
+
 ## MeshInstanceOptions
 Import from `joy-engine`. [Source](../../src/core/types.ts)
 
 ```ts
-interface MeshInstanceOptions {
-  position?: readonly number[];
-  rotation?: readonly number[];
-  scale?: readonly number[];
+interface MeshInstanceOptions extends SceneNodeOptions {
   tint?: readonly number[];
   opacity?: number;
-  visible?: boolean;
+  /** Solid geometry casts and receives shadows by default. Transparent geometry never casts opaque shadows. */
+  castsShadow?: boolean;
+  receivesShadow?: boolean;
   pass?: 'auto' | 'opaque' | 'transparent';
   /** Perceptual surface roughness for screen-space effects, zero polished to one matte. */
   sceneRoughness?: number;
 }
 ```
-Mutable instance settings. Euler angles are radians, applied X then Y then Z.
+Mesh presentation settings; the scene borrows the asset and owns the node.
+
+
+
+## TerrainInstanceOptions
+Import from `joy-engine`. [Source](../../src/core/types.ts)
+
+```ts
+interface TerrainInstanceOptions extends SceneNodeOptions {
+  castsShadow?: boolean;
+  receivesShadow?: boolean;
+  tolerance?: number;
+  targetRadius?: number;
+  /** Zero is normal shading; positive values select the terrain adapter diagnostic. */
+  diagnostic?: number;
+}
+```
+Resident terrain settings. Tolerance is CSS pixels; targetRadius is world units.
 
 
 
@@ -1142,17 +1476,23 @@ Import from `joy-engine`. [Source](../../src/rendering/scene/scene-renderer.ts)
 
 ```ts
 interface SceneRendererOptions {
-  /** WebGPU geometric shadows default to enabled. WebGL 2 retains illumination without shadows. */
+  /**
+   * WebGPU geometric shadows default to enabled. WebGL 2 retains illumination without shadows.
+   */
   shadows?: ShadowOptions | false;
   camera?: OrbitCamera;
   atmosphere?: boolean;
   pixelRatio?: number;
   postProcessing?: Partial<PostProcessingConfig> | false;
   device?: GpuDeviceOptions;
-  /** Individual WebGPU effect opt-ins. Opaque scene effects precede transparency and HDR display processing. */
+  /**
+   * Individual WebGPU effect opt-ins. Opaque scene effects precede transparency and HDR display processing.
+   */
   sceneEffects?: SceneEffectsOptions;
 }
 ```
+Construction settings; the renderer borrows its canvas and camera and owns GPU resources.
+
 
 
 ## SceneFrameOptions
@@ -1168,12 +1508,141 @@ interface SceneFrameOptions {
   opaqueTriangles?: readonly number[];
   transparentTriangles?: readonly number[];
   culling?: boolean;
-  /** Seconds since the preceding rendered frame, for exposure adaptation. */
+  /**
+   * Seconds since the preceding rendered frame, for exposure adaptation.
+   */
   deltaTimeSeconds?: number;
-  /** Explicit camera cut, teleport, procedural topology change or other discontinuity. */
+  /**
+   * Explicit camera cut, teleport, procedural topology change or other discontinuity.
+   */
   resetHistory?: boolean;
 }
 ```
+Borrowed scene inputs for one submission; time is in seconds and geometry is world-space.
+
+
+
+## FrameView
+Import from `joy-engine`. [Source](../../src/rendering/scene/frame-view.ts)
+
+```ts
+interface FrameView {
+  readonly camera: FrameCamera;
+  readonly viewport: FrameViewport;
+  readonly lighting: {
+    readonly lights: readonly Readonly<PointLight>[];
+    readonly ambient: number;
+    readonly directional: Immutable<AtmosphereLight> | null;
+  };
+  readonly environment: Immutable<EnvironmentFrame> | null;
+  readonly shadows: Readonly<ShadowOptions> | false;
+}
+```
+One owned, deeply immutable CPU snapshot per scene submission. Matrices, light records, environment, and shadow settings are copied before any feature runs. World space is Y-up, distances are world units, and lighting is linear RGB. No render target or pass override belongs here; features retain this same snapshot for the duration of the submission.
+
+
+
+## FrameViewOptions
+Import from `joy-engine`. [Source](../../src/rendering/scene/frame-view.ts)
+
+```ts
+interface FrameViewOptions {
+  camera: ShadowCameraFrame & {
+    eye: readonly number[];
+    backward: readonly number[];
+  };
+  viewport: {
+    cssWidth: number;
+    cssHeight: number;
+    pixelRatio: number;
+  };
+  jitter?: readonly [number, number];
+  lights?: readonly PointLight[];
+  ambient?: number;
+  environment?: EnvironmentFrame;
+  /** Explicit direct light for low-level scenes without an atmosphere. Omission uses the environment. */
+  directional?: AtmosphereLight | null;
+  shadows?: ShadowOptions | false;
+}
+```
+Borrowed CPU inputs copied during view creation; subsequent caller edits cannot alter the view.
+
+
+
+## FrameCamera
+Import from `joy-engine`. [Source](../../src/rendering/scene/frame-view.ts)
+
+```ts
+interface FrameCamera {
+  readonly viewMatrix: readonly number[];
+  readonly projectionMatrix: readonly number[];
+  readonly viewProjectionMatrix: readonly number[];
+  readonly rasterProjectionMatrix: readonly number[];
+  readonly rasterViewProjectionMatrix: readonly number[];
+  readonly inverseViewMatrix: readonly number[] | null;
+  readonly inverseProjectionMatrix: readonly number[] | null;
+  readonly inverseViewProjectionMatrix: readonly number[] | null;
+  readonly inverseRasterViewProjectionMatrix: readonly number[] | null;
+  readonly nearPlane: number;
+  readonly farPlane: number;
+  readonly eye: Readonly<Vector3>;
+  readonly backward: Readonly<Vector3>;
+  /** Top-left UV units. The inverse projection reconstructs jittered raster depth. */
+  readonly jitter: readonly [number, number];
+}
+```
+Column-major camera snapshots. Unjittered matrices drive culling and shadow fitting.
+
+
+
+## FrameViewport
+Import from `joy-engine`. [Source](../../src/rendering/scene/frame-view.ts)
+
+```ts
+interface FrameViewport {
+  readonly cssWidth: number;
+  readonly cssHeight: number;
+  readonly pixelRatio: number;
+  readonly width: number;
+  readonly height: number;
+}
+```
+CSS dimensions preserve the view; width and height are physical backing pixels.
+
+
+
+## RenderPassContext
+Import from `joy-engine`. [Source](../../src/rendering/scene/render-pass-context.ts)
+
+```ts
+interface RenderPassContext {
+  readonly camera: PassCamera | null;
+  readonly target: Framebuffer;
+  readonly viewport: Readonly<{
+    width: number;
+    height: number;
+  }>;
+  readonly renderPass: RenderPass;
+}
+```
+Borrowed GPU handles and camera overrides for one recorded pass. This context owns no resources; the caller ends the pass, and the target owner destroys its attachments. Shadow cameras and intermediate targets never replace any part of the shared FrameView. A null camera supports low-level callers that supply only custom packed shader uniforms.
+
+
+
+## PassCamera
+Import from `joy-engine`. [Source](../../src/rendering/scene/render-pass-context.ts)
+
+```ts
+interface PassCamera {
+  readonly viewMatrix: readonly number[];
+  readonly projectionMatrix: readonly number[];
+  readonly viewProjectionMatrix: readonly number[];
+  readonly nearPlane: number;
+  readonly farPlane: number;
+}
+```
+Pass-local column-major transforms and clip distances in world units.
+
 
 
 ## InputAction
@@ -1291,16 +1760,37 @@ Import from `joy-engine`. [Source](../../src/rendering/shadows/types.ts)
 
 ```ts
 interface ShadowOptions {
+  /**
+   * Shadow sampling quality preset; omitted uses the named default.
+   */
   quality?: 'low' | 'balanced' | 'cinematic';
+  /**
+   * Directional depth-map width and height in pixels; omitted uses the backend quality preset.
+   */
   directionalMapSize?: number;
+  /**
+   * Point-light cube-face width and height in pixels; omitted uses the backend quality preset.
+   */
   pointMapSize?: number;
+  /**
+   * Receiver displacement along its world-space normal, in world units.
+   */
   normalBias?: number;
+  /**
+   * Constant caster raster bias in backend depth units.
+   */
   depthBias?: number;
+  /**
+   * Caster depth bias scaled by the depth slope; dimensionless.
+   */
   depthBiasSlopeScale?: number;
+  /**
+   * Maximum directional shadow distance from the camera, in world units.
+   */
   shadowDistance?: number;
 }
 ```
-Quality and bias in world units (normal bias), depth units, and world-space shadow distance.
+ShadowOptions Interface Definition. Caller-owned configuration copied by shadow resource owners. Biases and distance must be finite and nonnegative when configuring SceneShadows.
 
 
 
@@ -1315,7 +1805,7 @@ interface ShadowCameraFrame {
   farPlane: number;
 }
 ```
-Borrowed column-major world-to-view and WebGPU projection matrices; clip distances are world units.
+ShadowCameraFrame Interface Definition. Borrowed column-major world-to-view and WebGPU projection matrices, unchanged by preparation. Each matrix contains 16 values; clip distances are in world units and remain valid for the call.
 
 
 
@@ -1324,19 +1814,22 @@ Import from `joy-engine`. [Source](../../src/rendering/shadows/types.ts)
 
 ```ts
 interface SceneLightFrame {
-  camera: ShadowCameraFrame;
-  lights: readonly PointLight[];
-  directional: AtmosphereLight | null;
-  /** Complete opaque XYZ/RGBA caster triangles, including objects outside the camera frustum. */
+  readonly view: FrameView;
+  /**
+   * Complete opaque world-space XYZ/RGBA caster triangles, including objects outside the camera frustum.
+   * Input remains caller-owned and must be valid until preparation returns.
+   */
   casters: number[] | Float32Array;
+  /** Camera-visible opaque runs; omitted means every colored receiver accepts shadows. */
+  receivesShadowRanges?: readonly {firstVertex: number; vertexCount: number; receivesShadow: boolean}[];
 }
 ```
-Borrowed lighting/caster data for the default lit triangle pass.
+SceneLightFrame Interface Definition. Shared immutable view and borrowed caster geometry for one default lit-triangle preparation. Preparation copies geometry into owned GPU storage and leaves this record and its inputs unchanged.
 
 
 
 ## PbrEnvironmentOptions
-Import from `joy-engine`. [Source](../../src/rendering/pbr/pbr-environment.ts)
+Import from `joy-engine`. [Source](../../src/rendering/environment/pbr-environment.ts)
 
 ```ts
 type PbrEnvironmentOptions = Omit<PreparePBREnvironmentOptions, 'source' | 'intensity' | 'rotation'>;
@@ -1344,7 +1837,7 @@ type PbrEnvironmentOptions = Omit<PreparePBREnvironmentOptions, 'source' | 'inte
 
 
 ## PbrEnvironmentPixels
-Import from `joy-engine`. [Source](../../src/rendering/pbr/pbr-environment.ts)
+Import from `joy-engine`. [Source](../../src/rendering/environment/pbr-environment.ts)
 
 ```ts
 interface PbrEnvironmentPixels {

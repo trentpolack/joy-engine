@@ -8,6 +8,8 @@ import type { ParticleCameraBasis } from '../particles/rendering.ts';
 import type { ParameterValue } from '../form/parameters.ts';
 import type { CompiledParticleEffect } from '../particles/asset.ts';
 import type { RenderScene } from '../rendering/scene/render-scene.ts';
+import { COMPONENT_TYPE } from './constants.ts';
+import { EFFECT_COMPONENT_DEFAULTS } from './built-in-component-schemas.ts';
 import { LevelScene } from './level-scene.ts';
 import { copyEntityDefinition } from './entity-definition.ts';
 import { resolveLevelObjects } from './object-document.ts';
@@ -99,7 +101,7 @@ export class AssetScene {
     const effectCache: Map<string, CompiledParticleEffect> = new Map();
     try {
       for(const entity of resolved.entities) {
-        const render = entity.components.render;
+        const render = entity.components[COMPONENT_TYPE.RENDER];
         if(render?.asset) {
           const path = assetPath(render.asset, ['.form', '.formlab']);
           const text = await read(path);
@@ -122,7 +124,7 @@ export class AssetScene {
           meshCache.set(key, mesh);
           meshes.set(entity.id, mesh);
         }
-        const settings = entity.components.effect;
+        const settings = entity.components[COMPONENT_TYPE.EFFECT];
         if(settings?.asset && settings.enabled !== false) {
           const path = assetPath(settings.asset, ['.joyfx']);
           const text = await read(path);
@@ -139,7 +141,7 @@ export class AssetScene {
           if(previous?.key === key) {
             effects.set(entity.id, previous);
           } else {
-            const seed = settings.seed === undefined ? 7777 : Number(settings.seed);
+            const seed = settings.seed === undefined ? EFFECT_COMPONENT_DEFAULTS.seed : Number(settings.seed);
             const effect = new ParticleEffect(definition, {seed, parameters:  ((parameterRecord(settings.parameters)) as ParticleEffectOptions['parameters'])});
             created.push(effect);
             effect.step();

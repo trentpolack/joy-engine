@@ -6,6 +6,7 @@ import {readFile, writeFile, mkdir, rm, readdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {createServer} from 'vite';
 import {chromium, expect} from '@playwright/test';
+import {COMPONENT_PRESET} from 'joy-engine/constants';
 import {createAssetText} from '../site/src/workspace/asset-types.ts';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
@@ -37,7 +38,7 @@ try {
   await frame.locator('#entity-name').fill('Beacon');
   await frame.locator('#entity-name').press('Tab');
   await frame.getByRole('button', {name: 'Remove render', exact: true}).click();
-  await frame.locator('#component-kind').selectOption('mesh');
+  await frame.locator('#component-kind').selectOption(COMPONENT_PRESET.RENDER_MESH);
   await frame.locator('#add-component').click();
   await frame.getByLabel('render.asset', {exact: true}).selectOption(`assets/${paths.form}`);
   await frame.locator('#viewport').focus();
@@ -50,7 +51,7 @@ try {
   await frame.locator('#redo').click();
   await expect(width).toHaveValue('2');
   console.log('PASS compiler parameter defaults and property undo/redo');
-  await frame.locator('#component-kind').selectOption('effect');
+  await frame.locator('#component-kind').selectOption(COMPONENT_PRESET.EFFECT_PARTICLES);
   await frame.locator('#add-component').click();
   await frame.getByLabel('effect.asset', {exact: true}).selectOption(`assets/${paths.joyfx}`);
   await frame.locator('#viewport').focus();

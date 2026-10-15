@@ -1,44 +1,78 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
+import type { TerrainAsset } from '../terrain/terrain-asset.ts';
 import type { MeshAsset } from './mesh-asset.ts';
-import type { MeshInstanceOptions } from '../../core/types.ts';
+import type { MeshInstanceOptions, SceneNodeOptions, TerrainInstanceOptions } from '../../core/types.ts';
 import type { PreparedMesh } from './mesh-frame.ts';
 
+import { TerrainInstance } from './terrain-instance.ts';
+import { SceneNode } from './scene-node.ts';
 import { MeshInstance } from './mesh-instance.ts';
 import { MeshCollection } from './mesh-collection.ts';
 
-/** Owns presentation instances; assets are borrowed and remain valid after removal. */
+/** Owns a transform hierarchy and presentation instances; all geometry assets remain borrowed. */
 export class RenderScene {
-  declare instances: Set<MeshInstance>;
-  private declare collections: Set<MeshCollection>;
-  declare frameCache: WeakMap<MeshInstance, PreparedMesh>;
-  declare destroyed: boolean;
+  private readonly ownedNodes = new Set<SceneNode>();
+  private readonly rootNodes = new Set<SceneNode>();
+  private readonly meshInstances = new Set<MeshInstance>();
+  private readonly terrains = new Set<TerrainInstance>();
+  private readonly collections = new Set<MeshCollection>();
+  /** @internal Scene-owned world vertex cache. */
+  frameCache = new WeakMap<MeshInstance, PreparedMesh>();
+  destroyed = false;
 
-  constructor() {
-    /** Read-only to consumers; mutate through scene methods. */
-    this.instances = new Set();
-    /** @private */
-    this.collections = new Set();
-    /** @internal */
-    this.frameCache = new WeakMap();
-    this.destroyed = false;
+  get nodes(): ReadonlySet<SceneNode> { return this.ownedNodes; }
+  get roots(): ReadonlySet<SceneNode> { return this.rootNodes; }
+  get instances(): ReadonlySet<MeshInstance> { return this.meshInstances; }
+  get terrainInstances(): ReadonlySet<TerrainInstance> { return this.terrains; }
+
+  /** Create a transform-only node; the explicit parent overrides options.parent when provided. */
+  createNode(options: SceneNodeOptions = {}, parent: SceneNode | null = options.parent ?? null) {
+    this.assertAlive();
+    const node = new SceneNode({...options, parent}, this);
+    this.registerNode(node);
+    return node;
   }
 
-  /** Create mutable presentation state owned by this scene and borrowing the supplied asset.
-   * @param asset
-   * @param [options]
-   */
-  createMesh(asset: MeshAsset, options?: MeshInstanceOptions) {
+  /** Create scene-owned presentation state borrowing the supplied asset. */
+  createMesh(asset: MeshAsset, options: MeshInstanceOptions = {}) {
     this.assertAlive();
-    const instance = new MeshInstance(asset, options);
-    this.instances.add(instance);
+    const instance = new MeshInstance(asset, options, this);
+    this.registerNode(instance);
     return instance;
   }
 
-  /** Remove an owned instance; repeated removal is harmless. @param instance */
-  remove(instance: MeshInstance) {
-    this.instances.delete(instance);
+  /** Create a resident terrain node; the renderer owns its device-specific adapter resources. */
+  createTerrain(asset: TerrainAsset, options: TerrainInstanceOptions = {}) {
+    this.assertAlive();
+    const instance = new TerrainInstance(asset, options, this);
+    this.registerNode(instance);
+    return instance;
+  }
+
+  /** Remove an owned node and its full subtree; repeated or foreign removal is harmless. */
+  remove(node: SceneNode) {
+    if(!this.ownedNodes.has(node)) {
+      return;
+    }
+    const pending = [node];
+    while(pending.length) {
+      const current = pending.pop()!;
+      for(const child of current.children) {
+        pending.push(child);
+      }
+      this.ownedNodes.delete(current);
+      this.rootNodes.delete(current);
+      if(current instanceof MeshInstance) {
+        this.meshInstances.delete(current);
+        this.frameCache.delete(current);
+      }
+      if(current instanceof TerrainInstance) {
+        this.terrains.delete(current);
+      }
+      current.invalidate();
+    }
   }
 
   /** Create a scene-owned keyed collection for synchronizing simulation views. */
@@ -49,12 +83,14 @@ export class RenderScene {
     return collection;
   }
 
-  /** Release instance references; collections remain reusable until scene destruction. */
+  /** Invalidate owned nodes and release references without releasing borrowed assets. */
   clear() {
     for(const collection of this.collections) {
       collection.clear();
     }
-    this.instances.clear();
+    for(const node of this.rootNodes) {
+      this.remove(node);
+    }
     this.frameCache = new WeakMap();
   }
 
@@ -66,6 +102,47 @@ export class RenderScene {
     this.clear();
     this.collections.clear();
     this.destroyed = true;
+  }
+
+  /** @internal Register a fully constructed geometry node owned by this scene. */
+  registerNode(node: SceneNode) {
+    this.assertAlive();
+    if(node.scene !== this || node.removed) {
+      throw new Error('Cannot register a foreign or removed scene node.');
+    }
+    this.ownedNodes.add(node);
+    if(node instanceof MeshInstance) {
+      this.meshInstances.add(node);
+    }
+    if(node instanceof TerrainInstance) {
+      this.terrains.add(node);
+    }
+    this.updateRootNode(node);
+  }
+
+  /** @internal Maintain roots after a validated parent change. */
+  updateRootNode(node: SceneNode) {
+    if(!this.ownedNodes.has(node)) {
+      return;
+    }
+    if(node.parent) {
+      this.rootNodes.delete(node);
+    } else {
+      this.rootNodes.add(node);
+    }
+  }
+
+  /** @internal Update ancestors before descendants in one iterative scene traversal. */
+  updateWorldTransforms() {
+    this.assertAlive();
+    const pending = Array.from(this.rootNodes);
+    while(pending.length) {
+      const node = pending.pop()!;
+      node.updateWorldTransform();
+      for(const child of node.children) {
+        pending.push(child);
+      }
+    }
   }
 
   /** @internal */

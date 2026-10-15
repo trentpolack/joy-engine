@@ -1,14 +1,18 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import { PRIMITIVE_SHAPE } from '../rendering/geometry/constants.ts';
+import { PRIMITIVE_SHAPE } from '../core/constants.ts';
 import type { EntityRegistry } from './entity-registry.ts';
 import type { PhysicsBodyOptions, PhysicsBody } from '../physics/physics-body.ts';
 import type { PhysicsVehicleOptions, PhysicsVehicle } from '../physics/physics-vehicle.ts';
 import type { LevelData } from './level-document.ts';
-import { EntityWorld } from './entity-world.ts';
+import type {EntityWorld} from './entity-world.ts';
+import {World} from './world.ts';
+import { COMPONENT_TYPE } from './constants.ts';
+import { PHYSICS_BODY_DEFAULTS } from '../physics/physics-body.ts';
+import { PHYSICS_WHEEL_DEFAULTS } from '../physics/physics-vehicle.ts';
 import { parseLevel } from './level-document.ts';
-import { PhysicsWorld } from '../physics/physics-world.ts';
+import type {PhysicsWorld} from '../physics/physics-world.ts';
 
 export interface LevelRuntimeOptions {
   registry: EntityRegistry;
@@ -23,6 +27,7 @@ export interface LevelRuntimeOptions {
  */
 export class LevelRuntime {
   declare level: LevelData;
+  declare simulation: World;
   declare world: EntityWorld;
   declare physics: PhysicsWorld;
   declare ownsPhysics: boolean;
@@ -39,9 +44,10 @@ export class LevelRuntime {
     if(this.level.entities.some(entity => entity.template)) {
       throw new Error('Resolve linked objects with resolveLevelObjects before creating LevelRuntime.');
     }
-    this.world = new EntityWorld({registry});
-    this.physics = physics ?? new PhysicsWorld();
-    this.ownsPhysics = !physics;
+    this.simulation = new World({entities: {registry}, physicsWorld: physics});
+    this.world = this.simulation.entities;
+    this.physics = this.simulation.physics;
+    this.ownsPhysics = this.simulation.ownsPhysics;
 
     this.bodies = new Map();
 
@@ -72,8 +78,8 @@ export class LevelRuntime {
     }
     const entity = this.world.spawn(definition);
     try {
-      const collider = entity.components.physics;
-      const vehicleConfig = entity.components.vehicle;
+      const collider = entity.components[COMPONENT_TYPE.PHYSICS];
+      const vehicleConfig = entity.components[COMPONENT_TYPE.VEHICLE];
       if(vehicleConfig !== undefined && collider === undefined) {
         throw new TypeError(`Entity ${entity.id}: vehicle requires a physics component.`);
       }
@@ -96,7 +102,7 @@ export class LevelRuntime {
         rotation: entity.transform.rotation
       };
       if(config.shape === PRIMITIVE_SHAPE.BOX) {
-        const extents = config.halfExtents ?? [0.5, 0.5, 0.5];
+        const extents = config.halfExtents ?? PHYSICS_BODY_DEFAULTS.halfExtents;
         if(!Array.isArray(extents) || extents.length !== 3 || extents.some(value => typeof value !== 'number' || !Number.isFinite(value) || value <= 0)) {
           throw new TypeError('Box halfExtents require three finite positive numbers.');
         }
@@ -105,7 +111,7 @@ export class LevelRuntime {
         if(scale[0] !== scale[1] || scale[1] !== scale[2]) {
           throw new RangeError('Sphere physics requires uniform entity scale.');
         }
-        const radius = config.radius ?? 0.5;
+        const radius = config.radius ?? PHYSICS_BODY_DEFAULTS.radius;
         if(typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) {
           throw new TypeError('Sphere radius must be finite and positive.');
         }
@@ -199,13 +205,10 @@ export class LevelRuntime {
     }
     this.destroyed = true;
     try {
-      this.world.destroy();
+      this.simulation.destroy();
     } finally {
       this.vehicles.clear();
       this.bodies.clear();
-      if(this.ownsPhysics) {
-        this.physics.destroy();
-      }
     }
   }
 }
@@ -238,9 +241,9 @@ function scaleVehicle(config: Record<string, unknown>, scale: number) {
       if(!Array.isArray(wheel.position) || wheel.position.length !== 3 || wheel.position.some(item => typeof item !== 'number' || !Number.isFinite(item))) {
         throw new TypeError('Wheel position requires three finite numbers.');
       }
-      const radius = wheel.radius ?? 0.35;
-      const suspensionRestLength = wheel.suspensionRestLength ?? 0.3;
-      const maxSuspensionTravel = wheel.maxSuspensionTravel ?? 0.3;
+      const radius = wheel.radius ?? PHYSICS_WHEEL_DEFAULTS.radius;
+      const suspensionRestLength = wheel.suspensionRestLength ?? PHYSICS_WHEEL_DEFAULTS.suspensionRestLength;
+      const maxSuspensionTravel = wheel.maxSuspensionTravel ?? PHYSICS_WHEEL_DEFAULTS.maxSuspensionTravel;
       for(const value of [radius, suspensionRestLength, maxSuspensionTravel]) {
         if(typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
           throw new TypeError('Wheel dimensions must be finite and nonnegative.');

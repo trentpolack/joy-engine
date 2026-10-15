@@ -1,17 +1,29 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
+
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { OrbitCamera } from '../src/rendering/camera/orbit-camera.ts';
-import { screenRay, projectToViewport, intersectRayPlane } from '../src/rendering/camera/projection.ts';
+import {
+  screenRay,
+  projectToViewport,
+  intersectRayPlane
+} from '../src/rendering/camera/projection.ts';
 import { SceneRenderer } from '../src/rendering/scene/scene-renderer.ts';
 import { EnvironmentSystem } from '../src/environment/environment-system.ts';
-import { POINT_LIGHT_UNIFORM_BYTES } from '../src/rendering/pbr/point-lights.ts';
+import { POINT_LIGHT_UNIFORM_BYTES } from '../src/rendering/lighting/point-lights.ts';
 import { RenderScene } from '../src/rendering/scene/render-scene.ts';
-import { GpuTriangleRenderer } from '../src/rendering/renderers/gpu-triangle-renderer.ts';
+import { GpuTriangleRenderer } from '../src/rendering/renderer.ts';
 import { createFormMeshAsset } from '../src/form/mesh-asset.ts';
+import { createFrameView } from '../src/rendering/scene/frame-view.ts';
 
-const bounds = {left: 40, top: 30, width: 800, height: 500};
+const bounds = {
+  left: 40,
+  top: 30,
+  width: 800,
+  height: 500
+};
+
 test('projection and picking round-trip CSS coordinates on both clip-depth conventions', () => {
   const camera = new OrbitCamera();
   for(const webgpu of [false, true]) {
@@ -21,9 +33,9 @@ test('projection and picking round-trip CSS coordinates on both clip-depth conve
     const hit = intersectRayPlane(ray, [0, 1, 0], 0);
     assert.ok(Math.abs(hit[0] - 1) < 1e-4);
     assert.ok(Math.abs(hit[2] - 2) < 1e-4);
-    assert.equal(screenRay(0, 0, matrix, {...bounds, width: 0}, webgpu), null);
+    assert.equal(screenRay(0, 0, matrix, { ...bounds, width: 0 }, webgpu), null);
   }
-  assert.equal(intersectRayPlane({origin: [0, 1, 0], direction: [1, 0, 0]}, [0, 1, 0], 0), null);
+  assert.equal(intersectRayPlane({ origin: [0, 1, 0], direction: [1, 0, 0] }, [0, 1, 0], 0), null);
 });
 
 test('FORM assets preserve authored channels and metadata through the asset boundary', () => {
@@ -41,30 +53,82 @@ test('scene renderer owns initialization, frame submission, resize and late disp
   let submitted;
   let creationOptions;
   const resized = [];
-  const backend = {backend: 'webgl', resetSceneHistory: () => {}, resize: (...args) => resized.push(args),
-    render: (...args) => { submitted = args; }, destroy: () => { destroyed++; }};
+  const backend = {
+    backend: 'webgl',
+    resetSceneHistory: () => {},
+    resize: (...args) => resized.push(args),
+    createFrameView: options => createFrameView({
+      ...options,
+      shadows: creationOptions.shadows
+    }),
+    render: (...args) => {
+      submitted = args;
+    },
+    destroy: () => {
+      destroyed++;
+    }
+  };
   GpuTriangleRenderer.create = async (_canvas, options) => {
     creationOptions = options;
     return backend;
   };
-  const canvas = {clientWidth: 800, clientHeight: 500, getBoundingClientRect: () => bounds};
+  const canvas = {
+    clientWidth: 800,
+    clientHeight: 500,
+    getBoundingClientRect: () => bounds
+  };
   try {
-    const renderer = new SceneRenderer(canvas, {camera: new OrbitCamera(), pixelRatio: 2, atmosphere: true});
+    const renderer = new SceneRenderer(canvas, {
+      camera: new OrbitCamera(),
+      pixelRatio: 2,
+      atmosphere: true
+    });
     await renderer.initialize();
     assert.deepEqual(creationOptions.postProcessing, {}, 'standard scene viewports use the shared display pipeline');
     const scene = new RenderScene();
-    renderer.render(scene, {lights: [], ambient: 0.5, timeSeconds: 3});
-    renderer.render(scene, {lights: [], ambient: 0.5, timeSeconds: 4});
+    renderer.render(scene, { lights: [], ambient: 0.5, timeSeconds: 3 });
+    renderer.render(scene, { lights: [], ambient: 0.5, timeSeconds: 4 });
     assert.equal(resized.length, 1);
     assert.deepEqual(resized[0], [800, 500, 2]);
     assert.equal(submitted[1].byteLength, POINT_LIGHT_UNIFORM_BYTES);
     assert.equal(submitted[4], 4);
-    const environment = new EnvironmentSystem({timeOfDay: 0.5}).sample();
-    renderer.render(scene, {environment});
+    const environment = structuredClone(new EnvironmentSystem({ timeOfDay: 0.5 }).sample());
+    const light = {
+      x: 1,
+      y: 2,
+      z: 3,
+      r: 4,
+      g: 5,
+      b: 6,
+      range: 7
+    };
+    const lights = [light];
+    renderer.render(scene, { environment, lights });
+    const view = submitted[10].view;
+    assert.deepEqual(view.viewport, {
+      cssWidth: 800,
+      cssHeight: 500,
+      pixelRatio: 2,
+      width: 1600,
+      height: 1000
+    });
+    assert.equal(view.lighting.directional, view.environment.primaryLight);
+    assert.throws(() => {
+      view.lighting.lights[0].range = 0;
+    }, TypeError);
+    assert.throws(() => {
+      view.environment.primaryLight.direction[0] = 9;
+    }, TypeError);
+    assert.throws(() => {
+      view.environment.clouds.coverage = 9;
+    }, TypeError);
     assert.equal(creationOptions.atmosphere, true);
     assert.equal(submitted[8].byteLength, 352, 'sky receives its own complete uniform block');
     assert.deepEqual(Array.from(submitted[8].slice(20, 22)), [1600, 1000], 'sky uses physical viewport dimensions');
-    assert.deepEqual(Array.from(submitted[1].slice(280, 284)), [...environment.primaryLight.direction, environment.primaryLight.intensity].map(Math.fround));
+    assert.deepEqual(Array.from(submitted[1].slice(280, 284)), [
+      ...environment.primaryLight.direction,
+      environment.primaryLight.intensity
+    ].map(Math.fround));
     assert.equal(submitted[1][21], 0, 'environment replaces the fixed ambient default');
     const skyMatrix = submitted[8].slice(0, 16);
     const cameraMatrix = renderer.camera.matrix(1.6, false);
@@ -77,13 +141,26 @@ test('scene renderer owns initialization, frame submission, resize and late disp
         assert.ok(Math.abs(value - Number(row === column)) < 0.002, 'sky and geometry use inverse camera matrices');
       }
     }
+    const savedView = structuredClone(view);
+    light.range = 20;
+    lights.push({ ...light });
+    environment.primaryLight.direction[0] = 9;
+    environment.clouds.coverage = 9;
+    renderer.camera.yaw+= 0.1;
+    assert.deepEqual(view, savedView, 'borrowed authoring inputs cannot change an already submitted view');
     renderer.render(scene);
+    assert.notEqual(submitted[10].view, view, 'each submission owns a fresh snapshot');
+    assert.equal(submitted[10].view.environment, null);
+    assert.deepEqual(submitted[10].view.lighting.lights, []);
+    assert.equal(submitted[10].view.lighting.ambient, 0.3);
     assert.equal(submitted[8], null, 'omitting environment hides the sky on the next frame');
     renderer.destroy();
     renderer.destroy();
     assert.equal(destroyed, 1);
     assert.equal(scene.destroyed, false, 'renderer borrows the scene');
-    GpuTriangleRenderer.create = () => new Promise(resolve => { release = resolve; });
+    GpuTriangleRenderer.create = () => new Promise(resolve => {
+      release = resolve;
+    });
     const late = new SceneRenderer(canvas);
     const pending = late.initialize();
     late.destroy();
@@ -101,9 +178,27 @@ test('scene effects expose real object/camera correspondence and reset on discon
   const submissions = [];
   let resets = 0;
   let reject = false;
-  const backend = {backend: 'webgpu', sceneEffects: {capabilities: {backend: 'webgpu'}},
-    resize() {}, destroy() {}, resetSceneHistory() { resets++; }, setSceneEffectsConfig() {},
-    render(...args) { if(reject) { throw new Error('submission rejected'); } submissions.push(args); }};
+  const backend = {
+    backend: 'webgpu',
+    sceneEffects: {
+      capabilities: {
+        backend: 'webgpu'
+      }
+    },
+    createFrameView,
+    resize() {},
+    destroy() {},
+    resetSceneHistory() {
+      resets++;
+    },
+    setSceneEffectsConfig() {},
+    render(...args) {
+      if(reject) {
+        throw new Error('submission rejected');
+      }
+      submissions.push(args);
+    }
+  };
   GpuTriangleRenderer.create = async (_canvas, options) => {
     assert.equal(options.sceneEffects.taa, true);
     assert.ok(options.device.optionalFeatures.includes('float32-filterable'));
@@ -111,39 +206,63 @@ test('scene effects expose real object/camera correspondence and reset on discon
   };
   try {
     const camera = new OrbitCamera();
-    const canvas = {clientWidth: 800, clientHeight: 500};
-    const renderer = new SceneRenderer(canvas, {camera, pixelRatio: 1, sceneEffects: {taa: true}});
+    const canvas = {
+      clientWidth: 800,
+      clientHeight: 500
+    };
+    const renderer = new SceneRenderer(canvas, {
+      camera,
+      pixelRatio: 1,
+      sceneEffects: {
+        taa: true
+      }
+    });
     await renderer.initialize();
     const scene = new RenderScene();
-    const mesh = scene.createMesh(createFormMeshAsset('box(0, 0, 0, 1, 2, 3)'), {sceneRoughness: 0.2});
-    renderer.render(scene, {timeSeconds: 1});
+    const mesh = scene.createMesh(createFormMeshAsset('box(0, 0, 0, 1, 2, 3)'), { sceneRoughness: 0.2 });
+    renderer.render(scene, { timeSeconds: 1 });
+    const view = submissions[0][10].view;
+    assert.ok(view, 'scene submission carries the shared FrameView');
+    assert.equal(submissions[0][9].view, view, 'attachments borrow the same FrameView');
+    assert.throws(() => {
+      view.camera.viewMatrix[0] = 99;
+    }, TypeError);
+    assert.throws(() => {
+      view.viewport.width = 1;
+    }, TypeError);
+    assert.throws(() => {
+      view.shadows.normalBias = 99;
+    }, TypeError);
     assert.equal(submissions[0][7].resetHistory, true);
     const initialPositions = Array.from(submissions[0][9].motion.previousPositions);
     mesh.position[0] = 0.1;
     camera.yaw+= 0.01;
-    renderer.render(scene, {timeSeconds: 1.016});
+    renderer.render(scene, { timeSeconds: 1.016 });
     assert.equal(submissions[1][7].resetHistory, false);
     assert.deepEqual(Array.from(submissions[1][9].motion.previousPositions), initialPositions);
-    assert.notDeepEqual(Array.from(submissions[1][9].motion.currentViewProjection), Array.from(submissions[1][9].motion.previousViewProjection));
+    assert.notDeepEqual(
+      Array.from(submissions[1][9].motion.currentViewProjection),
+      Array.from(submissions[1][9].motion.previousViewProjection)
+    );
     assert.equal(submissions[1][9].surfaceRoughness[0], 0.2);
     assert.notDeepEqual(submissions[1][7].currentJitter, submissions[1][7].previousJitter);
-    renderer.render(scene, {timeSeconds: 0.5});
+    renderer.render(scene, { timeSeconds: 0.5 });
     assert.equal(submissions[2][7].resetHistory, true, 'rewinding animation invalidates history');
     camera.yaw+= 1;
-    renderer.render(scene, {timeSeconds: 0.516});
+    renderer.render(scene, { timeSeconds: 0.516 });
     assert.equal(submissions[3][7].resetHistory, true, 'camera cuts invalidate history');
     reject = true;
-    assert.throws(() => renderer.render(scene, {timeSeconds: 0.532}), /submission rejected/);
+    assert.throws(() => renderer.render(scene, { timeSeconds: 0.532 }), /submission rejected/);
     reject = false;
-    renderer.render(scene, {timeSeconds: 0.548});
+    renderer.render(scene, { timeSeconds: 0.548 });
     assert.equal(submissions[4][7].resetHistory, true, 'failed submission never commits CPU history');
-    renderer.setSceneEffectsConfig({taa: false});
-    renderer.render(scene, {timeSeconds: 0.564});
+    renderer.setSceneEffectsConfig({ taa: false });
+    renderer.render(scene, { timeSeconds: 0.564 });
     assert.equal(submissions[5][7].resetHistory, true, 'toggling starts fresh');
     canvas.clientWidth = 0;
-    assert.equal(renderer.render(scene, {timeSeconds: 0.58}), false);
+    assert.equal(renderer.render(scene, { timeSeconds: 0.58 }), false);
     canvas.clientWidth = 800;
-    renderer.render(scene, {timeSeconds: 0.596});
+    renderer.render(scene, { timeSeconds: 0.596 });
     assert.equal(submissions[6][7].resetHistory, true, 'hidden viewports resume with fresh history');
     assert.ok(resets >= 5);
     renderer.destroy();
@@ -151,4 +270,38 @@ test('scene effects expose real object/camera correspondence and reset on discon
   } finally {
     GpuTriangleRenderer.create = original;
   }
+});
+
+test('renderer-owned view preparation preserves configured shadow quality and bias', () => {
+  const camera = new OrbitCamera();
+  const renderer = Object.create(GpuTriangleRenderer.prototype);
+  renderer.shadowOptions = {
+    quality: 'cinematic',
+    directionalMapSize: 2048,
+    normalBias: 0.07,
+    shadowDistance: 60
+  };
+  const options = {
+    camera: {
+      viewMatrix: camera.viewMatrix(),
+      projectionMatrix: camera.projectionMatrix(1, true),
+      nearPlane: camera.nearPlane,
+      farPlane: camera.farPlane,
+      ...camera.basis()
+    },
+    viewport: {
+      cssWidth: 500,
+      cssHeight: 500,
+      pixelRatio: 1
+    }
+  };
+  assert.equal(typeof renderer.createFrameView, 'function');
+  const view = renderer.createFrameView(options);
+  assert.equal(view.shadows.quality, 'cinematic');
+  assert.equal(view.shadows.directionalMapSize, 2048);
+  assert.equal(view.shadows.normalBias, 0.07);
+  assert.equal(view.shadows.shadowDistance, 60);
+  renderer.shadowOptions = false;
+  assert.equal(renderer.createFrameView(options).shadows, false);
+  assert.equal(view.shadows.quality, 'cinematic', 'later settings do not alter an existing snapshot');
 });
