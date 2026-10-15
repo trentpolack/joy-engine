@@ -5,6 +5,8 @@ Browser-native runtime, rendering, particles, gameplay and development tooling s
 
 Runtime implementations and public contracts are authored as native TypeScript, including rendering, physics, environment simulation, FORM compilation, particles and in-game development overlays. Vite compiles browser builds; supported Node.js versions strip types for asset-free tooling entry points and tests. Strict no-emit checking validates native TypeScript and the remaining checked JavaScript consumers.
 
+Browser games can use `GameShell` to compose configuration, a renderer, input, development diagnostics, ordered input/simulation/presentation/render phases, and dependency-ordered cleanup without moving project behavior into the engine.
+
 The engine package is self-contained: it owns its TypeScript base configuration, tests, documentation and tooling, and imports nothing from the repository that consumes it. [Joy Editor](editor/README.md) lives in `editor/` as a separate package (with FORM LAB and PARTICLE LAB in `editor/tools/`); authoring UI and the Electron lab host belong to it, and the engine never imports it. It was developed inside [JoyGames](https://github.com/trentpolack/JoyGames), which now includes this repository as a git submodule at `joy-engine/`; see its [repository split](https://github.com/trentpolack/JoyGames/blob/develop/docs/development/repository-split.md) notes.
 
 ## Package commands

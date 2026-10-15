@@ -133,6 +133,64 @@ interface AudioBankOptions {
 ```
 
 
+## GameShellFrame
+Import from `joy-engine`. [Source](../../src/runtime/game-shell.ts)
+
+```ts
+interface GameShellFrame<TConfiguration, TRenderer, TInput> {
+  configuration: TConfiguration;
+  renderer: TRenderer;
+  input: TInput;
+  devTools: DevTools;
+  elapsedSeconds: number;
+  timeSeconds: number;
+  timestampMilliseconds: number;
+}
+```
+
+
+## GameShellOptions
+Import from `joy-engine`. [Source](../../src/runtime/game-shell.ts)
+
+```ts
+interface GameShellOptions<TConfiguration, TRenderer extends GameShellResource, TInput extends GameShellResource> {
+  title: string;
+  development: boolean;
+  createConfiguration(): TConfiguration;
+  createRenderer(configuration: TConfiguration): Promise<TRenderer>;
+  createInput(renderer: TRenderer, configuration: TConfiguration): TInput;
+  initialize?(shell: GameShell<TConfiguration, TRenderer, TInput>): Promise<void> | void;
+  input?: GameShellPhase<TConfiguration, TRenderer, TInput>;
+  simulation?: GameShellPhase<TConfiguration, TRenderer, TInput>;
+  presentation?: GameShellPhase<TConfiguration, TRenderer, TInput>;
+  render: GameShellPhase<TConfiguration, TRenderer, TInput>;
+  afterFrame?: GameShellPhase<TConfiguration, TRenderer, TInput>;
+  dispose?(shell: GameShell<TConfiguration, TRenderer, TInput>): void;
+  fail(error: unknown): void;
+  maximumFrameSeconds?: number;
+}
+```
+
+
+## GameShellPhase
+Import from `joy-engine`. [Source](../../src/runtime/game-shell.ts)
+
+```ts
+type GameShellPhase<TConfiguration, TRenderer, TInput> =
+  (frame: GameShellFrame<TConfiguration, TRenderer, TInput>) => void;
+```
+
+
+## GameShellResource
+Import from `joy-engine`. [Source](../../src/runtime/game-shell.ts)
+
+```ts
+interface GameShellResource {
+  destroy(): void;
+}
+```
+
+
 ## EnvironmentOptions
 Import from `joy-engine`. [Source](../../src/environment/environment-system.ts)
 

@@ -5,6 +5,9 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, P
 ## 10-15-2026
 ### Workspace Configuration
 - Renamed FORM LAB and PARTICLE LAB's published site category from `app` to `tool` to match the hosting platform's Joy Engine Tools category.
+
+### Game Shell
+- Added `GameShell` as the shared browser composition owner for configuration, renderer and input resources, development diagnostics, ordered frame phases, failure handling, and idempotent page lifecycle cleanup; FRAMEBREAK is the first game integration.
 - Extended the `.joyconfig` schema with project production availability settings for hosting-workspace builds, captures, and deployment.
 
 ### Engine Rendering Backend Wrappers

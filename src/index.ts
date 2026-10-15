@@ -19,6 +19,8 @@ export { AudioBank } from './browser/audio-bank.ts';
 export type { SoundDefinition } from './browser/audio-bank.ts';
 export type { AudioBankOptions } from './browser/audio-bank.ts';
 export { startGameLoop } from './runtime/game-loop.ts';
+export { GameShell } from './runtime/game-shell.ts';
+export type { GameShellFrame, GameShellOptions, GameShellPhase, GameShellResource } from './runtime/game-shell.ts';
 export { EnvironmentSystem } from './environment/environment-system.ts';
 export { createEnvironmentLighting, createEnvironmentUniforms, ENVIRONMENT_UNIFORM_BYTES } from './rendering/environment/environment-uniforms.ts';
 export { ATMOSPHERE_RENDER_UNIFORM_BYTES, ATMOSPHERE_SHADERS, createAtmosphereRenderUniforms } from './rendering/environment/atmosphere-rendering.ts';
