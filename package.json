@@ -54,9 +54,10 @@
     "LICENSE"
   ],
   "scripts": {
-    "check": "tsc --project tsconfig.json && node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts test",
+    "check": "tsc --project tsconfig.json && node scripts/check-boundaries.mjs && node scripts/check-rust-layers.mjs && node scripts/check-javascript.mjs scripts test",
     "test": "node --import ./scripts/testing/register-raw-loader.mjs --test test/*.test.mjs",
-    "docs:api": "node scripts/generate-api.mjs"
+    "docs:api": "node scripts/generate-api.mjs",
+    "rust:web": "node scripts/rust/build-web.mjs"
   },
   "dependencies": {
     "@loaders.gl/core": "^4.5.2",

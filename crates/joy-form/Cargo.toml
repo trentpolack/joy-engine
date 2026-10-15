@@ -1,0 +1,32 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# The FORM procedural language: parser, evaluator, and renderer-free geometry.
+# Behavior is parity-tested against `src/form/*.ts`; see README.md.
+
+[package]
+name = "joy-form"
+description = "Joy Engine's FORM procedural geometry language, renderer-free and parity-tested against the TypeScript runtime."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lib]
+name = "joy_form"
+path = "src/lib.rs"
+
+# JSON-lines evaluator used by FORM LAB's Rust parity harness.
+[[bin]]
+name = "joy-form-evaluate"
+path = "src/bin/joy-form-evaluate.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

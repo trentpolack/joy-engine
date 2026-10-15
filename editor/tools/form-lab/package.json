@@ -18,6 +18,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "check": "joy-check-javascript src site test && tsc --project tsconfig.json",
     "test": "node --import joy-engine/testing/register-raw-loader --test test/*.test.js",
+    "test:rust-parity": "node --import joy-engine/testing/register-raw-loader test/rust-form-parity.mjs",
     "capture": "node test/browser.mjs",
     "test:worker-browser": "node test/worker-budget-browser.mjs",
     "test:viewport-browser": "node test/viewport-browser.mjs",

@@ -1,0 +1,108 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Joy Engine's Rust implementation. Each crate owns one dependency layer from
+# `architecture/layers.json`, so the crate graph enforces the same one-way
+# model the TypeScript boundary checker records:
+#
+#   joy-foundation  shared data and algorithms (math, transforms, random, display profiles)
+#   joy-simulation  environment, physics, entities, controllers, and levels; headless
+#   joy-form        the FORM procedural language; renderer-free geometry
+#   joy-render      the definitive wgpu renderer for games, tools, and examples
+#   joy-platform    windows, browser canvases, the frame-phase runner, input, and dev UI
+#   joy-engine      the facade games depend on; re-exports the layers above
+#
+#   cargo test --workspace            # every Rust test
+#   cargo run -p joy-engine --example form-viewer
+#
+# Versions are pinned once here and match joy-apps, so editor tools and games
+# build against the same wgpu and egui.
+
+[workspace]
+resolver = "3"
+members = [
+    "crates/joy-foundation",
+    "crates/joy-simulation",
+    "crates/joy-form",
+    "crates/joy-render",
+    "crates/joy-platform",
+    "crates/joy-engine",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT"
+authors = ["Trent Polack"]
+repository = "https://github.com/trentpolack/joy-engine"
+
+[workspace.dependencies]
+# Engine layers.
+joy-foundation = { path = "crates/joy-foundation" }
+joy-simulation = { path = "crates/joy-simulation" }
+joy-form = { path = "crates/joy-form" }
+joy-render = { path = "crates/joy-render" }
+joy-platform = { path = "crates/joy-platform" }
+
+# Math and data.
+glam = { version = "0.34.1", features = ["bytemuck", "serde"] }
+bytemuck = { version = "1.25.2", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
+# float_roundtrip keeps authored documents byte-stable through a parse/serialize round trip.
+serde_json = { version = "1.0.154", features = ["preserve_order", "float_roundtrip"] }
+indexmap = { version = "2.14.2", features = ["serde"] }
+thiserror = "2.0.21"
+log = "0.4.34"
+
+# Physics. Enhanced determinism keeps native and WebAssembly simulations identical.
+rapier3d = { version = "0.36.1", features = ["enhanced-determinism"] }
+
+# Rendering, windows, and development UI. These match joy-apps' pins.
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "wgsl", "webgpu", "webgl", "vulkan", "metal", "dx12", "gles"] }
+winit = "0.30.13"
+egui = "0.36.2"
+egui-wgpu = { version = "0.36.2", default-features = false }
+egui-winit = { version = "0.36.2", default-features = false }
+pollster = "0.4.0"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+env_logger = "0.11.11"
+web-time = "1.1.0"
+
+# Browser targets.
+wasm-bindgen = "0.2.106"
+wasm-bindgen-futures = "0.4.56"
+web-sys = "0.3.83"
+js-sys = "0.3.83"
+console_error_panic_hook = "0.1.7"
+console_log = "1.0.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+# Explicit parenthesized arithmetic is part of the house style; keep clippy from fighting it.
+precedence = "allow"
+
+[profile.dev]
+# Line tables keep backtraces useful without multi-gigabyte debug info.
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+# Dependencies (wgpu, naga, rapier) run optimized even in debug builds, so games stay playable while iterating.
+opt-level = 2
+debug = false
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+strip = "debuginfo"
+
+# Browser builds trade a little speed for download size.
+[profile.web-release]
+inherits = "release"
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+strip = "symbols"

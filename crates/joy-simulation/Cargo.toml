@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+[package]
+name = "joy-simulation"
+description = "Joy Engine simulation layer: environment clock, physics, entities, controllers, and levels; headless."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+joy-foundation.workspace = true
+glam.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true
+thiserror.workspace = true
+log.workspace = true
+rapier3d.workspace = true
+
+[lints]
+workspace = true

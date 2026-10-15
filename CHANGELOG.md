@@ -3,6 +3,12 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-15-2026
+### Rust Engine
+- Added a Rust implementation of Joy Engine in `crates/`, one crate per dependency layer behind the `joy-engine` facade, so games and tools run natively and in browsers (WebGPU with WebGL 2 fallback) from one codebase. The TypeScript engine is unchanged and remains the behavioral reference.
+- Added `joy-render`, a wgpu renderer matching the TypeScript frame: Lit, PBR, and Unlit material passes, filtered directional shadows on every backend, point lights, the procedural atmosphere, and the full display-processing chain from the same post-processing profiles. It is the single renderer for games, FORM content (`FormAssetLibrary`), level presentation (`LevelScene`), and tools; FORM stays renderer-free.
+- Added `joy-simulation` (environment, rapier rigid bodies and raycast vehicles, entities, controllers, levels, and grid navigation) and `joy-form`, both checked against values recorded from the TypeScript engine, and `joy-platform`, a `GameShell`-style frame-phase runner with input, multi-touch, egui HUDs, a development overlay, and headless runs.
+- Added `scripts/rust/build-web.mjs` (`npm run rust:web`) for static browser builds, a `form-viewer` example, crate-layer checks in `npm run check`, and the [Rust engine guide](docs/rust.md) with parity notes and the migration path.
+
 ### Workspace Configuration
 - Renamed FORM LAB and PARTICLE LAB's published site category from `app` to `tool` to match the hosting platform's Joy Engine Tools category.
 

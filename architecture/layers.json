@@ -68,6 +68,47 @@
     "editor",
     "examples"
   ],
+  "rustCrates": {
+    "joy-foundation": "foundation",
+    "joy-simulation": "simulation",
+    "joy-form": "content",
+    "joy-render": "rendering",
+    "joy-platform": "platform"
+  },
+  "rustFacadeCrate": "joy-engine",
+  "rustBackendCrates": {
+    "rapier3d": {
+      "layers": [
+        "simulation"
+      ]
+    },
+    "wgpu": {
+      "layers": [
+        "rendering",
+        "platform"
+      ]
+    },
+    "winit": {
+      "layers": [
+        "platform"
+      ]
+    },
+    "egui": {
+      "layers": [
+        "platform"
+      ]
+    },
+    "egui-wgpu": {
+      "layers": [
+        "platform"
+      ]
+    },
+    "egui-winit": {
+      "layers": [
+        "platform"
+      ]
+    }
+  },
   "existingViolations": [
     "src/core/types.ts -> src/rendering/environment/pbr-environment.ts",
     "src/core/types.ts -> src/rendering/lighting/point-lights.ts",

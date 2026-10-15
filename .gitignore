@@ -10,6 +10,10 @@ dist/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+# Rust build output and generated WebAssembly packages
+target/
+/crates/*/pkg/
+
 # Electron packaging output
 release/
 

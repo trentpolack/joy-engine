@@ -13,9 +13,18 @@ The engine package is self-contained: it owns its TypeScript base configuration,
 Run from this directory, or from the JoyGames root with `--workspace joy-engine`:
 
 ```bash
-npm run check     # strict type check, dependency-boundary check, script syntax gate
+npm run check     # strict type check, dependency-boundary and Rust crate-layer checks, script syntax gate
 npm test          # engine unit suite in test/ (npm run test:engine from the JoyGames root)
 npm run docs:api  # regenerate docs/api from the public exports
+```
+
+## Rust Engine
+`crates/` holds the Rust implementation: the same layers as `src/` as Cargo crates (`joy-foundation`, `joy-simulation`, `joy-form`, `joy-render`, `joy-platform`) behind the `joy-engine` facade crate. Games and tools written against it run natively and in browsers (WebGPU with WebGL 2 fallback) from one codebase, and `joy-render` is the single renderer for games, FORM content, and tools. The TypeScript engine remains the shipping runtime and the behavioral reference while the port grows; see the [Rust engine guide](docs/rust.md) for status, parity, and gaps.
+
+```bash
+cargo test --workspace                          # Rust unit, parity, and headless GPU tests
+cargo run -p joy-engine --example form-viewer   # FORM assets through the engine renderer
+npm run rust:web -- --package joy-engine --example form-viewer   # browser build
 ```
 
 ## Package entry points
@@ -44,6 +53,7 @@ Do not import these helpers from the root `joy-engine` entry point in build-tool
 This also applies to transitive dependencies, such as game configuration loaded through tuning metadata. Profile validation, presets, and resolution are available from the same Node-safe entry point.
 
 - [Engine guide](docs/README.md)
+- [Rust engine guide](docs/rust.md)
 - [Public API reference](docs/api/README.md)
 - [Resident CLOD terrain](docs/terrain.md)
 - [Scene effects and capture evidence](docs/scene-effects.md)
