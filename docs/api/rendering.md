@@ -503,7 +503,7 @@ Release the current allocation; the borrowed device remains alive.
 Import from `joy-engine`. [Source](../../src/rendering/gpu/gpu-device.ts)
 
 ```ts
-async function createGpuCanvasDevice(canvas: HTMLCanvasElement | OffscreenCanvas, options: GpuDeviceOptions = {}): Promise<Device>
+async function createGpuCanvasDevice(canvas: HTMLCanvasElement | OffscreenCanvas, options: GpuDeviceOptions = {}): Promise<GpuDevice>
 ```
 Create the repository's portable luma.gl device and its default canvas context. Backend registration stays explicit so bundlers include only the adapters the engine supports. A WebGL retry handles browsers that expose WebGPU while failing adapter acquisition; callers can disable it when WebGPU is required.
 
@@ -536,60 +536,6 @@ Resolve an explicit development backend from a URL query. Unknown or absent valu
 - **param** search
 
 
-## bloom
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## bloomShaderPassPipeline
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## createBloomShaderPassPipeline
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## brightnessContrast
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## denoise
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## gaussianBlur
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## hueSaturation
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## noise
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## sepia
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## tiltShift
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## toneMapping
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## vibrance
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## vignette
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## fxaa
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## createMotionBlurShaderPassPipeline
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## createOutlineShaderPassPipeline
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## createSSAOShaderPassPipeline
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
-## createTAAShaderPassPipeline
-Re-exported from `@luma.gl/effects` through `joy-engine`. The underlying package owns its API.
-
 ## ShaderPassRenderer
 Import from `joy-engine`. [Source](../../src/rendering/gpu/shader-pass-renderer.ts)
 
@@ -618,12 +564,6 @@ destroy()
 Release pass resources before their borrowed sampler.
 
 
-
-## GLSLShaderAssembler
-Re-exported from `@luma.gl/shadertools` through `joy-engine`. The underlying package owns its API.
-
-## WGSLShaderAssembler
-Re-exported from `@luma.gl/shadertools` through `joy-engine`. The underlying package owns its API.
 
 ## SceneEffects
 Import from `joy-engine`. [Source](../../src/rendering/scene/scene-effects.ts)
@@ -729,12 +669,6 @@ const vignetteBlur
 Blends an independently blurred scene into the frame near the vignette edge. The renderer borrows `blurredTexture`; its creator retains ownership.
 
 
-
-## ShaderPass
-Re-exported from `@luma.gl/shadertools` through `joy-engine`. The underlying package owns its API.
-
-## ShaderPassPipeline
-Re-exported from `@luma.gl/shadertools` through `joy-engine`. The underlying package owns its API.
 
 ## DEFAULT_POST_PROCESSING
 Import from `joy-engine`. [Source](../../src/rendering/postprocessor/config.ts)

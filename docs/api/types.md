@@ -270,6 +270,126 @@ interface WorldStep {
 ```
 
 
+## ComponentSchema
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+interface ComponentSchema {
+  readonly type: string;
+  readonly label: string;
+  readonly description: string;
+  /** Display group, normally a `COMPONENT_CATEGORY` value. */
+  readonly category: string;
+  readonly fields: readonly ComponentFieldSchema[];
+  /** Starting records offered when adding the component; at least one is required. */
+  readonly presets: readonly ComponentPreset[];
+  /** Component types this component needs on the same entity. */
+  readonly requires?: readonly string[];
+}
+```
+Authoring contract for one component type. Schemas describe authored JSON for tools and validation; runtime behavior stays with the systems that interpret the component. Fields outside the schema remain valid custom data and round-trip unchanged.
+
+
+
+## ComponentFieldSchema
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+interface ComponentFieldSchema {
+  /** Own property name inside the component record. */
+  readonly name: string;
+  readonly kind: ComponentFieldKind;
+  /** Inspector label; the field name is used when omitted. */
+  readonly label?: string;
+  /** One sentence of authoring help. */
+  readonly description?: string;
+  /** Display unit for numbers and vectors, such as `m`, `kg` or `s`. */
+  readonly unit?: string;
+  /** Runtime value for an omitted field. Absent means omission carries no implied value. */
+  readonly default?: JsonValue;
+  /** Report omission (or an empty asset path) as an issue. */
+  readonly required?: boolean;
+  /** Inclusive lower bound, or exclusive when `minExclusive` is true. */
+  readonly min?: number;
+  readonly minExclusive?: boolean;
+  /** Inclusive upper bound. */
+  readonly max?: number;
+  /** Suggested control increment; validation does not quantize to it. */
+  readonly step?: number;
+  readonly integer?: boolean;
+  /** Accepted values for `choice` fields. */
+  readonly choices?: readonly string[];
+  /** Workspace asset kinds (file extensions without the dot) accepted by `asset` fields. */
+  readonly assetKinds?: readonly string[];
+  /** Fields of each record item in a `list` field. */
+  readonly items?: readonly ComponentFieldSchema[];
+  readonly when?: ComponentFieldCondition;
+}
+```
+One authored field inside a component record. Numbers, vectors and colors share bounds per channel. `default` is the value the runtime assumes when the field is omitted; it is never written for the author.
+
+
+
+## ComponentFieldKind
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+type ComponentFieldKind = typeof COMPONENT_FIELD_KIND[keyof typeof COMPONENT_FIELD_KIND];
+```
+
+
+## ComponentFieldCondition
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+interface ComponentFieldCondition {
+  readonly field: string;
+  readonly equals: readonly string[];
+}
+```
+Show a field only while a sibling choice holds one of the listed values, e.g. box half extents only while `shape` is `box`.
+
+
+
+## ComponentPreset
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+interface ComponentPreset {
+  readonly id: string;
+  readonly label: string;
+  readonly data: JsonRecord;
+}
+```
+A named starting record offered when an author adds a component, e.g. a box collider or a FORM mesh. Preset ids are unique across a catalog.
+
+
+
+## ComponentIssue
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+interface ComponentIssue {
+  readonly component: string;
+  readonly field: string | null;
+  readonly message: string;
+}
+```
+One advisory validation result. `field` is a dotted path inside the component record (`wheels.2.radius`), or null for whole-component problems.
+
+
+
+## ComponentSchemaCatalogOptions
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+interface ComponentSchemaCatalogOptions {
+  /** Register the engine's built-in schemas first; defaults to true. */
+  builtIns?: boolean;
+}
+```
+
+
 ## GridRoute
 Import from `joy-engine`. [Source](../../src/gameplay/grid-navigation.ts)
 
@@ -734,6 +854,16 @@ Import from `joy-engine`. [Source](../../src/rendering/gpu/gpu-device.ts)
 ```ts
 type GpuBackend = typeof GPU_BACKEND.BEST_AVAILABLE | typeof GPU_BACKEND.WEBGPU | typeof GPU_BACKEND.WEBGL;
 ```
+
+
+## GpuDevice
+Import from `joy-engine`. [Source](../../src/rendering/gpu/gpu-device.ts)
+
+```ts
+type GpuDevice = Device;
+```
+Engine name for the portable GPU device returned by `createGpuCanvasDevice`. Consumers pass it to engine owners such as `TerrainRenderer` and `SceneEffects` and destroy it after them; naming it here keeps the backend package out of consumer code.
+
 
 
 ## PostProcessingProfile

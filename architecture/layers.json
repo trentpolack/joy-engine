@@ -57,17 +57,25 @@
       ]
     }
   },
+  "backendPackages": {
+    "@luma.gl/": {
+      "layers": [
+        "rendering"
+      ]
+    }
+  },
+  "consumerRoots": [
+    "editor",
+    "examples"
+  ],
   "existingViolations": [
     "src/core/types.ts -> src/rendering/environment/pbr-environment.ts",
     "src/core/types.ts -> src/rendering/lighting/point-lights.ts",
     "src/core/types.ts -> src/rendering/shadows/types.ts",
     "src/core/types.ts -> src/rendering/materials/pbr/constants.ts",
-    "src/physics/physics-body.ts -> src/rendering/geometry/constants.ts",
     "src/gameplay/level-document.ts -> src/rendering/postprocessor/profile.ts",
     "src/gameplay/asset-scene.ts -> src/rendering/scene/render-scene.ts",
     "src/gameplay/asset-scene.ts -> src/rendering/scene/mesh-asset.ts",
-    "src/gameplay/level-runtime.ts -> src/rendering/geometry/constants.ts",
-    "src/gameplay/level-scene.ts -> src/rendering/geometry/constants.ts",
     "src/gameplay/level-scene.ts -> src/rendering/lighting/point-lights.ts",
     "src/gameplay/level-scene.ts -> src/rendering/scene/mesh-instance.ts",
     "src/gameplay/level-scene.ts -> src/rendering/scene/mesh-asset.ts",

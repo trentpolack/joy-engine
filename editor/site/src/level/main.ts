@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-import { BROWSER_EVENT, ENTITY_TYPE, KEY_CODE, PRIMITIVE_SHAPE, TRANSFORM_PROPERTY } from 'joy-engine/constants';
+import { BROWSER_EVENT, COMPONENT_FIELD_KIND, COMPONENT_PRESET, COMPONENT_TYPE, ENTITY_TYPE, KEY_CODE, PRIMITIVE_SHAPE, TRANSFORM_PROPERTY } from 'joy-engine/constants';
 import { WORKSPACE_OPERATION } from '../workspace/constants.ts';
-import { LEVEL_TOOL } from './constants.ts';
+import { CUSTOM_COMPONENT_OPTION, LEVEL_TOOL } from './constants.ts';
 import type { JsonValue, EntityDefinition, JsonRecord } from 'joy-engine';
 import type { FieldMetadata } from './property-editor.ts';
 import type { Parameter } from 'joy-engine/form';
@@ -16,6 +16,7 @@ import '@fontsource/archivo/400.css';
 import '@fontsource/archivo/600.css';
 import '@fontsource/archivo/900.css';
 import {
+  ComponentSchemaCatalog,
   LevelDocument,
   parseLevel,
   serializeLevel,
@@ -41,6 +42,7 @@ class LevelEditor {
   declare assetGeneration: number;
   declare assets: { path: string; kind: string; }[];
   declare objects: Map<string, ObjectData>;
+  declare componentSchemas: ComponentSchemaCatalog;
   declare propertyEditor: PropertyEditor;
   declare viewport: LevelViewport;
   declare numeric: NumericControls;
@@ -60,7 +62,11 @@ class LevelEditor {
     this.assets = [];
 
     this.objects = new Map();
+
+    // Built-in component schemas drive the add menu, inspector controls and inline issues.
+    this.componentSchemas = new ComponentSchemaCatalog();
     this.propertyEditor = new PropertyEditor(element('component-fields'), {
+      schemas: this.componentSchemas,
       change: (path, value) => this.changeProperty(path, value),
       error: message => this.status(message),
       open: path => { void this.openSource(path); },
@@ -88,6 +94,7 @@ class LevelEditor {
       readText: path => this.readAsset(path)
     });
     this.createTransforms();
+    this.createComponentMenu();
     this.numeric = new NumericControls(element('properties'), this.listeners.signal, {commit: input => this.attempt(() => {
       if(input.closest('#component-fields')) {
         this.propertyEditor.commitInput(input);
@@ -149,6 +156,7 @@ class LevelEditor {
   add(shape: typeof PRIMITIVE_SHAPE.BOX | typeof PRIMITIVE_SHAPE.SPHERE) {
     this.attempt(() => {
       this.applyComponents();
+      const collider = shape === PRIMITIVE_SHAPE.BOX ? COMPONENT_PRESET.PHYSICS_BOX : COMPONENT_PRESET.PHYSICS_SPHERE;
       const id = crypto.randomUUID();
       const target = this.viewport.camera.target;
       const snap = this.viewport.snap;
@@ -165,10 +173,8 @@ class LevelEditor {
             scale: [1, 1, 1]
           },
           components: {
-            render: {shape, color: [0.95, 0.36, 0.12]},
-            physics: shape === PRIMITIVE_SHAPE.BOX
-              ? {shape, mass: 0, halfExtents: [0.5, 0.5, 0.5]}
-              : {shape, mass: 0, radius: 0.5}
+            [COMPONENT_TYPE.RENDER]: {shape, color: [0.95, 0.36, 0.12]},
+            [COMPONENT_TYPE.PHYSICS]: this.componentSchemas.createComponent(collider).data
           }
         });
       });
@@ -186,8 +192,8 @@ class LevelEditor {
   /** Add an editable point light and a small visible authoring marker. */
   addLight() {
     this.addEntity('Point Light', {
-      light: {enabled: true, color: [1, 0.88, 0.7], intensity: 4, range: 12, castsShadow: true},
-      render: {shape: PRIMITIVE_SHAPE.SPHERE, size: [0.25, 0.25, 0.25], color: [1, 0.72, 0.3]}
+      [COMPONENT_TYPE.LIGHT]: this.componentSchemas.createComponent(COMPONENT_PRESET.LIGHT_POINT).data,
+      [COMPONENT_TYPE.RENDER]: {shape: PRIMITIVE_SHAPE.SPHERE, size: [0.25, 0.25, 0.25], color: [1, 0.72, 0.3]}
     });
   }
 
@@ -392,6 +398,8 @@ class LevelEditor {
       textarea('components').value = this.componentSnapshot;
       if(refreshProperties) {
         this.renderProperties(selected);
+      } else {
+        this.propertyEditor.showIssues(this.componentSchemas.validateEntity(selected));
       }
       element('instance-info').hidden = !authored?.template;
       element('instance-source').textContent = authored?.template ?? '';
@@ -421,7 +429,7 @@ class LevelEditor {
     const mesh = scene.meshes.get(entity.id);
     const formParameters = ((mesh?.geometry.metadata?.parameters ?? []) as Parameter[]);
     const effectParameters = scene.effects.get(entity.id)?.effect.definition.asset.parameters ?? {};
-    for(const [component, parameters] of  (([['render', formParameters], ['effect', Object.entries(effectParameters).map(([name, value]) => ({name, ...value}))]]) as const)) {
+    for(const [component, parameters] of  (([[COMPONENT_TYPE.RENDER, formParameters], [COMPONENT_TYPE.EFFECT, Object.entries(effectParameters).map(([name, value]) => ({name, ...value}))]]) as const)) {
       const target = components[component];
       if(!target || !target.asset || !parameters.length) {
         continue;
@@ -439,7 +447,9 @@ class LevelEditor {
       }
     }
     this.propertyEditor.actions.metadata = metadata;
-    this.propertyEditor.render(components);
+
+    // Issues describe the resolved authored data, not the display-only parameter defaults above.
+    this.propertyEditor.render(components, this.componentSchemas.validateEntity(entity));
   }
 
   /**
@@ -543,33 +553,61 @@ class LevelEditor {
         setPath(entity.components, path, value);
       }
     });
-    const structural = value === undefined || (value !== null && typeof value === 'object' && (!Array.isArray(value) || !Array.isArray(oldValue) || value.length !== oldValue.length));
+    // New keys add rows, and choice fields can enable or disable sibling fields, so both rebuild the inspector.
+    const schema = path.length > 1 ? this.componentSchemas.field(path[0], path.slice(1)) : null;
+    const isNewKey = oldValue === undefined || oldValue === null;
+    const changesLayout = isNewKey || schema?.kind === COMPONENT_FIELD_KIND.CHOICE;
+    const structural = changesLayout || value === undefined || (value !== null && typeof value === 'object' && (!Array.isArray(value) || !Array.isArray(oldValue) || value.length !== oldValue.length));
     this.refresh(structural);
     this.status('Property updated.');
   }
 
   /**
-   * Add a useful component record using typed controls. */
+   * Add the chosen component preset, or a named custom record, to the selection.
+   * Unassigned asset fields take the first matching project asset so new meshes and effects show immediately.
+   */
   addComponent() {
     this.applyComponents();
-    const kind = ((element('component-kind')) as HTMLSelectElement).value;
-    const mesh = this.assets.find(asset => ['form', 'formlab'].includes(asset.kind));
-    const effect = this.assets.find(asset => asset.kind === 'joyfx');
-    const name = kind === 'custom' ? prompt('Component name:', 'gameplay') : kind === 'mesh' ? 'render' : kind;
+    const choice = ((element('component-kind')) as HTMLSelectElement).value;
+
+    let name: string | null;
+    let value: JsonRecord;
+    if(choice === CUSTOM_COMPONENT_OPTION) {
+      name = prompt('Component name:', 'gameplay');
+      value = {};
+    } else {
+      const created = this.componentSchemas.createComponent(choice);
+      name = created.type;
+      value = created.data;
+      this.assignFirstAssets(name, value);
+    }
     if(!name) {
       return;
     }
+
     const selected = this.selected();
     if(selected && Object.hasOwn(this.resolve(selected).components, name)) {
-      this.status(`This object already has a ${name} component. Remove it first to replace it.`); return;
+      this.status(`This object already has a ${name} component. Remove it first to replace it.`);
+      return;
     }
-
-    const value: JsonRecord = kind === 'mesh' ? {asset: mesh?.path ?? '', parameters: {}} :
-      kind === 'render' ? {shape: PRIMITIVE_SHAPE.BOX, size: [1, 1, 1], color: [0.93, 0.42, 0.22]} :
-      kind === 'light' ? {enabled: true, color: [1, 0.88, 0.7], intensity: 4, range: 12, castsShadow: true} :
-      kind === 'effect' ? {asset: effect?.path ?? '', enabled: true, loop: true, seed: 7777, parameters: {}} :
-      kind === 'physics' ? {shape: PRIMITIVE_SHAPE.BOX, mass: 0, halfExtents: [0.5, 0.5, 0.5]} : {};
     this.changeProperty([name], value);
+  }
+
+  /**
+   * Fill empty asset fields of a new component with the first project asset of an accepted kind.
+   * @param type Component type that owns the record.
+   * @param data Owned new component record; mutated in place.
+   */
+  private assignFirstAssets(type: string, data: JsonRecord) {
+    for(const field of this.componentSchemas.get(type)?.fields ?? []) {
+      if(field.kind !== COMPONENT_FIELD_KIND.ASSET || data[field.name] !== '') {
+        continue;
+      }
+      const asset = this.assets.find(candidate => field.assetKinds?.includes(candidate.kind));
+      if(asset) {
+        data[field.name] = asset.path;
+      }
+    }
   }
 
   /**
@@ -669,6 +707,38 @@ class LevelEditor {
     this.panelLayout?.destroy();
     this.listeners.abort();
     this.viewport.destroy();
+  }
+
+  /**
+   * Build the add-component menu from schema presets, grouped by category, plus custom records. @private */
+  private createComponentMenu() {
+    const menu = ((element('component-kind')) as HTMLSelectElement);
+    const groups: Map<string, HTMLOptGroupElement> = new Map();
+
+    for(const schema of this.componentSchemas.list()) {
+      let group = groups.get(schema.category);
+      if(!group) {
+        group = document.createElement('optgroup');
+        group.label = schema.category;
+        groups.set(schema.category, group);
+      }
+      for(const preset of schema.presets) {
+        const item = document.createElement('option');
+        item.value = preset.id;
+        item.textContent = preset.label;
+        item.title = schema.description;
+        group.append(item);
+      }
+    }
+
+    const custom = document.createElement('optgroup');
+    custom.label = 'Custom';
+    const item = document.createElement('option');
+    item.value = CUSTOM_COMPONENT_OPTION;
+    item.textContent = 'Custom Properties';
+    custom.append(item);
+
+    menu.replaceChildren(...groups.values(), custom);
   }
 
   /**

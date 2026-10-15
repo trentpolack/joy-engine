@@ -16,6 +16,9 @@ export type {EntityWorldOptions} from './entity-world.ts';
 export {World} from './world.ts';
 export type {WorldOptions, WorldStep} from './world.ts';
 export {copyEntityDefinition} from './entity-definition.ts';
+export {ComponentSchemaCatalog, isComponentFieldActive} from './component-schema.ts';
+export type {ComponentSchema, ComponentFieldSchema, ComponentFieldKind, ComponentFieldCondition, ComponentPreset, ComponentIssue, ComponentSchemaCatalogOptions} from './component-schema.ts';
+export {BUILT_IN_COMPONENT_SCHEMAS, RENDER_COMPONENT_DEFAULTS, LIGHT_COMPONENT_DEFAULTS, EFFECT_COMPONENT_DEFAULTS} from './built-in-component-schemas.ts';
 export {searchGrid, traceGridRoute} from './grid-navigation.ts';
 export type {GridRoute, GridSearchOptions} from './grid-navigation.ts';
 

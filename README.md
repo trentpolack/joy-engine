@@ -25,7 +25,7 @@ npm run docs:api  # regenerate docs/api from the public exports
 | `joy-engine/scripting`, `joy-engine/particles/scripting` | Editor-neutral scripting contracts and built-in particle language information for authoring integrations. |
 | `joy-engine/post-processing` | Node-safe post-processing configuration helpers (see below). |
 | `joy-engine/development`, `joy-engine/development/editor`, `joy-engine/development/preview`, `joy-engine/dev/*` | Development-only in-game overlays and the editor preview bridge. |
-| `joy-engine/development/vite` | Node-only Vite plugins: config tuning and post-processing persistence, shared favicon. |
+| `joy-engine/development/vite` | Node-only Vite plugins: config tuning and post-processing persistence, shared favicon, and engine dependency pre-bundling. |
 | `joy-engine/shaders/*`, `joy-engine/schemas/*` | Reusable authored WGSL/GLSL programs and JSON asset schemas. |
 | `joy-engine/tsconfig.base.json` | Shared strict compiler options for engine consumers. |
 | `joy-engine/testing/register-raw-loader` | `node --import` hook that lets Node load engine source with Vite-style `?raw` imports. |

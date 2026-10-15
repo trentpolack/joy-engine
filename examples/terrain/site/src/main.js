@@ -22,7 +22,7 @@ const camera = new OrbitCamera();
 const events = new AbortController();
 const controls = new TerrainCameraControls(canvas,camera,TERRAIN_CONFIG.cameraControls);
 const CAMERA_PRESET_KEYS = Object.freeze({ground:KEY_CODE.KEY_G,overview:KEY_CODE.KEY_O});
-/** @type {import('@luma.gl/core').Device|null} */
+/** @type {import('joy-engine').GpuDevice|null} */
 let device = null;
 /** @type {TerrainRenderer|null} */
 let renderer = null;

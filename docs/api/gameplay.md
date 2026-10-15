@@ -458,6 +458,137 @@ Validate and copy a definition, applying defaults without retaining authored ref
 - **param** definition
 
 
+## ComponentSchemaCatalog
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+Instance-owned set of component schemas for authoring tools and validation. Registered schemas are copied and frozen; lookups return borrowed read-only records. The catalog is data only: it never constructs runtime components or evaluates authored values.
+
+### constructor
+```ts
+constructor({builtIns = true}: ComponentSchemaCatalogOptions = {})
+```
+- **param** options Catalog setup; built-in engine schemas are registered unless disabled.
+
+### register
+```ts
+register(schema: ComponentSchema): this
+```
+Register a project schema. Invalid schemas, duplicate types and duplicate preset ids throw before anything is registered.
+
+- **param** schema Borrowed definition; the catalog keeps a frozen copy.
+- **returns** This catalog for chained registration.
+
+### has
+```ts
+has(type: string): boolean
+```
+Return whether a schema describes this component type.
+
+
+### get
+```ts
+get(type: string): ComponentSchema | null
+```
+Borrow the read-only schema for a component type.
+
+- **returns** The frozen schema, or null for custom component types.
+
+### list
+```ts
+list(): readonly ComponentSchema[]
+```
+Borrow every schema in registration order.
+
+
+### createComponent
+```ts
+createComponent(presetId: string): { type: string; data: JsonRecord; }
+```
+Create an owned component record from a preset.
+
+- **param** presetId A preset id from any registered schema.
+- **returns** The component type and a fresh, caller-owned copy of the preset data.
+
+### field
+```ts
+field(type: string, path: readonly string[]): ComponentFieldSchema | null
+```
+Resolve the field schema for a path inside a component record, descending through list items.
+
+- **param** type Component type.
+- **param** path Field path inside the component record, e.g. `['wheels', '0', 'radius']`.
+- **returns** The borrowed field schema, or null for custom data and for paths ending on a list item.
+
+### validate
+```ts
+validate(type: string, data: JsonValue): ComponentIssue[]
+```
+Check one authored component against its schema. Custom component types have no issues.
+
+- **param** type Component type.
+- **param** data Borrowed authored record; never mutated.
+
+### validateEntity
+```ts
+validateEntity(entity: EntityDefinition): ComponentIssue[]
+```
+Check every schema-described component on an entity, plus required companion components.
+
+- **param** entity Borrowed resolved definition; linked objects should be resolved first.
+
+
+## isComponentFieldActive
+Import from `joy-engine`. [Source](../../src/gameplay/component-schema.ts)
+
+```ts
+function isComponentFieldActive(field: ComponentFieldSchema, record: JsonRecord): boolean
+```
+Return whether a field applies to its record under the field's sibling condition.
+
+- **param** field Field schema to test.
+- **param** record Borrowed record that holds the field and its siblings.
+
+
+## BUILT_IN_COMPONENT_SCHEMAS
+Import from `joy-engine`. [Source](../../src/gameplay/built-in-component-schemas.ts)
+
+```ts
+const BUILT_IN_COMPONENT_SCHEMAS
+```
+Schemas for every component the engine interprets, in authoring display order.
+
+
+
+## RENDER_COMPONENT_DEFAULTS
+Import from `joy-engine`. [Source](../../src/gameplay/built-in-component-schemas.ts)
+
+```ts
+const RENDER_COMPONENT_DEFAULTS
+```
+Values `LevelScene` assumes for omitted `render` fields. Size is full dimensions in meters; colors are linear RGB. FORM meshes keep their authored colors unless a tint is supplied.
+
+
+
+## LIGHT_COMPONENT_DEFAULTS
+Import from `joy-engine`. [Source](../../src/gameplay/built-in-component-schemas.ts)
+
+```ts
+const LIGHT_COMPONENT_DEFAULTS
+```
+Values `LevelScene` assumes for omitted `light` fields. Range is meters; intensity scales linear color.
+
+
+
+## EFFECT_COMPONENT_DEFAULTS
+Import from `joy-engine`. [Source](../../src/gameplay/built-in-component-schemas.ts)
+
+```ts
+const EFFECT_COMPONENT_DEFAULTS
+```
+Values `AssetScene` assumes for omitted `effect` fields. The seed selects a deterministic cosmetic sequence.
+
+
+
 ## searchGrid
 Import from `joy-engine`. [Source](../../src/gameplay/grid-navigation.ts)
 

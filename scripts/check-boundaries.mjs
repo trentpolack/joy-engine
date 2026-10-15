@@ -11,9 +11,14 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sourceRoot = resolve(packageRoot, 'src');
 const architecture = JSON.parse(readFileSync(resolve(packageRoot, 'architecture/layers.json'), 'utf8'));
 const sourceExtensions = new Set(['.ts', '.js', '.mjs']);
+const consumerExtensions = new Set(['.ts', '.js', '.mjs', '.cjs', '.html']);
+
+// Generated output and installed packages are not authored consumer source.
+const ignoredConsumerDirectories = new Set(['node_modules', 'dist', 'artifacts']);
 
 checkPackageBoundary();
 checkLayerDirection();
+checkConsumerBackendPackages();
 
 /** Ensure the compiler cannot pull project or editor sources into the engine package. */
 function checkPackageBoundary() {
@@ -46,6 +51,12 @@ function checkLayerDirection() {
     const source = readFileSync(sourcePath, 'utf8');
     for(const specifier of collectModuleSpecifiers(source)) {
       if(!specifier.startsWith('.')) {
+        const backendEdge = backendPackageViolation(sourceModule, sourceLayer, specifier);
+        if(backendEdge && knownExceptions.has(backendEdge)) {
+          encounteredExceptions.add(backendEdge);
+        } else if(backendEdge) {
+          violations.push(backendEdge);
+        }
         continue;
       }
       const targetPath = resolve(dirname(sourcePath), specifier);
@@ -73,6 +84,47 @@ function checkLayerDirection() {
   console.log(`Engine dependency boundaries checked (${knownExceptions.size} recorded migration violations).`);
 }
 
+/**
+ * Keep backend packages behind the engine: the editor and examples consume `joy-engine` exports only.
+ * Any mention of a backend package specifier counts, including JSDoc `import()` types and Vite
+ * dependency lists, because each one couples the consumer to the backend's API or packaging.
+ */
+function checkConsumerBackendPackages() {
+  const prefixes = Object.keys(architecture.backendPackages);
+  const violations = [];
+  for(const root of architecture.consumerRoots) {
+    for(const sourcePath of collectConsumerSources(resolve(packageRoot, root))) {
+      const source = readFileSync(sourcePath, 'utf8');
+      const consumerModule = relative(packageRoot, sourcePath).replaceAll('\\', '/');
+      for(const prefix of prefixes) {
+        if(source.includes(prefix)) {
+          violations.push(`${consumerModule} names ${prefix}`);
+        }
+      }
+    }
+  }
+  if(violations.length > 0) {
+    fail('Editor and example sources must reach backend packages through joy-engine exports:', violations);
+  }
+  console.log(`Consumer backend boundaries checked (${prefixes.join(', ')}).`);
+}
+
+/**
+ * Return the violating edge when an engine module imports a backend package outside its owning layers.
+ * @param sourceModule Package-relative importing module.
+ * @param sourceLayer Architecture layer that owns the importing module.
+ * @param specifier Bare package specifier from the import.
+ * @returns The edge recorded for exceptions, or null when the import is permitted.
+ */
+function backendPackageViolation(sourceModule, sourceLayer, specifier) {
+  for(const [prefix, ownership] of Object.entries(architecture.backendPackages)) {
+    if(specifier.startsWith(prefix) && !ownership.layers.includes(sourceLayer)) {
+      return `${sourceModule} -> ${specifier}`;
+    }
+  }
+  return null;
+}
+
 /** Collect static imports/exports and literal dynamic imports without executing source. */
 function collectModuleSpecifiers(source) {
   const specifiers = [];
@@ -95,6 +147,22 @@ function collectSources(directory) {
     if(entry.isDirectory()) {
       sources.push(...collectSources(path));
     } else if(sourceExtensions.has(extname(entry.name)) && !entry.name.endsWith('.d.ts')) {
+      sources.push(path);
+    }
+  }
+  return sources;
+}
+
+function collectConsumerSources(directory) {
+  const sources = [];
+  for(const entry of readdirSync(directory, {withFileTypes: true})) {
+    if(entry.name.startsWith('.') || ignoredConsumerDirectories.has(entry.name)) {
+      continue;
+    }
+    const path = resolve(directory, entry.name);
+    if(entry.isDirectory()) {
+      sources.push(...collectConsumerSources(path));
+    } else if(consumerExtensions.has(extname(entry.name))) {
       sources.push(path);
     }
   }

@@ -40,14 +40,17 @@ export type { EntityWorldOptions } from './gameplay/entity-world.ts';
 export { World } from './gameplay/world.ts';
 export type { WorldOptions, WorldStep } from './gameplay/world.ts';
 export { copyEntityDefinition } from './gameplay/entity-definition.ts';
+export { ComponentSchemaCatalog, isComponentFieldActive } from './gameplay/component-schema.ts';
+export type { ComponentSchema, ComponentFieldSchema, ComponentFieldKind, ComponentFieldCondition, ComponentPreset, ComponentIssue, ComponentSchemaCatalogOptions } from './gameplay/component-schema.ts';
+export { BUILT_IN_COMPONENT_SCHEMAS, RENDER_COMPONENT_DEFAULTS, LIGHT_COMPONENT_DEFAULTS, EFFECT_COMPONENT_DEFAULTS } from './gameplay/built-in-component-schemas.ts';
 export { searchGrid, traceGridRoute } from './gameplay/grid-navigation.ts';
 export type { GridRoute, GridSearchOptions } from './gameplay/grid-navigation.ts';
 export { LevelDocument, parseLevel, serializeLevel } from './gameplay/level-document.ts';
 export { LevelScene } from './gameplay/level-scene.ts';
 export { LevelRuntime } from './gameplay/level-runtime.ts';
 export { PhysicsWorld } from './physics/physics-world.ts';
-export { PhysicsBody } from './physics/physics-body.ts';
-export { PhysicsVehicle } from './physics/physics-vehicle.ts';
+export { PhysicsBody, PHYSICS_BODY_DEFAULTS } from './physics/physics-body.ts';
+export { PhysicsVehicle, PHYSICS_VEHICLE_DEFAULTS, PHYSICS_WHEEL_DEFAULTS } from './physics/physics-vehicle.ts';
 export type { EntityDefinition } from './gameplay/types.ts';
 export type { EntityOptions } from './gameplay/types.ts';
 export type { EntityTransform } from './gameplay/types.ts';
@@ -79,16 +82,12 @@ export { calculateBackingPixelRatio } from './rendering/display.ts';
 export { createTopDownOrthographicMatrix, sortTopDownTransparentTriangles } from './rendering/camera/top-down-camera.ts';
 export { DynamicGpuBuffer } from './rendering/gpu/dynamic-gpu-buffer.ts';
 export { createGpuCanvasDevice, createPortableShaders, gpuBackendFromQuery } from './rendering/gpu/gpu-device.ts';
-export * from './rendering/scene/effects.ts';
 export { ShaderPassRenderer } from './rendering/gpu/shader-pass-renderer.ts';
-export { GLSLShaderAssembler, WGSLShaderAssembler } from '@luma.gl/shadertools';
 export { SceneEffects } from './rendering/scene/scene-effects.ts';
 export { agxToneMapping, animatedGrain, antialias, linearExposure, vignetteBlur } from './rendering/postprocessor/supplemental-passes.ts';
 export type { SceneEffectsOptions } from './rendering/scene/scene-effect-config.ts';
 export type { SceneEffectsFrame } from './rendering/scene/scene-effects.ts';
-export type { GpuBackend } from './rendering/gpu/gpu-device.ts';
-export type { ShaderPass } from '@luma.gl/shadertools';
-export type { ShaderPassPipeline } from '@luma.gl/shadertools';
+export type { GpuBackend, GpuDevice } from './rendering/gpu/gpu-device.ts';
 export {
   DEFAULT_POST_PROCESSING,
   POST_PROCESSING_SCHEMA,

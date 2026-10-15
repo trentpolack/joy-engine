@@ -2,6 +2,20 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-15-2026
+### Engine Rendering Backend Wrappers
+- Removed raw luma.gl re-exports from `joy-engine`: the `@luma.gl/effects` pass wildcard, `GLSLShaderAssembler`/`WGSLShaderAssembler`, and the `ShaderPass`/`ShaderPassPipeline` types. No game, example, or editor imported them; this is breaking for direct importers, who should select effects through post-processing profiles and `SceneEffectsOptions`.
+- Added `GpuDevice` for the device returned by `createGpuCanvasDevice`, and `createEngineDependenciesPlugin()` in `joy-engine/development/vite` so Vite configs no longer list `@luma.gl/*` packages.
+- `npm run check` now rejects luma.gl imports outside the rendering layer and any `@luma.gl/` reference in the editor or examples.
+- Moved `PRIMITIVE_SHAPE` into the foundation layer, retiring three recorded layer violations.
+
+### Components
+- Added `ComponentSchemaCatalog` with built-in schemas for `render`, `light`, `effect`, `physics`, and `vehicle`: typed fields, units, bounds, conditional fields, presets, and advisory validation. Projects can register their own schemas.
+- Named runtime defaults -- `PHYSICS_BODY_DEFAULTS`, `PHYSICS_VEHICLE_DEFAULTS`, and `PHYSICS_WHEEL_DEFAULTS` as well as render, light, and effect component defaults -- so schemas and runtimes share one source; values are unchanged.
+
+### Joy Editor
+- Made the level inspector schema-driven: the add-component menu lists catalog presets by category, fields use schema labels, units, bounds, choices, and asset kinds, omitted fields can be added at their runtime defaults, fields a shape ignores are dimmed, and issues such as a vehicle without physics appear inline without blocking edits.
+
 ## 10-14-2026
 ### Runtime Architecture
 - Added a headless `World` owner for deterministic entity and physics updates, with rendering left behind an application-owned integration boundary.

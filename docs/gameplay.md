@@ -9,6 +9,7 @@ Joy's gameplay layer separates the object being controlled from the source of it
 | `Entity` | Base world object with identity, transform, tags, component data and owned resource cleanup. |
 | `EntityComponent` | One entity-owned behavior over an authored component record. |
 | `ComponentRegistry` | Resolve trusted component names to runtime component factories. |
+| `ComponentSchemaCatalog` | Describe authored component fields, presets and validation for tools; never constructs runtime behavior. |
 | `EntitySystem` | Process a stable query of entities with a required component composition. |
 | `Character` / `PlayerCharacter` | Possessable entity and project gameplay response to control intent. |
 | `Controller` | Exclusive possession, switching and unpossessing. |
@@ -83,6 +84,30 @@ Components borrow their entity-owned JSON record rather than copying it again, s
 
 This first version deliberately avoids archetype storage, implicit global registries and parallel scheduling. The object-oriented lifetime shell keeps browser, GPU and physics ownership explicit; data-oriented systems provide the flexible composition point. Hot paths can later move component data into specialized storage without changing authored level documents or the base world-object contract.
 
+## Component schemas
+A `ComponentSchemaCatalog` describes authored component records for tools: each `ComponentSchema` lists typed fields (number, boolean, text, choice, vector3, color, asset, record, list) with labels, units, bounds, defaults and optional sibling conditions, plus named presets for adding the component. The catalog is data only and independent of `ComponentRegistry`: schemas tell an editor how to present and check a record, while registered factories (or the engine runtimes) decide what it does.
+
+The catalog starts with built-in schemas for every component the engine interprets: `render` and `light` (`LevelScene`), `effect` (`AssetScene`), and `physics` and `vehicle` (`LevelRuntime`). A field's `default` is the value its runtime assumes when the field is omitted, and those runtimes read the same named defaults (`LIGHT_COMPONENT_DEFAULTS`, `PHYSICS_BODY_DEFAULTS`, `PHYSICS_WHEEL_DEFAULTS` and the rest), so tools cannot drift from runtime behavior. `when` conditions express shape-specific fields, such as box `halfExtents` and sphere `radius`; `requires` names companion components, such as a vehicle's physics body.
+
+```js
+import { ComponentSchemaCatalog } from 'joy-engine';
+import { COMPONENT_FIELD_KIND, COMPONENT_CATEGORY } from 'joy-engine/constants';
+
+const components = new ComponentSchemaCatalog().register({
+  type: 'health', label: 'Health', category: COMPONENT_CATEGORY.GAMEPLAY,
+  description: 'Hit points restored over time.',
+  fields: [
+    {name: 'maximum', kind: COMPONENT_FIELD_KIND.NUMBER, min: 1, integer: true, required: true},
+    {name: 'perSecond', kind: COMPONENT_FIELD_KIND.NUMBER, unit: '1/s', min: 0, default: 0}
+  ],
+  presets: [{id: 'health.default', label: 'Health', data: {maximum: 100, perSecond: 2}}]
+});
+
+components.validateEntity(entity); // [{component, field, message}] issues; never throws for bad data
+```
+
+`validate` and `validateEntity` return advisory issues by dotted field path (`wheels.2.radius`) and leave custom fields alone, so records keep round-tripping unknown data. Runtimes still validate at their own boundaries. Catalogs are independent instances; registered schemas are copied and frozen.
+
 ## Grid navigation
 Turn-based and tile-based games share one weighted search. `searchGrid` floods outward from a start cell within an inclusive cost budget and returns a caller-owned `Map` from each reachable cell to `{cost, previous}`; `traceGridRoute` rebuilds the cheapest route from that result. The engine does not interpret coordinates, terrain or factions: cells are any `Map` key (tile indices are typical), `neighbors(cell)` lists adjacent candidates, and `stepCost(from, to)` returns a finite nonnegative cost or `null` when the step is not allowed. Unit classes, occupancy, elevation limits and zones of control stay in the project's cost callback.
 
@@ -133,7 +158,7 @@ Vehicles attach a configurable array of suspension rays to a dynamic chassis. Ea
 Raycast tires are a first vehicle foundation: they have no solid rolling wheel collider, and the underlying discrete solver can tunnel through thin geometry at high speeds. Use sufficiently thick barriers and moderate speeds. Suspension stiffness/damping and tire grip use the solver's tuning conventions; `brakeForce` is a per-wheel maximum impulse per fixed step. These are not a full drivetrain, tire or suspension engineering simulation.
 
 ## Authoring workflow
-Run `npm run dev:editor`, choose **VEHICLE PLAYGROUND**, and open `assets/playground.joylevel`. Use the level outliner and viewport to select/place entities, edit transforms and component records, and undo/redo changes. **Save File** writes the same file used by VS Code, with the workspace's revision checks and recovery copies. **New Level** creates a validated `.joylevel` without overwriting an existing file.
+Run `npm run dev:editor`, choose **VEHICLE PLAYGROUND**, and open `assets/playground.joylevel`. Use the level outliner and viewport to select/place entities, edit transforms and component records, and undo/redo changes. Component controls, the add-component menu and inline issues come from the built-in `ComponentSchemaCatalog`. **Save File** writes the same file used by VS Code, with the workspace's revision checks and recovery copies. **New Level** creates a validated `.joylevel` without overwriting an existing file.
 
 The game preview loads saved authored state. Saved level changes are staged for an explicit reset/regeneration so a physics session never silently jumps to a new layout. Editing a file and changing a live simulation are separate operations. Stop unloads the preview and its resources; Run creates a fresh session.
 

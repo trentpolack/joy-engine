@@ -28,6 +28,14 @@ const SHADER_CONSTANTS_MODULE = {
 };
 
 export type GpuBackend = typeof GPU_BACKEND.BEST_AVAILABLE | typeof GPU_BACKEND.WEBGPU | typeof GPU_BACKEND.WEBGL;
+
+/**
+ * Engine name for the portable GPU device returned by `createGpuCanvasDevice`.
+ * Consumers pass it to engine owners such as `TerrainRenderer` and `SceneEffects` and
+ * destroy it after them; naming it here keeps the backend package out of consumer code.
+ */
+export type GpuDevice = Device;
+
 export interface GpuDeviceOptions {
   backend?: GpuBackend;
   optionalFeatures?: CreateDeviceProps['optionalFeatures'];
@@ -59,7 +67,7 @@ export interface PortableShaderSources {
  * @param [options]
  * @returns Caller-owned device with a canvas context; destroy after dependent resources.
  */
-export async function createGpuCanvasDevice(canvas: HTMLCanvasElement | OffscreenCanvas, options: GpuDeviceOptions = {}): Promise<Device> {
+export async function createGpuCanvasDevice(canvas: HTMLCanvasElement | OffscreenCanvas, options: GpuDeviceOptions = {}): Promise<GpuDevice> {
   const {
     backend = GPU_BACKEND.BEST_AVAILABLE,
     optionalFeatures,
