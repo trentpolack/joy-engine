@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "gameSite": {
-    "category": "app",
+    "category": "tool",
     "title": "FORM LAB",
     "description": "A little language. A lot of possibilities. Script geometry and point clouds with a live Joy Engine viewport.",
     "status": "Creative tool",

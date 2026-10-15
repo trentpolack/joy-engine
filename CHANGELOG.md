@@ -3,6 +3,10 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-15-2026
+### Workspace Configuration
+- Renamed FORM LAB and PARTICLE LAB's published site category from `app` to `tool` to match the hosting platform's Joy Engine Tools category.
+- Extended the `.joyconfig` schema with project production availability settings for hosting-workspace builds, captures, and deployment.
+
 ### Engine Rendering Backend Wrappers
 - Removed raw luma.gl re-exports from `joy-engine`: the `@luma.gl/effects` pass wildcard, `GLSLShaderAssembler`/`WGSLShaderAssembler`, and the `ShaderPass`/`ShaderPassPipeline` types. No game, example, or editor imported them; this is breaking for direct importers, who should select effects through post-processing profiles and `SceneEffectsOptions`.
 - Added `GpuDevice` for the device returned by `createGpuCanvasDevice`, and `createEngineDependenciesPlugin()` in `joy-engine/development/vite` so Vite configs no longer list `@luma.gl/*` packages.

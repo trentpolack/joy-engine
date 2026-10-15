@@ -45,6 +45,8 @@ In addition:
 - When encountering new/found work, bugs, potential future work, deprecated logic/packages, adding tech debt then create an Issue in GitHub.
   - Don't create "checklist" issues; just file actionable issues.
   - For follow-up/future work, create a GitHub Issue; do not create standalone markdown files like `follow-ups.md`.
+  - Do not file issues for work that is being addressed within current task(s); file issues for work that needs eyes on it for future work.
+  - Apply appropriate labels/tags to issues.
 
 Use the completion date in `America/Detroit`. Keep the whole summary under roughly 300 words; link out instead of expanding.
 

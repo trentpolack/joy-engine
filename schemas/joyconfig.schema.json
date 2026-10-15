@@ -1,11 +1,18 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Joy Engine configuration",
-  "description": "Workspace editor availability stored in a .joyconfig document.",
+  "description": "Workspace editor and project production availability stored in a .joyconfig document.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["editors"],
   "properties": {
+    "projects": {
+      "type": "object",
+      "description": "Production build, capture, and deployment overrides keyed by workspace-relative project directory. Unlisted projects remain enabled. Development and direct project commands remain available; editor availability belongs in editors.",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(projects|joy-engine/examples)/[a-zA-Z0-9_-]+$": {"$ref": "#/definitions/project"}
+      }
+    },
     "editors": {
       "type": "object",
       "description": "Production availability overrides. Development enables all editors; enabling Joy Editor also enables both labs.",
@@ -18,6 +25,18 @@
     }
   },
   "definitions": {
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["productionEnabled"],
+      "properties": {
+        "productionEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include this project in root production builds, release captures, and the deployed site. False also removes stale workspace output during root builds."
+        }
+      }
+    },
     "editor": {
       "type": "object",
       "additionalProperties": false,
