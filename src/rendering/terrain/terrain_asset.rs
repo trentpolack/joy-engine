@@ -218,7 +218,7 @@ pub fn decode_terrain(manifest: TerrainManifest, binary: &[u8]) -> Result<Terrai
 
     // Read byte order explicitly rather than depending on the host's endianness.
     let heights: Vec<u16> =
-        binary.chunks_exact(BYTES_PER_HEIGHT_SAMPLE).map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]])).collect();
+        binary.as_chunks::<BYTES_PER_HEIGHT_SAMPLE>().0.iter().map(|bytes| u16::from_le_bytes(*bytes)).collect();
 
     let minimum = manifest.patches.iter().map(|patch| patch.min).fold(f64::INFINITY, f64::min);
     let maximum = manifest.patches.iter().map(|patch| patch.max).fold(f64::NEG_INFINITY, f64::max);

@@ -3,6 +3,12 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-16-2026
+### Fixes
+- Added `runtime::SaveSlot`, which refuses ordinary writes after a failed read or a rejected save until the game explicitly replaces it, so an autosave can no longer overwrite progress that merely failed to load (a valid but unreadable save used to be replaced by a fresh one). See [Rust storage](docs/rust-storage.md#saves-saveslot).
+- Browser builds now pass Shift, Ctrl, Alt, and Command to egui (with Cmd as the shortcut key on Apple platforms), so Shift-panning, Shift-selection, and modifier shortcuts work in browsers as they do natively.
+- A touch that starts on a UI widget now stays with the UI until it ends, so dragging a slider or scrolling a panel can no longer become a gameplay touch underneath.
+- The declared minimum Rust version is now 1.95 (egui 0.36 requires it; 1.90 builds failed), and the code passes Rust 1.99's Clippy, which flags `chunks_exact` with a constant size in favor of `as_chunks`.
+
 ### Rust Engine
 - Added pointer lock to the Rust shell: `Frame::set_pointer_lock` captures the cursor (winit's locked grab natively, falling back to confined; `requestPointerLock` in browsers), `InputManager::pointer_motion` reports raw relative mouse movement per frame while locked, and `InputManager::pointer_locked` reports whether the lock is held, so a game can pause when the browser or window releases it.
 - Added `InputManager::touch_points`, every active touch with its id, so on-screen sticks and look pads follow the finger that started on them.

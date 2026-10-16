@@ -62,7 +62,9 @@ pub fn top_down_orthographic(
 /// suits parallel effect planes, not intersecting transparent meshes.
 pub fn sort_top_down_transparent_triangles(vertices: &[ColorVertex]) -> Vec<ColorVertex> {
     let mut triangles: Vec<(f32, usize)> = vertices
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .enumerate()
         .map(|(index, triangle)| {
             ((triangle[0].position[2] + triangle[1].position[2] + triangle[2].position[2]) / 3.0, index)

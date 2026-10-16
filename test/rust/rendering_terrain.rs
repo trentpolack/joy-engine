@@ -89,7 +89,9 @@ fn save(name: &str, pixels: &[u8]) {
 fn coverage(pixels: &[u8]) -> f32 {
     let background = BACKGROUND.map(|channel| (channel * 255.0).round() as i32);
     let covered = pixels
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|pixel| (0..3).any(|channel| (i32::from(pixel[channel]) - background[channel]).abs() > 3))
         .count();
     covered as f32 / (WIDTH * HEIGHT) as f32
@@ -368,8 +370,11 @@ fn scene_terrain_draws_into_effect_attachments() {
     }
     let processed = target.read_rgba(&gpu).expect("readback");
     save("terrain-scene-effects", &processed);
-    let lit =
-        processed.chunks_exact(4).filter(|pixel| u32::from(pixel[0]) + u32::from(pixel[1]) + u32::from(pixel[2]) > 30);
+    let lit = processed
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|pixel| u32::from(pixel[0]) + u32::from(pixel[1]) + u32::from(pixel[2]) > 30);
     assert!(lit.count() > (WIDTH * HEIGHT / 2) as usize, "effects keep the terrain visible");
     assert!(difference(&baseline, &processed) > 0.5, "effects change the terrain frame");
 }
@@ -429,5 +434,5 @@ fn opengl_selects_on_the_cpu_and_renders_both_paths() {
     let lit = render_scene(&gpu, &mut scene_renderer, &scene, focus, 2).expect("frame renders");
     save("terrain-gl-scene-lit", &lit);
     assert!(scene_renderer.diagnostics().shadows_active);
-    assert!(lit.chunks_exact(4).filter(|pixel| pixel[1] > 40).count() > (WIDTH * HEIGHT / 3) as usize);
+    assert!(lit.as_chunks::<4>().0.iter().filter(|pixel| pixel[1] > 40).count() > (WIDTH * HEIGHT / 3) as usize);
 }

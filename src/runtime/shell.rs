@@ -10,6 +10,7 @@
 //! A phase error stops the loop and is shown to the player. Hiding the window resets the clock; losing focus releases
 //! held input.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::rendering::{BackendPreference, GpuContext, RenderError, Renderer, RendererOptions};
@@ -136,6 +137,33 @@ struct Running {
     started: Instant,
     /// The game asked for the pointer lock and the shell applied it.
     pointer_lock: bool,
+    touches: TouchOwners,
+}
+
+/// Which touches belong to the UI. A touch that starts on a widget stays with the UI until it ends, so dragging a slider
+/// or scrolling a panel never turns into a gameplay touch (which would also hold the primary button underneath).
+#[derive(Debug, Default)]
+struct TouchOwners {
+    interface: HashSet<u64>,
+}
+
+impl TouchOwners {
+    /// Whether gameplay receives this touch event; `ui_claimed` says whether the UI claimed a starting touch.
+    fn route_to_gameplay(&mut self, id: u64, phase: TouchPhase, ui_claimed: bool) -> bool {
+        match phase {
+            // A new touch is decided afresh, even when the platform reuses an identifier.
+            TouchPhase::Started if ui_claimed => {
+                self.interface.insert(id);
+                false
+            }
+            TouchPhase::Started => {
+                self.interface.remove(&id);
+                true
+            }
+            TouchPhase::Moved => !self.interface.contains(&id),
+            TouchPhase::Ended | TouchPhase::Cancelled => !self.interface.remove(&id),
+        }
+    }
 }
 
 struct App<G: Game> {
@@ -243,11 +271,12 @@ impl<G: Game> ApplicationHandler for App<G> {
             WindowEvent::Touch(touch) => {
                 let scale = running.window.scale_factor();
                 let position = glam::Vec2::new((touch.location.x / scale) as f32, (touch.location.y / scale) as f32);
-                match touch.phase {
-                    // Touches that start on a UI widget belong to the UI.
-                    TouchPhase::Started if consumed => {}
-                    TouchPhase::Started | TouchPhase::Moved => running.input.handle_touch(touch.id, Some(position)),
-                    TouchPhase::Ended | TouchPhase::Cancelled => running.input.handle_touch(touch.id, None),
+                // Touches that start on a UI widget belong to the UI until they end.
+                if running.touches.route_to_gameplay(touch.id, touch.phase, consumed) {
+                    match touch.phase {
+                        TouchPhase::Started | TouchPhase::Moved => running.input.handle_touch(touch.id, Some(position)),
+                        TouchPhase::Ended | TouchPhase::Cancelled => running.input.handle_touch(touch.id, None),
+                    }
                 }
             }
             WindowEvent::Focused(focused) => {
@@ -330,6 +359,7 @@ impl<G: Game> App<G> {
             requests: ShellRequests::default(),
             started: Instant::now(),
             pointer_lock: false,
+            touches: TouchOwners::default(),
         }));
         window.request_redraw();
     }
@@ -368,6 +398,7 @@ impl<G: Game> App<G> {
             requests,
             started,
             pointer_lock,
+            touches: _,
         } = &mut **running;
         let game = &mut self.game;
 
@@ -582,4 +613,27 @@ fn init_logging() {
     }
     #[cfg(target_arch = "wasm32")]
     crate::browser::dom::init_logging();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn touches_that_start_on_the_interface_stay_there_until_released() {
+        let mut owners = TouchOwners::default();
+        // A drag that starts on a slider: none of it reaches gameplay.
+        assert!(!owners.route_to_gameplay(7, TouchPhase::Started, true));
+        assert!(!owners.route_to_gameplay(7, TouchPhase::Moved, false), "moving off the widget stays with the UI");
+        assert!(!owners.route_to_gameplay(7, TouchPhase::Ended, false));
+        // A touch on the scene reaches gameplay throughout, even with the same identifier reused.
+        assert!(owners.route_to_gameplay(7, TouchPhase::Started, false));
+        assert!(owners.route_to_gameplay(7, TouchPhase::Moved, true), "passing over a widget does not steal it");
+        assert!(owners.route_to_gameplay(7, TouchPhase::Cancelled, false));
+        // Simultaneous touches are owned independently.
+        assert!(!owners.route_to_gameplay(1, TouchPhase::Started, true));
+        assert!(owners.route_to_gameplay(2, TouchPhase::Started, false));
+        assert!(!owners.route_to_gameplay(1, TouchPhase::Moved, false));
+        assert!(owners.route_to_gameplay(2, TouchPhase::Moved, false));
+    }
 }

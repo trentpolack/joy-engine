@@ -237,7 +237,7 @@ impl TextureAsset {
         let pixels = if decoder.has_alpha() {
             buffer
         } else {
-            buffer.chunks_exact(3).flat_map(|pixel| [pixel[0], pixel[1], pixel[2], 255]).collect()
+            buffer.as_chunks::<3>().0.iter().flat_map(|pixel| [pixel[0], pixel[1], pixel[2], 255]).collect()
         };
         Self::from_rgba8(width, height, pixels)
     }
@@ -316,7 +316,7 @@ mod tests {
 
         let lossy = TextureAsset::decode_data_url(WEBP_LOSSY).unwrap();
         assert_eq!((lossy.width(), lossy.height()), (2, 2));
-        assert!(lossy.pixels().chunks_exact(4).all(|pixel| pixel[3] == 255), "opaque WebP expands to RGBA");
+        assert!(lossy.pixels().as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 255), "opaque WebP expands to RGBA");
 
         let gray = TextureAsset::decode_data_url(JPEG_GRAY).unwrap();
         assert_eq!((gray.width(), gray.height()), (1, 1));

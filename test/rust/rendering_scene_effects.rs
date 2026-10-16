@@ -183,8 +183,12 @@ fn every_effect_renders_across_frames() {
     let other = render(&gpu, Some(alternate), 4, "effects-ssao-camera-taa");
     for pixels in [&all, &other] {
         // The effects change the image without blanking it.
-        let lit =
-            pixels.chunks_exact(4).filter(|pixel| pixel[0] as u32 + pixel[1] as u32 + pixel[2] as u32 > 30).count();
+        let lit = pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|pixel| pixel[0] as u32 + pixel[1] as u32 + pixel[2] as u32 > 30)
+            .count();
         assert!(lit > (WIDTH * HEIGHT / 2) as usize, "most pixels stay lit");
         assert!(difference(&baseline, pixels) > 0.5, "effects visibly change the frame");
     }
@@ -209,7 +213,7 @@ fn outlines_darken_silhouettes_only() {
     );
     let mut darker = 0;
     let mut lighter = 0;
-    for (before, after) in baseline.chunks_exact(4).zip(outlined.chunks_exact(4)) {
+    for (before, after) in baseline.as_chunks::<4>().0.iter().zip(outlined.as_chunks::<4>().0) {
         let luminance = |pixel: &[u8]| u32::from(pixel[0]) + u32::from(pixel[1]) + u32::from(pixel[2]);
         let (before, after) = (luminance(before), luminance(after));
         if after + 30 < before {

@@ -288,7 +288,7 @@ impl MeshAsset {
         // Partition triangles by blend state so each group draws with one pipeline.
         let mut opaque = Vec::with_capacity(data.indices.len());
         let mut blended = Vec::new();
-        for triangle in data.indices.chunks_exact(3) {
+        for triangle in data.indices.as_chunks::<3>().0 {
             let blends = triangle.iter().any(|index| data.vertices[*index as usize].blends());
             if blends {
                 blended.extend_from_slice(triangle);

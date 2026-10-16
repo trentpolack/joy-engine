@@ -179,7 +179,7 @@ pub fn form_mesh_asset_with_textures(
     let mut remap = std::collections::HashMap::new();
     let mut vertices = Vec::with_capacity(vertex_count);
     let mut indices = Vec::with_capacity(geometry.triangles.len());
-    for (triangle, corners) in geometry.triangles.chunks_exact(3).enumerate() {
+    for (triangle, corners) in geometry.triangles.as_chunks::<3>().0.iter().enumerate() {
         let material_index =
             if bake_materials { geometry.triangle_materials.get(triangle).copied().unwrap_or(0) } else { 0 };
         for &corner in corners {

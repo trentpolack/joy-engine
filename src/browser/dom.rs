@@ -94,6 +94,16 @@ fn download_blob(file_name: &str, parts: &js_sys::Array, media_type: &str) -> Re
     clicked
 }
 
+/// Whether the page runs on an Apple platform, where Cmd is the shortcut key.
+pub(crate) fn apple_platform() -> bool {
+    let Some(navigator) = web_sys::window().map(|window| window.navigator()) else {
+        return false;
+    };
+    let platform = navigator.platform().unwrap_or_default();
+    let agent = navigator.user_agent().unwrap_or_default();
+    ["Mac", "iPhone", "iPad", "iPod"].iter().any(|name| platform.contains(name) || agent.contains(name))
+}
+
 /// Show a startup or runtime failure where the player can see it, matching the TypeScript failure panels.
 pub(crate) fn report_failure(title: &str, message: &str) {
     let Some(document) = web_sys::window().and_then(|window| window.document()) else {

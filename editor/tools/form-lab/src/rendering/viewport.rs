@@ -384,7 +384,12 @@ impl Viewport {
 
 /// Packed world positions of geometry.
 fn positions(data: &GeometryData) -> Vec<Vec3> {
-    data.positions.chunks_exact(3).map(|point| Vec3::new(point[0] as f32, point[1] as f32, point[2] as f32)).collect()
+    data.positions
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|point| Vec3::new(point[0] as f32, point[1] as f32, point[2] as f32))
+        .collect()
 }
 
 /// The environment record for the studio: its light as the primary (and sun), no moon, skylight, sky, or fog.

@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 //! Runtime (platform layer): the game shell that owns windows or browser canvases, the GPU and renderer, input and
-//! gamepads, the frame clock, and development UI, and runs a [`Game`]'s phases every frame; plus sound playback and
-//! persistent text storage for saves.
+//! gamepads, the frame clock, and development UI, and runs a [`Game`]'s phases every frame; plus sound playback,
+//! persistent text storage, and [`SaveSlot`], which keeps a save that could not be read from being overwritten.
 //!
 //! The same game code runs as a native application (Windows, macOS, Linux) and in the browser through WebAssembly; the
 //! shell hides the differences (asynchronous browser startup, canvas sizing, WebGPU or WebGL 2 selection). Immediate-
@@ -23,6 +23,7 @@ pub mod hud_text;
 pub(crate) mod input;
 mod launch;
 mod save_file;
+mod save_slot;
 pub(crate) mod shell;
 mod storage;
 mod surface;
@@ -42,5 +43,6 @@ pub use input::{
 };
 pub use launch::launch_parameter;
 pub use save_file::{SaveFileError, save_binary_file, save_text_file};
+pub use save_slot::{SaveGuard, SaveSlot, SaveWrite};
 pub use shell::{ShellError, ShellOptions, run};
 pub use storage::{MAXIMUM_STORAGE_BYTES, Storage, StorageError};

@@ -271,7 +271,7 @@ mod tests {
         let step: UniformValues = vec![("direction", vec![0.0, 1.0])];
         let frame: UniformValues = vec![("radius", vec![2.0])];
         let bytes = pack_uniforms(pass, &[&step, &frame]);
-        let floats: Vec<f32> = bytes.chunks_exact(4).map(|word| f32::from_le_bytes(word.try_into().unwrap())).collect();
+        let floats: Vec<f32> = bytes.as_chunks::<4>().0.iter().map(|word| f32::from_le_bytes(*word)).collect();
         // direction (vec2), radius, depthSigma, spatialSigma.
         assert_eq!(&floats[..5], &[0.0, 1.0, 2.0, 0.01, 3.0]);
     }

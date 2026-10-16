@@ -185,7 +185,9 @@ fn presets_and_baked_mode_render() {
     let coverage = |pixels: &[u8]| {
         let background = [pixels[0], pixels[1], pixels[2]];
         pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|pixel| (0..3).any(|channel| pixel[channel].abs_diff(background[channel]) > 12))
             .count()
     };

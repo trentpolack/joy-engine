@@ -128,7 +128,7 @@ fn decode_base64(encoded: &str) -> Option<Vec<u8>> {
         return None;
     }
     let mut output = Vec::with_capacity((bytes.len() / 4) * 3);
-    for (index, group) in bytes.chunks_exact(4).enumerate() {
+    for (index, group) in bytes.as_chunks::<4>().0.iter().enumerate() {
         let last = index + 1 == bytes.len() / 4;
         let padding = group.iter().rev().take_while(|byte| **byte == b'=').count();
         if padding > 2 || (padding > 0 && !last) {

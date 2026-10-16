@@ -209,7 +209,9 @@ impl FrameInputs<'_> {
 /// approximation, not order-independent transparency.
 pub fn sort_transparent_triangles(vertices: &[ColorVertex], backward: Vec3) -> Vec<ColorVertex> {
     let mut triangles: Vec<(f32, usize)> = vertices
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .enumerate()
         .map(|(index, triangle)| {
             let depth: f32 = triangle.iter().map(|vertex| Vec3::from_array(vertex.position).dot(backward)).sum();
@@ -236,7 +238,7 @@ mod tests {
         let vertices: Vec<ColorVertex> = [triangle(5.0), triangle(-5.0), triangle(0.0)].concat();
         // Camera on +Z looking toward -Z: the farthest (most negative Z) triangle draws first.
         let sorted = sort_transparent_triangles(&vertices, Vec3::Z);
-        let order: Vec<f32> = sorted.chunks_exact(3).map(|triangle| triangle[0].position[2]).collect();
+        let order: Vec<f32> = sorted.as_chunks::<3>().0.iter().map(|triangle| triangle[0].position[2]).collect();
         assert_eq!(order, [-5.0, 0.0, 5.0]);
     }
 

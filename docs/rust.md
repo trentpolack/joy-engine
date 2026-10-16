@@ -59,7 +59,7 @@ Games, the published examples, FORM LAB, PARTICLE LAB, and Joy Editor each decla
 The browser picks WebGPU when available and falls back to WebGL 2; `?backend=webgpu` or `?backend=webgl` forces one. Browsers use the engine's own egui input translator because the pinned egui-winit does not build for WebAssembly. Layout uses the canvas's measured backing ratio, which stays correct when a browser's `devicePixelRatio` and canvas measurements disagree.
 
 ## Commands
-Run from this directory (the package root). Linux builds need the udev and ALSA development packages for gamepads and audio (`sudo apt install pkg-config libudev-dev libasound2-dev` on Debian and Ubuntu).
+Run from this directory (the package root). The crate needs Rust 1.95 or newer (the `rust-version` egui 0.36 requires). Linux builds need the udev and ALSA development packages for gamepads and audio (`sudo apt install pkg-config libudev-dev libasound2-dev` on Debian and Ubuntu).
 
 ```bash
 cargo fmt --all --check

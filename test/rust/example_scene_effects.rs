@@ -78,7 +78,9 @@ fn the_room_renders_with_shadowed_point_lights_and_effect_presets() {
     assert_eq!(snapshot.diagnostics.shadow_views, 27 * 6, "six faces per light and no sun");
     assert!(snapshot.paused && snapshot.time_seconds == 2.0, "the clock starts frozen at two seconds");
     let lit = baseline
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|pixel| u32::from(pixel[0]) + u32::from(pixel[1]) + u32::from(pixel[2]) > 60)
         .count();
     assert!(lit > (WIDTH * HEIGHT / 3) as usize, "the room fills the view ({lit} lit pixels)");

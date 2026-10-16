@@ -166,7 +166,7 @@ pub fn append_particle_effect(
         };
         scratch.clear();
         append_colored_particle(&mut scratch, particle, emitter.asset.renderer, camera);
-        vertices.extend(scratch.chunks_exact(COLORED_STRIDE).map(colored_vertex));
+        vertices.extend(scratch.as_chunks::<COLORED_STRIDE>().0.iter().map(|vertex| colored_vertex(vertex)));
     }
     Ok(())
 }
@@ -187,7 +187,7 @@ pub fn create_particle_effect_batches(
     if !additional_triangles.len().is_multiple_of(3) {
         return Err(ParticleRenderError::IncompleteTriangles);
     }
-    for triangle in additional_triangles.chunks_exact(3) {
+    for triangle in additional_triangles.as_chunks::<3>().0 {
         let corner = |vertex: &ColorVertex| ParticleCorner {
             position: vertex.position.map(f64::from),
             color: vertex.color.map(f64::from),
@@ -429,7 +429,7 @@ fn append_colored_particle(
     }
 
     let origin = [particle.x, particle.y, particle.z];
-    for vertex in local.chunks_exact(COLORED_STRIDE) {
+    for vertex in local.as_chunks::<COLORED_STRIDE>().0 {
         let axes = origin.iter().zip(camera.right).zip(camera.up).zip(camera.backward);
         for (((origin, right), up), backward) in axes {
             vertices.push(((origin + (vertex[0] * right)) + (vertex[1] * up)) + (vertex[2] * backward));
@@ -516,7 +516,7 @@ fn append_textured_particle(
     let uvs = [[left, top], [left, bottom], [right, bottom], [left, top], [right, bottom], [right, top]];
 
     let origin = [particle.x, particle.y, particle.z];
-    for (vertex, uv) in local.chunks_exact(COLORED_STRIDE).zip(uvs) {
+    for (vertex, uv) in local.as_chunks::<COLORED_STRIDE>().0.iter().zip(uvs) {
         for ((origin, right), up) in origin.iter().zip(camera.right).zip(camera.up) {
             out.push((origin + (vertex[0] * right)) + (vertex[1] * up));
         }

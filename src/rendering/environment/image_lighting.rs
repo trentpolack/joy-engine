@@ -298,7 +298,7 @@ pub(crate) fn prepare_environment_map(
     });
     let mut filter_bytes = vec![0_u8; draws.len() * FILTER_STRIDE as usize];
     for (chunk, (_, face, _, target, mode, roughness)) in
-        filter_bytes.chunks_exact_mut(FILTER_STRIDE as usize).zip(&draws)
+        filter_bytes.as_chunks_mut::<{ FILTER_STRIDE as usize }>().0.iter_mut().zip(&draws)
     {
         let uniforms = FilterUniforms {
             face: *face,

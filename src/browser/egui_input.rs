@@ -16,7 +16,7 @@ use web_time::Instant;
 use winit::event::{ElementState, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent};
 use winit::window::Window;
 
-use crate::runtime::egui_layer::claims_press;
+use crate::runtime::egui_layer::{browser_modifiers, claims_press};
 
 /// A page clipboard listener, kept so it can be removed.
 type ClipboardListener = (&'static str, Closure<dyn FnMut(web_sys::ClipboardEvent)>);
@@ -26,6 +26,8 @@ pub(crate) struct WebEguiInput {
     started: Instant,
     pointer: Option<egui::Pos2>,
     modifiers: egui::Modifiers,
+    /// Whether Cmd rather than Ctrl is the shortcut key (macOS, iOS, iPadOS).
+    apple: bool,
     focused: bool,
     cursor_visible: bool,
     max_texture_side: usize,
@@ -63,6 +65,7 @@ impl WebEguiInput {
             started: Instant::now(),
             pointer: None,
             modifiers: egui::Modifiers::default(),
+            apple: crate::browser::dom::apple_platform(),
             focused: true,
             cursor_visible: true,
             max_texture_side,
@@ -171,13 +174,15 @@ impl WebEguiInput {
             }
             WindowEvent::ModifiersChanged(modifiers) => {
                 let state = modifiers.state();
-                self.modifiers = egui::Modifiers {
-                    alt: state.alt_key(),
-                    ctrl: state.control_key(),
-                    shift: state.shift_key(),
-                    mac_cmd: false,
-                    command: state.control_key() || state.super_key(),
-                };
+                self.modifiers = browser_modifiers(
+                    state.alt_key(),
+                    state.control_key(),
+                    state.shift_key(),
+                    state.super_key(),
+                    self.apple,
+                );
+                // egui reads modifier state only from this event (pointer and wheel events carry a copy).
+                self.events.push(egui::Event::ModifiersChanged(self.modifiers));
                 false
             }
             WindowEvent::KeyboardInput { event, .. } => {
@@ -207,6 +212,10 @@ impl WebEguiInput {
             }
             WindowEvent::Focused(focused) => {
                 self.focused = *focused;
+                // Keys released while the page is unfocused never report; egui clears its copy on this event too.
+                if !*focused {
+                    self.modifiers = egui::Modifiers::default();
+                }
                 self.events.push(egui::Event::WindowFocused(*focused));
                 false
             }

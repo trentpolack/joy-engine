@@ -136,6 +136,13 @@ pub(crate) fn paint_output(
     }
 }
 
+/// egui modifiers for the keys a browser reports. Command is the platform's shortcut key, as egui-winit maps it
+/// natively: Cmd (the Meta key) on Apple platforms, Ctrl elsewhere.
+#[cfg(any(test, target_arch = "wasm32"))]
+pub(crate) fn browser_modifiers(alt: bool, ctrl: bool, shift: bool, meta: bool, apple: bool) -> egui::Modifiers {
+    egui::Modifiers { alt, ctrl, shift, mac_cmd: apple && meta, command: if apple { meta } else { ctrl } }
+}
+
 /// Whether egui claims a press at `position` (points): a widget already holds the pointer, or an interactable area
 /// (a HUD panel, button, or development tool) lies under the press.
 ///
@@ -150,6 +157,25 @@ pub(crate) fn claims_press(context: &egui::Context, position: egui::Pos2) -> boo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn browser_modifiers_follow_the_platform_shortcut_key_and_reach_egui() {
+        let mac = browser_modifiers(false, false, true, true, true);
+        assert!(mac.shift && mac.command && mac.mac_cmd && !mac.ctrl);
+        let other = browser_modifiers(true, true, false, true, false);
+        assert!(other.alt && other.ctrl && other.command && !other.mac_cmd);
+
+        // egui only learns modifier state from `ModifiersChanged` events, so the browser adapter must send them.
+        let context = egui::Context::default();
+        let frame = |events: Vec<egui::Event>| {
+            let mut output = context.run_ui(egui::RawInput { events, ..Default::default() }, |_| {});
+            output.textures_delta.clear();
+        };
+        frame(vec![egui::Event::ModifiersChanged(mac)]);
+        assert!(context.input(|input| input.modifiers.shift && input.modifiers.command));
+        frame(vec![egui::Event::ModifiersChanged(egui::Modifiers::default())]);
+        assert!(context.input(|input| !input.modifiers.shift));
+    }
 
     #[test]
     fn presses_are_claimed_only_over_interactable_areas() {

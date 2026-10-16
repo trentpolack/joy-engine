@@ -75,7 +75,7 @@ pub fn add_mesh(
         let shade = triangle[9];
         let channel = |value: f32| (f64::from(value) * shade).min(1.0) as f32;
         let shaded = [channel(color[0]), channel(color[1]), channel(color[2]), color[3]];
-        for corner in triangle[..9].chunks_exact(3) {
+        for corner in triangle[..9].as_chunks::<3>().0 {
             let local_x = corner[0] * scale;
             let local_y = corner[1] * scale;
             push(

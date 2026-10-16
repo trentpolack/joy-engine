@@ -46,7 +46,7 @@ pub fn decode_base64(encoded: &str) -> Option<Vec<u8>> {
     }
     let groups = bytes.len() / 4;
     let mut output = Vec::with_capacity(groups * 3);
-    for (index, group) in bytes.chunks_exact(4).enumerate() {
+    for (index, group) in bytes.as_chunks::<4>().0.iter().enumerate() {
         let padding = group.iter().rev().take_while(|byte| **byte == b'=').count();
         if padding > 2 || (padding > 0 && index + 1 != groups) {
             return None;
