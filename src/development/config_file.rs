@@ -2,8 +2,7 @@
 // Licensed under the MIT License.
 
 //! Native persistence for config panels: a version-1 tuning override document (`tuning-overrides.json`), saved with
-//! only the values that differ from field defaults so later default changes still reach untouched fields, like the
-//! TypeScript development server plugin.
+//! only the values that differ from field defaults so later default changes still reach untouched fields.
 
 use std::path::PathBuf;
 

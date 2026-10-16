@@ -3,7 +3,7 @@
 
 //! The textured transparent material and the plan for [`FrameInputs::transparent_draws`](crate::rendering::FrameInputs).
 //!
-//! The Rust counterpart of the TypeScript `TexturedMaterialPass`: one blended pipeline that samples a sprite texture and
+//! One blended pipeline samples a sprite texture and
 //! multiplies it by vertex color, depth-tested (`LessEqual`) against opaque geometry without writing depth. Colored
 //! runs reuse the unlit blend pipeline through the renderer's transient buffer; textured runs use this pass's own
 //! vertex buffer. Textures upload on first use and release once their [`TextureAsset`] is dropped everywhere.

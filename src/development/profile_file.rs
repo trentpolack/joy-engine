@@ -3,7 +3,7 @@
 
 //! Native persistence for the post-processing editor. The profile lives under `postProcessing` in a JSON document (a
 //! level or project file); saves replace only that key, write atomically, and refuse to overwrite a file that changed
-//! since it was read, like the TypeScript development server plugin.
+//! since it was read.
 
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};

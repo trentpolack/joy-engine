@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Runtime behavior attached to one entity per authored component type (TypeScript `component.ts`).
+//! Runtime behavior attached to one entity per authored component type.
 //!
 //! Authored component data stays a plain JSON record in [`EntityState::components`]; a runtime component is the
 //! project logic and resources a [`ComponentRegistry`](super::ComponentRegistry) factory creates for that record.
@@ -9,13 +9,13 @@
 //! [`EntitySystem`](super::EntitySystem)s and [`EntityWorld::query`](super::EntityWorld::query) select entities by the
 //! runtime components they carry.
 //!
-//! Lifecycle (matching the TypeScript engine):
+//! Lifecycle:
 //! - Spawning attaches registered components in authored component order, before the behavior's `on_spawn`.
 //! - [`EntityComponent::on_attach`] acquires resources; returning an error detaches the component (running
 //!   [`EntityComponent::on_detach`]) and rolls back the whole spawn.
 //! - Removal runs the behavior's `on_destroy`, then detaches components in reverse attachment order: each component's
-//!   `on_detach` runs exactly once and the component is dropped, releasing the resources it owns in reverse field
-//!   order (the Rust form of the TypeScript `own` list), before the entity's own resources.
+//!   `on_detach` runs exactly once and the component is dropped, releasing its fields in declaration order before
+//!   the entity's own resources.
 
 use std::any::Any;
 

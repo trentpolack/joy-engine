@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! World-owned processors for entities selected by runtime component composition (TypeScript `entity-system.ts`).
+//! World-owned processors for entities selected by runtime component composition.
 
 use super::entity::{Entity, SimulationContext};
 use super::error::GameplayError;

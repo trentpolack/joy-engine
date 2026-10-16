@@ -2,9 +2,9 @@
 // Licensed under the MIT License.
 
 //! The entity owner: spawning with rollback, runtime components, removal, deterministic insertion-order updates,
-//! entity systems, and exclusive controller possession (TypeScript `entity-world.ts`).
+//! entity systems, and exclusive controller possession.
 //!
-//! Semantics follow the TypeScript `EntityWorld`, `Entity`, `Character`, and `Controller`:
+//! Lifecycle and control contracts:
 //! - Spawning registers the entity, attaches runtime components for authored types the [`ComponentRegistry`] knows (in
 //!   authored order), and then runs the behavior's `on_spawn`. Any failure removes the entity again, running the same
 //!   teardown as [`EntityWorld::remove`], before the error is returned.
@@ -14,8 +14,7 @@
 //!   possessed entities have their control intent cleared and their behavior's `reset_control` called. Removed entities
 //!   cannot be possessed, and removing an entity releases its controller.
 //!
-//! In Rust every entity can be possessed (the TypeScript engine restricts possession to `Character` subclasses), and
-//! the world, not the entity, owns possession bookkeeping.
+//! Every entity can be possessed. The world owns possession bookkeeping.
 
 use std::collections::HashSet;
 use std::fmt;

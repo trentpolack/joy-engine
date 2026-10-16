@@ -1,18 +1,17 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The preview: accepted FORM geometry drawn by the engine renderer. Ported from `viewport.ts`, without its shaders.
+//! The preview: accepted FORM geometry drawn by the engine renderer.
 //!
-//! The TypeScript preview drew through its own triangle batches and preview shaders. Here every pixel comes from the
-//! engine: geometry becomes a mesh through `form_mesh_asset` (the path games and the editor use), surfaces shade in the
+//! Geometry becomes a mesh through `form_mesh_asset` (the path games and the editor use), surfaces shade in the
 //! PBR pass with `MaterialTextures`, the studio environment lights them through `Renderer::prepare_environment_map`,
 //! the direct light casts directional (and alpha-masked) shadows, `EditorGrid` draws the reference grid, and point and
 //! inspection markers are unlit transparent runs. FORM content therefore looks the same here, in Joy Editor, and in
 //! games.
 //!
 //! The preview occupies a rectangle of the window between the tool's panels. The engine's `RegionCamera` maps the orbit
-//! camera onto that rectangle exactly as if it were its own canvas (aspect, field of view, and centering), so framing
-//! matches the TypeScript tool while the renderer keeps drawing the whole window.
+//! camera onto that rectangle with its own aspect, field of view, and centering while the renderer draws the whole
+//! window.
 
 use joy_engine::core::Transform;
 use joy_engine::form::GeometryData;

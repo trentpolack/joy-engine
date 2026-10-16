@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Preview-only inspection lighting and the procedural studio environment. Ported from `preview-lighting.ts`.
+//! Preview-only inspection lighting and the procedural studio environment.
 //!
 //! These settings light the preview alone: they never enter a document, a `.formlab` save, or an export. The studio
 //! environment is an original equirectangular image (two soft panels over a floor-to-ceiling gradient) that the engine

@@ -5,8 +5,8 @@
 //! Browser's width. (The level editor's panels persist through the authoring kit's `PanelLayout`.)
 //! Unsaved source buffers are never stored; disk content stays authoritative.
 //!
-//! Sessions persist through `runtime::Storage` (a per-user file natively, `localStorage` in browsers) as JSON in the
-//! TypeScript layout record's shape (`project`, `tabs`, `active`), with the panel widths beside them. Unreadable or
+//! Sessions persist through `runtime::Storage` (a per-user file natively, `localStorage` in browsers) as JSON with
+//! `project`, `tabs`, and `active` fields, alongside panel widths. Unreadable or
 //! invalid sessions start empty; storage failures never block authoring.
 
 use std::collections::BTreeMap;

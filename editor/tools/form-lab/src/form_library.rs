@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! The Examples library: authored `.form` and `.formlab` files under the engine's `assets/examples` and `assets/form`
-//! folders. Ported from `form-library.ts`.
+//! folders.
 //!
 //! The library describes files without evaluating scripts or touching the GPU. Opening an asset parses a fresh working
 //! copy each time, so editing, recovery, and saving never change the bundled text or an earlier copy.

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Mesh and material parameter groups (UI module), ported from `resource-parameter-controls.ts`. Mesh parameters
+//! Mesh and material parameter groups (UI module). Mesh parameters
 //! offer the current mesh, a unit box or sphere, and a geometry-only GLB import; material parameters edit linear RGBA
 //! base color (alpha below one switches to BLEND), metallic, and roughness. Controls own no runtime state: every edit
 //! publishes an explicit override.

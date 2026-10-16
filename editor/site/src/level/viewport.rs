@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The level viewport (TypeScript `viewport.ts`): the retained asset presentation, the orbit camera framed into the
+//! The level viewport: the retained asset presentation, the orbit camera framed into the
 //! viewport's region of the window, the editor grid, picking, and the move gizmo.
 //!
 //! The viewport draws through the engine renderer exactly like games and the labs: [`AssetScene`] presents primitives,

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The shared script editor (the TypeScript `script-editor.ts` CodeMirror setup) on egui's `TextEdit`: catalog-driven
+//! The shared script editor on egui's `TextEdit`: catalog-driven
 //! syntax highlighting, line numbers with the active line marked, completion while typing and on Ctrl+Space with call
 //! insertion, hover documentation for keywords, functions, fields, and inputs, diagnostics underlined and marked in
 //! the gutter with go-to-line, Ctrl/Cmd+Enter to run, and a read-only mode with language tools off for JSON.

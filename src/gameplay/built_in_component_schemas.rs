@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Schemas for every component the engine interprets (TypeScript `built-in-component-schemas.ts`).
+//! Schemas for every component the engine interprets.
 //!
 //! Field defaults come from the same constants the runtime readers use ([`RENDER_COMPONENT_DEFAULTS`],
 //! [`LIGHT_COMPONENT_DEFAULTS`], [`EFFECT_COMPONENT_DEFAULTS`], and the physics body, vehicle, and wheel defaults), so

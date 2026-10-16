@@ -1,12 +1,12 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Action and axis input for one player, matching the TypeScript `InputManager`.
+//! Action and axis input for one player on native and browser targets.
 //!
 //! Games describe named actions bound to keys, mouse buttons, gamepad buttons, or virtual (on-screen) buttons, and
 //! axes built from a positive and a negative action plus an optional analog stick. The shell feeds device events in and
 //! polls gamepads; the game reads one snapshot per frame. Keys use DOM `KeyboardEvent.code` names (`"KeyW"`,
-//! `"ArrowUp"`, `"Space"`) and gamepads use the W3C standard mapping, so bindings read the same as TypeScript ones.
+//! `"ArrowUp"`, `"Space"`) and gamepads use the W3C standard mapping on every target.
 //!
 //! Actions aggregate by maximum value and count as held above [`PRESS_THRESHOLD`]; a press and release completed
 //! between two frames still reports `pressed`. Every action and axis belongs to one or more contexts (by default

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The workspace model (TypeScript `workspace/main.ts`, minus the DOM): project selection, the asset list, document
+//! The workspace model: project selection, the asset list, document
 //! tabs and their editors, saves against disk revisions, external-change polling and conflicts, asset lifecycle
 //! (create, import, rename, delete), source navigation between documents, and the restored session.
 //!

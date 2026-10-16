@@ -3,7 +3,7 @@
 
 //! Development overlay: frame rate, frame time, backend, viewport, renderer statistics, and game-published values.
 //!
-//! The Rust counterpart of the TypeScript `DevTools`: disabled in production, a STATS launcher in the development dock,
+//! Disabled in production, with a STATS launcher in the development dock,
 //! toggled with the backquote key, and fed only by values that already exist (no GPU queries).
 
 use egui::RichText;

@@ -3,7 +3,7 @@
 
 //! Screen-space shader passes ported from luma.gl 9.4.2 (`@luma.gl/effects`, MIT License, Copyright (c) vis.gl
 //! contributors; see `LICENSE-luma.gl`). Each pass's WGSL lives in `shaders/`; this table records its uniform block
-//! in declaration order with luma.gl's default values. Generated from the npm package the TypeScript engine uses.
+//! in declaration order with luma.gl's default values. The table was generated from the upstream npm package.
 
 use crate::rendering::scene_effects::pass::{PassDefinition, UniformField, UniformKind};
 

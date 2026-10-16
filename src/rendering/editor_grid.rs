@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! A cached editor reference grid on the XZ plane, ported from the TypeScript `EditorGrid`.
+//! A cached editor reference grid on the XZ plane.
 //!
 //! Camera-facing ribbons keep lines readable across zoom and orbit. World units are never rescaled: minor spacing
 //! follows a 1/2/5 sequence and major lines mark five divisions. The origin axes stay at world zero while the finite

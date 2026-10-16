@@ -3,12 +3,11 @@
 
 //! Project file access for Joy Editor, in process.
 //!
-//! The TypeScript workspace reached project files through a Vite middleware (`plugin.mjs`) backed by
-//! `project-files.mjs`. The Rust editor owns its files directly: [`ProjectStore`] is the operation set the middleware
-//! served (projects, assets, read, save, create, rename, delete), [`ProjectFiles`](project_files::ProjectFiles) is the
-//! native implementation with the same path policy (manifest-supported assets beneath `assets/`, no symbolic links, no
-//! traversal, revision-checked and serialized saves, recovery copies), and [`BundledProjects`] is the read-only store
-//! the browser build opens, since a static page has no project file service.
+//! [`ProjectStore`] defines project and asset discovery, reads, saves, creation, renaming, and deletion.
+//! [`ProjectFiles`](project_files::ProjectFiles) implements native file access with manifest-supported assets beneath
+//! `assets/`, no symbolic links or traversal, revision-checked and serialized saves, and recovery copies.
+//! [`BundledProjects`] provides the read-only examples the browser build opens, since a static page has no project file
+//! service.
 //!
 //! Paths are project-relative with forward slashes (`assets/levels/track.joylevel`). Revisions are content hashes: a
 //! save succeeds only when the file still has the revision the editor read.

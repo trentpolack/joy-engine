@@ -4,9 +4,8 @@
 //! Versioned `.joylevel` documents and the editable [`LevelDocument`] with undo history.
 //!
 //! Parsing validates the version, a nonblank name, every entity definition, unique entity ids, and the optional
-//! post-processing profile, exactly like the TypeScript `parseLevel`. Serialization writes pretty JSON with two-space
-//! indentation, the TypeScript key order, and a trailing newline, so documents written by either engine round trip
-//! unchanged. Component data is never evaluated.
+//! post-processing profile. Serialization writes pretty JSON with two-space indentation, stable key order, and a
+//! trailing newline, preserving the authored document format. Component data is never evaluated.
 
 use std::collections::VecDeque;
 

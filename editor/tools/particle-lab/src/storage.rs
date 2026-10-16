@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Working-draft recovery through `runtime::Storage` (the TypeScript `storage.ts` over `localStorage`): blocked or
+//! Working-draft recovery through `runtime::Storage`: blocked or
 //! failing storage reads as an absent draft and never interrupts editing.
 
 use joy_engine::runtime::Storage;

@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The TUNE panel for a [`ConfigSession`] and [`ConfigEditor`], which pairs a session with a game's override document,
-//! matching the TypeScript `ConfigPanel` and `mountConfigEditor`.
+//! The TUNE panel for a [`ConfigSession`] and [`ConfigEditor`], which pairs a session with a game's override document.
 //!
 //! Games own the editor in development builds, draw it from their UI phase, and apply
 //! [`take_change`](ConfigEditor::take_change). Native builds given the document path read it at startup and save into

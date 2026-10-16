@@ -9,7 +9,7 @@
 //!
 //! Material factors are baked into vertices. Submeshes may also carry [`MaterialTextures`] (base color, normal,
 //! emissive, metallic, roughness, and occlusion maps) that multiply those factors in the PBR pass;
-//! [`MeshAsset::from_pbr_mesh`] builds such assets from the TypeScript `PbrMesh` document.
+//! [`MeshAsset::from_pbr_mesh`] builds such assets from a `PbrMesh` document.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};

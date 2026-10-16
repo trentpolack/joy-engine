@@ -2,18 +2,15 @@
 // Licensed under the MIT License.
 
 //! Foundation layer: shared data and algorithms with no simulation, content, rendering, or platform dependencies.
-//! Mirrors the TypeScript `src/core/` modules.
-//!
 //! Coordinate conventions used across the engine:
 //! - World space is Y-up and right-handed, measured in meters (or project world units).
 //! - Rotations are XYZ Euler radians applied X, then Y, then Z (the matrix `Rz * Ry * Rx`).
 //! - Transforms apply scale, then rotation, then translation.
 //! - Colors are linear RGB(A) unless a function says otherwise.
 //!
-//! TypeScript map: `color.ts` → [`color`], `config-values.ts` → [`config_values`], `constants.ts` →
-//! [`primitive`] (`PRIMITIVE_SHAPE`), `math.ts` → [`math`], `random.ts` → [`random`], and `types.ts` → [`types`].
-//! [`js_math`] provides JavaScript `Math` semantics for simulations ported from TypeScript, [`format`] JavaScript number
-//! formatting for text and JSON writers, and [`base64`] the `data:` URL encoding authored documents embed.
+//! [`color`], [`config_values`], [`primitive`], [`math`], [`random`], and [`types`] define shared engine data and algorithms.
+//! [`js_math`] preserves numerical semantics used by recorded simulation fixtures, [`mod@format`] supplies portable
+//! number formatting for text and JSON writers, and [`base64`] handles the `data:` URL encoding authored documents embed.
 
 pub mod base64;
 pub mod color;

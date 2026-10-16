@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! FORM LAB's composition root and workbench (UI module). Ported from `site/src/main.ts`.
+//! FORM LAB's composition root and workbench (UI module).
 //!
 //! [`FormLab`] owns the session (document, compile lifecycle, history, recovery), the engine preview, the Output
 //! inspector, and the workbench UI: header, project bar, and the Script, Preview, and Inspector panes. It is a [`Game`]

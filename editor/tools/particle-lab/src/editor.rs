@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! One lab script editor (the TypeScript `editor.ts`): the kit's script editor with the particle language catalog,
+//! One lab script editor: the kit's script editor with the particle language catalog,
 //! the effect's parameter names highlighted, a status line with the cursor position and a Script Reference button,
 //! and a fresh history whenever the owner switches emitters or documents, so programmatic refreshes never become undo
 //! entries.

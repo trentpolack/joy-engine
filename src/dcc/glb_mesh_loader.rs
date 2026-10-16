@@ -1,20 +1,19 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Decode one indexed triangle mesh from in-memory glTF 2.0 data (TypeScript `glb-mesh-loader.ts`).
+//! Decode one indexed triangle mesh from in-memory glTF 2.0 data.
 //!
-//! The TypeScript loader delegates container, buffer, accessor, sparse-data, and stride decoding to loaders.gl; this
-//! module implements the same subset of the glTF 2.0 specification directly, so no dependency is needed:
+//! This module implements the supported subset of the glTF 2.0 specification directly:
 //! - binary GLB containers (JSON chunk plus optional BIN chunk) and JSON glTF text;
 //! - buffers stored in the GLB BIN chunk or embedded as base64 `data:` URIs (loading external buffers is the caller's
 //!   job, like fetching the asset itself);
 //! - accessors with buffer-view and accessor offsets, interleaved strides, sparse substitution, and accessors without
 //!   a buffer view (zero-filled before sparse substitution).
 //!
-//! As in the TypeScript loader, one mesh is selected (by exact name, or the first), it must hold exactly one triangle
+//! One mesh is selected (by exact name, or the first), and it must hold exactly one triangle
 //! primitive with float XYZ positions and normals, unindexed triangles receive sequential indices, and scene/node
 //! transforms, materials, animation, and other primitives are not interpreted. Error messages for authored-content
-//! problems match the TypeScript engine; container and accessor errors are specific to this decoder.
+//! problems preserve the established asset contract; container and accessor errors are specific to this decoder.
 
 use serde_json::{Map, Value};
 

@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Geometry interchange exports of an accepted build: Wavefront OBJ, ASCII PLY, and generated JSON. Ported from
-//! `export.ts` and FORM LAB's JSON export. Numbers print exactly as the TypeScript tool prints them, and none of these
-//! formats carries the procedural recipe.
+//! Geometry interchange exports of an accepted build: Wavefront OBJ, ASCII PLY, and generated JSON. Number formatting
+//! preserves byte compatibility with the retired TypeScript exporter's reference output. None of these formats
+//! carries the procedural recipe.
 
 use joy_engine::core::{format_js_number, json_number};
 use joy_engine::form::GeometryData;

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The Variants inspector (UI module), ported from `variant-controls.ts`: up to 16 named takes of explicit parameter
+//! The Variants inspector (UI module): up to 16 named takes of explicit parameter
 //! overrides (meshes and materials included). Apply replaces current overrides; the script and the document material
 //! palette stay shared by every take, and script defaults stay live for parameters a take leaves out.
 

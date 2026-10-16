@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Hand a generated text or binary file to the player: browsers download it, like the TypeScript tools' download
-//! links, and native builds write it into the working directory. Tools and examples use it for one-off exports such as baked
+//! Hand a generated text or binary file to the player: browsers download it, and native builds write it into the
+//! working directory. Tools and examples use it for one-off exports such as baked
 //! meshes and editable recipes that the player takes elsewhere. Values the game reads back later (settings, progress)
 //! belong in persisted storage (`runtime::Storage`) instead, and authored documents that must not be overwritten use the
 //! development editors' guarded saves.

@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Trusted project factories keyed by authored component type (TypeScript `component-registry.ts`). Authored type
-//! names never evaluate code.
+//! Trusted project factories keyed by authored component type. Authored type names never evaluate code.
 
 use std::fmt;
 

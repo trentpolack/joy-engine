@@ -1,13 +1,13 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Inspector drafts for the level editor (the document side of TypeScript `numeric-controls.ts`).
+//! Inspector drafts for the level editor.
 //!
 //! Number text, validation, and Shift/Alt steps come from the authoring kit's UI-free rules
 //! (`joy_engine::development::lab_values`). What the level editor adds is [`FieldDrafts`]: uncommitted text for every
 //! inspector field (names, tags, transforms, component values) owned by the document model, so the workspace's saves
 //! and the editor's selection changes can commit valid drafts and refuse while any draft is invalid, wherever the save
-//! comes from. Scrolling over a field never steps it (egui fields ignore the wheel), replacing `number-scroll.ts`.
+//! comes from. Scrolling over a field never steps it; egui fields ignore the wheel.
 
 use std::collections::BTreeMap;
 

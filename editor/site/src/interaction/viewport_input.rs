@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The level viewport's camera response to gestures (the camera half of TypeScript `viewport.ts`). The authoring kit's
+//! The level viewport's camera response to gestures. The authoring kit's
 //! `development::viewport_input` reads the gestures (orbit with the primary button, pan with Shift or another button,
-//! wheel zoom, F/0/arrow shortcuts, clicks); this module applies them to an [`OrbitCamera`] with the TypeScript
-//! editor's speeds and limits, and snaps placements to the grid. Deltas are logical pixels; wheel deltas follow the DOM
+//! wheel zoom, F/0/arrow shortcuts, clicks); this module applies them to an [`OrbitCamera`] with the editor's speeds
+//! and limits, and snaps placements to the grid. Deltas are logical pixels; wheel deltas follow the DOM
 //! convention (positive scrolls toward the author and zooms out).
 
 use joy_engine::development::{ViewportGesture, ViewportShortcut};

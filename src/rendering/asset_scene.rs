@@ -3,18 +3,18 @@
 
 //! Authored asset presentation for levels, the editor, and previews: FORM meshes plus per-entity particle effects.
 //!
-//! The Rust port of the TypeScript `src/gameplay/asset-scene.ts`, placed in the rendering layer because it presents
-//! meshes and effects (TypeScript recorded that as a layer violation). Entities' `render` components resolve FORM and
+//! This owner belongs to the rendering layer because it presents meshes and effects. Entities' `render` components
+//! resolve FORM and
 //! FORM LAB meshes through a [`FormAssetLibrary`] and draw through [`LevelScene`]; `effect` components play `.joyfx`
 //! effects attached to the entity transform, with the component's `seed`, `loop`, `enabled`, and `parameters`.
 //!
-//! Synchronization is staged as in TypeScript: [`AssetScene::prepare`] reads, compiles, decodes, and starts every
+//! Synchronization is staged: [`AssetScene::prepare`] reads, compiles, decodes, and starts every
 //! resource without touching the displayed presentation, and [`AssetScene::commit`] swaps it in only if no newer
 //! preparation (or [`cancel_pending`](AssetScene::cancel_pending)) superseded it. A failed preparation leaves the running
 //! presentation, its effects, and its caches unchanged. Asset text always comes from the caller's `read` function (a
 //! file system, a bundle, or text fetched by a browser), never from this module, so it works the same in browsers.
 //!
-//! Beyond TypeScript, textured and flipbook effects are supported (draw them with [`AssetScene::particle_batches`] and
+//! Textured and flipbook effects are supported (draw them with [`AssetScene::particle_batches`] and
 //! [`AssetScene::transparent_draws`]), and particle lights are available in world space.
 
 use std::collections::HashMap;

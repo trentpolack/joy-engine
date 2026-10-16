@@ -3,7 +3,7 @@
 
 //! Result selection and the bounded, read-only attribute table of the Output inspector: which named output the preview
 //! shows, its attribute domains and columns, element locations for picking, paging, the selection, and attribute
-//! visualization colors. The UI-free half of `output-inspector.ts`; the script owns every edit.
+//! visualization colors. This model stays independent of the inspector UI; the script owns every edit.
 
 use joy_engine::core::format_js_number;
 use joy_engine::form::GeometryData;

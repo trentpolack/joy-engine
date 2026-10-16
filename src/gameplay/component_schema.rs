@@ -2,11 +2,11 @@
 // Licensed under the MIT License.
 
 //! Authoring contracts for component records: schemas, presets, conditional fields, and advisory validation for tools
-//! such as Joy Editor's inspector (TypeScript `component-schema.ts`).
+//! such as Joy Editor's inspector.
 //!
 //! Schemas describe authored JSON; runtime behavior stays with the systems that interpret a component. Fields outside a
 //! schema remain valid custom data and round trip unchanged, and component types without a schema are never reported.
-//! Issue paths and messages match the TypeScript engine word for word.
+//! Issue paths identify the authored fields that need attention.
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};

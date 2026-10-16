@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Typed failures for authored documents and runtime gameplay. Messages follow the TypeScript engine.
+//! Typed failures for authored documents and runtime gameplay.
 
 use crate::core::PostProcessingError;
 

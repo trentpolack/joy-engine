@@ -10,8 +10,7 @@
 //!
 //! PNG, JPEG, and WebP files decode on every target ([`TextureAsset::decode_image`]), including embedded
 //! `data:image/…;base64,` sources ([`TextureAsset::decode_data_url`]) such as FORM material maps, without color-space
-//! conversion or premultiplication, like the TypeScript engine's `createImageBitmap(…, {premultiplyAlpha: 'none',
-//! colorSpaceConversion: 'none'})`.
+//! conversion or premultiplication.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};

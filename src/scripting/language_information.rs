@@ -1,11 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Built-in symbol catalogs that editors, documentation, and other tooling borrow (TypeScript
-//! `language-information.ts`).
+//! Built-in symbol catalogs that editors, documentation, and other tooling borrow.
 //!
-//! Signatures are display text; consumers must not infer runtime behavior from them. Records serialize with the
-//! TypeScript field names, so catalogs exchange as JSON with the TypeScript editor.
+//! Signatures are display text; consumers must not infer runtime behavior from them. Records preserve the established
+//! serialized field names for JSON interchange with authoring integrations.
 
 use serde::{Deserialize, Serialize};
 

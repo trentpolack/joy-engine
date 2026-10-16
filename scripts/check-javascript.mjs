@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-// Syntax gate for JavaScript that TypeScript does not type-check (launchers, tooling
-// and Node tests). Published as the `joy-check-javascript` package bin so games and
+// Syntax gate for retained JavaScript launchers, tooling, and Node tests.
+// Published as the `joy-check-javascript` package bin so games and
 // tools share one implementation instead of copying it.
 
 import { readdirSync, statSync } from 'node:fs';

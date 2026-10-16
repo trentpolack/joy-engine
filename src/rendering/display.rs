@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Drawing-buffer density policy (the TypeScript `display.ts`).
+//! Drawing-buffer density policy.
 
 /// Limits for [`backing_pixel_ratio`].
 #[derive(Clone, Copy, Debug, PartialEq)]

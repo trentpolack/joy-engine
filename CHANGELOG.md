@@ -3,6 +3,10 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-16-2026
+### Rust Runtime Default
+- Retired the deprecated engine, editor, lab, and example runtime implementation and its renderer dependencies. Rust is the shared native/browser implementation; canonical npm scripts wrap Cargo and browser builds.
+- Replaced current runtime and contribution documentation with Rust guidance and generated rustdoc, retaining useful Node tooling, asset schemas, capture orchestration, and recorded compatibility fixtures.
+
 ### Continuous Integration
 - Added locked Rust formatting, Clippy, native workspace tests, and WebAssembly checks for pull requests and protected branches, with pinned GitHub Actions and shared build caching.
 

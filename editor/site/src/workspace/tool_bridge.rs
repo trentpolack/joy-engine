@@ -1,10 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Hosting authoring tools as workspace tabs (TypeScript `tool-bridge.ts`).
+//! Hosting authoring tools as workspace tabs.
 //!
-//! The TypeScript workspace loaded each tool into a same-origin frame and exchanged load, capture, and save messages
-//! with it. The Rust editor embeds tools in process through `joy_engine::development::AuthoringTool`: a [`ToolTab`]
+//! The editor embeds tools in process through `joy_engine::development::AuthoringTool`: a [`ToolTab`]
 //! owns one tool instance, starts it with the shared renderer the first time a frame can provide one, then hands it the
 //! document; captures call `save_document`, saves call `mark_saved`, and the workspace drives phases only for the
 //! active tab, so inactive previews suspend. [`ToolRegistry`] maps extensions to tool factories (FORM LAB for `.form`

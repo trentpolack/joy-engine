@@ -1,23 +1,21 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Control intent: the controller-facing half of the TypeScript `Character` and `PlayerCharacter` (`character.ts`).
+//! Control intent and possession contracts for entities.
 //!
-//! In TypeScript, `Character` is the `Entity` subclass that carries `controller`, `controlIntent`, `receiveControl`,
-//! and `resetControl`, and `PlayerCharacter` is an empty extension point. The Rust engine keeps entities as plain
-//! [`EntityState`](super::EntityState) plus an optional [`EntityBehavior`](super::EntityBehavior), so the same contract
-//! is split across owners:
-//! - `controller` → [`EntityState::possessed_by`](super::EntityState::possessed_by), maintained by
-//!   [`EntityWorld::possess`](super::EntityWorld::possess);
-//! - `controlIntent` → [`EntityState::control_intent`](super::EntityState::control_intent), a [`ControlIntent`];
-//! - `receiveControl` → [`EntityWorld::receive_control`](super::EntityWorld::receive_control), and
-//!   [`ControlIntent::from_json`] for untrusted intent records;
-//! - `resetControl` → [`EntityWorld::reset_control`](super::EntityWorld::reset_control) plus the
-//!   [`EntityBehavior::reset_control`](super::EntityBehavior::reset_control) hook;
-//! - `destroy` releasing possession → [`EntityWorld::remove`](super::EntityWorld::remove).
+//! Entities keep plain [`EntityState`](super::EntityState) and optional [`EntityBehavior`](super::EntityBehavior).
+//! Possession and intent are split across those owners:
+//! - [`EntityState::possessed_by`](super::EntityState::possessed_by) records the controller, maintained by
+//!   [`EntityWorld::possess`](super::EntityWorld::possess).
+//! - [`EntityState::control_intent`](super::EntityState::control_intent) stores a [`ControlIntent`].
+//! - [`EntityWorld::receive_control`](super::EntityWorld::receive_control) accepts intent;
+//!   [`ControlIntent::from_json`] validates untrusted records.
+//! - [`EntityWorld::reset_control`](super::EntityWorld::reset_control) clears intent and calls the
+//!   [`EntityBehavior::reset_control`](super::EntityBehavior::reset_control) hook.
+//! - [`EntityWorld::remove`](super::EntityWorld::remove) releases possession before removing an entity.
 //!
 //! The built-in `character` and `player-character` types ([`entity_type`](super::entity_type)) remain registered, and
-//! every entity type may be possessed (the TypeScript engine restricts possession to `Character` subclasses).
+//! every entity type may be possessed.
 
 use indexmap::IndexMap;
 use serde_json::{Map, Value};

@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The workbench's panes and inspector tabs (UI module). Ported from `workspace-layout.ts` and the editor's
-//! `PanelLayout` setup in `main.ts`: the authoring kit's `PanelLayout` places Script, Preview, and Inspector with
+//! The workbench's panes and inspector tabs (UI module). The authoring kit's `PanelLayout` places Script, Preview,
+//! and Inspector with
 //! persisted widths, the View menu hides or restores each panel (keeping at least one), and Maximize keeps the panes
 //! while the tool hides its own chrome. Preferences never alter a study.
 

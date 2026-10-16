@@ -60,6 +60,15 @@ pub(crate) fn game_canvas(id: &str) -> Option<web_sys::HtmlCanvasElement> {
     Some(canvas)
 }
 
+/// Publish readiness only after presenting a frame, for the loading screen and browser captures.
+pub(crate) fn mark_canvas_ready(window: &winit::window::Window, backend: &str) {
+    use winit::platform::web::WindowExtWebSys;
+    if let Some(canvas) = window.canvas() {
+        let _ = canvas.set_attribute("data-backend", backend);
+        let _ = canvas.set_attribute("data-ready", "true");
+    }
+}
+
 /// Offer `contents` as a downloaded file named `file_name`: a UTF-8 text `Blob` behind a temporary object URL, which
 /// avoids URL length limits for large exports.
 pub(crate) fn download_text(file_name: &str, contents: &str) -> Result<(), String> {

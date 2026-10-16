@@ -22,6 +22,28 @@ env:
   RUST_BACKTRACE: "1"
 
 jobs:
+  tooling:
+    name: Browser And Patch Tooling
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Joy Engine
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Install browser tooling
+        run: npm ci
+
+      - name: Check engine architecture and tooling syntax
+        run: node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts test editor/tooling editor/test editor/tools/form-lab/test
+
+      - name: Test retained Node tooling
+        run: npm run test:tooling
+
   quality:
     name: Format And Clippy
     runs-on: ubuntu-24.04

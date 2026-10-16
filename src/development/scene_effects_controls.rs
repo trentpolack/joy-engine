@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Development controls that preview scene effects on a running renderer, matching the TypeScript
-//! `SceneEffectsControls`: presets, quality, per-effect toggles, and HDR bloom. Settings are temporary and never saved.
+//! Development controls that preview scene effects on a running renderer: presets, quality, per-effect toggles, and
+//! HDR bloom. Settings are temporary and never saved.
 //!
 //! Games draw [`ui`](SceneEffectsControls::ui) inside a HUD panel during the UI phase and call
 //! [`apply`](SceneEffectsControls::apply) with the renderer during the render phase, which commits any change.

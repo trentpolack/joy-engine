@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! UI-free language tools behind the script editor (the TypeScript `script-language-tools.ts` and the labs' stream
-//! languages): catalog-driven syntax highlighting, completion entries and filtering, call insertion, symbol lookup
+//! UI-free language tools behind the script editor: catalog-driven syntax highlighting, completion entries and
+//! filtering, call insertion, symbol lookup
 //! for hover documentation, and diagnostic positions.
 //!
 //! Positions are character indices (Unicode scalar values) into the script, as egui's text cursors count them.

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The Save and Export dialog (UI module), ported from `artifact-dialog.ts`: an explicit format, a file name, and
+//! The Save and Export dialog (UI module): an explicit format, a file name, and
 //! where the file goes. Contents are produced only when the author confirms; the platform's save dialog (natively) or
 //! a download (browsers) then writes them through the authoring kit's `FileDialogs`. Cancelling the save dialog keeps
 //! this dialog open and writes nothing, and a failed write keeps it open with the error.

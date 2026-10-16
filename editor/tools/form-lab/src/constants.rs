@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! FORM preview display modes, separate from geometry attribute domains. Ported from `constants.ts`.
+//! FORM preview display modes, separate from geometry attribute domains.
 
 /// How the preview draws the accepted build.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

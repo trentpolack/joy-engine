@@ -3,7 +3,7 @@
 
 //! Serialized particle vocabularies shared by `.joyfx` documents, the script language, and renderers.
 //!
-//! Spellings match the TypeScript `src/particles/constants.ts` so the same documents load in both engines.
+//! Stable spellings preserve compatibility with existing authored documents.
 
 /// Particle renderer families (the emitter `renderer` field).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

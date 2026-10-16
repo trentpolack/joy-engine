@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Camera-facing point markers for authored points and the Points view. Ported from `batches.ts`.
+//! Camera-facing point markers for authored points and the Points view.
 //!
 //! Markers are two triangles each, sized to a constant pixel footprint at the camera's focus distance and colored by
 //! their vertex tint, material base color, and emission, with alpha following the material's glTF policy. The engine

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The Parameters inspector (UI module), ported from `parameter-controls.ts`: one group per script parameter with
+//! The Parameters inspector (UI module): one group per script parameter with
 //! its type badge, default/modified indicator (hover for the script default), and per-parameter reset; bounded
 //! scalars pair a slider with an exact field, XYZ components share one group, and colors pair linear RGBA channels
 //! with a swatch and sRGB picker. Controls edit the build's resolved values in place and report overrides; the session

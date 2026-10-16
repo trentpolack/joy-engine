@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Editor-facing particle script entry point, mirroring the TypeScript `joy-engine/particles/scripting` export:
+//! Editor-facing particle script entry point:
 //! language information for completion and documentation, plus the compiler and its diagnostics for live validation.
 
 pub use crate::particles::language_information::particle_language_catalog;

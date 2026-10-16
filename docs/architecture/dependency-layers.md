@@ -1,16 +1,14 @@
 # Dependency Layers
-Joy Engine source follows a one-way dependency model so simulation remains runnable without a DOM, canvas, or GPU:
+Joy Engine uses a one-way dependency model so simulation runs without a window, canvas, or GPU:
 
-1. **Foundation** contains shared data and algorithms.
-2. **Simulation** contains environment, entity, gameplay, and physics state.
-3. **Content** contains asset loading, compilation, and scripting.
-4. **Rendering** contains GPU presentation and render features.
-5. **Platform** contains browser, development, and frame-loop integrations.
+1. Foundation contains shared data and algorithms.
+2. Simulation contains environment, entity, gameplay, and physics state.
+3. Content contains asset parsing, compilation, and script information.
+4. Rendering contains GPU presentation and effects.
+5. Platform contains runtime, browser, and development integrations.
 
-Higher layers may import the allowed lower layers recorded in `architecture/layers.json`. The checker reads static imports, re-exports, and literal dynamic imports, and rejects new upward edges. Existing upward edges are named individually as migration debt; removing one also requires removing its now-stale exception. This makes the allowlist shrink during the renderer migration rather than silently becoming a permanent architectural bypass.
+`architecture/layers.json` records the allowed edges. `npm run check` runs `scripts/check-boundaries.mjs`, which checks Rust `crate::<module>` paths, grouped imports, and documentation paths against the owning top-level source folder. Internal modules use module-qualified paths; the re-exports in `src/lib.rs` are the consumer-facing API.
 
-Backend packages have owners too. `backendPackages` names the layers allowed to import each one; luma.gl belongs to the rendering layer, so simulation, content, and platform modules reach the GPU through rendering owners. The editor and examples listed in `consumerRoots` may not reference a backend package at all, including JSDoc `import()` types and Vite dependency lists; they use `joy-engine` exports such as `GpuDevice` and `createEngineDependenciesPlugin()`.
+Backend crates also have owners: wgpu belongs to rendering and platform, rapier to simulation, and winit and egui to platform. Games, tools, and examples depend on `joy-engine`, using its re-exported UI contracts rather than backend dependencies. The engine never depends on those consumers.
 
-The Rust crate follows the same model in the same folders: a `.rs` file's layer comes from its top-level `src/` folder, and every `crate::<module>` path it names (including grouped `use crate::{…}` imports and doc links) must stay within that layer or one it may import. `rustBackendCrates` limits wgpu to rendering and platform, rapier to simulation, and winit and egui to platform, and Rust examples may not name those crates. The crate root `src/lib.rs` (the public API) and `src/bin/` are exempt. Rust has no recorded exceptions: level presentation lives in the rendering layer, post-processing profiles are foundation data, and FORM returns renderer-free geometry, which retires the migration debt listed above for the TypeScript engine.
-
-`World` is the headless composition boundary for entities and physics. Rendering observes simulation through a separate application integration and must not become owned by `World`.
+`World` is the headless composition boundary for entities and physics. `LevelScene` and `AssetScene` observe simulation from rendering. FORM returns plain geometry, and post-processing profiles are foundation data. These boundaries have no migration exception list.

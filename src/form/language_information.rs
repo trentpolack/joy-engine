@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Editor-neutral information about the FORM language's built-in symbols (TypeScript `form/language-information.ts`),
-//! for completion, hover text, highlighting, and documentation.
+//! Editor-neutral information about the FORM language's built-in symbols for completion, hover text, highlighting,
+//! and documentation.
 
 use crate::scripting::{ScriptLanguageCatalog, ScriptLanguageSymbol, ScriptSymbolKind};
 

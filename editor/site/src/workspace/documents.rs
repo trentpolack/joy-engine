@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! One tab's source and disk baseline (TypeScript `documents.ts`). Editors borrow the current text; the workspace owns
+//! One tab's source and disk baseline. Editors borrow the current text; the workspace owns
 //! persistence and conflicts.
 
 use crate::server::DiskDocument;

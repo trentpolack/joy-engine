@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Renaming a document through its script's `project meta(name="…")` declaration. Ported from `project-metadata.ts`.
+//! Renaming a document through its script's `project meta(name="…")` declaration.
 
 use joy_engine::form::{CompiledScript, project_name_tokens};
 use joy_engine::serde_json;

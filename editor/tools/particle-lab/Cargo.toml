@@ -18,7 +18,7 @@ rust-version = "1.95"
 license = "MIT"
 authors = ["Trent Polack"]
 publish = false
-# `test/` holds the TypeScript tests; the Rust integration tests are listed explicitly.
+# Integration tests are listed explicitly.
 autotests = false
 
 [lib]

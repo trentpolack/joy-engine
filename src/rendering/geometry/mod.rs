@@ -1,11 +1,11 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Immediate triangle builders for arcade and effect geometry (the TypeScript `geometry/geometry.ts`).
+//! Immediate triangle builders for arcade and effect geometry.
 //!
 //! Each function appends non-indexed triangles to a caller-owned [`ColorVertex`] list in the caller's logical world
 //! units, with straight-alpha linear RGBA colors. Angles are radians. The lists feed [`TriangleRenderer`] frames or
-//! the scene renderer's transient triangles. Math runs in `f64` like the TypeScript engine and rounds once per vertex.
+//! the scene renderer's transient triangles. Math runs in `f64` and rounds once per vertex.
 //!
 //! [`TriangleRenderer`]: crate::rendering::TriangleRenderer
 

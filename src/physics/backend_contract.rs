@@ -1,15 +1,14 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Solver-neutral synchronization boundary for resident collision shapes (TypeScript `backend-contract.ts`).
+//! Solver-neutral synchronization boundary for resident collision shapes.
 //!
 //! Gameplay-visible mutation batches complete before [`PhysicsBackend::query`], avoiding asynchronous readback on aim
 //! and character collision paths. GPU backends may retain simulation state on-device and publish only compact event and
 //! readback records; CPU implementations remain the required fallback. [`PhysicsWorld`] is the engine's CPU backend:
 //! resident shapes become static rapier boxes that dynamic bodies (for example debris) collide with.
 //!
-//! The TypeScript contract allows asynchronous `applyMutations` and `step`; Rust backends are synchronous, and
-//! `destroy()` is `Drop`.
+//! Backends apply mutations and step synchronously. Owned resources are released through `Drop`.
 
 use glam::Vec3;
 use indexmap::IndexSet;

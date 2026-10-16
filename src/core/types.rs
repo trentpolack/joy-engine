@@ -1,15 +1,14 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Shared numeric contracts: plain records every layer can name, ported from the TypeScript `src/core/types.ts`.
+//! Shared numeric contracts: plain records every layer can name.
 //!
-//! Scalars are `f64` because the TypeScript records hold JavaScript numbers; converting to `f32` for GPU upload is the
+//! Scalars use `f64` to retain authored numerical precision; converting to `f32` for GPU upload is the
 //! consumer's job. Units, coordinate spaces, and gameplay meaning belong to each consuming API, which documents them.
-//! Records serialize with the TypeScript field names so the same JSON moves between both engines.
+//! Records preserve the established serialized field names for compatible JSON interchange.
 //!
-//! The TypeScript file also declares renderer-facing records (`PbrFrame`, `SceneNodeOptions`, `MeshInstanceOptions`,
-//! and `TerrainInstanceOptions`) that reference scene nodes, prepared environments, point lights, and shadow cameras.
-//! Those belong to the rendering layer and are intentionally not part of the foundation layer.
+//! Renderer-facing records that reference scene nodes, prepared environments, point lights, or shadow cameras belong
+//! to the rendering layer and are intentionally not part of these foundation contracts.
 
 use serde::{Deserialize, Serialize};
 

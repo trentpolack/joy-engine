@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The native Joy Editor (replacing the Electron host):
+//! The native Joy Editor:
 //!
 //!     cargo run -p joy-editor -- [--workspace=<folder>] [--project=<id>] [--examples]
 //!

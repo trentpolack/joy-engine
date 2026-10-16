@@ -3,8 +3,8 @@
 
 //! GPU instance, adapter, and device ownership with backend selection and capability detection.
 //!
-//! Browser builds prefer WebGPU and fall back to WebGL 2 when WebGPU is missing, matching the TypeScript engine's
-//! WebGPU-first policy. Native builds use Vulkan, Metal, or DirectX 12, with OpenGL as a fallback. Everything that
+//! Browser builds prefer WebGPU and fall back to WebGL 2 when WebGPU is missing. Native builds use Vulkan, Metal, or
+//! DirectX 12, with OpenGL as a fallback. Everything that
 //! depends on the backend (limits, the HDR scene format) is decided here once, from the created device.
 
 use std::sync::Arc;

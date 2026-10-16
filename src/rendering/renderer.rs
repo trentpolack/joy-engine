@@ -9,7 +9,7 @@
 //! post-processing into the caller's presentation view. Materials define shading; the renderer defines frame-wide
 //! invariants and submission order.
 //!
-//! With scene effects enabled (on WebGPU-class backends, like TypeScript), the scene pass splits: opaque geometry, then
+//! With scene effects enabled on WebGPU-class backends, the scene pass splits: opaque geometry, then
 //! the attachments the effects need (normals and roughness, motion vectors, clustered lights), then the effect chains
 //! over the opaque HDR color, then transparency against the same depth. Temporal antialiasing jitters the raster
 //! projection by a Halton sequence; history resets on camera cuts, time jumps, and projection changes.

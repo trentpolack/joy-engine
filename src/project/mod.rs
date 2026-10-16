@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Content layer: project-level authoring metadata shared by Joy Editor and the desktop host. Mirrors the TypeScript
-//! `src/project/` module.
+//! Content layer: project-level authoring metadata shared by Joy Editor and its native project host.
 
 pub mod project_manifest;
 

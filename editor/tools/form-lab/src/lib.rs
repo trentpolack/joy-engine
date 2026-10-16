@@ -4,7 +4,7 @@
 //! FORM LAB on the Rust Joy Engine: write FORM scripts and see them through the engine's own renderer, natively and in
 //! browsers, standalone or as a Joy Editor tab ([`FormLab`] implements `AuthoringTool`).
 //!
-//! Model modules carry no UI and sit beside their TypeScript counterparts in `src/`: documents, the Examples library,
+//! Model modules carry no UI: documents, the Examples library,
 //! exports, MaterialX, the compile lifecycle, parameters, the session, the Output inspection model, and the preview
 //! (`rendering`). UI modules draw them with the authoring kit's egui widgets: the workbench (`site/src/main.rs`), the
 //! inspectors, the dialogs, and viewport input, so a later UI technology change touches only those.

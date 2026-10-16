@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Where the Examples library comes from. Ported from `form-assets.ts`.
+//! Where the Examples library comes from.
 //!
 //! Native builds read the engine's `assets/examples` and `assets/form` folders from disk each time the library is
 //! refreshed, so new and removed files appear without rebuilding; installed copies without those folders, and browsers,

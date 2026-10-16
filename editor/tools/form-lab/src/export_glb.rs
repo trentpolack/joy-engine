@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! Self-contained glTF 2.0 binary (GLB) export of an accepted build with its authored materials and embedded maps.
-//! Ported from `export-glb.ts`; the output matches the TypeScript exporter byte for byte.
+//! Output matches reference files from the retired TypeScript exporter byte for byte.
 //!
 //! Triangles group into one primitive per material, in first-use order, with every triangle's three corners written
 //! out so hard edges keep their own normals; points become `POINTS` primitives. Positions carry exact float32 bounds,

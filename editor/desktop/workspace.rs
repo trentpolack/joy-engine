@@ -3,10 +3,9 @@
 
 //! Locating the hosting workspace (the game repository whose `projects/` the editor authors).
 //!
-//! The Electron host read `JOY_EDITOR_WORKSPACE` or assumed the JoyGames layout three folders up, and the production
-//! policy walked up to `joy.joyconfig`. The native binary accepts, in order: `--workspace=<dir>` (or `--workspace
-//! <dir>`), the `JOY_EDITOR_WORKSPACE` environment variable, and the nearest folder at or above the current directory
-//! that holds `joy.joyconfig`. Without any of them the editor still opens: Open Folder can add any project folder.
+//! The native binary accepts, in order: `--workspace=<dir>` (or `--workspace <dir>`), the `JOY_EDITOR_WORKSPACE`
+//! environment variable, and the nearest folder at or above the current directory that holds `joy.joyconfig`.
+//! Without any of them the editor still opens: Open Folder can add any project folder.
 
 use std::path::{Path, PathBuf};
 

@@ -1,11 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Controllers that turn sampled input or AI decisions into control intent for the entity they possess (TypeScript
-//! `player-controller.ts`).
+//! Controllers that turn sampled input or AI decisions into control intent for the entity they possess.
 //!
-//! [`IntentController`] covers both the TypeScript `PlayerController` (sampling borrowed keyboard, touch, or gamepad
-//! adapters) and `AIController` (sampling decisions): both use the same intent and possession contract, so
+//! [`IntentController`] samples borrowed keyboard, touch, or gamepad adapters or AI decisions. Both use the same
+//! intent and possession contract, so
 //! [`PlayerController`] and [`AiController`] name the same type. Update controllers before the entity world so behaviors
 //! see the new intent in the same frame.
 

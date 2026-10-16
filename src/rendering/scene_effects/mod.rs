@@ -5,7 +5,7 @@
 //! clustered volumetric lighting, depth-aware blur, temporal antialiasing, motion blur, and adaptive exposure.
 //!
 //! The shader passes are luma.gl's (`@luma.gl/effects`, MIT License, Copyright (c) vis.gl contributors; see
-//! `LICENSE-luma.gl`), the same code the TypeScript engine runs, assembled by a port of luma.gl's shader-pass renderer.
+//! `LICENSE-luma.gl`), assembled by the engine's Rust shader-pass renderer.
 
 mod attachments;
 mod chain;

@@ -3,7 +3,7 @@
 
 //! Script parameters as the inspector sees them: typed descriptors read from a build, default and modified state,
 //! the overrides property history covers, mesh sources (presets and geometry-only GLB import), and material resource
-//! edits. The UI-free half of `parameter-controls.ts` and `resource-parameter-controls.ts`.
+//! edits. These models stay independent of the parameter controls' UI.
 
 use joy_engine::form::{mesh_box_value, mesh_sphere_value, read_material_value, read_mesh};
 use joy_engine::serde_json::{Value as Json, json};

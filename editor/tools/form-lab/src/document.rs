@@ -2,12 +2,12 @@
 // Licensed under the MIT License.
 
 //! FORM LAB documents (`.formlab`): script source with parameter overrides, a document material palette, and named
-//! parameter variants. Ported from `document.ts`.
+//! parameter variants.
 //!
 //! Documents are validated once when read, so the editor, the compiler, and saves only ever see reopenable data. A raw
 //! `.form` file is script source alone; [`FormDocument::from_script`] wraps it without inventing overrides. Serialized
-//! documents are compact JSON in the TypeScript key order (`version`, `name`, `source`, `overrides`, `materials`,
-//! `variants`), so the same files open in both FORM LABs, Joy Editor, and the engine's scene asset loader.
+//! documents are compact JSON with stable key order (`version`, `name`, `source`, `overrides`, `materials`,
+//! `variants`), shared by standalone and hosted FORM LAB, Joy Editor, and the engine's scene asset loader.
 
 use joy_engine::form::{DOCUMENT_FILE_BYTES, read_materials, read_parameter_value};
 use joy_engine::serde_json::{self, Map, Value as Json};

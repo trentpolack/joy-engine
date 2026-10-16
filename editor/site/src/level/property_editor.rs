@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The schema-driven component inspector as data (TypeScript `property-editor.ts`, minus the DOM).
+//! The schema-driven component inspector as data.
 //!
 //! [`build_property_tree`] turns an entity's components into [`PropertyNode`]s: component schemas choose controls,
 //! labels, units, bounds, field order, and missing-field suggestions (**+ FIELD**); fields a sibling choice disables

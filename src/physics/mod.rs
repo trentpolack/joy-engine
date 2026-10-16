@@ -9,10 +9,10 @@
 //!
 //! Coordinates are meters in Y-up world space; rotations are XYZ Euler radians applied X, then Y, then Z. Vehicles use
 //! up = +Y, forward = +Z, and right = +X in chassis space. Time is in seconds and the solver advances in fixed steps
-//! with bounded catch-up, exactly like the TypeScript `PhysicsWorld`.
+//! with bounded catch-up.
 //!
-//! The TypeScript engine uses cannon-es. Parameter mapping and the remaining behavioral differences are documented on
-//! the individual options and in `docs/rust-simulation.md`.
+//! Authored physics values preserve the established tuning contract. Rapier parameter mapping and solver limitations
+//! are documented on the individual options and in `docs/rust-simulation.md`.
 //!
 //! [`destruction`] holds solver-independent destructible chunk structures, and [`PhysicsBackend`] is the
 //! shape-residency contract they synchronize through; `PhysicsWorld` implements it as the CPU backend.

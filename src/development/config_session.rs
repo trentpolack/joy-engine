@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! One independent editing history over a game's numeric tuning fields and its saved baseline, ported from the
-//! TypeScript `ConfigSession`.
+//! One independent editing history over a game's numeric tuning fields and its saved baseline.
 //!
 //! Edits are validated against the field contract before anything changes. A runtime adapter may reject a complete
 //! record, leaving values and history unchanged. Continuous edits (a slider drag) between

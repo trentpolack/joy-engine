@@ -4,22 +4,22 @@
 //! Joy Editor on the Rust engine: one workspace for a game project's levels, reusable objects, FORM meshes, and
 //! particle effects.
 //!
-//! Modules sit beside the TypeScript they replace:
+//! Module responsibilities:
 //! - [`workspace`] (`site/src/workspace/`): project selection, the Content Browser, document tabs, saves with revision
 //!   checks and conflict resolution, session restore, repair views, and hosting FORM LAB and PARTICLE LAB tabs through
 //!   `joy_engine::development::AuthoringTool`.
 //! - [`level`] (`site/src/level/`): the level and object editor (viewport, outliner, schema-driven inspector).
 //! - [`interaction`] (`site/src/interaction/`): camera responses to the kit's viewport gestures, inspector drafts, and
 //!   shared widgets.
-//! - [`server`] (`server/`): in-process project file access, replacing the Vite file service.
-//! - [`desktop`] (`desktop/`): the native host, replacing Electron.
+//! - [`server`] (`server/`): in-process project file access.
+//! - [`desktop`] (`desktop/`): the native host.
 //!
 //! Document and model logic stays in modules without egui (`workspace::main`, `level::main`, `level::property_editor`,
 //! `level::viewport`, `server`); egui code lives in the `ui` modules and `interaction::widgets`, so a later UI
 //! technology change touches only them. [`JoyEditor`] ties them into a `joy_engine::Game`.
 //!
 //! The browser build opens read-only bundled examples ([`server::BundledProjects`]): a static page has no project file
-//! service, which the TypeScript workspace only had from its development server.
+//! service.
 
 #[path = "../../desktop/mod.rs"]
 pub mod desktop;

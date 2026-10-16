@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Box and sphere primitives as ready-to-draw geometry, matching the TypeScript `meshBox` and
-//! `meshSphere` resources.
+//! Box and sphere primitives as ready-to-draw geometry.
 
 use std::{cell::RefCell, rc::Rc};
 

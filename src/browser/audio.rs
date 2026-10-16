@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Browser audio output through Web Audio: one context, one buffer per sound, and a source and gain node per voice,
-//! mirroring the TypeScript `AudioBank`.
+//! Browser audio output through Web Audio: one context, one buffer per sound, and a source and gain node per voice.
 
 use std::cell::RefCell;
 use std::rc::Rc;

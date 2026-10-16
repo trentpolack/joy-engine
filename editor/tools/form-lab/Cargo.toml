@@ -2,8 +2,8 @@
 # Licensed under the MIT License.
 
 # FORM LAB on the Rust Joy Engine: script procedural geometry with a live engine preview, natively and in browsers,
-# standalone or as a Joy Editor tab (`form_lab::FormLab` implements `AuthoringTool`). Modules sit beside the
-# TypeScript tool in `src/` and `site/src/`.
+# standalone or as a Joy Editor tab (`form_lab::FormLab` implements `AuthoringTool`). Modules live in
+# `src/` and `site/src/`.
 #
 #   cargo run -p form-lab
 #   cargo test -p form-lab
@@ -19,7 +19,7 @@ license = "MIT"
 authors = ["Trent Polack"]
 repository = "https://github.com/trentpolack/joy-engine"
 publish = false
-# `test/` holds the TypeScript tool's JavaScript tests; the Rust tests are one binary listed below.
+# Integration tests are one binary listed below.
 autotests = false
 autobins = false
 

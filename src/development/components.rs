@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The shared Joy look for authoring tools (the TypeScript `components.ts` vocabulary: buttons, fields, panel headers,
-//! toolbars, and status bars) as small egui helpers over [`theme::tokens`](crate::runtime::theme::tokens). Apply
+//! The shared Joy look for authoring tools: buttons, fields, panel headers, toolbars, and status bars as small egui
+//! helpers over [`theme::tokens`](crate::runtime::theme::tokens). Apply
 //! [`theme::apply_authoring`](crate::runtime::theme::apply_authoring) once for the base widget style; these helpers add
 //! the pieces egui has no style slot for.
 

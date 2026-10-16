@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! UI-free value rules behind the lab controls: exact number text, numeric draft validation, keyboard and scrub steps,
-//! and linear/sRGB color conversion (the TypeScript `lab-controls.ts` and `numeric-controls.ts` arithmetic).
+//! and linear/sRGB color conversion.
 //!
 //! Authored values are `f64` and are never rounded for display: number text is the shortest text that reads back as
 //! the same value (JavaScript `String(number)`), so an exact field shows every authored digit. Colors are authored as

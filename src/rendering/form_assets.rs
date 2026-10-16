@@ -4,11 +4,11 @@
 //! FORM geometry as renderable mesh assets.
 //!
 //! FORM itself is renderer-free; this adapter is the only path from FORM output to the screen, so FORM LAB, games, and
-//! examples all see the same result. Lit assets keep FORM's vertex colors exactly as the TypeScript scene path draws
-//! them. PBR assets multiply each vertex color by its triangle's material base color and bake the material's metallic,
-//! roughness, emission, and alpha mode into the vertices, matching the TypeScript PBR material pass. Materials with
+//! examples all see the same result. Lit assets keep FORM's vertex colors. PBR assets multiply each vertex color by
+//! its triangle's material base color and bake the material's metallic, roughness, emission, and alpha mode into the
+//! vertices. Materials with
 //! embedded maps (PNG, JPEG, or WebP data URLs) also keep FORM's texture coordinates and draw their decoded maps as
-//! [`MaterialTextures`](crate::rendering::MaterialTextures), as the TypeScript material pass does.
+//! [`MaterialTextures`](crate::rendering::MaterialTextures).
 
 use std::collections::HashMap;
 

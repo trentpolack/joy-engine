@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 //! The FORM script editor (UI module): the authoring kit's `ScriptEditor` with FORM highlighting and the engine's FORM
-//! language catalog for completion, call insertion, hover documentation, and diagnostics. Ported from `editor.ts`,
-//! whose CodeMirror stream language the kit's `ScriptSyntax::form` replaces.
+//! language catalog for completion, call insertion, hover documentation, and diagnostics. The kit's `ScriptSyntax::form`
+//! supplies highlighting rules.
 
 use joy_engine::development::{ScriptEditor, ScriptSyntax};
 

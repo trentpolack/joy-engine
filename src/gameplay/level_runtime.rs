@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! Instantiates an authored level: entities, rigid bodies for `physics` components, and raycast vehicles for `vehicle`
-//! components. Semantics follow the TypeScript `LevelRuntime`.
+//! components.
 //!
 //! - `physics` components use local collider dimensions; the entity scale is applied once at spawn. Box half extents
 //!   scale per axis; spheres require uniform scale and scale their radius. The body starts at the entity's position and
@@ -13,8 +13,8 @@
 //! - Every failure rolls back: a failed spawn removes the entity and any solver objects it created, and a failed level
 //!   setup removes every entity created so far.
 //! - Spawn dynamic entities through [`LevelRuntime::spawn`] so they receive the same physics setup as authored ones.
-//!   Entities spawned by behaviors through `SimulationContext::request_spawn` bypass physics setup, like entities
-//!   spawned directly on the TypeScript `EntityWorld`.
+//!   Entities spawned by behaviors through `SimulationContext::request_spawn` bypass physics setup, as do entities
+//!   spawned directly on `EntityWorld`.
 
 use crate::core::{JsonRecord, PrimitiveShape};
 use glam::Vec3;

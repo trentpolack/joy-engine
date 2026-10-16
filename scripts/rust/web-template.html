@@ -48,12 +48,7 @@
     import start from '{{module}}';
 
     const canvas = document.getElementById('{{canvas}}');
-    // The shell sizes the canvas once the GPU is ready; hide the loading label then.
-    new ResizeObserver(() => {
-      if(canvas.width > 0) {
-        canvas.dataset.ready = 'true';
-      }
-    }).observe(canvas);
+    // The shell sets data-ready after its first presented frame; CSS then hides the loading label.
     start().then(() => canvas.focus()).catch(error => {
       document.getElementById('joy-loading').textContent = `Unable to start: ${error}`;
     });

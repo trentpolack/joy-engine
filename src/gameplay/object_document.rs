@@ -6,7 +6,7 @@
 //! An instance keeps its own identity (`id`, `name`) and placement (`transform`) and links a source object through
 //! `template`. Its `overrides` record replaces the source's `type`, `tags`, and `components` key by key: nested objects
 //! merge recursively, arrays and scalars replace as a unit, and a `null` component override removes that component.
-//! Linked definitions cannot nest. Semantics match the TypeScript `object-document.ts`.
+//! Linked definitions cannot nest.
 
 use std::collections::HashMap;
 use std::fmt::Display;

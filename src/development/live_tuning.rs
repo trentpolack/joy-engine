@@ -1,10 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Live tuning of running objects through one shared history and TUNE panel, matching the TypeScript `LiveTuning`.
+//! Live tuning of running objects through one shared history and TUNE panel.
 //!
-//! TypeScript binds object properties by reflection. Rust games register each object's current values under an
-//! identifier instead, then apply [`take_change`](LiveTuning::take_change) to their own state every frame; values
+//! Games register each object's current values under an identifier, then apply [`take_change`](LiveTuning::take_change) to their own state every frame; values
 //! read back by identifier and field key. Every field applies live.
 
 use std::collections::HashSet;

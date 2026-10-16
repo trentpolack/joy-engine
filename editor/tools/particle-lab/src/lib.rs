@@ -4,9 +4,9 @@
 //! PARTICLE LAB on the Rust Joy Engine: author deterministic, layered `.joyfx` particle effects with scripts, child
 //! emitters, textures, lights, and a live preview drawn by the engine renderer.
 //!
-//! Runs natively (`cargo run -p particle-lab`) and in browsers (`node scripts/rust/build-web.mjs --package
-//! particle-lab`) from this one crate, and Joy Editor hosts [`ParticleLabTool`] as a tab through
-//! [`AuthoringTool`](joy_engine::development::AuthoringTool). Modules sit beside the TypeScript lab they replace:
+//! Runs natively (`cargo run -p particle-lab`) and builds for browsers with
+//! `npm run build --workspace @joy-games/particle-lab`. Joy Editor hosts [`ParticleLabTool`] as a tab through
+//! [`AuthoringTool`](joy_engine::development::AuthoringTool). Module responsibilities are split by model and UI:
 //! document, examples, storage, and session logic stay free of interface code; `editor`, `emitter_inspector`,
 //! `parameter_controls`, and `interface` are the egui interface; `viewport` draws through the engine.
 

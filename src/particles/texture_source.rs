@@ -3,9 +3,8 @@
 
 //! Embedded PNG particle texture sources (`data:image/png;base64,…`).
 //!
-//! Validation reads only the PNG signature and IHDR header, before any decoding or GPU allocation, with the same limits
-//! and messages as the TypeScript `src/particles/texture-source.ts`: at most 1 MiB of PNG data and 1–2048 pixels per
-//! axis.
+//! Validation reads only the PNG signature and IHDR header, before any decoding or GPU allocation: at most 1 MiB of
+//! PNG data and 1–2048 pixels per axis.
 
 /// Original procedural 16×16 white cross with transparent corners.
 pub const DEFAULT_PARTICLE_TEXTURE: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAJElEQVR4nGP4//8/Aw6MDrCqw6V51AASDaAIDBMDBj4WRroBAMgTbL72rES3AAAAAElFTkSuQmCC";

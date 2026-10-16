@@ -43,7 +43,7 @@ export function findWorkspaceRoot(startDirectory) {
  * Missing settings use defaults, but malformed settings fail the build.
  * @param {string | null} [rootDirectory] Workspace containing joy.joyconfig; defaults to
  * the nearest one above the current directory, and null uses the defaults.
- * @param {boolean} [development] Whether this is a Vite development server.
+ * @param {boolean} [development] Whether this is a development session.
  * @returns {Promise<{joyEditor:boolean, formLab:boolean, particleLab:boolean}>}
  */
 export async function readEditorPolicy(rootDirectory = findWorkspaceRoot(process.cwd()), development = false) {

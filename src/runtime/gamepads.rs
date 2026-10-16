@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! Gamepad polling for the shell: gilrs natively and `navigator.getGamepads()` in browsers, both reported in the W3C
-//! standard mapping so bindings match the TypeScript engine.
+//! standard mapping so bindings agree across platforms.
 
 use crate::runtime::input::GamepadState;
 #[cfg(not(target_arch = "wasm32"))]

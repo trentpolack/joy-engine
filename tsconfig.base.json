@@ -8,19 +8,10 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "paths": {
-      "joy-engine": [
-        "./src/index.ts"
-      ]
-    },
     "lib": [
       "ES2022",
       "DOM",
       "DOM.Iterable"
-    ],
-    "types": [
-      "@webgpu/types",
-      "vite/client"
     ],
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true

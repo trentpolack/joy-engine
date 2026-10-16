@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Fixed top-down orthographic camera for arcade games (the TypeScript `camera/top-down-camera.ts`).
+//! Fixed top-down orthographic camera for arcade games.
 
 use glam::{Mat4, Vec2};
 

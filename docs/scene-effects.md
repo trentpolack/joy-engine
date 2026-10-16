@@ -1,61 +1,14 @@
-# Scene effects
+# Scene Effects
+`Renderer::set_scene_effects` configures scene processing before bloom and display transforms. `FrameInputs` supplies the scene's frame data; `development::SceneEffectsControls` exposes temporary preview controls. Effects remain opt-in and do not rewrite authored assets automatically.
 
-`SceneRenderer` accepts individual `sceneEffects` opt-ins and retains the existing HDR display/tone-mapping/bloom path. Defaults remain disabled. The Level viewport and development Vehicle Playground expose temporary controls; changes do not rewrite level assets. The isolated [Scene Effects Lab](../examples/scene-effects/README.md) provides deterministic individual and combined comparisons.
+Available passes include SSAO or GTAO, screen-space global illumination, reflections, outlines, height fog, clustered volumetric lighting, depth-aware blur, temporal antialiasing, motion blur, and adaptive exposure. The [scene-effects example](../examples/scene-effects/README.md) isolates those controls.
 
-```ts
-const camera = new OrbitCamera();
-camera.nearClip = 0.5;
-camera.farClip = 100;
-const renderer = new SceneRenderer(canvas, {
-  camera,
-  sceneEffects: {gtao: true, taa: true, motionBlur: {strength: 0.5}},
-  postProcessing: {bloomStrength: 0.2}
-});
-await renderer.initialize();
-renderer.render(scene, {timeSeconds, deltaTimeSeconds, lights});
-// Complete replacement, atomically validated; unspecified effects become disabled.
-renderer.setSceneEffectsConfig({ssao: true, outlines: true});
-renderer.resetHistory(); // teleports/content edits retaining instance identities
-renderer.destroy(); // scene and camera are borrowed
-```
+## Frame Contracts
+Surface and motion attachments use the same geometry, camera, and opaque depth as the scene. Temporal effects need genuine previous object/camera state, with signed UV motion and documented jitter conventions. Translucent feedback follows the opaque effects stage. Stable identities are necessary for correspondence; reset history after discontinuous scene or camera changes.
 
-## Inputs and ownership
+Depth, normal, velocity, and color formats must meet the effect's capability requirements. Unsupported backends report availability rather than inventing missing inputs. The browser's WebGL fallback still provides the base scene and display path; validate optional effects on the backend that will ship them.
 
-`SceneRenderer` builds one `FrameView` per visible submission. Its camera transforms (including raster jitter and inverses), CSS/backing viewport dimensions, lighting, environment, and shadow configuration are copied and deeply frozen. Features share that snapshot; CPU matrices use frozen numeric arrays rather than writable typed-array buffers. Culling and shadow fitting use the unjittered projection, while atmosphere and depth-dependent effects use the raster projection. GPU upload buffers and temporal history remain owned by their respective passes.
-
-`RenderPassContext` holds a pass camera, render target, backing viewport, and borrowed render-pass handle. Each shadow face supplies its own light-space camera and target; the transparency composite supplies its intermediate target. These overrides neither rebuild nor modify `FrameView`, and freezing a context does not freeze its GPU resources. The owner still ends each pass and releases its targets.
-
-Low-level `GpuTriangleRenderer` lighting callers now pass `SceneLightFrame` as `{view, casters}`. Build `view` with `renderer.createFrameView` to preserve that renderer's configured shadow quality, map sizes, and biases. Shadow allocation settings remain fixed for the renderer's lifetime; standalone views from the exported CPU `createFrameView` factory must keep the same shadow configuration when submitted to a renderer. `directional` supports a direct light without an atmosphere, and omission uses the environment's primary light. Auxiliary scene inputs borrow that same `view`. Custom shader callers without a structured camera retain their packed-uniform path and have a null pass camera.
-
-Opaque flat-lit mesh color/depth is rendered offscreen. View-space face normals encode `normal * 0.5 + 0.5`; alpha contains perceptual `MeshInstance.sceneRoughness` (default 1, matte). This metadata enables SSR without changing authored materials or converting games to PBR. Exact opaque depth is borrowed by the normal pass. Object identity/topology correspondence retains previous world positions; velocities are signed current-minus-previous top-left UV. TAA and blur use unjittered velocity, while GTAO/SSGI/SSR receive jitter-inclusive velocity. Camera and raster matrix histories are separate to avoid double jitter correction.
-
-Only opaque meshes participate in these effects. Transparent feedback/particles render afterward against the original opaque depth and then enter HDR display processing. Transient opaque triangle arrays lack stable identity; they conservatively reset temporal history rather than invent motion correspondence.
-
-Owned passes, textures, framebuffers and clustered buffers are released on disposal. Replacement graphs are constructed before replacing the working graph. Histories reset on resize, hidden/resumed viewport, camera replacement/cut, clip/FOV changes, scene replacement, topology/visibility discontinuities, explicit reset, time rewind/gap over 0.25 seconds, toggling and failed submission. Callers must explicitly reset after discontinuous changes that retain identities; continuous object/camera motion uses real previous positions/matrices.
-
-## Supported combinations
-
-| Effect | Contract / limitation |
-| --- | --- |
-| Depth-aware blur | Bilateral opaque color/depth blur. |
-| SSAO | Perspective only; depth reconstruction or supplied view normals. Mutually exclusive with GTAO. |
-| GTAO | Perspective horizon AO with temporal depth rejection. Upstream composites against full opaque color; ambient-only separation is unavailable in this renderer. |
-| SSGI | Colored screen-space diffuse bounce; offscreen/occluded sources cannot contribute. |
-| Outlines | Depth/normal edges with independent opt-in. |
-| TAA | Default velocity reprojection supports object and camera motion. Explicit `reprojection: 'camera'` assumes static geometry; use velocity for moving scenes. |
-| Motion blur | Unjittered object/camera velocity, with bounded sample count. |
-| SSR | Screen-space reflections classified by scene roughness; offscreen reflections are unavailable. |
-| Height fog | Upstream compact screen-height/raw-depth approximation. Temporal accumulation is disabled because it has no camera reprojection. It is not world-space height integration. |
-| Clustered lighting | Participating-media scattering with directional radiance and actual view-space point lights. Conservative CPU cluster lists feed GPU integration, capped at 32 lights / 8 per cluster; overflow is reported by `sceneVolumeStats`. No shadow-map occlusion is supplied. |
-| Adaptive exposure | GPU luminance meter/adaptation driven by delta seconds. No CPU readback. |
-| HDR bloom | Existing multiscale display bloom, independently controlled after scene effects. |
-
-The shared adapter supports perspective `OrbitCamera`. Lower-level `SceneEffects` validates its camera/input contract and rejects unsupported combinations. `postProcessing: false` cannot be combined with scene effects. WebGPU floating-point attachments and precise filterable 32-bit temporal depth history are required for relevant passes. Unsupported configurations report specific capability failures. WebGL preserves the base scene/display path and reports scene effects unavailable; it does not synthesize inputs. Explicit WebGPU selection reports adapter failure, while automatic device selection retains its existing WebGL fallback.
-
-Upstream `ShaderPassRenderer` can throw during its own constructor before returning an owner. Completed stages are cleaned up; hidden allocations inside a partially constructed upstream stage cannot be individually reclaimed on a live-device configuration failure. Initial renderer creation destroys its device on failure. This upstream limitation remains; device loss itself is not automatically recovered.
+Screen-space techniques cannot see offscreen or occluded sources. Centroid transparency sorting does not resolve intersecting surfaces. Fog and volumetric approximations are rendering effects rather than gameplay simulation. Keep these limits visible when judging captures.
 
 ## Verification
-
-The focused tests cover configuration bounds, inputs, matrix/jitter conventions, object identity correspondence, resize/reset, failure rollback, attachment ownership and clustered light bounds. Run `npm run check`, `npm test`, `npm run validate`, and the example capture commands in its README. Root release capture intentionally skips command-line examples, so Scene Effects Lab requires its own capture invocation.
-
-Native Mac evidence and timings are recorded in [scene-effects-verification.md](scene-effects-verification.md). CPU submission includes scene preparation and command submission. RAF cadence describes browser scheduling. Neither is measured GPU execution time.
+Run engine integration tests, the example's native/browser builds, and captures on the affected backends. Headless rendering tests in `test/rust/` protect configuration, ownership, motion, and shader contracts. Inspect temporal behavior interactively as well as still captures; CPU timing and frame cadence do not establish GPU execution time.

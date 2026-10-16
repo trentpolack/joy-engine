@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Frame clock with bounded elapsed time, matching the TypeScript `GameShell` timing rules.
+//! Frame clock with bounded elapsed time.
 
 use crate::runtime::game::FrameTime;
 

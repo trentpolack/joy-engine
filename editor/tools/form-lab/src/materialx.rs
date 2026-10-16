@@ -1,13 +1,12 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! MaterialX 1.39 exchange for FORM LAB's constant `gltf_pbr` subset. Ported from `materialx.ts`.
+//! MaterialX 1.39 exchange for FORM LAB's constant `gltf_pbr` subset.
 //!
 //! Export writes one `gltf_pbr` surface shader and one `surfacematerial` per palette entry. Import accepts exactly that
 //! subset and rejects everything it would otherwise lose: node graphs, connections, textures, unknown inputs or
-//! attributes, unreferenced shaders, significant text, and DOCTYPE or entity declarations. The TypeScript tool parses
-//! with the browser's `DOMParser`; this module carries the small XML reader the subset needs, so the tool depends on the
-//! engine alone.
+//! attributes, unreferenced shaders, significant text, and DOCTYPE or entity declarations. This module carries the
+//! small XML reader the subset needs, so parsing works on native and browser targets without another dependency.
 
 use joy_engine::core::format_js_number;
 use joy_engine::form::read_materials;

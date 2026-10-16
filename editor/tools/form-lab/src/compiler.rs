@@ -1,10 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The compile lifecycle: FORM evaluation off the UI thread with startup and execution budgets. Ported from
-//! `compiler-protocol.ts` and `compiler-worker.ts`.
+//! The compile lifecycle: FORM evaluation with startup and execution budgets.
 //!
-//! Each request gets its own job, as the TypeScript tool starts a fresh worker per build; starting another request or
+//! Each request gets its own job, preserving the original worker-per-build lifecycle; starting another request or
 //! cancelling abandons the current job and ignores anything it reports later. Native builds evaluate on a background
 //! thread. Browsers evaluate inline when the job is polled (WebAssembly threads would need cross-origin isolation),
 //! within the same execution budget. FORM's own operation, vertex, and allocation limits bound every evaluation, so an

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Bundled example effects and emitter insertion presets (the TypeScript `examples.ts`). Every call returns a fully
+//! Bundled example effects and emitter insertion presets. Every call returns a fully
 //! detached document, so editing one never changes the bundled original.
 
 use joy_engine::particles::{

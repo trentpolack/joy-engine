@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Shared lab controls for authoring tools (the TypeScript `lab-controls.ts` and `numeric-controls.ts` widgets as
-//! egui widgets): exact number fields with drag scrubbing and Shift/Alt keyboard steps, bounded scalars (slider plus
+//! Shared egui controls for authoring tools: exact number fields with drag scrubbing and Shift/Alt keyboard steps,
+//! bounded scalars (slider plus
 //! exact field), XYZ and RGBA component groups, a linear-RGBA color control with an sRGB picker, and default/modified
 //! indication with per-field reset.
 //!
@@ -14,12 +14,11 @@
 //! A draft the author types is validated on Enter or when the field loses focus. A rejected draft never changes the
 //! value: it stays visible in the field with its message until repaired (a valid entry, a slider move, a reset, or
 //! Escape back to the accepted value), and [`NumericDrafts`] reports it so tools refuse Apply, export, navigation, or a
-//! picker choice that would discard it, as the TypeScript labs do. Displaying a value never rounds it: number text is
+//! picker choice that would discard it. Displaying a value never rounds it: number text is
 //! exact ([`format_number`]), sliders do not clamp values they did not edit, and opening or refreshing the color picker
 //! does not write back.
 //!
-//! The mouse wheel never changes a number (egui scrolls the panel instead), which replaces the TypeScript
-//! `number-scroll.ts` guard.
+//! The mouse wheel never changes a number; egui scrolls the panel instead.
 //!
 //! [`PropertyHistory`]: crate::development::PropertyHistory
 //! [`format_number`]: crate::development::lab_values::format_number

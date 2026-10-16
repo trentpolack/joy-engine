@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Clustered point lights for volumetric lighting, ported from the TypeScript `scene-volume-lights.ts`: lights move
+//! Clustered point lights for volumetric lighting: lights move
 //! into view space, then bin into screen tiles and exponential depth slices, uploaded as storage buffers.
 
 use glam::Mat4;

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The Lighting inspector (UI module), ported from `preview-lighting-controls.ts`: direct light direction, linear
+//! The Lighting inspector (UI module): direct light direction, linear
 //! color, and intensity, studio environment intensity and rotation, shadow casting, and shadow quality. These settings
 //! only redraw the preview; they never change a document, a save, or an export.
 

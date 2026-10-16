@@ -1,47 +1,21 @@
-# FORM building shell
-A reusable exterior asset authored entirely in FORM. It uses meters, Y-up, centered X/Z, and ground Y=0. Four walls, thin floor slabs, facade panels, entrance canopies, and flat/gable roofs form a compact building that a game can borrow as a static prop. It has no physics, navigation, or playable interior. Doors and windows are decorative panels over walls.
+# FORM Building Shell
+A Rust example of editable procedural content and baked consumption. `assets/building.form` produces a reusable exterior in meters, Y-up, centered X/Z, with ground at Y=0. Windows and doors are decorative; no playable interior, collision, or navigation is implied.
 
-## Run locally
-From `/Users/trent/development/JoyGames`:
-```sh
+```bash
 npm run dev --workspace @joy-engine/example-form-building
-npm run check --workspace @joy-engine/example-form-building
-npm run test --workspace @joy-engine/example-form-building
-npm run bake --workspace @joy-engine/example-form-building
 npm run build --workspace @joy-engine/example-form-building
-npm run capture --workspace @joy-engine/example-form-building
+npm run test --workspace @joy-engine/example-form-building
 npm run capture --workspace @joy-engine/example-form-building -- --built
 ```
-Captures use Playwright Chromium by default, or `CAPTURE_EXECUTABLE` when supplied. They run headed on macOS for GPU presentation and headless elsewhere; `FORM_BUILDING_HEADLESS=1` and `FORM_BUILDING_HEADED=1` override that choice.
 
-Open the URL printed by Vite. Use `?backend=webgl` or `?backend=webgpu` to select a backend. Add `&mode=baked` to load the supplied cottage mesh without parsing or evaluating FORM. Drag to orbit, scroll to zoom, and click **Frame view** after large dimension changes. The sidebar scrolls independently of the asset viewport.
+The native command runs the Cargo example. Browser output lives in this workspace's `dist/`, published by JoyGames at `/examples/form-building/`. Use `?mode=baked` for the baked cottage; natively pass `--mode=baked` to `cargo run --example form-building`. Browser `backend=webgpu` or `backend=webgl` selects rendering.
 
-## Editable procedural use
-`assets/building.form` is the canonical source; `assets/presets.json` contains cottage, warehouse, and apartment configurations. The browser parses once with `compileFormScript(source)`, evaluates complete parameter snapshots, copies the successful result into an immutable asset, and replaces the scene's previous material groups. A failed evaluation leaves the previous visible asset intact. `src/asset.ts` and `src/presentation.ts` show game consumption through public engine exports; neither generates geometry.
+## Editable and Baked Content
+`CompiledScript` parses once, then evaluates complete parameter snapshots. `form_mesh_asset` draws accepted output with the engine PBR pass, including authored material factors. Invalid evaluation retains the previous building. Presets include cottage, warehouse, and apartments; counts are explicitly floored, while metadata bounds do not quantize arbitrary inputs.
 
-The runtime panel exposes width/depth (4–30 m), total wall height (3–30 m), floors (1–8), window spacing (1.5–6 m), door spacing (3–12 m), roof shape (0 flat / 1 gable), roof rise (0.3–5 m), and seed (1–9999). Floors are explicitly floored; roof shape switches at 0.5. Metadata clamps finite inputs but does not quantize them. Total height is divided by floor count, so a short eight-floor shell is valid stress geometry, not plausible architecture. Keep normal floor heights around 2.5–3.5 m. The seed changes window tint rather than gameplay or structural dimensions.
+Open the supplied `.formlab` recipes in FORM LAB to edit parameters, materials, and mesh resources. Save editable recipe writes source/input state; Bake mesh JSON writes evaluated geometry. Browser actions download; native actions write their named output files. GLB exports are baked interchange and do not preserve procedural source. Baked mode loads the supplied mesh without evaluating FORM.
 
-Open `assets/cottage.formlab`, `warehouse.formlab`, or `apartments.formlab` in FORM LAB (`npm run dev:form-lab`, then **Open**). FORM LAB also exposes wall/roof RGBA colors, material resource overrides, and the replaceable window mesh. Saved resource overrides take precedence over the material defaults derived from tint. The runtime **Save editable recipe** button writes a complete `.formlab` source/input snapshot. `npm run bake` refreshes the three provided documents after source/preset edits.
+## Validation and Limits
+`test/rust/example_form_building.rs` covers presets, failure isolation, baked round trips, tool documents through `FormAssetLibrary`, and headless renders. Browser captures provide startup/image evidence. CPU frame encoding is not GPU execution time.
 
-## Baked consumption and export
-`assets/cottage.mesh.json` contains evaluated geometry, material assignments, and semantic entrance metadata. The baked URL path constructs `new MeshAsset(data)` and never evaluates FORM; it cannot change procedural dimensions. The runtime **Bake mesh JSON** button saves the current evaluated asset. JSON preserves authoring material data but is an engine-local mesh format.
-
-`assets/cottage.glb`, `warehouse.glb`, and `apartments.glb` were exported through FORM LAB. For a fresh interoperable export, open the corresponding `.formlab`, select **GLB · Geometry + materials**, and click **Export data**. Those GLBs retain material groups, metallic/roughness values, and vertex colors. They are baked; they carry no editable FORM source. GLB reload into a game is outside this example's exercised runtime path.
-
-`SceneRenderer` does not interpret asset PBR materials. The example's presentation adapter groups existing triangles by material and uses supported instance tint/roughness, leaving the canonical asset untouched. Metallic, emissive, texture, and material alpha-mode behavior require a different runtime path; FORM LAB previews and GLB exports preserve the authored channels. This example does not add a new renderer subsystem.
-
-The example owns its RAF, listeners, renderer, and scene. `dispose()` stops the loop, aborts listeners, destroys rendering resources, clears scene references, and releases the current asset. Mesh assets own CPU arrays only. Legacy FORM `instance()` reuses source meshes during authoring but realizes copies in final geometry; this example does not demonstrate GPU instancing or retained logical `instances()` outputs.
-
-## Findings and evidence
-See [the findings report](FINDINGS.md) for measured timings, the focused matrix, minimal diagnostic reproductions, browser evidence, and the existing repository-validation blocker. The example remains an independent engine workspace and is published in the JoyGames platform’s Joy Engine Examples section at `/examples/form-building/`.
-
-## Rust Version
-`main.rs` and `src/*.rs` port the example to the Rust engine. The same `assets/building.form` parses once through `joy_engine::form::CompiledScript`, presets and parameter controls evaluate complete snapshots, and `form_mesh_asset` turns each result into one PBR asset, so walls, roofs, trim, and glass draw with their authored metallic, roughness, and emissive factors instead of the TypeScript material-group tints. A failed evaluation keeps the previous building. From the repository root:
-
-```sh
-cargo run --example form-building
-cargo run --example form-building -- --mode=baked
-node scripts/rust/build-web.mjs --example form-building --release
-```
-
-The web build writes a static page under `target/web/form-building/`; serve it and append `?backend=webgl`, `?backend=webgpu`, or `?mode=baked`. **Save editable recipe** and **Bake mesh JSON** download files in browsers and write `building.formlab` and `building.mesh.json` into the working directory natively. `cargo test` covers the presets, failure isolation, baked round trips, the FORM LAB documents through `FormAssetLibrary`, and preset and baked-mode renders (`test/rust/example_form_building.rs`). The Rust example has no `window.buildingExample` API, its timings report CPU frame encoding, and its parameter fields apply while dragging.
+The example is not a DCC bridge, node graph, automatic collision/LOD generator, or runtime fracture system. FORM remains the source of geometry, and the host remains its consumer.

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Effect parameter cards (the TypeScript `parameter-controls.ts`), built from the kit's lab controls: a type menu, the
+//! Effect parameter cards, built from the kit's lab controls: a type menu, the
 //! name, a linear-RGBA swatch for colors, collapse and delete buttons, then the values (a bounded scalar, or XYZ and
 //! RGBA component groups) and the per-component bounds beneath. Collapsing hides the editors without changing the
 //! effect and keeps a compact summary.

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Number formatting shared by error messages and JSON writers, so text reads exactly like the TypeScript engine's.
+//! Number formatting shared by error messages and JSON writers, preserving JavaScript-compatible number text.
 
 use serde_json::Value;
 

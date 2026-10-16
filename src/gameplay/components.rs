@@ -4,9 +4,8 @@
 //! Built-in component vocabulary, defaults, and typed readers for presentation components.
 //!
 //! Projects may author any component type; the engine preserves unknown records as data and interprets only the types
-//! named here. Defaults match the TypeScript `built-in-component-schemas.ts` (the schema catalog in
-//! `component_schema.rs` publishes the same values), and the readers apply the same rules the TypeScript `LevelScene`
-//! and `AssetScene` use. The vocabulary modules mirror the TypeScript `constants.ts`.
+//! named here. The schema catalog and runtime readers share these defaults, so authoring tools display the values
+//! that scene adapters use when a field is omitted.
 
 use crate::core::{JsonRecord, PrimitiveShape, Rgb};
 use glam::Vec3;

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! PARTICLE LAB vocabularies and tuning (the TypeScript `constants.ts` plus the lab's timing values from `main.ts`).
+//! PARTICLE LAB vocabularies, tuning, and timing values.
 
 /// Preview performance inspection modes.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

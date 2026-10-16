@@ -3,8 +3,7 @@
 
 //! Read-only example projects compiled into the editor.
 //!
-//! A static browser page has no project file service: the TypeScript workspace got its files from the Vite development
-//! server, and the published site deliberately ships none. The browser build opens these bundled examples instead, so
+//! A static browser page has no project file service. The browser build opens these bundled examples, so
 //! every editor (levels, objects, FORM, JOYFX) can be explored; saves explain that project files need the native
 //! editor, and Download hands the current document to the browser.
 

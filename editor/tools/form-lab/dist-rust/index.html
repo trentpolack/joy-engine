@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Trent Polack. All Rights Reserved. Licensed under the MIT License. -->
+<!-- Page written by joy-engine/scripts/rust/build-web.mjs; edit the template, not generated copies. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:,">
+  <title>FORM LAB · Joy Engine</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #0d1a20;
+      color: #e8eeee;
+      font: 14px system-ui, sans-serif;
+    }
+
+    #form-lab {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      outline: none;
+      touch-action: none;
+    }
+
+    #joy-loading {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      letter-spacing: 0.2em;
+      pointer-events: none;
+    }
+
+    #form-lab[data-ready] + #joy-loading {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="form-lab" tabindex="0"></canvas>
+  <div id="joy-loading">LOADING</div>
+  <script type="module">
+    import start from './form_lab.js';
+
+    const canvas = document.getElementById('form-lab');
+    // The shell sizes the canvas once the GPU is ready; hide the loading label then.
+    new ResizeObserver(() => {
+      if(canvas.width > 0) {
+        canvas.dataset.ready = 'true';
+      }
+    }).observe(canvas);
+    start().then(() => canvas.focus()).catch(error => {
+      document.getElementById('joy-loading').textContent = `Unable to start: ${error}`;
+    });
+  </script>
+</body>
+</html>

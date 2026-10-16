@@ -3,7 +3,7 @@
 
 //! The game contract: ordered frame phases, frame timing, and the render target handed to the render phase.
 //!
-//! This is the Rust counterpart of the TypeScript `GameShell` options: the shell owns the window or canvas, GPU,
+//! The runtime shell owns the window or canvas, GPU,
 //! renderer, input, and development tools; the game implements phases that run in input, simulation, presentation,
 //! render, UI, and after-frame order every frame. Time is in seconds.
 

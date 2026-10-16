@@ -6,7 +6,7 @@
 //! The renderer draws a retained [`RenderScene`] from a [`Camera`] each frame on wgpu, which runs on WebGPU and WebGL 2
 //! in browsers and on Vulkan, Metal, DirectX 12, or OpenGL natively. Shaders are authored once in WGSL.
 //!
-//! Frame structure, materials, and display processing follow the TypeScript engine so the same content looks the same:
+//! Games and authoring previews share these rendering contracts:
 //! - Lit (flat, double-sided vertex-color lighting), PBR (metallic-roughness), and Unlit material passes.
 //! - The environment's primary light with cascaded soft shadows, ambient skylight, and up to 32 point lights with
 //!   optional soft shadows, on WebGL 2 as well as WebGPU.

@@ -6,9 +6,9 @@
 //! Scenes hold no gameplay authority. Instances reference shared assets and own their presentation state (transform,
 //! tint, opacity, visibility, pass, shading, and shadow policy). The renderer borrows a scene for each frame.
 //!
-//! Like the TypeScript `SceneNode` hierarchy, instances and nodes may be parented to transform-only [`SceneNode`]s:
+//! Instances and nodes may be parented to transform-only [`SceneNode`]s:
 //! their transform is local to the parent's world transform, and hiding a node hides everything beneath it. Removing
-//! a node removes its whole subtree. In TypeScript every instance is itself a node; here instances are leaves, so
+//! a node removes its whole subtree. Instances are leaves, so
 //! parent several instances to one node to move them together.
 
 mod terrain_instance;

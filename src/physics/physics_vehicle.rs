@@ -5,15 +5,15 @@
 //!
 //! Vehicles use rapier's `DynamicRayCastVehicleController`, which, like cannon-es's `RaycastVehicle`, is a port of
 //! Bullet's `btRaycastVehicle`. Chassis axes are up = +Y, forward = +Z; every wheel casts along chassis -Y and spins
-//! around the chassis -X axle. The public contract matches the TypeScript engine: positive throttle drives local +Z,
+//! around the chassis -X axle. Positive throttle drives local +Z,
 //! positive steer turns toward local +X, and brake is an impulse bound scaled by `brake_force` on braking wheels.
 //!
-//! Parameter mapping (TypeScript name → rapier wheel field): `suspensionStiffness` → `suspension_stiffness`,
+//! Parameter mapping (authored JSON name → rapier wheel field): `suspensionStiffness` → `suspension_stiffness`,
 //! `dampingCompression` → `damping_compression`, `dampingRelaxation` → `damping_relaxation`,
 //! `maxSuspensionTravel` → `max_suspension_travel`, `maxSuspensionForce` → `max_suspension_force`, and
 //! `frictionSlip` → `friction_slip`; side friction stiffness is 1 like cannon. Known solver differences:
 //! - `rollInfluence` is validated and stored but rapier 0.36 does not expose it; rapier applies a fixed 0.1 (the
-//!   TypeScript default is 0.01), so side impulses act slightly further from the center of mass than in cannon.
+//!   authored default is 0.01), so side impulses act slightly further from the center of mass than in cannon.
 //! - Rapier divides the rolling/brake friction impulse by the number of grounded wheels before clamping; cannon does
 //!   not. Brake impulses that hit the `brake_force` bound behave identically; gentle rolling resistance is weaker.
 //! - Rapier does not apply the equal-and-opposite side impulse to a dynamic ground body.

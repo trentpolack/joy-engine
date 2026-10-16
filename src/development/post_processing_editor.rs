@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The in-game post-processing editor, matching the TypeScript `PostProcessingEditor`: live display tuning with a
+//! The in-game post-processing editor: live display tuning with a
 //! preset, per-setting overrides, undo, preview modes, and saving back to the game's profile.
 //!
 //! A game owns the editor in development builds, draws it from its UI phase, and applies

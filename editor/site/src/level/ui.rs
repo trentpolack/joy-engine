@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The level editor's egui presentation (TypeScript `level.html` and the DOM half of `level/main.ts` and
-//! `property-editor.ts`): the authoring toolbar, the scene outliner, the viewport's input and overlays (tools, grid,
-//! snap, the move gizmo), and the inspector with transforms, the schema-driven component tree, and Advanced Source.
+//! The level editor's egui presentation: the authoring toolbar, the scene outliner, the viewport's input and overlays
+//! (tools, grid, snap, the move gizmo), and the inspector with transforms, the schema-driven component tree, and
+//! Advanced Source.
 //!
 //! The whole editor is one egui area, laid out by the authoring kit's `PanelLayout` (outliner, viewport, inspector,
 //! with persisted widths and dividers); viewport gestures come from the kit's `viewport_input`, and gizmo handles are

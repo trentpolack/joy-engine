@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The Materials inspector (UI module), ported from `material-controls.ts`: the document palette's base color,
+//! The Materials inspector (UI module): the document palette's base color,
 //! emissive, metallic, roughness, normal, ambient occlusion, and alpha policy, with PNG, JPEG, or WebP maps, adding,
 //! renaming, and deleting materials, and MaterialX import and export. Scripts select materials with `material(Name)`;
 //! edits never touch compiled geometry, and every change is validated against FORM's palette budget before it applies.

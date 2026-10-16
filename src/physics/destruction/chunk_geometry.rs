@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Renderer-free box geometry for chunk structures (TypeScript `chunk-geometry.ts`).
+//! Renderer-free box geometry for chunk structures.
 
 use serde_json::Value;
 

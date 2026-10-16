@@ -3,7 +3,7 @@
 
 //! Decoded particle textures keyed by their embedded PNG source.
 //!
-//! The Rust counterpart of the TypeScript `ParticleTextureSet`. It owns CPU [`TextureAsset`]s only; the renderer
+//! The set owns CPU [`TextureAsset`]s only; the renderer
 //! uploads each on first draw and releases the GPU copy when the asset is dropped, so the set never borrows a device.
 //! Decoding is synchronous, so a prepare cannot be superseded mid-flight; the prepare/activate split remains so a new
 //! definition's images are ready before it replaces the displayed one, and a failed decode leaves the set unchanged.

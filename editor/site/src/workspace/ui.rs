@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The workspace's egui presentation (TypeScript `index.html` and the DOM half of `workspace/main.ts`): the header with
+//! The workspace's egui presentation: the header with
 //! the project picker and Save File, the Content Browser (search, type filter, refresh, New, Import, rows with rename
 //! and delete, Project Details, Documentation), document tabs with conflict and return bars, repair views, dialogs,
 //! and the status footer. The active tab's editor fills the remaining region: the level editor draws there through

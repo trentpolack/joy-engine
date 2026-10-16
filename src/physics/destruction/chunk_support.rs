@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Optional Y-up masonry support approximation for chunk structures (TypeScript `chunk-support.ts`).
+//! Optional Y-up masonry support approximation for chunk structures.
 //!
 //! Face contacts carry support upward and sideways; horizontal offsets spend the cantilever allowance. This is a
 //! geometric support rule, not a stress, torque, or material-load solver. Contact topology is built once for the fixed

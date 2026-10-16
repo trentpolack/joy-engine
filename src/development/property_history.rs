@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Undo and redo for property edits (the TypeScript `NumericControls` history), separate from script text history.
+//! Undo and redo for property edits, separate from script text history.
 //!
 //! The history stores whole property snapshots chosen by the tool (FORM parameters, an effect's parameters and emitter
 //! settings without scripts or texture bytes) and never inspects them. It keeps a baseline, the snapshot at the last

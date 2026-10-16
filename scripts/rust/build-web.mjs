@@ -17,7 +17,7 @@
 //   --out <dir>              Output folder (default: <target>/web/<artifact>).
 //   --release                Optimize for size with the `web-release` profile.
 //   --dev                    Use the fast `dev` profile even when --release is given (development servers pass it so a
-//                            workspace's rust:web script keeps its title and canvas but builds quickly).
+//                            workspace's build script keeps its title and canvas but builds quickly).
 //   --title <text>           Page title (default: the artifact name).
 //   --canvas <id>            Canvas element ID the game looks up (default: joy-canvas).
 //
@@ -92,6 +92,7 @@ const page = template
   .replaceAll('{{module}}', `./${moduleName}.js`);
 writeFileSync(resolve(outputDirectory, 'index.html'), page);
 copyFileSync(resolve(engineRoot, 'LICENSE'), resolve(outputDirectory, 'LICENSE'));
+copyFileSync(resolve(engineRoot, 'src/rendering/scene_effects/LICENSE-luma.gl'), resolve(outputDirectory, 'THIRD-PARTY-NOTICES.txt'));
 console.log(`Web build ready: ${relative(process.cwd(), outputDirectory) || '.'} (${basename(wasmFile)}, ${profile}).`);
 
 /** Read the wasm-bindgen version the lockfile resolved; the CLI must match it exactly. */

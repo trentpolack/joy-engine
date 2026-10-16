@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The Documentation panel's guide (the TypeScript workspace's help dialog), as titled sections of paragraphs.
+//! The Documentation panel's guide, as titled sections of paragraphs.
 
 /// Guide sections: a title and its paragraphs.
 pub const SECTIONS: [(&str, &[&str]); 5] = [

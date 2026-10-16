@@ -1,38 +1,19 @@
-# Scene effects example
-This engine example is available in the JoyGames platform’s Joy Engine Examples section at `/examples/scene-effects/`, including site builds and release captures. It consumes the public `joy-engine` scene API without importing luma directly. Its deterministic room demonstrates depth-aware blur, SSAO or GTAO, SSGI, outlines, TAA, motion blur, SSR, height fog, clustered volumetric lighting, adaptive exposure and existing HDR bloom. Start from the repository root:
+# Scene Effects Example
+A deterministic Rust room for inspecting depth-aware blur, SSAO or GTAO, SSGI, outlines, TAA, motion blur, SSR, fog, volumetric lighting, adaptive exposure, and HDR bloom.
 
-```sh
+```bash
 npm run dev --workspace @joy-engine/example-scene-effects
-npm run check --workspace @joy-engine/example-scene-effects
 npm run build --workspace @joy-engine/example-scene-effects
-npm run capture --workspace @joy-engine/example-scene-effects
+npm run test --workspace @joy-engine/example-scene-effects
 npm run capture --workspace @joy-engine/example-scene-effects -- --built
 ```
 
-Append `?backend=webgl` or `?backend=webgpu` to choose a backend. Explicit WebGPU selection reports adapter failure instead of silently falling back. Automatic selection prefers WebGPU and falls back to WebGL. Unsupported hardware and shader failures appear in the page. The capabilities panel shows the renderer's device report, including its HDR attachment choice.
+Native development runs the Cargo example; browser output lives in `dist/` and publishes at `/examples/scene-effects/`. Use `backend=webgpu` or `backend=webgl` in browser queries. Scene effects require WebGPU or a capable native backend; WebGL 2 reports them unavailable while retaining scene rendering, shadows, and HDR bloom.
 
-## Scene and controls
-The open room contains saturated red and green walls for screen-space color bleed, blocks and corners for contact occlusion, thin vertical slats for temporal antialiasing, a floor with scene roughness 0.18 and a blue block with roughness 0.05 for screen-space reflections. The ceiling strip uses linear RGB `[12, 7, 2]`; bloom has threshold 1, so highlights have real HDR radiance. The 27 deterministic point lights illuminate the room and supply the clustered volumetric pass. Scene roughness is a screen-space reflection classification, not an authored PBR material. Height fog is the upstream stylized screen-height/depth approximation; clustered lighting uses world-space volumetric scattering. The camera uses near/far clips 0.5/100 world units to preserve useful depth precision in this small room.
+## Scene and Controls
+Colored walls reveal bounce, blocks and corners reveal occlusion, slats expose temporal stability, and low-roughness surfaces reveal reflections. HDR lighting and deterministic point lights supply actual scene inputs. Camera clips are 0.5/100 world units.
 
-CONFIG enables each effect independently. SSAO and GTAO are mutually exclusive; enabling either switches off the other. Low, medium and high quality adjust bounded sample counts and intermediate resolution without enabling additional effects. All off restores the comparison baseline; Combined enables GTAO, SSGI, TAA, SSR, clustered lighting, adaptive exposure and bloom. Drag or scroll in the viewport to orbit or zoom. The example requests backing pixel ratio 1 so capture resolution is reproducible.
+The shared `SceneEffectsControls` provides independent toggles, exclusive SSAO/GTAO selection, All off/Combined presets, bounded quality settings, and bloom. EFFECT GUIDE explains limitations. Fixed time, stepping, object/camera motion, camera cuts, scene replacement, and history reset support repeatable inspection. Drag and wheel orbit/zoom.
 
-Simulation starts frozen at 2 seconds while frames continue rendering to accumulate temporal history. Moving object and Camera motion enable deterministic sine motion. Uncheck Fixed simulation time to advance using the animation-frame clock, or use Time and Step 1/60 s to select reproducible motion frames. Camera cut, Replace scene, Reset history and Resize test exercise history invalidation. Scene replacement changes the wall colors and explicitly destroys the old scene. The owner releases RAF, DOM subscriptions, room instances and GPU resources on teardown and Vite replacement.
-
-## Capture API and evidence
-The typed `window.sceneEffectsExample` development/capture API is defined by `SceneEffectsExampleApi` in `site/src/main.ts`. It exposes effect/quality/bloom/motion/time controls, `baseline`, `combined`, `cameraCut`, `replaceScene`, `resetHistory`, `resizeTest`, `snapshot`, `resetMetrics`, `sample` and idempotent `dispose`. Settings use complete replacement through `SceneRenderer.setSceneEffectsConfig`; per-frame inputs include seconds, delta seconds and explicit history reset.
-
-The browser script starts an isolated random-port Vite server and a temporary Playwright browser. On macOS it selects installed Google Chrome when available, with headed rendering by default. Set `CAPTURE_EXECUTABLE` to choose another Chromium executable, `SCENE_EFFECTS_BACKEND=webgl` or `webgpu` for one backend, `SCENE_EFFECTS_HEADLESS=1` for headless, or `SCENE_EFFECTS_HEADED=1` to force headed elsewhere. Safari and Edge are not covered by this Chromium harness.
-
-Every available backend captures baseline, every individual effect, bloom, combined low/medium/high, motion, camera cut, replacement, step/reset, resize, repeated toggling and effects disabled again. The script checks shader/page errors, SSAO/GTAO exclusivity, nonempty timing samples and production log silence. It retains screenshots, an HTML gallery and `report.json` beneath ignored `artifacts/captures/`. The JSON includes hardware/browser/backend, capabilities, logical/backing resolution, all settings, camera pose and two separate timing distributions. Appearance must be inspected from the screenshots; these measurements are not a GPU benchmark.
-
-CPU render submission is `performance.now()` around `SceneRenderer.render`, including CPU frame preparation and command submission. RAF cadence is the difference between browser animation-frame timestamps. GPU execution time is explicitly unavailable. Frozen simulation time does not freeze cadence measurement; neither measure is relabeled as GPU time. Adaptive exposure still receives deterministic delta seconds while the scene clock is frozen, allowing repeatable convergence after a fixed frame count.
-
-## Rust Version
-`main.rs` and `src/*.rs` port the lab to the Rust engine: the same room, lights, camera, tuning, and temporal tests, drawn by the engine renderer with egui controls. Effect toggles, presets (All off, Combined), quality, and HDR bloom come from the engine's `SceneEffectsControls` with this lab's per-quality tuning; the effect notes appear under EFFECT GUIDE. Every room light casts point-light shadows, on WebGL 2 as well. From the repository root:
-
-```sh
-cargo run --example scene-effects
-node scripts/rust/build-web.mjs --example scene-effects --release
-```
-
-The web build writes a static page under `target/web/scene-effects/`; serve that folder and append `?backend=webgl` or `?backend=webgpu` to choose a backend. Scene effects need WebGPU (or native Vulkan, Metal, or DirectX 12); on WebGL 2 the controls report them unavailable and HDR bloom remains. `cargo test` drives the lab headlessly (`test/rust/example_scene_effects.rs`), including the shadow fixture and the shadow-material fixture; set `JOY_RENDER_CAPTURE_DIR` to keep captures. The Rust lab has no `window.sceneEffectsExample` capture API or Resize test, and its stats report CPU frame encoding (the shell submits the frame) and frame cadence.
+## Validation
+`test/rust/example_scene_effects.rs` drives the real application headlessly, including shadow/material fixtures; `JOY_RENDER_CAPTURE_DIR` retains GPU captures. Browser captures smoke-test WebAssembly initialization and rendered images. Inspect temporal motion interactively as well as still captures. Statistics report CPU encoding and frame cadence, not GPU execution time. See [scene effects](../../docs/scene-effects.md).

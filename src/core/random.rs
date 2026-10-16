@@ -3,8 +3,8 @@
 
 //! Deterministic random streams.
 //!
-//! `SeededRandom` reproduces the TypeScript engine's `createSeededRandom` bit for bit, so seeded gameplay and cosmetic
-//! sequences match across the two implementations and across native and WebAssembly builds.
+//! `SeededRandom` preserves the retired TypeScript engine's `createSeededRandom` sequence bit for bit. Seeded
+//! gameplay and cosmetic sequences match recorded fixtures and agree across native and WebAssembly builds.
 
 /// Linear congruential multiplier shared with the TypeScript engine (Numerical Recipes constants).
 const LCG_MULTIPLIER: u32 = 1_664_525;

@@ -4,8 +4,7 @@
 //! Entity and instance transforms.
 //!
 //! Euler angles are XYZ radians applied X, then Y, then Z, which is the matrix `Rz * Ry * Rx`. Transforms apply scale,
-//! then rotation, then translation. These conventions match the TypeScript engine, the authored level format, and the
-//! physics adapter.
+//! then rotation, then translation. The authored level format and physics adapter share these conventions.
 
 use glam::{EulerRot, Mat4, Quat, Vec3};
 use serde::{Deserialize, Serialize};

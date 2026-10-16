@@ -1,17 +1,17 @@
 # Rust Authoring Kit
-The authoring kit is the shared egui toolkit that FORM LAB, PARTICLE LAB, and Joy Editor build their UI from. It lives in the engine's `development` module (platform layer) beside the [`AuthoringTool`](../src/development/authoring_tool.rs) hosting contract, so tools depend only on `joy-engine`. It ports the behavior of the TypeScript editor library (`editor/src/lab-controls.ts`, `components.ts`, the interaction helpers in `editor/site/src/interaction/`) as idiomatic egui widgets: controls borrow authored values and return what happened, and tools own their documents.
+The authoring kit is the shared egui toolkit that FORM LAB, PARTICLE LAB, and Joy Editor build their UI from. It lives in the engine's `development` module (platform layer) beside the [`AuthoringTool`](../src/development/authoring_tool.rs) hosting contract, so tools depend only on `joy-engine`. Its egui widgets use explicit ownership: controls borrow authored values and return what happened, and tools own their documents.
 
 Keep tool UI in modules separate from document and model logic; the kit follows the same split (`lab_values.rs` holds the UI-free rules behind `lab_controls.rs`), so a later UI technology change touches only UI modules.
 
 ## Look
-`runtime::theme::apply_authoring(ctx)` applies the shared Joy design tokens (JoyGames `joy-tokens.json`, mirrored by `editor/src/joy-tokens.css`) to an egui context: navy panels, square fields with thin borders, orange focus and accents, 30-point controls, and the 10/11/13/16 type scale. The tokens themselves are constants in `runtime::theme::tokens` (`ACCENT`, `PANEL`, `FIELD`, `BORDER`, `MUTED`, `DANGER`, the script palette, spacing, radii, and border widths). Games keep `runtime::theme::apply` and its core colors.
+`runtime::theme::apply_authoring(ctx)` applies the shared Joy design tokens (JoyGames `joy-tokens.json`, represented by engine theme constants) to an egui context: navy panels, square fields with thin borders, orange focus and accents, 30-point controls, and the 10/11/13/16 type scale. The tokens themselves are constants in `runtime::theme::tokens` (`ACCENT`, `PANEL`, `FIELD`, `BORDER`, `MUTED`, `DANGER`, the script palette, spacing, radii, and border widths). Games keep `runtime::theme::apply` and its core colors.
 
 `development::components` adds the pieces egui has no style slot for: `panel_heading` (`01 COMPOSE`, drawn with `runtime::hud_text`), `primary_button`, `danger_button`, `toggle_button`, `field_title`, `guidance`, `error_text`, `status_badge`, `panel_frame`, and `toolbar_frame`.
 
 ## Lab Controls
 | Widget | Purpose |
 | --- | --- |
-| `NumberField` | Exact numeric field. Shows the authored value exactly (`lab_values::format_number`, JavaScript `String(number)`), scrubs by horizontal drag (one step per 2 points), steps with arrow keys (Shift a tenth, or one for integer fields; Alt ten steps), and validates drafts on Enter or focus loss against bounds, integrality, and an optional extra `check`. |
+| `NumberField` | Exact numeric field. Shows the authored value exactly (`lab_values::format_number`), scrubs by horizontal drag (one step per 2 points), steps with arrow keys (Shift a tenth, or one for integer fields; Alt ten steps), and validates drafts on Enter or focus loss against bounds, integrality, and an optional extra `check`. |
 | `ScalarControl` | Bounded scalar: a slider over the authored range plus an exact field, an optional label column, and a reset button while modified. The slider appears only for finite, distinct bounds. |
 | `ComponentGroup` | XYZ (`xyz`) and RGBA (`rgba`) groups: equal columns with a component label, an exact field, and a short slider per bounded component; per-component defaults and resets. |
 | `ColorControl` | Linear-RGBA swatch over a checkerboard with an sRGB picker and hex entry. Choosing converts RGB to linear within the owner's bounds and preserves alpha. |
@@ -22,16 +22,16 @@ Every control returns a `ControlResponse` with `changed`, the changed `component
 - `Continuing`: a slider drag, number scrub, or picker drag moved the value and is still in progress.
 - `Committed`: a gesture ended, or a discrete edit happened (exact entry, arrow step, reset, picker choice). Record history now.
 
-Controls carry accessible names (`ScalarControl::name` and `ComponentGroup::name` give `power value`, `power slider`, `tint A value`, as the TypeScript labels do; `NumberField::label` names a lone field; swatches read `<label> color picker`), which screen readers and headless tests use through egui's AccessKit output.
+Controls carry accessible names (`ScalarControl::name` and `ComponentGroup::name` give `power value`, `power slider`, `tint A value`; `NumberField::label` names a lone field; swatches read `<label> color picker`), which screen readers and headless tests use through egui's AccessKit output.
 
 Values are never rounded for display. Sliders use `SliderClamping::Edits`, so a value outside its range stays untouched until the author drags; the color picker writes only when the author changes it (floating-point noise from its color-space round trip is ignored), never when it opens or refreshes.
 
 ### Numeric Drafts
-`NumericDrafts` (one per tool document view) collects invalid drafts. A rejected draft never changes the value; it stays in its field in the danger color with its message until repaired by a valid entry, a slider move, a reset, or Escape back to the accepted value. Text being typed that is not yet valid also counts, as in the TypeScript `validate()`. Before Apply, export, switching emitters, loading examples, or anything that would replace fields, call `drafts.require_valid()` and show its message instead of continuing; the color picker refuses choices on its own while drafts are invalid. Call `drafts.clear()` when the document is replaced.
+`NumericDrafts` (one per tool document view) collects invalid drafts. A rejected draft never changes the value; it stays in its field in the danger color with its message until repaired by a valid entry, a slider move, a reset, or Escape back to the accepted value. Text being typed that is not yet valid also counts. Before Apply, export, switching emitters, loading examples, or anything that would replace fields, call `drafts.require_valid()` and show its message instead of continuing; the color picker refuses choices on its own while drafts are invalid. Call `drafts.clear()` when the document is replaced.
 
 Give every field a stable `id_salt` (a parameter name, an emitter field name), so drafts follow their field when rows are added or removed.
 
-The mouse wheel never steps a number; egui scrolls the panel instead, which replaces the TypeScript `number-scroll.ts` guard.
+The mouse wheel never steps a number; egui scrolls the panel instead.
 
 ## Property History
 `PropertyHistory<Snapshot>` is property undo/redo over snapshots the tool chooses (for example JSON of parameters and emitter settings without scripts or texture bytes), separate from script text history, keeping 30 entries. It coalesces continuous gestures through a baseline, the snapshot at the last commit point:
@@ -47,10 +47,10 @@ if let Some(snapshot) = self.history.undo(&self.property_snapshot()) {
 }
 ```
 
-`reset(snapshot)` starts over (a new document, or a script edit, which TypeScript also lets clear property history); `rebase(snapshot)` moves the baseline after a structural edit that is not a property edit (adding or deleting a parameter or emitter). Undo and redo first check that the current snapshot is the entry's result and clear the history otherwise, so they never restore over unrecorded work.
+`reset(snapshot)` starts over (a new document, or a script edit); `rebase(snapshot)` moves the baseline after a structural edit that is not a property edit (adding or deleting a parameter or emitter). Undo and redo first check that the current snapshot is the entry's result and clear the history otherwise, so they never restore over unrecorded work.
 
 ## Panel Layout
-`PanelLayout` places a left panel, a center, and a right panel inside any rectangle, so the same tool code works standalone and inside a Joy Editor tab area (`ToolHosting::Hosted { area }`). Widths clamp to the available space for display without changing the saved preference (the TypeScript limits: left 160 to 600 points and at most 36% of the width, right 220 to 480, keeping 280 for the center), persist through `runtime::Storage` under the tool's key in the TypeScript JSON shape, and resize by dragging a divider, by arrow keys on a focused divider (20 points), and back to the default on double-click. Panels collapse from `visibility_controls` (never all at once; the center only when `center_collapsible`), and `set_maximized` shows only the center (`MaximizeMode::Viewport`) or leaves the panes for the tool to hide its chrome (`MaximizeMode::Workspace`). Escape restores a maximized layout unless a text field has the keyboard. The toggles read left to right in either layout direction.
+`PanelLayout` places a left panel, a center, and a right panel inside any rectangle, so the same tool code works standalone and inside a Joy Editor tab area (`ToolHosting::Hosted { area }`). Widths clamp to the available space for display without changing the saved preference (the limits are left 160 to 600 points and at most 36% of the width, right 220 to 480, keeping 280 for the center), persist through `runtime::Storage` under the tool's key in its stable JSON shape, and resize by dragging a divider, by arrow keys on a focused divider (20 points), and back to the default on double-click. Panels collapse from `visibility_controls` (never all at once; the center only when `center_collapsible`), and `set_maximized` shows only the center (`MaximizeMode::Viewport`) or leaves the panes for the tool to hide its chrome (`MaximizeMode::Workspace`). Escape restores a maximized layout unless a text field has the keyboard. The toggles read left to right in either layout direction.
 
 Draw panes first and dividers last so dividers win hit tests over pane content:
 
@@ -64,7 +64,7 @@ self.layout.dividers(ui, &panes);
 ```
 
 ## Script Editor
-`ScriptEditor` is the code editor for FORM and JOYFX scripts (the TypeScript CodeMirror setup in `script-editor.ts` and `script-language-tools.ts`) on egui's `TextEdit`. It borrows the script text each frame and owns only presentation state:
+`ScriptEditor` is the code editor for FORM and JOYFX scripts on egui's `TextEdit`. It borrows the script text each frame and owns only presentation state:
 
 ```rust
 // Once per document view:
@@ -89,7 +89,7 @@ editor.go_to_line(error.line as usize);
 The catalogs are the engine's: `form::form_language_catalog()` and `particles::particle_language_catalog()`, both returning `scripting::ScriptLanguageCatalog`.
 
 ## Viewport Input
-`viewport_input(ui, rect, id)` reads camera gestures for a 3D viewport (the TypeScript `viewport-input.ts`): a captured drag that orbits with the primary button and pans with Shift or any other button (the mode is fixed when the drag begins), wheel zoom in page pixels (positive toward the author, the TypeScript `deltaY`), a primary click without modifiers or movement (for picking), and F, 0, and arrow shortcuts while the viewport has keyboard focus. Pressing the viewport focuses it and locks the arrow keys to it, so shortcuts never reach text fields. The caller maps `ViewportActions` onto its own camera.
+`viewport_input(ui, rect, id)` reads camera gestures for a 3D viewport: a captured drag that orbits with the primary button and pans with Shift or any other button (the mode is fixed when the drag begins), wheel zoom in page pixels (positive toward the author), a primary click without modifiers or movement (for picking), and F, 0, and arrow shortcuts while the viewport has keyboard focus. Pressing the viewport focuses it and locks the arrow keys to it, so shortcuts never reach text fields. The caller maps `ViewportActions` onto its own camera.
 
 ## File Dialogs
 `FileDialogs` opens and saves files without blocking a frame, natively and in browsers. Start one request from the UI phase that handled the author's click, then poll every frame:
@@ -113,13 +113,6 @@ match self.dialogs.poll() {
 - One request runs at a time (`FileDialogError::Busy`), and `deliver` queues an event directly, for hosts that supply files themselves and for tests.
 
 ## Headless UI Tests
-`HeadlessShell::step_with_ui(game, raw_input)` runs a frame including the UI phase with synthetic egui input (pointer moves and buttons, keys, text) and paints the UI over the capture, so tool tests drive the real interface and save full screenshots without a display; `ui_context()` exposes the context for focus and memory checks. `step` still skips the UI. egui fades new areas in, so run a few idle frames (about 0.1 seconds) before comparing captured UI colors. Call `ui_context().enable_accesskit()` to receive the AccessKit tree in each frame's platform output and find widgets by accessible name and bounds, the way the TypeScript browser tests use `getByLabel`. `test/rust/development_kit.rs` and PARTICLE LAB's `test/rust/support.rs` are references.
+`HeadlessShell::step_with_ui(game, raw_input)` runs a frame including the UI phase with synthetic egui input (pointer moves and buttons, keys, text) and paints the UI over the capture, so tool tests drive the real interface and save full screenshots without a display; `ui_context()` exposes the context for focus and memory checks. `step` still skips the UI. egui fades new areas in, so run a few idle frames (about 0.1 seconds) before comparing captured UI colors. Call `ui_context().enable_accesskit()` to receive the AccessKit tree in each frame's platform output and find widgets by accessible name and bounds. `test/rust/development_kit.rs` and PARTICLE LAB's `test/rust/support.rs` are references.
 
 For tool-wide shortcuts that should not fire while typing (Space, R), check `egui::Context::text_edit_focused()` rather than `egui_wants_keyboard_input()`, which is also true while a viewport, slider, or button has focus.
-
-## Differences From TypeScript
-- Number fields scrub by dragging (TypeScript fields only type and step), and Escape in a field restores the accepted value.
-- The color picker is egui's HSV picker with an sRGB hex field instead of the browser's native picker; choices keep full floating-point precision rather than 8-bit hex steps (hex entry still quantizes like a native picker).
-- Panel dividers reset to their default width on double-click.
-- Completion ranks prefix matches before subsequence matches (CodeMirror uses its own fuzzy scoring), and PARTICLE LAB scripts may color an effect's parameter names.
-- Property snapshots are any `Clone + PartialEq` type rather than JSON strings, and the 1 MiB snapshot cap is the tool's responsibility.

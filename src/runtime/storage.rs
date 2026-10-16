@@ -4,8 +4,7 @@
 //! Persistent text storage for small saves such as character progression: the page origin's `localStorage` in
 //! browsers, and one file per key in a per-user data folder natively.
 //!
-//! This is the Rust counterpart of games calling `localStorage.getItem`/`setItem` directly in TypeScript. Keys are
-//! plain names (`joy.luna.character.v1`); values are text the caller serializes and validates. Reads and writes are
+//! Keys are plain names (`joy.luna.character.v1`); values are text the caller serializes and validates. Reads and writes are
 //! synchronous and small (at most 1 MiB per value). Failures never panic: an unavailable store (a private browsing
 //! window that blocks storage, a read-only disk, no home folder) reports [`StorageError`] so the game can keep playing
 //! and tell the player progress will not persist.

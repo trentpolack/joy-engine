@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The particle preview (the TypeScript `viewport.ts`), drawn only through the engine renderer: an orbit camera framed
+//! The particle preview, drawn only through the engine renderer: an orbit camera framed
 //! into the preview region, the editor grid, an optional matte light-receiver surface, editor backgrounds, particle
 //! textures with a prepare/activate lifecycle, the lab's display processing, and per-frame statistics for the
 //! performance monitor.

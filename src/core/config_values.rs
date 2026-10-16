@@ -2,12 +2,12 @@
 // Licensed under the MIT License.
 
 //! Typed tuning and configuration values: numeric field contracts, validated value records, version-1 override
-//! documents, and the JSON Schema editors use. Ported from the TypeScript `src/core/config-values.ts`.
+//! documents, and the JSON Schema editors use.
 //!
 //! Games declare a list of [`ConfigField`]s (their CONFIG panel), merge saved overrides into a complete record with
 //! [`create_config_values`] or [`create_config_document_values`], and generate the persistence schema with
 //! [`create_config_schema`]. Values are JavaScript numbers (`f64`); records keep field order. Validation order and
-//! error messages match the TypeScript engine, and the schema serializes to the same JSON text.
+//! error messages preserve the authored format's established validation contract.
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};

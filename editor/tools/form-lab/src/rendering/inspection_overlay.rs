@@ -2,8 +2,7 @@
 // Licensed under the MIT License.
 
 //! CPU inspection data for the Output inspector: element locations, optional attribute colors, the selected element,
-//! and screen-space picking. Ported from `inspection-overlay.ts`; its markers draw through the engine like point
-//! markers.
+//! and screen-space picking. Its markers draw through the engine like point markers.
 
 use joy_engine::glam::{Mat4, Vec2, Vec3, Vec4};
 use joy_engine::rendering::ColorVertex;

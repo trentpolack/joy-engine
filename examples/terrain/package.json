@@ -6,13 +6,12 @@
   "author": "Trent Polack",
   "license": "MIT",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "build": "vite build --base=./",
-    "rust:web": "node ../../scripts/rust/build-web.mjs --example terrain --release --title \"TERRAIN · Joy Engine\"",
-    "preview": "vite preview --host 127.0.0.1",
-    "check": "joy-check-javascript src site test && tsc --project tsconfig.json",
-    "capture": "node test/browser.mjs",
-    "test": "node --import joy-engine/testing/register-raw-loader --test test/*.test.mjs"
+    "dev": "cargo run --package joy-engine --example terrain",
+    "build": "node ../../scripts/rust/build-web.mjs --example terrain --release --title \"TERRAIN \u00b7 Joy Engine\" --out dist",
+    "preview": "node ../../scripts/preview-web.mjs",
+    "check": "cargo check --package joy-engine --example terrain",
+    "test": "cargo test --package joy-engine terrain",
+    "capture": "node ../../scripts/capture-web.mjs"
   },
   "dependencies": {
     "joy-engine": "file:../.."

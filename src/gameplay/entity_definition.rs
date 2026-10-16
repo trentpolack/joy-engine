@@ -3,12 +3,12 @@
 
 //! Authored entity definitions: the serialized record shared by levels, objects, and runtime spawning.
 //!
-//! Validation and defaults match the TypeScript `copyEntityDefinition`: the id must be a nonblank string, the name
+//! The id must be a nonblank string, the name
 //! defaults to the id, the type defaults to `entity`, transforms are three finite numbers per vector, components are
 //! JSON objects preserved verbatim, and a `template` link must be a `.joyobject` asset path whose `overrides` may only
-//! touch `type`, `tags`, and `components`. Unknown top-level keys are dropped, as in the TypeScript copy.
+//! touch `type`, `tags`, and `components`. Unknown top-level keys are dropped.
 //!
-//! Serialization writes keys in the TypeScript order (`template`, `overrides`, `id`, `name`, `type`, `tags`,
+//! Serialization writes keys in the established document order (`template`, `overrides`, `id`, `name`, `type`, `tags`,
 //! `transform`, `components`) and writes transform numbers the way JavaScript does (integers without a decimal point),
 //! so documents round trip byte for byte. Transforms are stored as `f32`: authored values that need more than single
 //! precision are rounded to the nearest `f32` and written back in its shortest decimal form.

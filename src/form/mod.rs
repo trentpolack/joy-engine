@@ -3,8 +3,8 @@
 
 //! FORM, Joy Engine's procedural geometry language, without a renderer.
 //!
-//! This crate parses and evaluates the same `.form` scripts as the TypeScript runtime in
-//! `src/form/*.ts`, which remains the behavioral reference. Evaluation produces plain
+//! This module parses and evaluates `.form` scripts. Frozen reference fixtures preserve
+//! compatibility with existing authored content. Evaluation produces plain
 //! [`GeometryData`] records: indexed, Y-up geometry in script units, plus materials, parameter
 //! descriptors, project metadata, per-vertex user data, and named output snapshots. Renderers
 //! consume those records; nothing here touches a GPU, window, worker, or timer.

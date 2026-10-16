@@ -1,12 +1,11 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The Joy look for engine UI: navy panels with orange accents, matching the TypeScript engine's development widgets
-//! and joy-apps' default theme.
+//! The Joy look for engine UI: navy panels with orange accents, consistent with joy-apps' default theme.
 //!
 //! Games and development overlays use [`apply`] and the core colors below. Authoring tools (FORM LAB, PARTICLE LAB,
-//! Joy Editor) use the shared design tokens in [`tokens`], generated in TypeScript from JoyGames' `joy-tokens.json`
-//! (`editor/src/joy-tokens.css`), through [`apply_authoring`].
+//! Joy Editor) use the shared design tokens in [`tokens`], corresponding to JoyGames' `joy-tokens.json`, through
+//! [`apply_authoring`].
 
 /// Joy navy panel fill.
 pub const NAVY: egui::Color32 = egui::Color32::from_rgb(0x14, 0x24, 0x2c);

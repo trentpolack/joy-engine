@@ -1,12 +1,12 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The level and object editor's document logic (TypeScript `level/main.ts`, minus the DOM).
+//! The level and object editor's document logic.
 //!
 //! [`LevelEditor`] owns one `.joylevel` (or a `.joyobject`, edited as a one-entity level) through the engine's
 //! [`LevelDocument`]: every edit is one validated transaction with undo and redo, and the workspace owns files, saves,
 //! and conflicts. Inspector text that has not been committed lives in [`FieldDrafts`]; invalid drafts and invalid
-//! Advanced Source block saving, selection changes, and further edits until repaired, as in TypeScript.
+//! Advanced Source block saving, selection changes, and further edits until repaired.
 //!
 //! Units: transforms are meters, degrees in the inspector (stored as radians), and scale factors. Linked object
 //! instances keep their identity and placement locally; component edits become explicit overrides.

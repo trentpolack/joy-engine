@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The effect graph for one renderer, ported from the TypeScript `SceneEffects`: three chains (lighting, temporal
+//! The effect graph for one renderer: three chains (lighting, temporal
 //! antialiasing, finishing), each fed the previous chain's result, with per-frame uniforms derived from the camera,
 //! lights, and settings.
 

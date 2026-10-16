@@ -3,7 +3,7 @@
 
 //! Presentation surface configuration.
 //!
-//! The renderer writes display-referred values without sRGB encoding (the TypeScript canvas path), so the surface is
+//! The renderer writes display-referred values without sRGB encoding, so the surface is
 //! always rendered through a non-sRGB view. When a platform only offers sRGB swapchain formats, the surface keeps the
 //! sRGB format and exposes a non-sRGB view format of the same texture.
 

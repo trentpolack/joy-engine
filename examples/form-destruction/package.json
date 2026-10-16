@@ -15,13 +15,12 @@
     "screenshot": "example-form-destruction.png"
   },
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "build": "vite build --base=./",
-    "rust:web": "node ../../scripts/rust/build-web.mjs --example form-destruction --release --title \"FORM DESTRUCTION · Joy Engine\"",
-    "preview": "vite preview --host 127.0.0.1",
-    "check": "joy-check-javascript test vite.config.js && tsc --project tsconfig.json",
-    "test": "node --import joy-engine/testing/register-raw-loader --test test/*.test.mjs",
-    "capture": "node test/browser.mjs"
+    "dev": "cargo run --package joy-engine --example form-destruction",
+    "build": "node ../../scripts/rust/build-web.mjs --example form-destruction --release --title \"FORM DESTRUCTION \u00b7 Joy Engine\" --out dist",
+    "preview": "node ../../scripts/preview-web.mjs",
+    "check": "cargo check --package joy-engine --example form-destruction",
+    "test": "cargo test --package joy-engine example_form_destruction",
+    "capture": "node ../../scripts/capture-web.mjs"
   },
   "dependencies": {
     "joy-engine": "file:../.."

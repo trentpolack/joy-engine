@@ -2,10 +2,10 @@
 // Licensed under the MIT License.
 
 //! Runtime entities: identity, mutable state, control intent, project behavior, runtime components, and the context
-//! behaviors run in (TypeScript `entity.ts`).
+//! behaviors run in.
 //!
-//! An [`Entity`] is split into its [`EntityState`] (plain data), an optional boxed [`EntityBehavior`] (the project
-//! logic a TypeScript `Entity` subclass would hold), and its attached [`EntityComponent`]s. The world takes behaviors
+//! An [`Entity`] is split into its [`EntityState`] (plain data), an optional boxed [`EntityBehavior`] for project
+//! logic, and its attached [`EntityComponent`]s. The world takes behaviors
 //! and components out while they run, so hooks receive `&mut EntityState` and a [`SimulationContext`] without aliasing
 //! the world that owns them. Hooks refer to other entities, bodies, and vehicles by id or handle, never by reference.
 

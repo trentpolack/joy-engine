@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Camera gestures for editor viewports (the TypeScript `viewport-input.ts`): one captured drag that orbits with the
+//! Camera gestures for editor viewports: one captured drag that orbits with the
 //! primary button and pans with Shift or any other button, wheel zoom in page pixels, a click without movement, and
 //! shortcuts (F frames, 0 resets, arrows orbit) while the viewport has keyboard focus. Pressing the viewport focuses
 //! it, so its keys never reach text fields or panels.

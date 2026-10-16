@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The Output inspector's controls (UI module), ported from `output-inspector.ts`: the RESULT menu and kind above the
+//! The Output inspector's controls (UI module): the RESULT menu and kind above the
 //! preview, and the collapsible ATTRIBUTES panel with its domain and visualization menus, paging, selection readout,
 //! and a read-only table whose index buttons select elements.
 

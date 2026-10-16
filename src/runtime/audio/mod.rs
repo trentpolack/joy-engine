@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Sound playback with bounded overlapping voices, matching the TypeScript `AudioBank`.
+//! Sound playback with bounded overlapping voices on native outputs and browser Web Audio.
 //!
 //! An [`AudioBank`] owns one audio output, its decoded samples, and the voices playing them. Samples are decoded once
 //! at creation, from WAV files or raw PCM (such as procedurally synthesized sounds); playback never loads or decodes.

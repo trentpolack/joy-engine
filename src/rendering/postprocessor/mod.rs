@@ -3,13 +3,13 @@
 
 //! Scene-to-display pipeline: HDR scene targets, bloom, blurs, the display resolve, and the final presentation pass.
 //!
-//! The pass order matches the TypeScript engine: bloom, optional full-image blur and vignette edge blur, exposure and
+//! The pass order is bloom, optional full-image blur and vignette edge blur, exposure and
 //! tone mapping, grade, vignette, antialiasing, then film grain. Bloom is the fragment path of luma.gl's
-//! `createBloomShaderPassPipeline` with the options the TypeScript engine passes (MIT License, Copyright (c) vis.gl
+//! `createBloomShaderPassPipeline` with Joy Engine's authored options (MIT License, Copyright (c) vis.gl
 //! contributors; see `post-bloom.wgsl` and `scene_effects/LICENSE-luma.gl`): a two-to-five level pyramid of
 //! thresholded tent extraction and separable Gaussians, bicubic reconstruction blended by scatter, optional horizontal
 //! starburst streaks, and an additive composite. Targets are rebuilt only when the drawing size or the effect graph
-//! (bloom levels, streaks, blur passes) changes, which the TypeScript `effectPipelineKey` also keys on; radii,
+//! (bloom levels, streaks, blur passes) changes; radii,
 //! thresholds, and intensities are plain uniforms.
 
 use crate::core::post_processing::{AgxLook, FilmGrainNoise, PostProcessingConfig, ToneMapper};

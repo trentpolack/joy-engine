@@ -41,7 +41,7 @@ pub fn material_pbr(color: &[f64], metallic: f64, roughness: f64) -> Result<Json
 pub fn read_mesh(value: &Json) -> Result<Json, String> {
     let mesh = value.as_object().ok_or("Expected a mesh value.")?;
     if mesh.get("kind").and_then(Json::as_str) != Some("mesh")
-        || !mesh.get("name").and_then(Json::as_str).is_some_and(|name| name.encode_utf16().count() <= 120)
+        || mesh.get("name").and_then(Json::as_str).is_none_or(|name| name.encode_utf16().count() > 120)
     {
         return Err("Mesh requires kind and a name of at most 120 characters.".into());
     }

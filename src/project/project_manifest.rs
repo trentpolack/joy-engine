@@ -1,13 +1,13 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Project-owned editor manifests (`project.joyproject`), ported from the TypeScript `project-manifest.ts`.
+//! Project-owned editor manifests (`project.joyproject`).
 //!
 //! Parsing validates and copies the manifest: required text is trimmed, paths are normalized to forward slashes and
 //! must stay inside the selected project folder, capability ids are unique kebab-case, extensions are lowercase dot
 //! notation, and feature flags become booleans by JavaScript truthiness. Paths stay relative to the project directory;
 //! consumers must still enforce that boundary when reading. The optional `$schema` reference is preserved for
-//! authoring tools and never fetched. Messages match the TypeScript engine.
+//! authoring tools and never fetched. Diagnostics preserve the established manifest contract.
 
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};

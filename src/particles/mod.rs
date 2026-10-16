@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! Particle effects (`.joyfx`): documents, the particle script language, deterministic simulation, lights, and
-//! renderer geometry. Rendering layer; mirrors the TypeScript `src/particles/` modules.
+//! renderer geometry in the rendering layer.
 //!
 //! Data flow: a `.joyfx` document compiles once into a shared [`CompiledParticleEffect`]
 //! ([`compile_particle_effect`]); each [`ParticleEffect`] instance owns its particles, seed, and parameters and advances
@@ -33,9 +33,9 @@
 //!
 //! # Determinism
 //!
-//! Simulation uses `f64` like the TypeScript runtime, consumes the seeded cosmetic stream ([`crate::core::SeededRandom`])
+//! Simulation uses `f64`, consumes the seeded cosmetic stream ([`crate::core::SeededRandom`])
 //! in the same order, and computes transcendental functions with the portable `libm` crate, so native and WebAssembly
-//! builds agree exactly. Parity tests compare against values recorded from the TypeScript engine; V8's `sin`, `cos`,
+//! builds agree exactly. Parity tests compare against values recorded from the retired TypeScript engine; V8's `sin`, `cos`,
 //! `log`, and `pow` occasionally differ in the last bit (see `docs/rust-particles.md`).
 //!
 //! # Ownership

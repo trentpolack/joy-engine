@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 //! Bundles the engine's authored FORM assets (`assets/examples` and `assets/form`, recursively) for builds that cannot
-//! read them from disk, such as browsers: writes `form_assets.rs` into `OUT_DIR` with one `include_str!` per file, the
-//! Rust counterpart of the TypeScript tool's `import.meta.glob`. Adding or removing a file rebuilds the list.
+//! read them from disk, such as browsers: writes `form_assets.rs` into `OUT_DIR` with one `include_str!` per file.
+//! Adding or removing a file rebuilds the list.
 
 use std::path::{Path, PathBuf};
 

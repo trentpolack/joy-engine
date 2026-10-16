@@ -4,7 +4,7 @@
 //! Joy Engine: build games and tools once and run them natively (Windows, macOS, Linux) and in browsers (WebGPU or
 //! WebGL 2) from the same Rust code.
 //!
-//! Modules follow the TypeScript engine's `src/` folders and the dependency layers in `architecture/layers.json`; a
+//! Modules live under `src/` and follow the dependency layers in `architecture/layers.json`; a
 //! module may use only its own layer and the layers below it, which `npm run check` enforces:
 //!
 //! | Layer | Modules | Owns |
@@ -18,7 +18,7 @@
 //! Conventions shared by every module:
 //! - World space is Y-up and right-handed, measured in meters; vehicles drive along local +Z.
 //! - Rotations are XYZ Euler radians applied X, then Y, then Z ([`core::quat_from_euler`]).
-//! - Time is in seconds. Environment clocks use `f64` like the TypeScript engine; physics and entity updates use `f32`.
+//! - Time is in seconds. Environment clocks use `f64`; physics and entity updates use `f32`.
 //! - Owners hand out copyable handles and ids (`BodyHandle`, `EntityId`, `MeshInstanceId`) instead of long-lived
 //!   references; stale handles are reported, never dereferenced.
 //! - Authored data is validated once at the public boundary and reported through typed errors; authored content never

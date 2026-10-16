@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The PARTICLE LAB session (the application logic of the TypeScript `site/src/main.ts`, without its DOM): the working
+//! The PARTICLE LAB session: the working
 //! document, the accepted preview effect, Live application with debounce, playback, incremental seeking, property
 //! undo, recovery storage, and the performance monitor. The interface module draws it; nothing here uses egui.
 //!

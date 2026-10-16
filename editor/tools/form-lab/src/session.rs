@@ -2,11 +2,10 @@
 // Licensed under the MIT License.
 
 //! The working session: the document being edited, its compile lifecycle, the last accepted build, property history,
-//! variants, browser recovery, and the save and export artifacts. This is the UI-free half of the TypeScript
-//! composition root (`site/src/main.ts`); the workbench (`site/src/main.rs`) draws it and the preview displays its
-//! builds.
+//! variants, browser recovery, and the save and export artifacts. The workbench (`site/src/main.rs`) draws this UI-free
+//! model and the preview displays its builds.
 //!
-//! The session keeps four things distinct, as the TypeScript tool does: browser recovery (origin-local autosave of
+//! The session keeps four things distinct: browser recovery (origin-local autosave of
 //! the whole document), document saving (`.form` writes the raw script exactly; `.formlab` keeps overrides,
 //! materials, meshes, and variants), the last accepted build (what the preview shows and exports use), and baked
 //! exports (which never carry the recipe).

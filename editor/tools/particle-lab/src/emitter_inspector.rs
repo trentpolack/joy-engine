@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The EMITTER tab of the compose panel (the TypeScript `refreshInspector`/`editEmitterInput` markup and handlers):
+//! The EMITTER tab of the compose panel:
 //! identity, renderer, timing, the sprite texture for textured renderers, particle light emission, bursts, and child
 //! emission. Numeric fields are kit number fields, so they share drafts, keyboard steps, and property undo with the
 //! parameter panel; switches and menus are structural edits.

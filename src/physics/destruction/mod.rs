@@ -2,8 +2,7 @@
 // Licensed under the MIT License.
 
 //! Destructible chunk structures: queued radial damage committed at simulation boundaries, optional ground-support
-//! collapse, static ray and occupancy queries, and renderer-free box geometry. Ported from the TypeScript
-//! `src/physics/destruction/`.
+//! collapse, static ray and occupancy queries, and renderer-free box geometry.
 //!
 //! A typical frame queues hits with [`ChunkStructure::queue_damage`], calls [`ChunkStructure::commit`] once at the
 //! simulation boundary, turns the [`ChunkChangeSet`] into collision changes

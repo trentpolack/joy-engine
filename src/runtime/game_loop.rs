@@ -1,13 +1,13 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Fixed-rate simulation inside variable-rate frames (the TypeScript `startGameLoop` in `game-loop.ts`).
+//! Fixed-rate simulation inside variable-rate frames.
 //!
 //! The shell calls a game's phases once per displayed frame with that frame's elapsed seconds. Games whose rules are
 //! tuned per fixed tick (velocities per tick, lifetimes in ticks) feed each frame's elapsed time to a
 //! [`FixedStepLoop`] and run as many whole updates as it returns, so simulation speed never depends on the display's
-//! refresh rate. Pair it with `ShellOptions::maximum_frame_seconds` set to [`MAXIMUM_FRAME_SECONDS`] to keep the
-//! TypeScript loop's stall limit.
+//! refresh rate. Pair it with `ShellOptions::maximum_frame_seconds` set to [`MAXIMUM_FRAME_SECONDS`] to bound
+//! catch-up work after a stall.
 
 /// Simulation updates per second when a game does not choose a rate (TypeScript `DEFAULT_UPDATE_RATE`).
 pub const DEFAULT_UPDATES_PER_SECOND: f64 = 60.0;

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! One editing session over a saved post-processing profile: draft edits with undo and redo, a saved baseline, and
-//! conflicts with external file changes. Ported from the TypeScript `PostProcessingSession`.
+//! conflicts with external file changes.
 
 use serde_json::Value;
 

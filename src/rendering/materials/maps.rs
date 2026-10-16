@@ -6,7 +6,7 @@
 //! Each [`MaterialTextures`] set gets one bind group (group 3 of the PBR pipelines, group 1 of the masked caster) the
 //! first time a frame draws it; images upload once and are shared between sets. Missing maps bind white (or a flat
 //! normal), so untextured PBR surfaces use one shared default group. Images upload unchanged as UNORM: the shader
-//! decodes color maps from sRGB, as the TypeScript pass does, and reads data maps linearly.
+//! decodes color maps from sRGB and reads data maps linearly.
 
 use std::collections::HashMap;
 use std::sync::Weak;

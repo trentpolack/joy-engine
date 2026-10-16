@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The Script Reference dialog (UI module): the FORM SCRIPT field guide from the TypeScript tool's page, with the
-//! searchable, appendable Recipes (`script-guide.ts`'s cards). Appending never replaces source or touches parameters.
+//! The Script Reference dialog (UI module): the FORM SCRIPT field guide with searchable, appendable Recipes from
+//! `script_guide`. Appending never replaces source or touches parameters.
 
 use joy_engine::development::components;
 use joy_engine::egui::{self, RichText, Ui};

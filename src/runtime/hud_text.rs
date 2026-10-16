@@ -2,11 +2,11 @@
 // Licensed under the MIT License.
 
 //! HUD text with web-page typography for egui HUDs: CSS-style pixel sizes, letter spacing, line height, emulated font
-//! weight, and the symbols TypeScript game pages use that egui's bundled fonts lack (arrows and element sigils), which
+//! weight, and symbols that egui's bundled fonts lack (arrows and element sigils), which
 //! are drawn as vector glyphs in their place.
 //!
 //! Games lay out styled runs with [`layout`], [`single`], or [`wrapped`] and paint the returned [`Text`] with an egui
-//! [`Painter`], so ported HUDs keep the look of their TypeScript pages.
+//! [`Painter`].
 
 use std::sync::Arc;
 

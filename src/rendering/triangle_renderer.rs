@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Immediate triangle rendering with a game-supplied WGSL shader (the TypeScript `GpuTriangleRenderer` in
-//! `renderer.ts`).
+//! Immediate triangle rendering with a game-supplied WGSL shader.
 //!
 //! Arcade games build world-space triangle lists every frame (see [`add_circle`] and friends) and project them with
 //! their own shader and uniform block, while the engine owns the GPU resources, depth, and display processing. Each

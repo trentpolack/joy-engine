@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! Appendable Recipes: runnable starting points that use unique bindings and output names when appended to a study.
-//! Ported from `script-guide.ts` (the recipe cards and search live in the Script Reference dialog's UI module).
+//! The recipe cards and search live in the Script Reference dialog's UI module.
 
 /// One recipe: a title, a description, and code whose `$id` placeholder becomes a unique binding name.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

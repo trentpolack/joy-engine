@@ -1,5 +1,5 @@
 # Rust Storage
-`runtime::Storage` (platform layer, `src/runtime/storage.rs` with browser glue in `src/browser/storage.rs`) keeps small text values such as game saves across sessions. It is the Rust counterpart of TypeScript games calling `localStorage` directly; LUNA's character save is its first consumer.
+`runtime::Storage` (platform layer, `src/runtime/storage.rs` with browser glue in `src/browser/storage.rs`) keeps small text values such as game saves across sessions. LUNA, FRAMEBREAK, and other games use it for local progress.
 
 ## API
 ```rust
@@ -14,7 +14,7 @@ storage.remove("joy.luna.character.v1")?;
 - Keys are 1 to 128 ASCII letters, digits, periods, hyphens, or underscores and may not start with a period, so the same key is a valid `localStorage` key and a portable file name. Values are text of at most 1 MiB (`MAXIMUM_STORAGE_BYTES`); callers serialize and validate them.
 - Browsers read and write the page origin's `localStorage`. Native builds keep one file per key in `<data>/joy-games/<application>/`, where `<data>` is `%APPDATA%` on Windows, `~/Library/Application Support` on macOS, and `$XDG_DATA_HOME` or `~/.local/share` elsewhere. `Storage::in_directory` selects an explicit folder for tools and tests.
 - Native saves write a temporary file and rename it over the value, so an interrupted save keeps the previous value. Missing values load as `None`; removing a missing value succeeds.
-- Every failure is a `StorageError` (`Unavailable`, `InvalidKey`, `TooLarge`, `Read`, or `Write`) rather than a panic, so a game can keep playing and tell the player that progress will not persist, as the TypeScript games do when `localStorage` throws.
+- Every failure is a `StorageError` (`Unavailable`, `InvalidKey`, `TooLarge`, `Read`, or `Write`) rather than a panic, so a game can keep playing and tell the player that progress will not persist.
 
 ## Saves: `SaveSlot`
 A failed read does not mean nothing is saved. The value may exist and be unreadable for now (a permission problem, a file that is not text), and native storage can often still be written, so a game that treats the failure as an empty slot overwrites the player's progress on its next autosave. Keep progress in a `runtime::SaveSlot` instead:

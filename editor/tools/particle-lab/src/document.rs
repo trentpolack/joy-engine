@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The `.joyfx` working document (the TypeScript `document.ts` plus the document edits from `main.ts`): portable
+//! The `.joyfx` working document: portable
 //! reads that the engine compiler fully validates, lenient recovery reads that keep unfinished drafts, export text,
 //! property snapshots for undo, and the structural edits the inspector makes (emitters, parameters, bursts, children,
 //! textures, and lights).

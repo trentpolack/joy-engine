@@ -138,6 +138,8 @@ struct Running {
     /// The game asked for the pointer lock and the shell applied it.
     pointer_lock: bool,
     touches: TouchOwners,
+    #[cfg(target_arch = "wasm32")]
+    first_frame_presented: bool,
 }
 
 /// Which touches belong to the UI. A touch that starts on a widget stays with the UI until it ends, so dragging a slider
@@ -221,10 +223,8 @@ impl<G: Game> ApplicationHandler for App<G> {
         let consumed = running.egui.on_window_event(&running.window, &event);
 
         match event {
-            WindowEvent::CloseRequested => {
-                if self.game.close_requested() {
-                    event_loop.exit();
-                }
+            WindowEvent::CloseRequested if self.game.close_requested() => {
+                event_loop.exit();
             }
             WindowEvent::Resized(size) => {
                 running.surface.resize(&running.gpu, size.width, size.height);
@@ -360,6 +360,8 @@ impl<G: Game> App<G> {
             started: Instant::now(),
             pointer_lock: false,
             touches: TouchOwners::default(),
+            #[cfg(target_arch = "wasm32")]
+            first_frame_presented: false,
         }));
         window.request_redraw();
     }
@@ -399,6 +401,8 @@ impl<G: Game> App<G> {
             started,
             pointer_lock,
             touches: _,
+            #[cfg(target_arch = "wasm32")]
+            first_frame_presented,
         } = &mut **running;
         let game = &mut self.game;
 
@@ -460,6 +464,12 @@ impl<G: Game> App<G> {
         gpu.queue().submit([encoder.finish()]);
         window.pre_present_notify();
         gpu.queue().present(texture);
+
+        #[cfg(target_arch = "wasm32")]
+        if !*first_frame_presented {
+            crate::browser::dom::mark_canvas_ready(window, gpu.capabilities().backend.label());
+            *first_frame_presented = true;
+        }
 
         game.after_frame(&mut frame)?;
         frame.dev_tools.frame(time.elapsed_seconds);

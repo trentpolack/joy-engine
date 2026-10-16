@@ -1,14 +1,13 @@
 # Copyright (c) 2026 Trent Polack. All Rights Reserved.
 # Licensed under the MIT License.
 
-# Joy Engine's Rust implementation: one crate whose modules live beside the
-# TypeScript engine in `src/`, in the same folders and dependency layers
+# Joy Engine: one crate whose modules live in `src/`, with enforced dependency layers
 # (`architecture/layers.json`, enforced by `npm run check`).
 #
 #   cargo test                          # unit, parity, and headless GPU tests
 #   cargo run --example form-viewer     # FORM assets through the engine renderer
 #   cargo run --example terrain         # resident continuous-LOD terrain (Dragon Pit)
-#   npm run rust:web -- --example form-viewer
+#   npm run build:web -- --example form-viewer
 #
 # Versions match joy-apps, so editor tools and games build against the same
 # wgpu and egui.
@@ -24,7 +23,7 @@ authors = ["Trent Polack"]
 repository = "https://github.com/trentpolack/joy-engine"
 publish = false
 
-# Examples and tests share folders with the TypeScript engine, so targets are listed explicitly.
+# Example and integration-test targets are listed explicitly.
 autoexamples = false
 autotests = false
 
@@ -131,7 +130,7 @@ missing_docs = "warn"
 precedence = "allow"
 
 # This crate is its own workspace root, including when it is checked out inside a hosting repository. Tools are member
-# packages beside their TypeScript; `cargo test` at the root still tests only the engine.
+# packages; `cargo test` at the root still tests only the engine.
 [workspace]
 members = ["editor", "editor/tools/form-lab", "editor/tools/particle-lab"]
 default-members = ["."]

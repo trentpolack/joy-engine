@@ -1,11 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Scene effect options, defaults, and validation, ported from the TypeScript `scene-effect-config.ts`.
+//! Scene effect options, defaults, and validation.
 //!
-//! Each effect is off (`None`) or on with its settings; [`Default`] gives the TypeScript defaults, so
-//! `Some(Default::default())` is the TypeScript `true` shorthand. [`SceneEffectsOptions::validate`] applies the same
-//! ranges and rules and reports the same messages.
+//! Each effect is off (`None`) or on with its settings. `Some(Default::default())` enables an effect with its default
+//! settings. [`SceneEffectsOptions::validate`] checks every setting's accepted range and relationships.
 
 use serde::{Deserialize, Serialize};
 

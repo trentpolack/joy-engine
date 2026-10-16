@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Auxiliary scene attachments for effects, ported from the TypeScript `SceneSurfaces` and `SceneMotionPass`:
+//! Auxiliary scene attachments for effects:
 //! view-space normals with roughness (drawn against the scene depth with an equal test) and screen-space motion vectors
 //! from each instance's current and previous model matrices.
 

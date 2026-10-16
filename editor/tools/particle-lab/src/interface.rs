@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The PARTICLE LAB interface (the TypeScript `site/index.html` and the DOM half of `site/src/main.ts`) in egui: the
+//! The PARTICLE LAB interface in egui: the
 //! header with Open, Save, and the script reference; the project bar; the compose panel (Live and Apply, the emitter
 //! stack, the emitter inspector, and the spawn and update script editors); the preview panel (camera actions, playback
 //! toolbar, the viewport, preview options, replay window, timeline, diagnostics, and the performance monitor); the
@@ -224,8 +224,8 @@ impl Interface {
             .show(context, |ui| {
                 ui.set_clip_rect(area);
                 ui.set_min_size(area.size());
-                let chrome = !self.hosted
-                    && !(self.layout.maximized() && self.layout.maximize_mode() == MaximizeMode::Workspace);
+                let chrome = !(self.hosted
+                    || (self.layout.maximized() && self.layout.maximize_mode() == MaximizeMode::Workspace));
                 let mut top = area.top();
                 let mut bottom = area.bottom();
                 if chrome {

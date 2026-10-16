@@ -5,8 +5,7 @@
 //!
 //! This is plain data shared by level documents, tools, and the renderer. It lives in the foundation layer so authored
 //! levels can validate their profile without depending on rendering. Serialized names, defaults, ranges, presets, and
-//! the version-one `blue-noise` migration match the TypeScript engine, so the same `.joylevel` profile resolves to the
-//! same settings in both implementations.
+//! the version-one `blue-noise` migration preserve the authored `.joylevel` profile contract.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};

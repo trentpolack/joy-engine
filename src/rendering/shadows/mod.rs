@@ -3,12 +3,11 @@
 
 //! Shadows: cascaded directional maps with percentage-closer soft shadows, and six-face depth maps for point lights.
 //!
-//! This ports the luma.gl 9.4.2 shadow module the TypeScript renderer uses (`ShadowMapRenderer` and the `shadow` shader
+//! This implementation derives from the luma.gl 9.4.2 shadow module (`ShadowMapRenderer` and the `shadow` shader
 //! module, with the engine's WebGPU-depth adapter for point lights): practical cascade splits fitted to the camera
 //! frustum and snapped to whole texels, blocker search and filtering on a rotated disk, cascade blending, and a far
 //! fade. Two portability differences keep every backend on one path: point lights store their six faces in a 2D
-//! depth array instead of a cube array (the receiver selects the face itself), and shadows also run on WebGL 2, where
-//! the TypeScript renderer draws none.
+//! depth array instead of a cube array (the receiver selects the face itself), and shadows also run on WebGL 2.
 
 mod maps;
 

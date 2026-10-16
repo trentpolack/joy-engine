@@ -1,4 +1,4 @@
-# DCC interchange
-This folder contains importers for interchange files produced by digital-content-creation tools. Importers return portable engine data and do not own project catalogs, URLs, or loaded browser resources.
+# DCC Interchange
+`joy_engine::dcc::parse_glb_mesh` parses an indexed triangle mesh from GLB or embedded glTF bytes into portable `IndexedMesh3D` data. The caller owns loading bytes, choosing a mesh, and applying project scale/orientation. The importer does not own a catalog, filesystem, network service, renderer, materials, or animation.
 
-Audio does not belong here. `AudioBank.create()` fetches and decodes short effects into reusable Web Audio buffers. The bank owns its context and overlapping playback nodes; `destroy()` stops playback and closes the context. See [audio ownership and activation](audio.md).
+See [content formats](rust-content.md) for supported accessor layouts and explicit unsupported formats. FORM LAB's GLB export is a separate authored-geometry boundary; exporting a mesh does not preserve its procedural recipe.

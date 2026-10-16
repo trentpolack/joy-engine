@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Image-based lighting for PBR surfaces, ported from luma.gl's `PBREnvironmentGenerator` (which the TypeScript
-//! `PbrEnvironment` uses): an equirectangular environment is integrated into a cosine-weighted diffuse irradiance cube,
+//! Image-based lighting for PBR surfaces, derived from luma.gl's `PBREnvironmentGenerator`: an equirectangular
+//! environment is integrated into a cosine-weighted diffuse irradiance cube,
 //! a GGX-prefiltered specular cube with one roughness per mip, and a split-sum BRDF table.
 //!
 //! Preparation submits its own GPU work; call it during setup or when the environment changes, never per frame. The

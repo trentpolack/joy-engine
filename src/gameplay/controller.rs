@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The possession-only controller (TypeScript `controller.ts`).
+//! The possession-only controller.
 //!
 //! A [`Controller`] owns exclusive possession of one entity but samples nothing: intent arrives from elsewhere through
 //! [`EntityWorld::receive_control`] (network peers, replays, scripted sequences). Sampling controllers are

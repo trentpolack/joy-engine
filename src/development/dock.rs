@@ -1,12 +1,11 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The development dock: a row of launchers at the bottom-right corner whose panels open above it, one at a time,
-//! matching the TypeScript development widgets (`editor-launchers.css`, `dev-widget-theme.css`).
+//! The development dock: a row of launchers at the bottom-right corner whose panels open above it, one at a time.
 //!
 //! Tools that are present this frame take slots from the right in a fixed order: post-processing, config, then stats.
 //! Opening one panel closes the others. Tools may claim keys (for example a pause shortcut) so the shell keeps them
-//! from gameplay, the way the TypeScript widgets stop event propagation.
+//! from gameplay.
 
 use egui::{Align2, Color32, Context, Id, RichText, Stroke, Ui, Vec2};
 

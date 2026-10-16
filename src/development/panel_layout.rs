@@ -1,12 +1,12 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Resizable editor panes (the TypeScript `panel-layout.ts`): a left panel, a center (usually the preview), and a
+//! Resizable editor panes: a left panel, a center (usually the preview), and a
 //! right panel inside any rectangle, so the same layout works in a standalone window and inside a Joy Editor tab area.
 //!
 //! Widths are preferences, never document data: they clamp to the available space when displayed without rewriting
-//! the saved preference, persist through [`Storage`] under the tool's key (the TypeScript `localStorage` JSON shape, so
-//! keys stay recognizable), and a storage failure only means the layout is not remembered. Dividers resize by dragging,
+//! the saved preference, persist as JSON through [`Storage`] under the tool's key, and a storage failure only means
+//! the layout is not remembered. Dividers resize by dragging,
 //! by arrow keys once focused (20 points per press), and reset to their default width on double-click. Panels can be
 //! collapsed (never all at once) and the layout maximized.
 //!

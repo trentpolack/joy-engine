@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Resident continuous-LOD (CLOD) terrain, ported from the TypeScript `rendering/terrain` module.
+//! Resident continuous-LOD (CLOD) terrain with shared native and browser rendering contracts.
 //!
 //! A [`TerrainAsset`] is a validated version 1 heightfield: a square power-of-two-plus-one grid of `u16` samples with
 //! explicit world scales and a row-major list of fixed quadtree leaves, each with height bounds and monotone geometric
