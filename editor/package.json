@@ -23,6 +23,7 @@
     "dev": "vite --config ../../scripts/development/vite-site.config.mjs --host 127.0.0.1 --open /editor/",
     "dev:desktop": "node desktop/development.cjs",
     "build": "vite build --base=./",
+    "rust:web": "node ../scripts/rust/build-web.mjs --package joy-editor --release --title \"Joy Editor\" --canvas joy-editor",
     "check": "joy-check-javascript desktop server src site/src test tooling && tsc --project tsconfig.json",
     "test": "node --import joy-engine/testing/register-raw-loader --test test/*.test.mjs",
     "test:lab-controls": "node test/lab-controls-browser.mjs",

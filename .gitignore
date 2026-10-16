@@ -6,6 +6,8 @@ node_modules/
 # TypeScript and Vite build output
 *.tsbuildinfo
 dist/
+# Rust web builds staged for a hosting site's npm run build:rust
+dist-rust/
 .vite/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*

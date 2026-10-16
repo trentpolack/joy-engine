@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build --base=./",
+    "rust:web": "node ../../scripts/rust/build-web.mjs --example scene-effects --release --title \"SCENE EFFECTS · Joy Engine\"",
     "preview": "vite preview --host 127.0.0.1",
     "check": "joy-check-javascript test vite.config.js && tsc --project tsconfig.json",
     "capture": "node test/browser.mjs",

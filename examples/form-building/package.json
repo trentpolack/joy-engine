@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build --base=./",
+    "rust:web": "node ../../scripts/rust/build-web.mjs --example form-building --release --title \"FORM BUILDING · Joy Engine\"",
     "preview": "vite preview --host 127.0.0.1",
     "check": "joy-check-javascript test vite.config.js && tsc --project tsconfig.json",
     "test": "node --import joy-engine/testing/register-raw-loader --test test/asset.test.mjs",

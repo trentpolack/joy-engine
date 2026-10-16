@@ -54,6 +54,8 @@ cargo install wasm-bindgen-cli --version <lockfile version> --locked
 npm run rust:web -- --example form-viewer --release
 ```
 
+Games, the published examples, FORM LAB, PARTICLE LAB, and Joy Editor each declare a `rust:web` npm script that runs this build with `--release`; a hosting site passes `--out <folder>` (JoyGames' `npm run build:rust` stages them in `dist-rust/` and publishes them beside or in place of the TypeScript builds). `--dev` overrides a script's `--release` for fast development builds; JoyGames' `npm run dev:rust` serves every Rust page that way with live rebuilds.
+
 The browser picks WebGPU when available and falls back to WebGL 2; `?backend=webgpu` or `?backend=webgl` forces one. Browsers use the engine's own egui input translator because the pinned egui-winit does not build for WebAssembly. Layout uses the canvas's measured backing ratio, which stays correct when a browser's `devicePixelRatio` and canvas measurements disagree.
 
 ## Commands
@@ -87,4 +89,5 @@ Verified against the TypeScript engine: seeded random streams, transforms, envir
 1. **Games** (done): every JoyGames game has a Rust crate beside its TypeScript project (`projects/<game>/rust/`), checked against values recorded from the TypeScript game.
 2. **Engine subsystems** (done): every runtime subsystem has a Rust port in its `src/` folder, with parity tests against the TypeScript reference.
 3. **Tools** (done): Joy Editor, FORM LAB, and PARTICLE LAB run on the Rust renderer and runtime, so games and tools share one renderer.
-4. **Next:** publish the Rust web builds from the site and release scripts, then retire each TypeScript game, tool, and subsystem once nothing uses it.
+4. **Publication** (done): the JoyGames site build publishes every Rust web build, beside the TypeScript build by default (`joy.joyconfig` can replace or omit it per project).
+5. **Next:** switch projects to their Rust builds as each is verified, then retire each TypeScript game, tool, and subsystem once nothing uses it.

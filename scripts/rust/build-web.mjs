@@ -16,6 +16,8 @@
 //   --manifest-path <file>   Workspace Cargo.toml (default: the engine workspace).
 //   --out <dir>              Output folder (default: <target>/web/<artifact>).
 //   --release                Optimize for size with the `web-release` profile.
+//   --dev                    Use the fast `dev` profile even when --release is given (development servers pass it so a
+//                            workspace's rust:web script keeps its title and canvas but builds quickly).
 //   --title <text>           Page title (default: the artifact name).
 //   --canvas <id>            Canvas element ID the game looks up (default: joy-canvas).
 //
@@ -40,6 +42,7 @@ const {values: options} = parseArgs({
     'manifest-path': {type: 'string', default: resolve(engineRoot, 'Cargo.toml')},
     out: {type: 'string'},
     release: {type: 'boolean', default: false},
+    dev: {type: 'boolean', default: false},
     title: {type: 'string'},
     canvas: {type: 'string', default: 'joy-canvas'}
   }
@@ -56,7 +59,7 @@ const manifestPath = resolve(options['manifest-path']);
 const workspaceRoot = dirname(manifestPath);
 const bindgen = findBindgen(requiredBindgenVersion(resolve(workspaceRoot, 'Cargo.lock')));
 
-const profile = options.release ? 'web-release' : 'dev';
+const profile = options.release && !options.dev ? 'web-release' : 'dev';
 const cargoArguments = ['build', '--manifest-path', manifestPath, '--target', WASM_TARGET, '--package', options.package, '--profile', profile];
 if(options.example) {
   cargoArguments.push('--example', options.example);
