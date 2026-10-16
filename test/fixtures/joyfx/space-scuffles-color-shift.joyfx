@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "Color shift",
+  "maxParticles": 10,
+  "parameters": {},
+  "emitters": [
+    {
+      "id": "diamond",
+      "enabled": true,
+      "root": true,
+      "duration": 0,
+      "rate": 0,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 10
+        }
+      ],
+      "lifetime": 0.4,
+      "renderer": "circle",
+      "spawn": "vx = rand(-2.5, 2.5) * 60;\nvy = rand(-2.5, 2.5) * 60;\nsize = 3;\ndrag = 2.44931967121531;",
+      "update": "alpha = 1 - t;"
+    }
+  ]
+}

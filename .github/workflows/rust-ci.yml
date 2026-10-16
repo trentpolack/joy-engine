@@ -1,0 +1,112 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+name: Rust CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+concurrency:
+  group: rust-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+
+jobs:
+  tooling:
+    name: Browser And Patch Tooling
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Joy Engine
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.18.0
+          cache: npm
+
+      - name: Install browser tooling
+        run: npm ci
+
+      - name: Check engine architecture and tooling syntax
+        run: node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts test editor/tooling editor/test editor/tools/form-lab/test
+
+      - name: Test retained Node tooling
+        run: npm run test:tooling
+
+  quality:
+    name: Format And Clippy
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Joy Engine
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
+      - name: Install Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install --yes libasound2-dev libudev-dev pkg-config
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test:
+    name: Native Tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Joy Engine
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
+      - name: Install Linux test dependencies
+        run: sudo apt-get update && sudo apt-get install --yes libasound2-dev libudev-dev mesa-vulkan-drivers pkg-config
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: stable
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Run workspace tests
+        run: cargo test --workspace --locked
+
+  webassembly:
+    name: WebAssembly Check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Joy Engine
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
+      - name: Install stable Rust with WebAssembly
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: wasm32-unknown-unknown
+
+      - name: Check the WebAssembly workspace
+        run: cargo check --workspace --target wasm32-unknown-unknown --locked

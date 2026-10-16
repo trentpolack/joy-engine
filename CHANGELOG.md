@@ -2,7 +2,49 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-16-2026
+### Rust Runtime Default
+- Retired the deprecated engine, editor, lab, and example runtime implementation and its renderer dependencies. Rust is the shared native/browser implementation; canonical npm scripts wrap Cargo and browser builds.
+- Replaced current runtime and contribution documentation with Rust guidance and generated rustdoc, retaining useful Node tooling, asset schemas, capture orchestration, and recorded compatibility fixtures.
+
+### Continuous Integration
+- Added locked Rust formatting, Clippy, native workspace tests, and WebAssembly checks for pull requests and protected branches, with pinned GitHub Actions and shared build caching.
+
+### Cloud Patch Delivery
+- Added standalone cloud patch fetch/apply commands and delivery guidance, with engine-owned tooling shared by hosting workspaces. Both entry points preserve local staging, reconcile in disposable repositories, and remove all four bundle files only after successful or already-applied handling.
+
+### Fixes
+- Enabled the GLSL writer explicitly for native shader tests, so the standalone Rust workspace's Clippy and test commands compile on macOS without relying on a host OpenGL backend.
+- Added `runtime::SaveSlot`, which refuses ordinary writes after a failed read or a rejected save until the game explicitly replaces it, so an autosave can no longer overwrite progress that merely failed to load (a valid but unreadable save used to be replaced by a fresh one). See [Rust storage](docs/rust-storage.md#saves-saveslot).
+- Browser builds now pass Shift, Ctrl, Alt, and Command to egui (with Cmd as the shortcut key on Apple platforms), so Shift-panning, Shift-selection, and modifier shortcuts work in browsers as they do natively.
+- A touch that starts on a UI widget now stays with the UI until it ends, so dragging a slider or scrolling a panel can no longer become a gameplay touch underneath.
+- The declared minimum Rust version is now 1.95 (egui 0.36 requires it; 1.90 builds failed), and the code passes Rust 1.99's Clippy, which flags `chunks_exact` with a constant size in favor of `as_chunks`.
+
+### Rust Engine
+- Added pointer lock to the Rust shell: `Frame::set_pointer_lock` captures the cursor (winit's locked grab natively, falling back to confined; `requestPointerLock` in browsers), `InputManager::pointer_motion` reports raw relative mouse movement per frame while locked, and `InputManager::pointer_locked` reports whether the lock is held, so a game can pause when the browser or window releases it.
+- Added `InputManager::touch_points`, every active touch with its id, so on-screen sticks and look pads follow the finger that started on them.
+- Added JavaScript `Math.tan`, `Math.acos`, and `Math.asin` to `core::js_math`.
+- Added `AudioBank::set_master_volume`, which scales sounds as they start, for game volume settings; VECTORS TO VICTORY's synthesized sound board is its first consumer.
+- Fixed PBR shading of smooth-shaded silhouettes: normals now flip only on back faces, as in the TypeScript pass, instead of always turning toward the eye.
+
+### Rust Tools
+- Added the authoring kit to the Rust engine's `development` module for FORM LAB, PARTICLE LAB, and Joy Editor: lab controls (exact number fields with scrubbing and Shift/Alt steps, bounded scalars, XYZ/RGBA groups, a linear-RGBA color picker, defaults and resets, rejected-draft tracking), property undo, a script editor with catalog highlighting, completion, hover help, and diagnostics, resizable panes, viewport gestures, native and browser file dialogs (rfd natively), and the Joy design tokens as an egui theme. See [Rust authoring kit](docs/rust-authoring.md).
+- Ported PARTICLE LAB to the Rust engine as the `particle-lab` package beside its TypeScript, natively and in browsers, drawing only through the engine renderer and hostable in Joy Editor. Added `RegionCamera`, particle texture source encoding, runtime particle profiling toggles, and `HeadlessShell::step_with_ui` for driving tool interfaces in tests.
+- Ported FORM LAB to the Rust engine as the `form-lab` package beside its TypeScript, natively and in browsers: `.form` and `.formlab` documents with variants, the examples library, parameter, material, lighting, and output inspectors, and GLB (byte-identical to the TypeScript exporter), OBJ, PLY, JSON, and MaterialX exports, with the preview drawn by the engine renderer and hostable in Joy Editor. Added JPEG and WebP material maps, `FormTextureCache`, running-renderer sky and shadow setters, and FORM value validators for tools.
+- Ported Joy Editor to the Rust engine as the `joy-editor` package in `editor/`, a native application that replaces the Electron host: project discovery, the content browser, tabs with revision-checked saves, external-edit handling, and recovery copies, session restore, the schema-driven level editor with a move gizmo, and FORM LAB and PARTICLE LAB hosted as tabs through `development::AuthoringTool`. Browser builds open bundled examples read-only. Added `Game::close_requested` so a game or tool can keep its window open for unsaved work.
+- Added `rust:web` scripts to the published examples, FORM LAB, PARTICLE LAB, and Joy Editor, so a hosting site builds their Rust pages the same way it builds games (`npm run rust:web -- --out <folder>`); `dist-rust/` staging folders are ignored. `build-web.mjs --dev` keeps a script's title and canvas but builds with the fast dev profile, for development servers.
+
+### Rust Examples
+- Ported SCENE EFFECTS, FORM BUILDING, and FORM DESTRUCTION to the Rust engine (`cargo run --example <name>`, `npm run rust:web -- --example <name>`), each beside its TypeScript version with headless tests and captures in `test/rust/`. The building draws its FORM materials through the PBR pass, and the shadow-material fixture became a Rust render test.
+- Added small engine hooks they needed: `ShiftedCamera` (lens shift beside side panels), `Stopwatch`, `save_text_file` exports (Blob downloads in browsers), `MeshAsset::from_asset_data`, and per-quality tuning for `SceneEffectsControls`. HUD taps on egui widgets no longer also reach gameplay.
+
 ## 10-15-2026
+### Rust Engine
+- Added the `joy-engine` Rust crate (`Cargo.toml` at the root, `src/lib.rs`), with Rust modules beside the TypeScript in the same `src/` folders and dependency layers, so games and tools run natively and in browsers (WebGPU with WebGL 2 fallback) from one codebase. The TypeScript engine keeps running existing games and tools until they move over.
+- Added the Rust `rendering` module, a wgpu renderer matching the TypeScript frame: Lit, PBR, and Unlit material passes, filtered directional shadows on every backend, point lights, the procedural atmosphere, and the full display-processing chain from the same post-processing profiles. It is the single renderer for games, FORM content (`FormAssetLibrary`), level presentation (`LevelScene`), and tools; FORM stays renderer-free.
+- Added Rust `environment`, `physics` (rapier rigid bodies and raycast vehicles), `gameplay` (entities, controllers, levels, and grid navigation), and `form` modules, checked against values recorded from the TypeScript engine, and `runtime`, a `GameShell`-style frame-phase runner with input, multi-touch, egui HUDs, a development overlay, and headless runs.
+- Added `scripts/rust/build-web.mjs` (`npm run rust:web`) for static browser builds, a `form-viewer` example, Rust layer checks in `npm run check` that reuse the TypeScript layer roots, and the [Rust engine guide](docs/rust.md) with parity notes and the migration path.
+
 ### Workspace Configuration
 - Renamed FORM LAB and PARTICLE LAB's published site category from `app` to `tool` to match the hosting platform's Joy Engine Tools category.
 

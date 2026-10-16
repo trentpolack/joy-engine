@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "name": "LUNA / lightning",
+  "maxParticles": 64,
+  "parameters": {},
+  "emitters": [
+    {
+      "id": "shards",
+      "enabled": true,
+      "root": true,
+      "duration": 0.08,
+      "rate": 0,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 12
+        }
+      ],
+      "lifetime": 0.55,
+      "renderer": "square",
+      "spawn": "let angle = rand(0, 6.283);\nlet speed = rand(1.5, 5);\nvelocity.x = cos(angle) * speed;\nvelocity.z = sin(angle) * speed;\nvelocity.y = rand(1, 4);\nsize = rand(0.05, 0.17);\ncolor.r = 1.2; color.g = 0.45; color.b = 2.2;",
+      "update": "velocity.y -= dt * 7;\ncolor.a = 1 - t;"
+    },
+    {
+      "id": "glow",
+      "enabled": true,
+      "root": true,
+      "duration": 0.15,
+      "rate": 10,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 3
+        }
+      ],
+      "lifetime": 0.65,
+      "renderer": "soft",
+      "spawn": "velocity.y = rand(0.3, 1);\nsize = rand(0.25, 0.55);\ncolor.r = 0.48; color.g = 0.18000000000000002; color.b = 0.8800000000000001;",
+      "update": "size += dt * 0.8;\ncolor.a = (1 - t) * 0.5;"
+    }
+  ]
+}

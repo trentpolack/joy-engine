@@ -1,0 +1,51 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# PARTICLE LAB on the Rust Joy Engine: author layered `.joyfx` particle effects with scripts, child emitters, and a
+# live preview drawn by the engine renderer. Runs natively and in browsers, and Joy Editor hosts it as a tab through
+# `AuthoringTool`.
+#
+#   cargo run -p particle-lab
+#   cargo test -p particle-lab
+#   node scripts/rust/build-web.mjs --package particle-lab --release
+
+[package]
+name = "particle-lab"
+description = "PARTICLE LAB: live authoring for deterministic Joy Engine particle effects."
+version = "0.2.8"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+authors = ["Trent Polack"]
+publish = false
+# Integration tests are listed explicitly.
+autotests = false
+
+[lib]
+path = "src/lib.rs"
+# `cdylib` is the browser module; `rlib` serves the native binary, tests, and Joy Editor.
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "particle-lab"
+path = "src/main.rs"
+
+[[test]]
+name = "particle-lab"
+path = "test/rust/main.rs"
+
+[features]
+default = ["web-entry"]
+# The browser entry point (`web_main!`). Hosts that embed PARTICLE LAB, such as Joy Editor, turn it off so their own
+# entry point is the only one in the build.
+web-entry = []
+
+[dependencies]
+joy-engine = { path = "../../.." }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+precedence = "allow"

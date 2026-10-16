@@ -1,0 +1,25 @@
+{
+  "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+  "schemaVersion": 1,
+  "name": "VEHICLE PLAYGROUND",
+  "preview": {
+    "root": "dist",
+    "entry": "index.html"
+  },
+  "capabilities": [
+    {
+      "id": "authored-levels",
+      "label": "Authored levels",
+      "extensions": [
+        ".joylevel"
+      ],
+      "features": {
+        "primitiveMeshes": true,
+        "physics": true,
+        "vehicles": true
+      },
+      "assetRoot": "assets",
+      "renderer": "scene-primitives"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Matches joy-apps so engine, games, and tools share one Rust layout.
+max_width = 120
+use_small_heuristics = "Max"

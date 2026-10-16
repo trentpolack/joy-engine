@@ -3,15 +3,15 @@ node_modules/
 .npm/
 *.tgz
 
-# TypeScript and Vite build output
+# Browser builds and optional host tooling caches
 *.tsbuildinfo
 dist/
 .vite/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Electron packaging output
-release/
+# Rust build output and generated WebAssembly packages
+target/
 
 # Logs and Node diagnostic reports
 logs/

@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "name": "FRAMEBREAK / frame destroyed",
+  "maxParticles": 72,
+  "parameters": {
+    "scale": {
+      "value": 1,
+      "min": 0.1,
+      "max": 8
+    }
+  },
+  "emitters": [
+    {
+      "id": "core",
+      "enabled": true,
+      "root": true,
+      "duration": 0,
+      "rate": 0,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 2
+        }
+      ],
+      "lifetime": 0.35,
+      "renderer": "soft",
+      "spawn": "size = 5 * scale;\ncolor = rgba(9, 6, 3, 1);",
+      "update": "size += dt * 18 * scale;\ncolor.a = (1 - t) * (1 - t);"
+    },
+    {
+      "id": "fire",
+      "enabled": true,
+      "root": true,
+      "duration": 0.25,
+      "rate": 20,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 8
+        }
+      ],
+      "lifetime": 1,
+      "renderer": "soft",
+      "spawn": "let a = rand(0, tau);\nlet s = rand(3, 9) * scale;\nvelocity = vector(cos(a) * s, rand(2, 8) * scale, sin(a) * s);\nsize = rand(1.4, 2.8) * scale;\nlifetime = rand(0.6, 1.1);\ncolor = rgba(7, 2.4, 0.6, 1);",
+      "update": "drag = 2;\nsize += dt * 2 * scale;\ncolor.r = mix(7, 1, t);\ncolor.g = mix(2.4, 0.2, t);\ncolor.a = (1 - t);"
+    },
+    {
+      "id": "shrapnel",
+      "enabled": true,
+      "root": true,
+      "duration": 0,
+      "rate": 0,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 20
+        }
+      ],
+      "lifetime": 1.8,
+      "renderer": "square",
+      "spawn": "let a = rand(0, tau);\nlet e = rand(0.1, 1.2);\nlet s = rand(10, 26) * sqrt(scale);\nvelocity = vector(cos(a) * cos(e) * s, sin(e) * s, sin(a) * cos(e) * s);\nsize = rand(0.12, 0.34) * sqrt(scale);\nrotation = rand(0, tau);\nspin = rand(-10, 10);\nlifetime = rand(1, 1.8);\ncolor = rgba(0.16, 0.16, 0.17, 1);",
+      "update": "acceleration.y = -26;\ncolor.a = 1 - t * t;"
+    },
+    {
+      "id": "smoke",
+      "enabled": true,
+      "root": true,
+      "duration": 1.2,
+      "rate": 10,
+      "bursts": [],
+      "lifetime": 3.4,
+      "renderer": "billow",
+      "spawn": "velocity = vector(rand(-1.5, 1.5), rand(2.5, 5), rand(-1.5, 1.5)) * scale;\nposition = origin + vector(rand(-1, 1), rand(0, 1), rand(-1, 1)) * scale;\nsize = rand(2, 3.4) * scale;\nrotation = rand(0, tau);\nspin = rand(-0.5, 0.5);\ncolor = rgba(0.24, 0.22, 0.22, 0.5);",
+      "update": "drag = 0.7;\nsize += dt * 2 * scale;\ncolor.a = 0.5 * (1 - t) * smoothstep(0, 0.1, t);"
+    }
+  ]
+}

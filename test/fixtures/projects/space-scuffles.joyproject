@@ -1,0 +1,38 @@
+{
+  "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+  "schemaVersion": 1,
+  "name": "SPACE SCUFFLES",
+  "preview": {
+    "root": "dist",
+    "entry": "index.html"
+  },
+  "capabilities": [
+    {
+      "id": "particle-effects",
+      "label": "Particle effects",
+      "extensions": [
+        ".joyfx"
+      ],
+      "features": {
+        "untexturedParticles": true,
+        "texturedParticles": false,
+        "materialTint": true
+      },
+      "assetRoot": "assets/joyfx",
+      "renderer": "particle-billboards"
+    },
+    {
+      "id": "authored-levels",
+      "label": "Level settings",
+      "extensions": [
+        ".joylevel"
+      ],
+      "assetRoot": "assets",
+      "renderer": "project-scene",
+      "features": {
+        "postProcessing": true,
+        "proceduralWorld": true
+      }
+    }
+  ]
+}

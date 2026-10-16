@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "name": "FRAMEBREAK / quick boost",
+  "maxParticles": 12,
+  "parameters": {
+    "scale": {
+      "value": 1,
+      "min": 0.1,
+      "max": 8
+    },
+    "direction": {
+      "type": "vector3",
+      "value": [
+        0,
+        1,
+        0
+      ],
+      "min": [
+        -1,
+        -1,
+        -1
+      ],
+      "max": [
+        1,
+        1,
+        1
+      ]
+    },
+    "tint": {
+      "type": "color",
+      "value": [
+        1,
+        0.55,
+        0.2,
+        1
+      ],
+      "min": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max": [
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "emitters": [
+    {
+      "id": "ring",
+      "enabled": true,
+      "root": true,
+      "duration": 0,
+      "rate": 0,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 1
+        }
+      ],
+      "lifetime": 0.3,
+      "renderer": "ring",
+      "spawn": "position = origin - direction * 1.2 * scale;\nsize = 1.2 * scale;\ncolor = rgba(tint.r * 5, tint.g * 5, tint.b * 5, 0.9);",
+      "update": "size += dt * 9 * scale;\ncolor.a = 0.9 * (1 - t);"
+    },
+    {
+      "id": "wake",
+      "enabled": true,
+      "root": true,
+      "duration": 0,
+      "rate": 0,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 8
+        }
+      ],
+      "lifetime": 0.35,
+      "renderer": "streak",
+      "spawn": "velocity = direction * rand(-34, -16) * scale + vector(rand(-4, 4), rand(-2, 3), rand(-4, 4));\nposition = origin + vector(rand(-0.6, 0.6), rand(-0.8, 0.8), rand(-0.6, 0.6)) * scale;\nsize = rand(0.06, 0.14) * scale;\ncolor = rgba(tint.r * 7, tint.g * 7, tint.b * 7, 1);",
+      "update": "drag = 3;\ncolor.a = 1 - t;"
+    },
+    {
+      "id": "haze",
+      "enabled": true,
+      "root": true,
+      "duration": 0,
+      "rate": 0,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 2
+        }
+      ],
+      "lifetime": 0.6,
+      "renderer": "billow",
+      "spawn": "velocity = direction * rand(-8, -3) * scale + vector(0, 1, 0);\nposition = origin - direction * 1.5 * scale;\nsize = rand(0.8, 1.4) * scale;\nrotation = rand(0, tau);\ncolor = rgba(0.5, 0.48, 0.46, 0.28);",
+      "update": "drag = 2;\nsize += dt * 3 * scale;\ncolor.a = 0.28 * (1 - t);"
+    }
+  ]
+}

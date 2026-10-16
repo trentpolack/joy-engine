@@ -2,158 +2,143 @@
 // Licensed under the MIT License.
 
 import {readFileSync, readdirSync} from 'node:fs';
-import {createRequire} from 'node:module';
-import {dirname, extname, isAbsolute, relative, resolve} from 'node:path';
+import {dirname, extname, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {spawnSync} from 'node:child_process';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sourceRoot = resolve(packageRoot, 'src');
 const architecture = JSON.parse(readFileSync(resolve(packageRoot, 'architecture/layers.json'), 'utf8'));
-const sourceExtensions = new Set(['.ts', '.js', '.mjs']);
-const consumerExtensions = new Set(['.ts', '.js', '.mjs', '.cjs', '.html']);
-
 // Generated output and installed packages are not authored consumer source.
-const ignoredConsumerDirectories = new Set(['node_modules', 'dist', 'artifacts']);
+const ignoredConsumerDirectories = new Set(['node_modules', 'dist', 'artifacts', 'target']);
 
-checkPackageBoundary();
-checkLayerDirection();
-checkConsumerBackendPackages();
+checkRustLayerDirection();
+checkRustConsumerBackendCrates();
 
-/** Ensure the compiler cannot pull project or editor sources into the engine package. */
-function checkPackageBoundary() {
-  const require = createRequire(import.meta.url);
-  const typescriptManifest = require.resolve('typescript/package.json');
-  const compiler = resolve(dirname(typescriptManifest), require(typescriptManifest).bin.tsc);
-  const result = spawnSync(process.execPath, [compiler, '--project', 'tsconfig.json', '--listFilesOnly'], {cwd: packageRoot, encoding: 'utf8'});
-  if(result.error || result.status !== 0) {
-    console.error(result.error ?? result.stdout + result.stderr);
-    process.exit(1);
+/**
+ * Enforce the engine crate's module layers and backend ownership.
+ * A Rust module's layer comes from its top-level folder (`src/physics/...` is simulation); every `crate::<module>`
+ * path it names, including grouped `use crate::{a, b}` imports and doc links, must point into its own layer or one it
+ * may import, and backend crates (`rustBackendCrates`) may only be named from their owning layers. The crate root
+ * (`src/lib.rs`, the public API) and binaries (`src/bin/`, which use that API) are exempt. Rust edges have no
+ * migration allowlist.
+ */
+function checkRustLayerDirection() {
+  const moduleLayers = new Map();
+  for(const [layer, definition] of Object.entries(architecture.layers)) {
+    for(const root of definition.roots) {
+      moduleLayers.set(root.replaceAll('-', '_'), layer);
+    }
   }
-  const unexpectedFiles = result.stdout.trim().split(/\r?\n/).filter(file => {
-    const localPath = relative(packageRoot, file).replaceAll('\\', '/');
-    return isAbsolute(localPath)
-      || (!localPath.startsWith('src/') && !localPath.startsWith('node_modules/') && !localPath.includes('/node_modules/'));
-  });
-  if(unexpectedFiles.length > 0) {
-    fail('Engine imports must stay within the engine and its dependencies:', unexpectedFiles);
-  }
-}
+  const backendOwners = Object.entries(architecture.rustBackendCrates)
+    .map(([name, ownership]) => [name.replaceAll('-', '_'), ownership.layers]);
 
-/** Enforce documented source layers while grandfathering named migration debt only. */
-function checkLayerDirection() {
-  const knownExceptions = new Set(architecture.existingViolations);
-  const encounteredExceptions = new Set();
   const violations = [];
-  for(const sourcePath of collectSources(sourceRoot)) {
+  let checkedFiles = 0;
+  for(const sourcePath of collectRustSources(sourceRoot)) {
     const sourceModule = relative(packageRoot, sourcePath).replaceAll('\\', '/');
-    const sourceLayer = layerFor(sourceModule);
-    const source = readFileSync(sourcePath, 'utf8');
-    for(const specifier of collectModuleSpecifiers(source)) {
-      if(!specifier.startsWith('.')) {
-        const backendEdge = backendPackageViolation(sourceModule, sourceLayer, specifier);
-        if(backendEdge && knownExceptions.has(backendEdge)) {
-          encounteredExceptions.add(backendEdge);
-        } else if(backendEdge) {
-          violations.push(backendEdge);
-        }
-        continue;
+    if(sourceModule === 'src/lib.rs' || sourceModule.startsWith('src/bin/')) {
+      continue;
+    }
+    const topModule = sourceModule.slice('src/'.length).split('/')[0].replace(/\.rs$/, '');
+    const sourceLayer = moduleLayers.get(topModule);
+    if(!sourceLayer) {
+      violations.push(`${sourceModule} is in no architecture layer (add src/${topModule} to a layer's roots)`);
+      continue;
+    }
+    checkedFiles++;
+    const source = stripRustComments(readFileSync(sourcePath, 'utf8'));
+    for(const target of collectRustCrateModules(source)) {
+      const targetLayer = moduleLayers.get(target);
+      if(!targetLayer) {
+        violations.push(`${sourceModule} -> crate::${target} (layers name modules, not crate-root items)`);
+      } else if(targetLayer !== sourceLayer && !architecture.layers[sourceLayer].mayImport.includes(targetLayer)) {
+        violations.push(`${sourceModule} (${sourceLayer}) -> crate::${target} (${targetLayer})`);
       }
-      const targetPath = resolve(dirname(sourcePath), specifier);
-      const targetModule = relative(packageRoot, targetPath).replaceAll('\\', '/');
-      if(!targetModule.startsWith('src/')) {
-        continue;
-      }
-      const targetLayer = layerFor(targetModule);
-      if(sourceLayer === targetLayer || architecture.layers[sourceLayer].mayImport.includes(targetLayer)) {
-        continue;
-      }
-      const edge = `${sourceModule} -> ${targetModule}`;
-      if(knownExceptions.has(edge)) {
-        encounteredExceptions.add(edge);
-      } else {
-        violations.push(edge);
+    }
+    for(const [crateName, layers] of backendOwners) {
+      if(!layers.includes(sourceLayer) && namesRustCrate(source, crateName)) {
+        violations.push(`${sourceModule} (${sourceLayer}) -> backend crate ${crateName}`);
       }
     }
   }
-  const staleExceptions = [...knownExceptions].filter(edge => !encounteredExceptions.has(edge));
-  violations.push(...staleExceptions.map(edge => `stale exception: ${edge}`));
   if(violations.length > 0) {
-    fail('Engine source dependency layers were violated:', violations);
+    fail('Rust module dependency layers were violated:', violations);
   }
-  console.log(`Engine dependency boundaries checked (${knownExceptions.size} recorded migration violations).`);
+  console.log(`Rust module layers checked (${checkedFiles} files).`);
 }
 
 /**
- * Keep backend packages behind the engine: the editor and examples consume `joy-engine` exports only.
- * Any mention of a backend package specifier counts, including JSDoc `import()` types and Vite
- * dependency lists, because each one couples the consumer to the backend's API or packaging.
+ * Keep Rust examples on the public API: they may not name wgpu, winit, rapier, or the egui integrations directly.
+ * egui itself is re-exported by `joy_engine`, so only direct `use egui` imports are rejected.
  */
-function checkConsumerBackendPackages() {
-  const prefixes = Object.keys(architecture.backendPackages);
+function checkRustConsumerBackendCrates() {
   const violations = [];
   for(const root of architecture.consumerRoots) {
-    for(const sourcePath of collectConsumerSources(resolve(packageRoot, root))) {
-      const source = readFileSync(sourcePath, 'utf8');
+    for(const sourcePath of collectRustSources(resolve(packageRoot, root))) {
+      const source = stripRustComments(readFileSync(sourcePath, 'utf8'));
       const consumerModule = relative(packageRoot, sourcePath).replaceAll('\\', '/');
-      for(const prefix of prefixes) {
-        if(source.includes(prefix)) {
-          violations.push(`${consumerModule} names ${prefix}`);
+      for(const crateName of Object.keys(architecture.rustBackendCrates).map(name => name.replaceAll('-', '_'))) {
+        const direct = crateName === 'egui' ? new RegExp(`^\\s*(?:pub\\s+)?use\\s+::?egui\\b`, 'm').test(source) : namesRustCrate(source, crateName);
+        if(direct) {
+          violations.push(`${consumerModule} names ${crateName}`);
         }
       }
     }
   }
   if(violations.length > 0) {
-    fail('Editor and example sources must reach backend packages through joy-engine exports:', violations);
+    fail('Rust examples must reach backend crates through joy_engine:', violations);
   }
-  console.log(`Consumer backend boundaries checked (${prefixes.join(', ')}).`);
 }
 
-/**
- * Return the violating edge when an engine module imports a backend package outside its owning layers.
- * @param sourceModule Package-relative importing module.
- * @param sourceLayer Architecture layer that owns the importing module.
- * @param specifier Bare package specifier from the import.
- * @returns The edge recorded for exceptions, or null when the import is permitted.
- */
-function backendPackageViolation(sourceModule, sourceLayer, specifier) {
-  for(const [prefix, ownership] of Object.entries(architecture.backendPackages)) {
-    if(specifier.startsWith(prefix) && !ownership.layers.includes(sourceLayer)) {
-      return `${sourceModule} -> ${specifier}`;
+/** Top-level module names referenced through `crate::`, expanding grouped imports such as `crate::{core::X, physics}`. */
+function collectRustCrateModules(source) {
+  const modules = new Set();
+  const pattern = /(?<![$\w])crate::/g;
+  for(const match of source.matchAll(pattern)) {
+    const start = match.index + match[0].length;
+    if(source[start] !== '{') {
+      const name = /^[A-Za-z_]\w*/.exec(source.slice(start));
+      if(name) {
+        modules.add(name[0]);
+      }
+      continue;
+    }
+    let depth = 0;
+    let partStart = start + 1;
+    for(let index = start; index < source.length; index++) {
+      const character = source[index];
+      if(character === '{') {
+        depth++;
+      } else if(character === '}' && --depth === 0) {
+        addLeadingName(source.slice(partStart, index), modules);
+        break;
+      } else if(character === ',' && depth === 1) {
+        addLeadingName(source.slice(partStart, index), modules);
+        partStart = index + 1;
+      }
     }
   }
-  return null;
+  return modules;
 }
 
-/** Collect static imports/exports and literal dynamic imports without executing source. */
-function collectModuleSpecifiers(source) {
-  const specifiers = [];
-  const patterns = [
-    /(?:import|export)\s+(?:type\s+)?(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]/g,
-    /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g
-  ];
-  for(const pattern of patterns) {
-    for(const match of source.matchAll(pattern)) {
-      specifiers.push(match[1]);
-    }
+function addLeadingName(part, modules) {
+  const name = /^\s*([A-Za-z_]\w*)/.exec(part);
+  if(name && name[1] !== 'self') {
+    modules.add(name[1]);
   }
-  return specifiers;
 }
 
-function collectSources(directory) {
-  const sources = [];
-  for(const entry of readdirSync(directory, {withFileTypes: true})) {
-    const path = resolve(directory, entry.name);
-    if(entry.isDirectory()) {
-      sources.push(...collectSources(path));
-    } else if(sourceExtensions.has(extname(entry.name)) && !entry.name.endsWith('.d.ts')) {
-      sources.push(path);
-    }
-  }
-  return sources;
+/** Whether Rust source names an external crate as a path root (`wgpu::`), in a `use`, or with `extern crate`. */
+function namesRustCrate(source, crateName) {
+  return new RegExp(`(?<![\\w:$])${crateName}::|^\\s*(?:pub\\s+)?use\\s+::?${crateName}\\b|extern\\s+crate\\s+${crateName}\\b`, 'm').test(source);
 }
 
-function collectConsumerSources(directory) {
+/** Remove ordinary comments, keeping doc comments (their links are real references) and string contents intact enough. */
+function stripRustComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/(?![/!]).*$/gm, '');
+}
+
+function collectRustSources(directory) {
   const sources = [];
   for(const entry of readdirSync(directory, {withFileTypes: true})) {
     if(entry.name.startsWith('.') || ignoredConsumerDirectories.has(entry.name)) {
@@ -161,21 +146,12 @@ function collectConsumerSources(directory) {
     }
     const path = resolve(directory, entry.name);
     if(entry.isDirectory()) {
-      sources.push(...collectConsumerSources(path));
-    } else if(consumerExtensions.has(extname(entry.name))) {
+      sources.push(...collectRustSources(path));
+    } else if(extname(entry.name) === '.rs') {
       sources.push(path);
     }
   }
   return sources;
-}
-
-function layerFor(modulePath) {
-  for(const [layer, definition] of Object.entries(architecture.layers)) {
-    if(definition.roots.some(root => modulePath.startsWith(`src/${root}/`) || modulePath === `src/${root}.ts`)) {
-      return layer;
-    }
-  }
-  throw new Error(`No architecture layer owns ${modulePath}.`);
 }
 
 function fail(message, details) {

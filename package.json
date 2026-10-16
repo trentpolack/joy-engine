@@ -2,7 +2,7 @@
   "name": "joy-engine",
   "version": "0.12.0",
   "private": true,
-  "description": "Browser-native WebGPU/WebGL 2 game engine built on luma.gl: rendering, particles, gameplay, physics and development tooling.",
+  "description": "Cross-platform Rust game engine, browser build tools, and patch delivery.",
   "author": "Trent Polack",
   "license": "MIT",
   "type": "module",
@@ -19,24 +19,8 @@
     "editor/tools/*"
   ],
   "exports": {
-    ".": "./src/index.ts",
-    "./development": "./src/development.ts",
-    "./development/editor": "./src/development/mount-config-editor.ts",
-    "./development/preview": "./src/development/connect-editor-preview.ts",
-    "./development/vite": "./src/development/vite.ts",
-    "./post-processing": "./src/post-processing.ts",
-    "./scripting": "./src/scripting/index.ts",
-    "./particles/scripting": "./src/particles/scripting.ts",
-    "./shaders/*": "./shaders/*",
-    "./dev/widget-theme.css": "./src/browser/dev-widget-theme.css",
-    "./dev/post-processing": "./src/browser/post-processing/editor.ts",
-    "./form": "./src/form/index.ts",
-    "./levels": "./src/gameplay/level-document.ts",
-    "./objects": "./src/gameplay/object-document.ts",
-    "./project-manifest": "./src/project/project-manifest.ts",
-    "./constants": "./src/constants.ts",
+    "./development/patches": "./scripts/patches/index.mjs",
     "./schemas/*": "./schemas/*",
-    "./testing/register-raw-loader": "./scripts/testing/register-raw-loader.mjs",
     "./tsconfig.base.json": "./tsconfig.base.json",
     "./package.json": "./package.json"
   },
@@ -44,35 +28,23 @@
     "joy-check-javascript": "scripts/check-javascript.mjs"
   },
   "files": [
-    "src",
-    "shaders",
     "schemas",
-    "assets",
     "scripts",
     "tsconfig.base.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "check": "tsc --project tsconfig.json && node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts test",
-    "test": "node --import ./scripts/testing/register-raw-loader.mjs --test test/*.test.mjs",
-    "docs:api": "node scripts/generate-api.mjs"
-  },
-  "dependencies": {
-    "@loaders.gl/core": "^4.5.2",
-    "@loaders.gl/gltf": "^4.5.2",
-    "@luma.gl/core": "^9.4.2",
-    "@luma.gl/effects": "^9.4.2",
-    "@luma.gl/engine": "^9.4.2",
-    "@luma.gl/experimental": "9.4.2",
-    "@luma.gl/shadertools": "^9.4.2",
-    "@luma.gl/webgl": "^9.4.2",
-    "@luma.gl/webgpu": "^9.4.2",
-    "cannon-es": "^0.20.0"
+    "check": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts test editor/tooling editor/test editor/tools/form-lab/test",
+    "test": "cargo test --workspace && npm run test:tooling",
+    "test:tooling": "node --test test/*.test.mjs editor/test/*.test.mjs",
+    "fetch-joy-engine-patch": "node scripts/patches/fetch-joy-engine-patch.mjs",
+    "apply-joy-engine-patch": "node scripts/patches/apply-joy-engine-patch.mjs",
+    "docs:api": "cargo doc --workspace --no-deps",
+    "build:web": "node scripts/rust/build-web.mjs"
   },
   "devDependencies": {
-    "@webgpu/types": "^0.1.74",
-    "typescript": "^7.0.2",
+    "@playwright/test": "^1.63.0",
     "vite": "^8.3.2"
   }
 }

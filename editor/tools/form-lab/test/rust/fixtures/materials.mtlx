@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<materialx version="1.39">
+  <gltf_pbr name="FormLabShader0" type="surfaceshader">
+    <input name="base_color" type="color3" value="1, 1, 1"/>
+    <input name="metallic" type="float" value="0"/>
+    <input name="roughness" type="float" value="0.75"/>
+    <input name="alpha" type="float" value="1"/>
+    <input name="alpha_mode" type="integer" value="0"/>
+    <input name="alpha_cutoff" type="float" value="0.5"/>
+    <input name="emissive" type="color3" value="0, 0, 0"/>
+  </gltf_pbr>
+  <surfacematerial name="Default" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="FormLabShader0"/>
+  </surfacematerial>
+  <gltf_pbr name="FormLabShader1" type="surfaceshader">
+    <input name="base_color" type="color3" value="0.2, 0.3, 0.4"/>
+    <input name="metallic" type="float" value="0.7"/>
+    <input name="roughness" type="float" value="0.1"/>
+    <input name="alpha" type="float" value="0.6"/>
+    <input name="alpha_mode" type="integer" value="1"/>
+    <input name="alpha_cutoff" type="float" value="0.4"/>
+    <input name="emissive" type="color3" value="0.05, 0.1, 0.15"/>
+  </gltf_pbr>
+  <surfacematerial name="Glass" type="material">
+    <input name="surfaceshader" type="surfaceshader" nodename="FormLabShader1"/>
+  </surfacematerial>
+</materialx>

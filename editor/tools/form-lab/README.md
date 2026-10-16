@@ -1,49 +1,23 @@
 # FORM LAB
-This workspace contains the playable project, its project-owned content, and its build configuration.
+FORM LAB is a Rust procedural geometry workbench, available natively, in browsers, and as a Joy Editor tab. Script, parameter/material inspectors, and a 3D preview share the engine's [authoring kit](../../../docs/rust-authoring.md). Product goals and open decisions remain in the [maintained direction](https://github.com/trentpolack/JoyGames/blob/develop/docs/projects/form-lab/product-direction.md).
 
-FORM SCRIPT spheres use smooth radial normals by default, including `sphere(...)` and `meshSphere(...)`; boxes and other geometry retain flat face normals unless authored otherwise. `normal(x, y, z)` sets a normalized direction for subsequently authored vertices; `normal()` restores the default vertex state. Sphere generation supplies its own normals and restores the active normal afterward. `surface()` and `sphere()` generate UV coordinates automatically; `uv(u, v)` sets coordinates for subsequently authored vertices. Materials accept PNG, JPEG, or WebP maps for base color, normal, emissive, metallic, roughness, and ambient occlusion data.
+```bash
+npm run dev --workspace @joy-games/form-lab
+npm run build --workspace @joy-games/form-lab
+npm run test --workspace @joy-games/form-lab
+npm run test:parity --workspace @joy-games/form-lab
+```
 
-New scripts use object-first geometry: `box(width,height,depth)`, `sphere(radius,segments)`, and `grid(...)` return editable values; `translate`, `rotate`, `scale`, and `color` modify an explicit geometry value. Named wrangles such as `wrangle points in terrain as point` expose `point.position`, `point.color`, and `point.index` without implicit current-element syntax. Wrangles require both `in` and a named `as` binding: `wrangle points in terrain as point { ... }`. Attribute reads and assignments require an existing field; explicitly declare custom fields with `addAttribute(terrain, "points", "density", 0)` and point colors with `color(terrain, rgba(1,1,1,1))`. Older scripts must add `in` and `as point`, replace `@name` with `point.name`, and replace implicit attribute creation with explicit declarations. The retired `@` syntax reports a migration diagnostic. Existing immediate geometry commands remain supported.
+`dev` runs the native `form-lab` Cargo application; `build` writes its browser release to `dist/`. The parity harness compares the Rust evaluator to frozen reference fixtures.
 
-See the [project documentation](https://github.com/trentpolack/JoyGames/blob/develop/docs/projects/form-lab/README.md) for the application overview, controls, architecture, development workflow, and validation guidance.
+## Editing and Files
+FORM is script-first. Live compilation debounces changes; explicit Run and source-located diagnostics support iteration. Failed or expired builds keep the last accepted geometry, which exports use. Native compilation runs in a background thread; browser evaluation runs inline with bounded work. The engine owns compiler validation and budgets.
 
+Examples are authored `.form` and `.formlab` assets discovered under the engine's `assets/examples` and `assets/form`; browser builds bundle them. Opening an example creates a working copy. Parameter defaults/reset, materials, up to 16 named variants, recipes, output inspection, resizable panels, View visibility, and Maximize remain authoring features.
 
-### Workspace navigation
-The Examples picker recursively discovers `.form` and `.formlab` assets from `joy-engine/assets/examples` and `joy-engine/assets/form`, grouped by their folders and shown by filename. Full examples are authored files rather than embedded TypeScript scripts; adding or removing a file updates the development library, and production builds bundle the discovered text for offline use. Opened assets are independent working copies: editing, browser recovery, and Save do not automatically write back to the bundled file. `.formlab` assets retain their overrides, materials, imported meshes, and variants. Appendable Recipes remain available separately beside Script Reference.
+Save defaults to raw `.form` source. Choose `.formlab` to preserve overrides, document materials/maps, imported meshes, and variants. Saving source never bakes inspector overrides into expressions. GLB, OBJ, PLY, JSON, and MaterialX exports are baked interchange; they do not preserve the recipe. Native dialogs write chosen files; browsers download. Recovery through engine storage is separate from a source save.
 
-Drag the pane dividers to resize the workbench. Balanced, Script, and Preview profiles remain implemented and saved preferences still load, but the profile toolbar is hidden for now. Focus a divider and use arrow keys to resize; double-click restores Balanced. Desktop widths persist separately from your project. The inspector separates parameter and material editing, includes parameter search, and keeps exports available. Use Maximize in the preview header to expand the entire lab while retaining script and Inspector panels; Restore returns to the previous layout. Use Recipes for appendable starting points and Go to error to focus a compiler diagnostic.
+## Rendering and Ownership
+FORM returns geometry without owning a renderer. `form_mesh_asset` creates the preview asset, and the shared PBR pass draws its materials, PNG/JPEG/WebP maps, studio image lighting, direct light, and shadows on WebGPU and WebGL 2. `EditorGrid` is an editor-only aid. Lighting, camera, and inspection state never modify the authored document or export.
 
-### Reusable takes and profile tools
-The Variants inspector saves up to 16 named sets of explicit parameter overrides in `.formlab` files and autosave. Apply replaces current overrides, while the script and global material palette stay shared. Mesh and material parameter overrides are included. Unchanged parameters continue to use the script's defaults; removed parameter names are ignored. Use a new name to save another take, or Rename to rename the selected take.
-
-The Vessel workshop and Path workshop demonstrate generated profiles and paths without requiring external art. Recipes includes smaller appendable examples. All operations return ordinary editable geometry and work in the renderer-independent `joy-engine/form` runtime:
-
-| Operation | Behavior |
-| --- | --- |
-| `revolve(profile, segments)` | Revolves ordered `(radius,height,0)` points about Y. Nonnegative radii, 3–96 segments; bottom-to-top order faces outward. Zero-radius endpoints close the surface, other ends stay open. |
-| `tube(path, radius, sides)` | Sweeps ordered XYZ points with a positive radius and 3–64 sides. Open ends, projected frames; exact reversals and adjacent duplicates are rejected. Sharp bends can self-intersect. |
-| `smoothNormals(g)` | Copies geometry and replaces normals with area-weighted point normals. Preserves topology, colors, custom attributes, and corner UV seams. Isolated or degenerate points receive zero normals. |
-
-Profiles and paths contain 2–512 points. Their topology and attributes are not transferred to generated surfaces. Generated UVs use circumference for U and point-order fraction for V; edit corner UVs for another mapping. All generated data, copies, and outputs count against evaluation budgets. Profile operations are building blocks, not watertight-solid or collision solvers.
-
-### Parameter defaults and recovery
-Numeric parameter groups show a compact default/modified indicator; hover it for precise script defaults. Modified values are marked in orange. The per-parameter reset removes that override and participates in property Undo/Redo without editing source; **Reset params** restores all parameter defaults. Color controls group precise linear RGBA channels, including opacity, with a checkerboard swatch and native sRGB picker. Choosing a color converts RGB to linear within existing bounds and preserves alpha; simply opening or refreshing it never rounds authored values. XYZ components share one group, and bounded scalars pair a slider with an exact field. Material parameter factors, color choices, and resets also participate in property Undo/Redo; imported meshes remain outside that history. Palette materials use the same controls, with their existing document ownership. Recipes is available beside Script Reference in both standalone and hosted modes.
-
-Standalone **Browser recovery updated** refers to origin-local recovery only. **Save** or Ctrl/Command+S opens a file dialog, defaulting to `.form` script source. Choose `.formlab` explicitly to keep parameter overrides, document materials and textures, imported meshes, and variants with the source. A raw `.form` save does not rewrite defaults or flatten expressions; inspector-only changes remain in recovery and still receive replacement protection. FORM LAB and Joy Editor open both formats, and Joy Engine's scene asset loader can evaluate both as procedural render assets.
-
-**Export** opens a dialog for format, filename, and destination. GLB retains authored materials; OBJ, PLY, and generated JSON serve geometry/data interchange. Every export uses the last successful build and omits the procedural recipe. Save and Export show destination controls only when a native save picker is available; other browsers use normal downloads. In Safari, choose **Ask for each download** in its file download location setting to choose a folder each time. Cancellation does not trigger a fallback download, and failed writes keep the dialog and document intact.
-
-The header's **View** menu independently hides or restores Script, Preview, and Inspector, persists visibility and widths, and keeps at least one panel visible. Controls stay reachable when Preview is hidden, including in Joy Editor. Hidden panels retain their source, inspector, and camera state. The standalone footer is removed; build and preview diagnostics remain beside their respective panels. Run `CAPTURE_CHANNEL=chrome npm run test:authoring-browser --workspace @joy-games/form-lab` for file and panel regressions, or use `CAPTURE_BROWSER=webkit` for Playwright WebKit coverage.
-
-### Compiler lifecycle
-Compiler module startup has a bounded 10-second loading window. Once the worker begins compiling, the existing two-second script execution budget applies. Rejected or interrupted builds retain the last accepted geometry. Run `npm run test:worker-browser --workspace=@joy-games/form-lab` for the delayed-start, execution-limit, retained-preview and recovery browser regression; set `CAPTURE_EXECUTABLE` when using an installed local Chrome.
-
-
-### PBR preview and lighting
-Choose **Material studio** to compare polished metal, brushed metal, painted surfaces, and straight-alpha transparency. The **Materials** inspector edits base color, tangent-space normal, emissive, metallic, roughness, AO, and alpha policy. Base-color and emissive images decode from sRGB once; numeric colors are linear. Metallic, roughness, and AO images each use their own red channel. MASK discards below the authored cutoff; BLEND uses sorted straight-alpha compositing and does not cast opaque shadows.
-
-The **Lighting** inspector edits world-space direct-light direction, linear RGB/intensity, studio environment intensity/rotation in radians, shadow casting, and quality. Reset restores the inspection defaults. The original procedural studio environment is prepared once per viewport; intensity and rotation reuse its textures. Lighting controls only redraw the preview and never change `.formlab`, GLB, or material exports. Spheres are smooth by default; use `smoothNormals` or authored normals to smooth other geometry. For an explicitly faceted sphere, set its point normals to `vector(0,0,0)` in a wrangle before output.
-
-Directional shadows are enabled by default on WebGPU. WebGL 2 retains PBR maps, reflections, and illumination; geometric shadows are deferred in [#53](https://github.com/trentpolack/joy-engine/issues/53). Run `npm run test:viewport-browser --workspace @joy-games/form-lab` for both backends, all material channels, masked shadows, lighting/export isolation, and high-DPI resizing. Set `CAPTURE_CHANNEL=chrome` to use installed Chrome, and `CAPTURE_URL` to exercise an already running development or production-preview server.
-
-Run `CAPTURE_EXECUTABLE=/path/to/chromium npm run test:lab-controls --workspace @joy-games/joy-editor` for the shared-control browser regression and screenshots.
+Document/model modules under `src/` remain separate from egui UI under `site/src/`. Rust tests cover document/export contracts, examples, compiler lifecycle, and headless interface behavior. Browser capture is a startup/image smoke check. See the [FORM language and application guide](https://github.com/trentpolack/JoyGames/blob/develop/docs/projects/form-lab/README.md).

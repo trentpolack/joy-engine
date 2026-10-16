@@ -1,0 +1,262 @@
+{
+  "version": 1,
+  "name": "Showcase yard",
+  "entities": [
+    {
+      "id": "ground",
+      "name": "Yard floor",
+      "type": "prop",
+      "tags": [
+        "static"
+      ],
+      "transform": {
+        "position": [
+          0,
+          -0.25,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "components": {
+        "render": {
+          "shape": "box",
+          "size": [
+            24,
+            0.5,
+            24
+          ],
+          "color": [
+            0.24,
+            0.3,
+            0.32
+          ]
+        },
+        "physics": {
+          "shape": "box",
+          "mass": 0,
+          "halfExtents": [
+            12,
+            0.25,
+            12
+          ]
+        }
+      }
+    },
+    {
+      "id": "cottage",
+      "name": "Cottage",
+      "type": "prop",
+      "tags": [],
+      "transform": {
+        "position": [
+          -4,
+          0,
+          -3
+        ],
+        "rotation": [
+          0,
+          0.6,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "components": {
+        "render": {
+          "asset": "assets/form/cottage.formlab"
+        }
+      }
+    },
+    {
+      "id": "garden",
+      "name": "Satellite garden",
+      "type": "prop",
+      "tags": [],
+      "transform": {
+        "position": [
+          5,
+          0,
+          -4
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "components": {
+        "render": {
+          "asset": "assets/form/satellite-garden.form"
+        }
+      }
+    },
+    {
+      "id": "crate",
+      "name": "Crate",
+      "type": "prop",
+      "tags": [],
+      "transform": {
+        "position": [
+          2,
+          0.5,
+          2
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "components": {
+        "render": {
+          "shape": "box",
+          "color": [
+            0.95,
+            0.36,
+            0.12
+          ]
+        },
+        "physics": {
+          "shape": "box",
+          "mass": 1,
+          "halfExtents": [
+            0.5,
+            0.5,
+            0.5
+          ]
+        }
+      }
+    },
+    {
+      "id": "ball",
+      "name": "Ball",
+      "type": "prop",
+      "tags": [],
+      "transform": {
+        "position": [
+          -1,
+          0.5,
+          3
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "components": {
+        "render": {
+          "shape": "sphere",
+          "color": [
+            0.3,
+            0.62,
+            0.9
+          ]
+        },
+        "physics": {
+          "shape": "sphere",
+          "mass": 1,
+          "radius": 0.5
+        }
+      }
+    },
+    {
+      "template": "assets/objects/lantern-post.joyobject",
+      "overrides": {},
+      "id": "lantern-a",
+      "name": "Lantern post",
+      "transform": {
+        "position": [
+          1,
+          1.1,
+          -1
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "id": "lamp",
+      "name": "Warm lamp",
+      "type": "entity",
+      "tags": [],
+      "transform": {
+        "position": [
+          0,
+          4,
+          2
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "components": {
+        "light": {
+          "color": [
+            1,
+            0.72,
+            0.42
+          ],
+          "intensity": 3,
+          "range": 14,
+          "castsShadow": false
+        },
+        "render": {
+          "shape": "sphere",
+          "size": [
+            0.25,
+            0.25,
+            0.25
+          ],
+          "color": [
+            1,
+            0.72,
+            0.3
+          ]
+        }
+      }
+    }
+  ]
+}

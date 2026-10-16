@@ -1,0 +1,1075 @@
+{
+ "manifests": [
+  {
+   "name": "blast-garden.joyproject",
+   "result": {
+    "ok": {
+     "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+     "schemaVersion": 1,
+     "name": "BLAST GARDEN",
+     "preview": {
+      "root": "dist",
+      "entry": "index.html"
+     },
+     "capabilities": [
+      {
+       "id": "particle-effects",
+       "label": "Particle effects",
+       "extensions": [
+        ".joyfx"
+       ],
+       "assetRoot": "assets/joyfx",
+       "renderer": "particle-billboards",
+       "features": {
+        "untexturedParticles": true
+       }
+      },
+      {
+       "id": "authored-levels",
+       "label": "Level settings",
+       "extensions": [
+        ".joylevel"
+       ],
+       "assetRoot": "assets",
+       "renderer": "project-scene",
+       "features": {
+        "postProcessing": true,
+        "proceduralWorld": true
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "framebreak.joyproject",
+   "result": {
+    "ok": {
+     "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+     "schemaVersion": 1,
+     "name": "FRAMEBREAK",
+     "preview": {
+      "root": "dist",
+      "entry": "index.html"
+     },
+     "capabilities": [
+      {
+       "id": "procedural-meshes",
+       "label": "Frames, weapons, and the FORM city",
+       "extensions": [
+        ".form"
+       ],
+       "assetRoot": "assets/form",
+       "renderer": "lit-triangles",
+       "features": {
+        "vertexColors": true,
+        "materials": false,
+        "materialTextures": false
+       }
+      },
+      {
+       "id": "particle-effects",
+       "label": "Combat and destruction effects",
+       "extensions": [
+        ".joyfx"
+       ],
+       "assetRoot": "assets/joyfx",
+       "renderer": "particle-billboards",
+       "features": {
+        "untexturedParticles": true,
+        "texturedParticles": false,
+        "materialTint": true
+       }
+      },
+      {
+       "id": "authored-levels",
+       "label": "Level settings",
+       "extensions": [
+        ".joylevel"
+       ],
+       "assetRoot": "assets",
+       "renderer": "project-scene",
+       "features": {
+        "postProcessing": true,
+        "proceduralWorld": true
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "god-game.joyproject",
+   "result": {
+    "ok": {
+     "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+     "schemaVersion": 1,
+     "name": "GOD GAME",
+     "preview": {
+      "root": "dist",
+      "entry": "index.html"
+     },
+     "capabilities": [
+      {
+       "id": "procedural-meshes",
+       "label": "Procedural meshes",
+       "extensions": [
+        ".form"
+       ],
+       "assetRoot": "assets/form",
+       "renderer": "pbr-triangles",
+       "features": {
+        "vertexColors": true
+       }
+      },
+      {
+       "id": "particle-effects",
+       "label": "Particle effects",
+       "extensions": [
+        ".joyfx"
+       ],
+       "assetRoot": "assets/joyfx",
+       "renderer": "particle-billboards",
+       "features": {
+        "untexturedParticles": true
+       }
+      },
+      {
+       "id": "authored-levels",
+       "label": "Level settings",
+       "extensions": [
+        ".joylevel"
+       ],
+       "assetRoot": "assets",
+       "renderer": "project-scene",
+       "features": {
+        "postProcessing": true,
+        "proceduralWorld": true
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "luna.joyproject",
+   "result": {
+    "ok": {
+     "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+     "schemaVersion": 1,
+     "name": "LUNA",
+     "preview": {
+      "root": "dist",
+      "entry": "index.html"
+     },
+     "capabilities": [
+      {
+       "id": "procedural-meshes",
+       "label": "Procedural meshes",
+       "extensions": [
+        ".form"
+       ],
+       "assetRoot": "assets/form",
+       "renderer": "lit-triangles",
+       "features": {
+        "vertexColors": true,
+        "materials": false,
+        "materialTextures": false
+       }
+      },
+      {
+       "id": "particle-effects",
+       "label": "Particle effects",
+       "extensions": [
+        ".joyfx"
+       ],
+       "assetRoot": "assets/joyfx",
+       "renderer": "particle-billboards",
+       "features": {
+        "untexturedParticles": true,
+        "texturedParticles": false,
+        "materialTint": true
+       }
+      },
+      {
+       "id": "authored-levels",
+       "label": "Level settings",
+       "extensions": [
+        ".joylevel"
+       ],
+       "assetRoot": "assets",
+       "renderer": "project-scene",
+       "features": {
+        "postProcessing": true,
+        "proceduralWorld": true
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "magic-colors.joyproject",
+   "result": {
+    "ok": {
+     "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+     "schemaVersion": 1,
+     "name": "MAGIC COLORS",
+     "preview": {
+      "root": "dist",
+      "entry": "index.html"
+     },
+     "capabilities": [
+      {
+       "id": "procedural-meshes",
+       "label": "Procedural meshes",
+       "extensions": [
+        ".form"
+       ],
+       "assetRoot": "assets/form",
+       "renderer": "lit-triangles",
+       "features": {
+        "vertexColors": true,
+        "materials": false,
+        "materialTextures": false
+       }
+      },
+      {
+       "id": "particle-effects",
+       "label": "Particle effects",
+       "extensions": [
+        ".joyfx"
+       ],
+       "assetRoot": "assets/joyfx",
+       "renderer": "particle-billboards",
+       "features": {
+        "untexturedParticles": true,
+        "texturedParticles": false,
+        "materialTint": true
+       }
+      },
+      {
+       "id": "authored-levels",
+       "label": "Level settings",
+       "extensions": [
+        ".joylevel"
+       ],
+       "assetRoot": "assets",
+       "renderer": "project-scene",
+       "features": {
+        "postProcessing": true,
+        "proceduralWorld": true
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "space-scuffles.joyproject",
+   "result": {
+    "ok": {
+     "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+     "schemaVersion": 1,
+     "name": "SPACE SCUFFLES",
+     "preview": {
+      "root": "dist",
+      "entry": "index.html"
+     },
+     "capabilities": [
+      {
+       "id": "particle-effects",
+       "label": "Particle effects",
+       "extensions": [
+        ".joyfx"
+       ],
+       "assetRoot": "assets/joyfx",
+       "renderer": "particle-billboards",
+       "features": {
+        "untexturedParticles": true,
+        "texturedParticles": false,
+        "materialTint": true
+       }
+      },
+      {
+       "id": "authored-levels",
+       "label": "Level settings",
+       "extensions": [
+        ".joylevel"
+       ],
+       "assetRoot": "assets",
+       "renderer": "project-scene",
+       "features": {
+        "postProcessing": true,
+        "proceduralWorld": true
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "vectors-to-victory.joyproject",
+   "result": {
+    "ok": {
+     "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+     "schemaVersion": 1,
+     "name": "VECTORS TO VICTORY",
+     "preview": {
+      "root": "dist",
+      "entry": "index.html"
+     },
+     "capabilities": [
+      {
+       "id": "procedural-meshes",
+       "label": "Unit and battlefield prop FORM scripts",
+       "extensions": [
+        ".form"
+       ],
+       "assetRoot": "assets/form",
+       "renderer": "lit-triangles",
+       "features": {
+        "vertexColors": true,
+        "materials": false,
+        "materialTextures": false
+       }
+      },
+      {
+       "id": "particle-effects",
+       "label": "Combat and ceremony effects",
+       "extensions": [
+        ".joyfx"
+       ],
+       "assetRoot": "assets/joyfx",
+       "renderer": "particle-billboards",
+       "features": {
+        "untexturedParticles": true,
+        "texturedParticles": false,
+        "materialTint": true
+       }
+      },
+      {
+       "id": "authored-levels",
+       "label": "Display settings",
+       "extensions": [
+        ".joylevel"
+       ],
+       "assetRoot": "assets",
+       "renderer": "project-scene",
+       "features": {
+        "postProcessing": true,
+        "proceduralWorld": true
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "vehicle-playground.joyproject",
+   "result": {
+    "ok": {
+     "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+     "schemaVersion": 1,
+     "name": "VEHICLE PLAYGROUND",
+     "preview": {
+      "root": "dist",
+      "entry": "index.html"
+     },
+     "capabilities": [
+      {
+       "id": "authored-levels",
+       "label": "Authored levels",
+       "extensions": [
+        ".joylevel"
+       ],
+       "assetRoot": "assets",
+       "renderer": "scene-primitives",
+       "features": {
+        "primitiveMeshes": true,
+        "physics": true,
+        "vehicles": true
+       }
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "cases": [
+  {
+   "name": "minimal",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": []
+   },
+   "result": {
+    "ok": {
+     "schemaVersion": 1,
+     "name": "Test",
+     "preview": {
+      "root": "dist",
+      "entry": "index.html"
+     },
+     "capabilities": []
+    }
+   }
+  },
+  {
+   "name": "normalized",
+   "value": {
+    "schemaVersion": 1,
+    "name": "  Spaced  ",
+    "preview": {
+     "root": "./dist\\site",
+     "entry": "index.html"
+    },
+    "capabilities": [
+     {
+      "id": "particle-effects",
+      "label": " Effects ",
+      "extensions": [
+       ".JOYFX",
+       " .png "
+      ],
+      "assetRoot": ".\\assets\\joyfx",
+      "renderer": "particle-billboards",
+      "features": {
+       "a": 1,
+       "b": 0,
+       "c": "",
+       "d": "yes",
+       "e": null,
+       "f": [],
+       "g": {},
+       "h": true
+      }
+     }
+    ],
+    "$schema": " ../schema.json "
+   },
+   "result": {
+    "ok": {
+     "$schema": "../schema.json",
+     "schemaVersion": 1,
+     "name": "Spaced",
+     "preview": {
+      "root": "dist/site",
+      "entry": "index.html"
+     },
+     "capabilities": [
+      {
+       "id": "particle-effects",
+       "label": "Effects",
+       "extensions": [
+        ".joyfx",
+        ".png"
+       ],
+       "assetRoot": "assets/joyfx",
+       "renderer": "particle-billboards",
+       "features": {
+        "a": true,
+        "b": false,
+        "c": false,
+        "d": true,
+        "e": false,
+        "f": true,
+        "g": true,
+        "h": true
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "notObject",
+   "value": [
+    1
+   ],
+   "result": {
+    "error": "Joy project manifest must use schemaVersion 1."
+   }
+  },
+  {
+   "name": "version",
+   "value": {
+    "schemaVersion": 2,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": []
+   },
+   "result": {
+    "error": "Joy project manifest must use schemaVersion 1."
+   }
+  },
+  {
+   "name": "name",
+   "value": {
+    "schemaVersion": 1,
+    "name": "  ",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": []
+   },
+   "result": {
+    "error": "Joy project manifest name must be a non-empty string."
+   }
+  },
+  {
+   "name": "schemaType",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [],
+    "$schema": {
+     "type": "object"
+    }
+   },
+   "result": {
+    "error": "Joy project manifest $schema must be a non-empty string."
+   }
+  },
+  {
+   "name": "schemaBlank",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [],
+    "$schema": " "
+   },
+   "result": {
+    "error": "Joy project manifest $schema must be a non-empty string."
+   }
+  },
+  {
+   "name": "preview",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": "dist",
+    "capabilities": []
+   },
+   "result": {
+    "error": "Joy project manifest requires a preview object."
+   }
+  },
+  {
+   "name": "previewRoot",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "entry": "index.html"
+    },
+    "capabilities": []
+   },
+   "result": {
+    "error": "Joy project manifest preview.root must be a non-empty string."
+   }
+  },
+  {
+   "name": "traversal",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "../outside",
+     "entry": "index.html"
+    },
+    "capabilities": []
+   },
+   "result": {
+    "error": "Project path must stay inside the selected folder: ../outside"
+   }
+  },
+  {
+   "name": "absolute",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "/var/www",
+     "entry": "index.html"
+    },
+    "capabilities": []
+   },
+   "result": {
+    "error": "Project path must stay inside the selected folder: /var/www"
+   }
+  },
+  {
+   "name": "drive",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "C:\\index.html"
+    },
+    "capabilities": []
+   },
+   "result": {
+    "error": "Project path must stay inside the selected folder: C:\\index.html"
+   }
+  },
+  {
+   "name": "capabilitiesType",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": {}
+   },
+   "result": {
+    "error": "Joy project manifest capabilities must be an array."
+   }
+  },
+  {
+   "name": "capabilityType",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [
+     {
+      "id": "particle-effects",
+      "label": " Effects ",
+      "extensions": [
+       ".JOYFX",
+       " .png "
+      ],
+      "assetRoot": ".\\assets\\joyfx",
+      "renderer": "particle-billboards",
+      "features": {
+       "a": 1,
+       "b": 0,
+       "c": "",
+       "d": "yes",
+       "e": null,
+       "f": [],
+       "g": {},
+       "h": true
+      }
+     },
+     3
+    ]
+   },
+   "result": {
+    "error": "Capability 2 must be an object."
+   }
+  },
+  {
+   "name": "capabilityId",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [
+     {
+      "id": "Particle",
+      "label": " Effects ",
+      "extensions": [
+       ".JOYFX",
+       " .png "
+      ],
+      "assetRoot": ".\\assets\\joyfx",
+      "renderer": "particle-billboards",
+      "features": {
+       "a": 1,
+       "b": 0,
+       "c": "",
+       "d": "yes",
+       "e": null,
+       "f": [],
+       "g": {},
+       "h": true
+      }
+     }
+    ]
+   },
+   "result": {
+    "error": "Capability id \"Particle\" must be unique kebab-case."
+   }
+  },
+  {
+   "name": "capabilityIdMissing",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [
+     {
+      "id": 4,
+      "label": " Effects ",
+      "extensions": [
+       ".JOYFX",
+       " .png "
+      ],
+      "assetRoot": ".\\assets\\joyfx",
+      "renderer": "particle-billboards",
+      "features": {
+       "a": 1,
+       "b": 0,
+       "c": "",
+       "d": "yes",
+       "e": null,
+       "f": [],
+       "g": {},
+       "h": true
+      }
+     }
+    ]
+   },
+   "result": {
+    "error": "Joy project manifest capabilities[0].id must be a non-empty string."
+   }
+  },
+  {
+   "name": "capabilityDuplicate",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [
+     {
+      "id": "particle-effects",
+      "label": " Effects ",
+      "extensions": [
+       ".JOYFX",
+       " .png "
+      ],
+      "assetRoot": ".\\assets\\joyfx",
+      "renderer": "particle-billboards",
+      "features": {
+       "a": 1,
+       "b": 0,
+       "c": "",
+       "d": "yes",
+       "e": null,
+       "f": [],
+       "g": {},
+       "h": true
+      }
+     },
+     {
+      "id": "particle-effects",
+      "label": " Effects ",
+      "extensions": [
+       ".JOYFX",
+       " .png "
+      ],
+      "assetRoot": ".\\assets\\joyfx",
+      "renderer": "particle-billboards",
+      "features": {
+       "a": 1,
+       "b": 0,
+       "c": "",
+       "d": "yes",
+       "e": null,
+       "f": [],
+       "g": {},
+       "h": true
+      }
+     }
+    ]
+   },
+   "result": {
+    "error": "Capability id \"particle-effects\" must be unique kebab-case."
+   }
+  },
+  {
+   "name": "extensionsEmpty",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [
+     {
+      "id": "particle-effects",
+      "label": " Effects ",
+      "extensions": [],
+      "assetRoot": ".\\assets\\joyfx",
+      "renderer": "particle-billboards",
+      "features": {
+       "a": 1,
+       "b": 0,
+       "c": "",
+       "d": "yes",
+       "e": null,
+       "f": [],
+       "g": {},
+       "h": true
+      }
+     }
+    ]
+   },
+   "result": {
+    "error": "Capability \"particle-effects\" requires at least one extension."
+   }
+  },
+  {
+   "name": "extensionInvalid",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [
+     {
+      "id": "particle-effects",
+      "label": " Effects ",
+      "extensions": [
+       ".joy-fx"
+      ],
+      "assetRoot": ".\\assets\\joyfx",
+      "renderer": "particle-billboards",
+      "features": {
+       "a": 1,
+       "b": 0,
+       "c": "",
+       "d": "yes",
+       "e": null,
+       "f": [],
+       "g": {},
+       "h": true
+      }
+     }
+    ]
+   },
+   "result": {
+    "error": "Capability \"particle-effects\" has invalid extension \".joy-fx\"."
+   }
+  },
+  {
+   "name": "extensionBlank",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [
+     {
+      "id": "particle-effects",
+      "label": " Effects ",
+      "extensions": [
+       " "
+      ],
+      "assetRoot": ".\\assets\\joyfx",
+      "renderer": "particle-billboards",
+      "features": {
+       "a": 1,
+       "b": 0,
+       "c": "",
+       "d": "yes",
+       "e": null,
+       "f": [],
+       "g": {},
+       "h": true
+      }
+     }
+    ]
+   },
+   "result": {
+    "error": "Joy project manifest capability particle-effects extension must be a non-empty string."
+   }
+  },
+  {
+   "name": "assetRoot",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [
+     {
+      "id": "particle-effects",
+      "label": " Effects ",
+      "extensions": [
+       ".JOYFX",
+       " .png "
+      ],
+      "assetRoot": "../x",
+      "renderer": "particle-billboards",
+      "features": {
+       "a": 1,
+       "b": 0,
+       "c": "",
+       "d": "yes",
+       "e": null,
+       "f": [],
+       "g": {},
+       "h": true
+      }
+     }
+    ]
+   },
+   "result": {
+    "error": "Project path must stay inside the selected folder: ../x"
+   }
+  },
+  {
+   "name": "renderer",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [
+     {
+      "id": "particle-effects",
+      "label": " Effects ",
+      "extensions": [
+       ".JOYFX",
+       " .png "
+      ],
+      "assetRoot": ".\\assets\\joyfx",
+      "renderer": "",
+      "features": {
+       "a": 1,
+       "b": 0,
+       "c": "",
+       "d": "yes",
+       "e": null,
+       "f": [],
+       "g": {},
+       "h": true
+      }
+     }
+    ]
+   },
+   "result": {
+    "error": "Joy project manifest capability particle-effects renderer must be a non-empty string."
+   }
+  },
+  {
+   "name": "label",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [
+     {
+      "id": "particle-effects",
+      "label": null,
+      "extensions": [
+       ".JOYFX",
+       " .png "
+      ],
+      "assetRoot": ".\\assets\\joyfx",
+      "renderer": "particle-billboards",
+      "features": {
+       "a": 1,
+       "b": 0,
+       "c": "",
+       "d": "yes",
+       "e": null,
+       "f": [],
+       "g": {},
+       "h": true
+      }
+     }
+    ]
+   },
+   "result": {
+    "error": "Joy project manifest capability particle-effects label must be a non-empty string."
+   }
+  },
+  {
+   "name": "featuresArray",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [
+     {
+      "id": "particle-effects",
+      "label": " Effects ",
+      "extensions": [
+       ".JOYFX",
+       " .png "
+      ],
+      "assetRoot": ".\\assets\\joyfx",
+      "renderer": "particle-billboards",
+      "features": [
+       true
+      ]
+     }
+    ]
+   },
+   "result": {
+    "ok": {
+     "schemaVersion": 1,
+     "name": "Test",
+     "preview": {
+      "root": "dist",
+      "entry": "index.html"
+     },
+     "capabilities": [
+      {
+       "id": "particle-effects",
+       "label": "Effects",
+       "extensions": [
+        ".joyfx",
+        ".png"
+       ],
+       "assetRoot": "assets/joyfx",
+       "renderer": "particle-billboards",
+       "features": {}
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

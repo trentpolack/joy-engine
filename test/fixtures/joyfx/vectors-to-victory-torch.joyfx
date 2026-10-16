@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "name": "VECTORS TO VICTORY / torch flame",
+  "maxParticles": 48,
+  "parameters": {},
+  "emitters": [
+    {
+      "id": "flame",
+      "enabled": true,
+      "root": true,
+      "duration": 30,
+      "rate": 36,
+      "bursts": [],
+      "lifetime": 0.55,
+      "renderer": "soft",
+      "spawn": "position.x = origin.x + rand(-0.05, 0.05);\nposition.z = origin.z + rand(-0.05, 0.05);\nvelocity.y = rand(0.9, 1.5);\nvelocity.x = rand(-0.12, 0.12);\nsize = rand(0.16, 0.26);\ncolor = rgba(2.4, rand(0.8, 1.2), 0.22, 1);\nu0 = size;",
+      "update": "size = u0 * (1 - t * 0.75);\ncolor.g -= dt * 1.0;\ncolor.a = (1 - t) * 0.9;"
+    },
+    {
+      "id": "sparks",
+      "enabled": true,
+      "root": true,
+      "duration": 30,
+      "rate": 5,
+      "bursts": [],
+      "lifetime": 0.9,
+      "renderer": "square",
+      "spawn": "position.x = origin.x;\nposition.z = origin.z;\nvelocity.y = rand(1, 2);\nvelocity.x = rand(-0.3, 0.3);\nvelocity.z = rand(-0.3, 0.3);\nsize = rand(0.02, 0.035);\ncolor = rgba(2.2, 0.9, 0.3, 1);",
+      "update": "color.a = 1 - t;"
+    }
+  ]
+}

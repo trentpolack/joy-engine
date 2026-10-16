@@ -1,0 +1,52 @@
+{
+  "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+  "schemaVersion": 1,
+  "name": "FRAMEBREAK",
+  "preview": {
+    "root": "dist",
+    "entry": "index.html"
+  },
+  "capabilities": [
+    {
+      "id": "procedural-meshes",
+      "label": "Frames, weapons, and the FORM city",
+      "extensions": [
+        ".form"
+      ],
+      "features": {
+        "vertexColors": true,
+        "materials": false,
+        "materialTextures": false
+      },
+      "assetRoot": "assets/form",
+      "renderer": "lit-triangles"
+    },
+    {
+      "id": "particle-effects",
+      "label": "Combat and destruction effects",
+      "extensions": [
+        ".joyfx"
+      ],
+      "features": {
+        "untexturedParticles": true,
+        "texturedParticles": false,
+        "materialTint": true
+      },
+      "assetRoot": "assets/joyfx",
+      "renderer": "particle-billboards"
+    },
+    {
+      "id": "authored-levels",
+      "label": "Level settings",
+      "extensions": [
+        ".joylevel"
+      ],
+      "assetRoot": "assets",
+      "renderer": "project-scene",
+      "features": {
+        "postProcessing": true,
+        "proceduralWorld": true
+      }
+    }
+  ]
+}
