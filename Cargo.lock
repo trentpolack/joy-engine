@@ -1425,7 +1425,7 @@ dependencies = [
 
 [[package]]
 name = "joy-engine"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "bytemuck",
  "console_error_panic_hook",

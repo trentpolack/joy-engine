@@ -1,8 +1,8 @@
 {
   "name": "joy-engine",
-  "version": "0.12.0",
+  "version": "1.0.0",
   "private": true,
-  "description": "Cross-platform Rust game engine, browser build tools, and patch delivery.",
+  "description": "A game engine built in Rust for making cross-platform games; the engine is intended for prototyping, procedural generation, and other things that seem fun.",
   "author": "Trent Polack",
   "license": "MIT",
   "type": "module",

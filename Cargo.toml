@@ -14,8 +14,8 @@
 
 [package]
 name = "joy-engine"
-description = "A game engine built for making cross-platform games with a renderer based on wgpu; the engine is intended for prototyping, procedural generation, and other things that seem fun."
-version = "0.1.0"
+description = "A game engine built in Rust for making cross-platform games; the engine is intended for prototyping, procedural generation, and other things that seem fun."
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
