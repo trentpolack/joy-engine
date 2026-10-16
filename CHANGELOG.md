@@ -3,7 +3,14 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-16-2026
+### Continuous Integration
+- Added locked Rust formatting, Clippy, native workspace tests, and WebAssembly checks for pull requests and protected branches, with pinned GitHub Actions and shared build caching.
+
+### Cloud Patch Delivery
+- Added standalone cloud patch fetch/apply commands and delivery guidance, with engine-owned tooling shared by hosting workspaces. Both entry points preserve local staging, reconcile in disposable repositories, and remove all four bundle files only after successful or already-applied handling.
+
 ### Fixes
+- Enabled the GLSL writer explicitly for native shader tests, so the standalone Rust workspace's Clippy and test commands compile on macOS without relying on a host OpenGL backend.
 - Added `runtime::SaveSlot`, which refuses ordinary writes after a failed read or a rejected save until the game explicitly replaces it, so an autosave can no longer overwrite progress that merely failed to load (a valid but unreadable save used to be replaced by a fresh one). See [Rust storage](docs/rust-storage.md#saves-saveslot).
 - Browser builds now pass Shift, Ctrl, Alt, and Command to egui (with Cmd as the shortcut key on Apple platforms), so Shift-panning, Shift-selection, and modifier shortcuts work in browsers as they do natively.
 - A touch that starts on a UI widget now stays with the UI until it ends, so dragging a slider or scrolling a panel can no longer become a gameplay touch underneath.

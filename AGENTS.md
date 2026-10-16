@@ -50,6 +50,14 @@ In addition:
 
 Use the completion date in `America/Detroit`. Keep the whole summary under roughly 300 words; link out instead of expanding.
 
+## Joy Engine Cloud Patch Delivery
+- For engine file changes delivered as a cloud bundle, produce `.patches/joy-engine.patch`, `.patches/joy-engine-base.txt`, `.patches/joy-engine-manifest.txt`, and `.patches/joy-engine-tests.txt` in this repository's root. A hosting workspace may specify its own delivery directory; follow that workspace's instructions when the engine is nested there.
+- Record the engine commit SHA from the start of the task. Include the task's modified/deleted files, new authored files, and binary changes relative to that revision, including task changes already committed in the cloud. Patch paths and the manifest must be engine-relative, with one changed path per manifest line. Include validation results in the test report.
+- Exclude dependencies, generated build output, secrets, `.patches/`, and submodule pointer changes. Verify the patch against a disposable copy of the recorded base without changing the real repository's index or refs.
+- Keep `.patches/` ignored. If the cloud task diff is the transport, force-add only these four delivery files in that cloud checkout; this does not authorize staging them locally or merging transport files into source history. Return all four files through the actual task diff or downloadable artifacts, and verify that they are present. A report without its patch is incomplete delivery; report missing delivery as a blocker.
+- Locally, run `npm run fetch-joy-engine-patch -- <task-id>` and `npm run apply-joy-engine-patch` from this repository's root. Fetch verifies and saves the ignored bundle without importing source changes; apply preserves staging and refs, reconciles in a disposable repository, and removes all four delivery files only after success or already-applied detection. Conflicts retain the bundle. Never run `git apply --3way` in the real working checkout.
+- See [Patch Delivery](docs/patch-delivery.md) for saved task diffs, noninteractive application, and hosting-workspace behavior.
+
 ## Unit Test Scope
 Keep the unit suite focused on core behavior and costly regressions: document and asset round trips, bounded or deterministic simulation, resource ownership and cleanup, backend contracts and fallback, and gameplay state transitions. Extend an existing scenario when it already covers the same risk. Add a new test only when it protects a distinct failure that matters to a player, author, or shared-engine consumer.
 

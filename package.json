@@ -24,6 +24,7 @@
     "./development/editor": "./src/development/mount-config-editor.ts",
     "./development/preview": "./src/development/connect-editor-preview.ts",
     "./development/vite": "./src/development/vite.ts",
+    "./development/patches": "./scripts/patches/index.mjs",
     "./post-processing": "./src/post-processing.ts",
     "./scripting": "./src/scripting/index.ts",
     "./particles/scripting": "./src/particles/scripting.ts",
@@ -56,6 +57,8 @@
   "scripts": {
     "check": "tsc --project tsconfig.json && node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts test",
     "test": "node --import ./scripts/testing/register-raw-loader.mjs --test test/*.test.mjs",
+    "fetch-joy-engine-patch": "node scripts/patches/fetch-joy-engine-patch.mjs",
+    "apply-joy-engine-patch": "node scripts/patches/apply-joy-engine-patch.mjs",
     "docs:api": "node scripts/generate-api.mjs",
     "rust:web": "node scripts/rust/build-web.mjs"
   },

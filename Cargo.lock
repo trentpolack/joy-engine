@@ -1444,6 +1444,7 @@ dependencies = [
  "js-sys",
  "libm",
  "log",
+ "naga",
  "png",
  "pollster",
  "rapier3d",

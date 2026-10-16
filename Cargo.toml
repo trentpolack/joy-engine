@@ -15,7 +15,7 @@
 
 [package]
 name = "joy-engine"
-description = "Joy Engine: deterministic simulation, FORM procedural content, and one wgpu renderer for games and tools on native and browser targets."
+description = "A game engine built for making cross-platform games with a renderer based on wgpu; the engine is intended for prototyping, procedural generation, and other things that seem fun."
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
@@ -23,6 +23,7 @@ license = "MIT"
 authors = ["Trent Polack"]
 repository = "https://github.com/trentpolack/joy-engine"
 publish = false
+
 # Examples and tests share folders with the TypeScript engine, so targets are listed explicitly.
 autoexamples = false
 autotests = false
@@ -56,19 +57,24 @@ path = "test/rust/main.rs"
 glam = { version = "0.34.1", features = ["bytemuck", "serde"] }
 bytemuck = { version = "1.25.2", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"] }
+
 # float_roundtrip keeps authored documents byte-stable through a parse/serialize round trip.
 serde_json = { version = "1.0.154", features = ["preserve_order", "float_roundtrip"] }
 indexmap = { version = "2.14.2", features = ["serde"] }
 thiserror = "2.0.21"
 log = "0.4.34"
 web-time = "1.1.0"
+
 # WAV decoding for the audio bank.
 hound = "3.5.1"
+
 # Portable IEEE math (FreeBSD msun ports) so particle scripts compute identical transcendental results natively and
 # in WebAssembly, and match the TypeScript engine's V8 results for exp, tan, and atan2 bit for bit.
 libm = "0.2.16"
+
 # PNG decoding for embedded particle textures on every target (browsers included); already used by `image` natively.
 png = "0.18.1"
+
 # JPEG and WebP decoding for embedded FORM material maps (PNG, JPEG, or WebP) on every target, browsers included.
 zune-jpeg = "0.5.15"
 image-webp = "0.2.4"
@@ -88,13 +94,20 @@ egui-winit = { version = "0.36.2", default-features = false, features = ["clipbo
 pollster = "0.4.0"
 env_logger = "0.11.11"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
+
 # Gamepads and audio output (platform layer). Linux builds need the udev and ALSA development packages.
 gilrs = "0.11.2"
 cpal = "0.18.2"
+
 # Native file dialogs for authoring tools (platform layer, behind development::FileDialogs); the version joy-apps uses.
 # The desktop portal backend loads libdbus at run time (falling back to zenity), so Linux builds need no system
 # packages; Wayland parent-window support is left out.
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+
+# Native shader tests translate WGSL to WebGL GLSL even on Metal-only hosts.
+naga = { version = "30.0.1", features = ["glsl-out"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2.106"

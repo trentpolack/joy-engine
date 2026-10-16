@@ -74,6 +74,8 @@ node scripts/rust/build-web.mjs --package form-lab --canvas form-lab --title "FO
 
 Headless GPU tests run on software adapters too (llvmpipe or SwiftShader through `VK_ICD_FILENAMES`). Set `JOY_RENDER_CAPTURE_DIR` to keep their PNG captures. FORM parity against the TypeScript compiler runs with `npm run test:rust-parity --workspace @joy-games/form-lab` after `cargo build --release --bin joy-form-evaluate`.
 
+The [Rust CI workflow](../.github/workflows/rust-ci.yml) runs on pull requests and pushes to `develop` and `main`, and supports manual runs. Its independent jobs run formatting and strict Clippy, native tests for the entire workspace, and a `wasm32-unknown-unknown` workspace check on Ubuntu with stable Rust. Clippy, tests, and the WebAssembly check use `--locked`. Require all three jobs in the repository's branch rules. A hosting game's workspace validates the engine as a dependency; it does not replace these checks of the engine's own tests, examples, and tools.
+
 See [Rust coding standards](rust-coding-standards.md) for conventions.
 
 ## Parity and Known Differences
