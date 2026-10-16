@@ -36,3 +36,6 @@ The renderer takes a borrowed device/pass and optional color attachment format, 
 Core regressions live in `joy-engine/test/terrain.test.mjs`; offline exporter tests use synthetic plane/spike/nonfinite inputs. Root validation remains `npm run validate` as required by AGENTS.md.
 
 The WebGPU path deliberately keeps indirect `firstInstance` zero and uses static per-draw uniforms for the patch index, so the optional `indirect-first-instance` feature is not required. `createGpuCanvasDevice` accepts optional supported WebGPU features; the demo requests timestamp queries. One-shot asynchronous descriptor/indirect readback in the development browser test compares CPU and compute results; no selection readback occurs in the runtime frame loop.
+
+## Rust Port
+The Rust engine runs the same example from `main.rs` in this folder (`cargo run --example terrain`, or `node scripts/rust/build-web.mjs --example terrain` for browsers) with the same asset, camera controls, HUD statistics, and CONFIG settings, plus a switch to draw the landscape through the scene renderer. See [the Rust terrain guide](../../docs/rust-terrain.md).

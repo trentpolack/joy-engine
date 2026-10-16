@@ -6,3 +6,9 @@ Read the maintained [FORM product direction](https://github.com/trentpolack/JoyG
 - Distinguish browser recovery, document saving, the last accepted build, and baked export. Never imply baked geometry retains the recipe or that browser recovery writes source to disk.
 - Runtime destruction, standalone SDK/DCC workflows, and optional visual composition remain goals to investigate, not existing capability claims or required architecture.
 - Respect the direction document's sequencing and approved scope. Trent cleared the rendering hold for a bounded UX pass on October 11, 2026; broader work still requires its own scope decision.
+
+## Rust FORM LAB
+- The Rust tool (`Cargo.toml`, `src/*.rs`, `site/src/*.rs`) depends only on `joy-engine`. Missing capabilities (image formats, file dialogs, widgets) belong in the engine behind an engine API, and shared egui widgets in the authoring kit (`joy_engine::development`), not in this package.
+- Keep UI modules (egui) separate from document and model modules so a later UI technology change touches only UI code.
+- The preview must stay on the engine renderer (`form_mesh_asset`, the PBR pass, image lighting, shadows, `EditorGrid`); do not add tool shaders or batches.
+- Run `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo clippy --target wasm32-unknown-unknown -p form-lab --lib -- -D warnings`, `cargo test -p form-lab`, and `node ../../../scripts/check-boundaries.mjs` before committing Rust changes.

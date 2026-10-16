@@ -31,3 +31,13 @@ The engine's separate solver-neutral `PhysicsBackend` and removal-mutation contr
 
 ## Browser checks
 The capture scenario uses actual pointer input to verify distinct left/right surface hits, cumulative damage and the six-hit breach threshold, integrity and support views, healthy-chunk collapse after a broad undercut, and the material-view toggle, impact markers and their visibility toggle, empty-space misses, orbit without damage, debris settling on the ground and persisting beyond the former expiry, reset, configuration, and resize. It also checks development startup diagnostics and production silence. `CAPTURE_BROWSER=webkit` uses Playwright WebKit; `CAPTURE_CHANNEL=chrome` or `msedge` selects an installed Chromium browser. `CAPTURE_BACKEND=fallback` disables WebGPU to exercise automatic WebGL 2 fallback, and `CAPTURE_DPR=2` exercises high-DPI picking. Native Safari requires a separate Safari run; Playwright WebKit is not Safari.
+
+## Rust Version
+`main.rs` and `src/*.rs` port the demo to the Rust engine: the same seeded structure through `physics::ChunkStructure` with the support rule, integrity and support views, rigid debris through the engine `PhysicsWorld` (Rapier instead of cannon-es), impact markers in the transparent pass, and an egui HUD laid out like the page. From the repository root:
+
+```sh
+cargo run --example form-destruction
+node scripts/rust/build-web.mjs --example form-destruction --release
+```
+
+The web build writes a static page under `target/web/form-destruction/`; serve it and append `?backend=webgl` or `?backend=webgpu`. Click to strike, drag to orbit, scroll to zoom, and press R or **RESET** to restore the structure. `cargo test` ports the Node tests and drives the demo headlessly with pointer and key input through damage, a breach, the views, a miss, a reset, an undercut, and an orbit (`test/rust/example_form_destruction.rs`). The Rust demo has no `window.formDestruction` API (its snapshot is a Rust method used by the tests), renders at the display's full pixel ratio rather than capping it at 2, and R resets even with modifier keys held. Debris settles like the TypeScript build, including chunks that wedge in the breach.

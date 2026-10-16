@@ -13,18 +13,20 @@ The engine package is self-contained: it owns its TypeScript base configuration,
 Run from this directory, or from the JoyGames root with `--workspace joy-engine`:
 
 ```bash
-npm run check     # strict type check, dependency-boundary and Rust crate-layer checks, script syntax gate
+npm run check     # strict type check, TypeScript and Rust dependency-layer checks, script syntax gate
 npm test          # engine unit suite in test/ (npm run test:engine from the JoyGames root)
 npm run docs:api  # regenerate docs/api from the public exports
 ```
 
 ## Rust Engine
-`crates/` holds the Rust implementation: the same layers as `src/` as Cargo crates (`joy-foundation`, `joy-simulation`, `joy-form`, `joy-render`, `joy-platform`) behind the `joy-engine` facade crate. Games and tools written against it run natively and in browsers (WebGPU with WebGL 2 fallback) from one codebase, and `joy-render` is the single renderer for games, FORM content, and tools. The TypeScript engine remains the shipping runtime and the behavioral reference while the port grows; see the [Rust engine guide](docs/rust.md) for status, parity, and gaps.
+The repository is also the `joy-engine` Rust crate (`Cargo.toml` here, `src/lib.rs` as its root), with Rust modules beside the TypeScript in the same `src/` folders and dependency layers. Games and tools written against it run natively and in browsers (WebGPU with WebGL 2 fallback) from one codebase, and its renderer is the single renderer for games, FORM content, and tools. Joy Editor (`editor/`), FORM LAB, and PARTICLE LAB (`editor/tools/`) have Rust versions in the same Cargo workspace, and the examples have Rust entry points beside their TypeScript. The TypeScript engine keeps running the published games and tools until they move over; see the [Rust engine guide](docs/rust.md) for status, parity, and gaps.
 
 ```bash
-cargo test --workspace                          # Rust unit, parity, and headless GPU tests
-cargo run -p joy-engine --example form-viewer   # FORM assets through the engine renderer
-npm run rust:web -- --package joy-engine --example form-viewer   # browser build
+cargo test                              # Rust unit, parity, and headless GPU tests
+cargo test --workspace                  # plus Joy Editor, FORM LAB, and PARTICLE LAB
+cargo run --example form-viewer         # FORM assets through the engine renderer
+cargo run -p joy-editor                 # the native authoring workspace
+npm run rust:web -- --example form-viewer   # browser build
 ```
 
 ## Package entry points

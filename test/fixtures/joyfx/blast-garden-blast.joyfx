@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "name": "BLAST GARDEN / Cultivation burst",
+  "maxParticles": 384,
+  "parameters": {
+    "power": { "value": 1, "min": 0.35, "max": 2.5 },
+    "red": { "value": 3.5, "min": 0, "max": 8 },
+    "green": { "value": 1.2, "min": 0, "max": 8 },
+    "blue": { "value": 0.1, "min": 0, "max": 8 }
+  },
+  "emitters": [
+    {
+      "id": "flash", "enabled": true, "root": true, "duration": 0, "rate": 0,
+      "bursts": [{ "time": 0, "count": 1 }], "lifetime": 0.1, "renderer": "soft",
+      "spawn": "size = 24 * power; z = 38; r = red * 1.8; g = green * 1.8; b = blue * 1.8;",
+      "update": "size = 24 * power * (1 + t * 1.4); alpha = (1 - t) ^ 2;"
+    },
+    {
+      "id": "bloom", "enabled": true, "root": true, "duration": 0.08, "rate": 0,
+      "bursts": [{ "time": 0, "count": 7 }, { "time": 0.05, "count": 4 }],
+      "lifetime": 0.62, "renderer": "billow",
+      "spawn": "let angle = rand(0, tau); let speed = rand(45, 120) * power; vx = cos(angle) * speed; vy = sin(angle) * speed; u0 = rand(8, 15) * power; size = u0 * 0.4; rotation = rand(0, tau); spin = rand(-1.5, 1.5); drag = 2.3; z = 34 + rand(0, 2); r = red; g = green; b = blue;",
+      "update": "size = u0 * (0.4 + 1.45 * (1 - exp(-age * 18))); alpha = clamp((1 - t) * 2.4, 0, 1); r = mix(red, 0.16, t); g = mix(green, 0.12, t); b = mix(blue, 0.08, t);"
+    },
+    {
+      "id": "shock", "enabled": true, "root": true, "duration": 0, "rate": 0,
+      "bursts": [{ "time": 0, "count": 1 }], "lifetime": 0.38, "renderer": "ring",
+      "spawn": "size = 5 * power; z = 39; r = red; g = green; b = blue;",
+      "update": "size = power * (5 + 90 * sqrt(t)); alpha = (1 - t) ^ 2;"
+    },
+    {
+      "id": "sparks", "enabled": true, "root": true, "duration": 0, "rate": 0,
+      "bursts": [{ "time": 0, "count": 22 }], "lifetime": 0.7, "renderer": "streak",
+      "spawn": "let angle = rand(0, tau); let speed = rand(180, 520) * sqrt(power); vx = cos(angle) * speed; vy = sin(angle) * speed; size = rand(0.8, 2.2) * sqrt(power); lifetime = rand(0.28, 0.72); drag = 1.8; z = 37; r = red * 1.25; g = green * 1.25; b = blue * 1.25;",
+      "update": "alpha = (1 - t) ^ 0.6;"
+    },
+    {
+      "id": "fragments", "enabled": true, "root": true, "duration": 0, "rate": 0,
+      "bursts": [{ "time": 0, "count": 4 }], "lifetime": 0.95, "renderer": "streak",
+      "spawn": "let angle = rand(0, tau); let speed = rand(240, 430) * sqrt(power); vx = cos(angle) * speed; vy = sin(angle) * speed; lifetime = rand(0.62, 1.0); size = rand(2.2, 4) * sqrt(power); u0 = rand(-2.4, 2.4); drag = 0.8; z = 36; r = red; g = green; b = blue;",
+      "update": "let speed = sqrt(vx * vx + vy * vy); let angle = atan2(vy, vx) + u0 * dt; vx = cos(angle) * speed; vy = sin(angle) * speed; alpha = clamp((1 - t) * 3, 0, 1);",
+      "trail": { "emitter": "smoke", "interval": 0.06, "count": 1 },
+      "death": { "emitter": "secondary", "count": 1 }
+    },
+    {
+      "id": "smoke", "enabled": true, "root": false, "duration": 0, "rate": 0,
+      "bursts": [], "lifetime": 1.15, "renderer": "billow",
+      "spawn": "vx = parentVx * 0.04 + rand(-8, 8); vy = parentVy * 0.04 + rand(-8, 8); u0 = rand(6, 11) * sqrt(power); size = u0; rotation = rand(0, tau); spin = rand(-1, 1); drag = 1.8; z = 26; r = red * 0.32; g = green * 0.22; b = blue * 0.18; u1 = rand(0, 10);",
+      "update": "size = u0 * (1 + t * 1.7); ax = noise(time * 1.6 + u1) * 12; ay = noise(time * 1.2 + u1 + 30) * 12; alpha = 0.32 * clamp((1 - t) * 3, 0, 1); let cool = clamp(age * 6, 0, 1); r = mix(red * 0.32, 0.08, cool); g = mix(green * 0.22, 0.09, cool); b = mix(blue * 0.18, 0.07, cool);"
+    },
+    {
+      "id": "secondary", "enabled": true, "root": false, "duration": 0, "rate": 0,
+      "bursts": [], "lifetime": 0.36, "renderer": "billow",
+      "spawn": "vx = parentVx * 0.05; vy = parentVy * 0.05; size = 3; z = 37; r = red; g = green; b = blue;",
+      "update": "size = sqrt(power) * (3 + 16 * (1 - exp(-age * 30))); alpha = clamp((1 - t) * 3, 0, 1); r = mix(red * 1.3, 0.25, t); g = mix(green * 1.3, 0.1, t); b = mix(blue * 1.3, 0.05, t);"
+    }
+  ]
+}

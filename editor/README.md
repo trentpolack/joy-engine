@@ -28,6 +28,23 @@ The workspace, level editor, shared browser controls, and FORM/PARTICLE LAB impl
 
 Shared editor chrome and desktop-launch behavior live at this level. Tool-specific source, assets, tests, and build configuration live in [`tools/`](tools/).
 
+## Rust editor
+The `joy-editor` Cargo package (`editor/Cargo.toml`) is Joy Editor on the Rust engine. It replaces both the browser workspace and the Electron host with one native application and a browser build, and draws every preview with the engine renderer:
+
+```bash
+cargo run -p joy-editor -- --workspace=<hosting workspace> [--project=<id>]
+cargo test -p joy-editor
+node scripts/rust/build-web.mjs --package joy-editor --out <folder>   # browser build
+```
+
+The hosting workspace comes from `--workspace`, `JOY_EDITOR_WORKSPACE`, or the nearest `joy.joyconfig` above the current folder; its projects are the `projects/<id>/` folders with a `project.joyproject` manifest, and **Open Folder** adds any other folder with a manifest for the session. Project files are read and written in process (`server/project_files.rs`) with the TypeScript service's policy: manifest-supported assets beneath `assets/` only, no symbolic links or traversal, revision-checked saves, and replaced files kept in `.joy-editor-recovery/`. The session (project, open paths, active tab, and Content Browser width) persists through the engine's `runtime::Storage`, as do the level editor's panel widths, and closing the window with unsaved work asks first. **Import** uses the native file picker; **Open Folder** takes a path.
+
+Authoring tools open as tabs through `joy_engine::development::AuthoringTool`: the editor owns the file, the tool draws inside the tab area, and inactive tabs receive no frames. FORM LAB (`tools/form-lab`) opens `.form` and `.formlab`, and PARTICLE LAB (`tools/particle-lab`) opens `.joyfx`; both are built without their own browser entry points (`default-features = false`), and each activation starts from the renderer's default post-processing and scene effects. Formats without a hosted tool, and structured assets their editor rejects, open as editable source. The level editor keeps the TypeScript workflow (outliner, schema-driven inspector, Advanced Source, reusable objects); **MOVE** adds a gizmo whose axis and plane handles drag with grid snapping, besides ground clicks. The chrome is built from the authoring kit (`PanelLayout`, `viewport_input`, `ScriptEditor`, `NumberField`, `FileDialogs`, `SceneEffectsControls`, and the authoring theme) shared with the labs.
+
+A static page has no project file service, so the browser build opens read-only bundled examples (`editor/assets/examples/`): every editor works, saves explain that project files need the native editor, and **Download** hands the current document to the browser. Game previews (Play and its destinations) are not part of the Rust editor; run a game from its own project.
+
+Modules sit beside the TypeScript they replace: `site/src/workspace/` (`main.rs` is the workspace model, `ui.rs` its egui presentation, `tool_bridge.rs` tool hosting), `site/src/level/` (`main.rs`, `property_editor.rs`, and `viewport.rs` hold the document logic; `ui.rs` draws them), `site/src/interaction/`, `server/`, and `desktop/`. Integration tests in `test/rust/` drive the real editor through `joy_engine::HeadlessShell` with synthetic input.
+
 ## Shared Script Editing
 FORM LAB and PARTICLE LAB use the shared CodeMirror owner exported by `@joy-games/joy-editor`. Editable scripting surfaces opt into an editor-neutral Joy Engine language catalog to receive the same completion and hover behavior without copying built-in names into each tool. Language definitions remain in Joy Engine's non-rendering FORM and particle modules; CodeMirror adaptation, tooltip presentation, and editor lifecycle remain in Joy Editor.
 

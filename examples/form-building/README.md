@@ -34,3 +34,14 @@ The example owns its RAF, listeners, renderer, and scene. `dispose()` stops the 
 
 ## Findings and evidence
 See [the findings report](FINDINGS.md) for measured timings, the focused matrix, minimal diagnostic reproductions, browser evidence, and the existing repository-validation blocker. The example remains an independent engine workspace and is published in the JoyGames platform’s Joy Engine Examples section at `/examples/form-building/`.
+
+## Rust Version
+`main.rs` and `src/*.rs` port the example to the Rust engine. The same `assets/building.form` parses once through `joy_engine::form::CompiledScript`, presets and parameter controls evaluate complete snapshots, and `form_mesh_asset` turns each result into one PBR asset, so walls, roofs, trim, and glass draw with their authored metallic, roughness, and emissive factors instead of the TypeScript material-group tints. A failed evaluation keeps the previous building. From the repository root:
+
+```sh
+cargo run --example form-building
+cargo run --example form-building -- --mode=baked
+node scripts/rust/build-web.mjs --example form-building --release
+```
+
+The web build writes a static page under `target/web/form-building/`; serve it and append `?backend=webgl`, `?backend=webgpu`, or `?mode=baked`. **Save editable recipe** and **Bake mesh JSON** download files in browsers and write `building.formlab` and `building.mesh.json` into the working directory natively. `cargo test` covers the presets, failure isolation, baked round trips, the FORM LAB documents through `FormAssetLibrary`, and preset and baked-mode renders (`test/rust/example_form_building.rs`). The Rust example has no `window.buildingExample` API, its timings report CPU frame encoding, and its parameter fields apply while dragging.

@@ -16,7 +16,7 @@ npm run check --workspaces --if-present
 npm test --workspaces --if-present
 ```
 
-`npm run check` and `npm test` cover the engine package; the `--workspaces` forms cover Joy Editor, FORM LAB, PARTICLE LAB and the examples. For Rust changes in `crates/`, also run `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `cargo build --workspace --target wasm32-unknown-unknown`; see [the Rust engine guide](docs/rust.md). Run `npm run docs:api` whenever public exports, types or their documentation change, and commit the regenerated `docs/api/`.
+`npm run check` and `npm test` cover the engine package; the `--workspaces` forms cover Joy Editor, FORM LAB, PARTICLE LAB and the examples. For Rust changes, also run `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, and `cargo build --target wasm32-unknown-unknown --lib --examples`; see [the Rust engine guide](docs/rust.md). Run `npm run docs:api` whenever public exports, types or their documentation change, and commit the regenerated `docs/api/`.
 
 Before completing a change:
 1. Run the narrowest relevant check while iterating.
@@ -59,7 +59,7 @@ Do not add tests solely for coverage counts, trivial helpers, fixed tuning value
 - `src/`, `shaders/`, `schemas/`, `assets/`: the `joy-engine` package (public entry points are listed in [README.md](README.md)).
 - `test/`, `scripts/`, `docs/`: the engine's unit suite, tooling, guide and generated API reference.
 - `editor/`: Joy Editor (`@joy-games/joy-editor`), a separate package with its own dependencies; FORM LAB and PARTICLE LAB live in `editor/tools/`.
-- `crates/`: the Rust engine (one crate per layer plus the `joy-engine` facade), a Cargo workspace rooted at `Cargo.toml`. `joy-render` is the only renderer; tools and FORM content draw through it rather than owning renderers.
+- `Cargo.toml`, `src/**/*.rs`, `test/rust/`: the `joy-engine` Rust crate, with modules in the same `src/` folders and layers as the TypeScript they replace. Its `rendering` module is the only renderer; tools and FORM content draw through it rather than owning renderers.
 - `examples/*`: engine feature demonstrations. A hosting workspace can publish examples that opt in with `gameSite.category: "example"`; examples remain independent of games and the host.
 
 The engine package never imports the editor, tools or examples. The editor may depend on the engine (`file:..`). Tests, fixtures and tooling live inside the owning package. Nothing in this repository may depend on a particular game; game-specific fixtures belong in the consuming repository.
@@ -122,7 +122,7 @@ Move code into `src/` when it is stable behavior that more than one game, tool, 
 - We use the oxford comma in this house, robot.
 - Capitalize major words in Markdown headings.
 - Before implementing or refactoring code, read, and follow [**Coding Standards**](docs/coding-standards.md), including its canonical style reference. Before completion, review all changed code against those requirements.
-- For Rust and WGSL in `crates/`, follow [**Rust Coding Standards**](docs/rust-coding-standards.md); `rustfmt` is authoritative for Rust layout.
+- For Rust and its WGSL, follow [**Rust Coding Standards**](docs/rust-coding-standards.md); `rustfmt` is authoritative for Rust layout.
 
 ## Commit Message Standards
 - Don't use the "Conventional Commits" commit style; i.e., don't use the `feat(<branch>): <message>`, `chore: <message>`, etc..

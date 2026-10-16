@@ -1,0 +1,48 @@
+{
+  "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+  "schemaVersion": 1,
+  "name": "GOD GAME",
+  "preview": {
+    "root": "dist",
+    "entry": "index.html"
+  },
+  "capabilities": [
+    {
+      "id": "procedural-meshes",
+      "label": "Procedural meshes",
+      "extensions": [
+        ".form"
+      ],
+      "features": {
+        "vertexColors": true
+      },
+      "assetRoot": "assets/form",
+      "renderer": "pbr-triangles"
+    },
+    {
+      "id": "particle-effects",
+      "label": "Particle effects",
+      "extensions": [
+        ".joyfx"
+      ],
+      "features": {
+        "untexturedParticles": true
+      },
+      "assetRoot": "assets/joyfx",
+      "renderer": "particle-billboards"
+    },
+    {
+      "id": "authored-levels",
+      "label": "Level settings",
+      "extensions": [
+        ".joylevel"
+      ],
+      "assetRoot": "assets",
+      "renderer": "project-scene",
+      "features": {
+        "postProcessing": true,
+        "proceduralWorld": true
+      }
+    }
+  ]
+}

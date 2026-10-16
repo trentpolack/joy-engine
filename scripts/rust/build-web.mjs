@@ -6,11 +6,11 @@
 // wasm-bindgen CLI pinned by the workspace lockfile, and write a static page that hosts the canvas. The output folder
 // is self-contained and can be served by any static host (the site, GitHub Pages, `npx serve`).
 //
-//   node scripts/rust/build-web.mjs --package joy-engine --example form-viewer [--release]
+//   node scripts/rust/build-web.mjs --example form-viewer [--release]
 //   node joy-engine/scripts/rust/build-web.mjs --manifest-path Cargo.toml --package vehicle-playground --release
 //
 // Options:
-//   --package <crate>        Crate to build (required).
+//   --package <crate>        Crate to build (default: joy-engine, the engine crate).
 //   --example <name>         Build an example; otherwise --bin <name>, otherwise the crate's cdylib library.
 //   --bin <name>             Build a binary target.
 //   --manifest-path <file>   Workspace Cargo.toml (default: the engine workspace).
@@ -34,7 +34,7 @@ const WASM_TARGET = 'wasm32-unknown-unknown';
 
 const {values: options} = parseArgs({
   options: {
-    package: {type: 'string'},
+    package: {type: 'string', default: 'joy-engine'},
     example: {type: 'string'},
     bin: {type: 'string'},
     'manifest-path': {type: 'string', default: resolve(engineRoot, 'Cargo.toml')},
@@ -45,9 +45,6 @@ const {values: options} = parseArgs({
   }
 });
 
-if(!options.package) {
-  fail('Usage: build-web.mjs --package <crate> [--example <name> | --bin <name>] [--release] [--out <dir>]');
-}
 if(options.example && options.bin) {
   fail('Choose either --example or --bin, not both.');
 }

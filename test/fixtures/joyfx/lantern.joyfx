@@ -1,0 +1,187 @@
+{
+  "version": 1,
+  "name": "Engine test lantern",
+  "maxParticles": 96,
+  "parameters": {
+    "power": {
+      "value": 1.5,
+      "min": 0,
+      "max": 4
+    },
+    "wind": {
+      "type": "vector3",
+      "value": [
+        0.4,
+        0,
+        -0.2
+      ],
+      "min": [
+        -2,
+        -2,
+        -2
+      ],
+      "max": [
+        2,
+        2,
+        2
+      ]
+    },
+    "tint": {
+      "type": "color",
+      "value": [
+        1,
+        0.6,
+        0.25,
+        1
+      ],
+      "min": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "max": [
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "emitters": [
+    {
+      "id": "flame",
+      "enabled": true,
+      "root": true,
+      "duration": 2,
+      "rate": 18,
+      "bursts": [
+        {
+          "time": 0.25,
+          "count": 3
+        },
+        {
+          "time": 0,
+          "count": 4
+        }
+      ],
+      "lifetime": 0.8,
+      "renderer": "flipbook",
+      "texture": {
+        "source": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAJElEQVR4nGP4//8/Aw6MDrCqw6V51AASDaAIDBMDBj4WRroBAMgTbL72rES3AAAAAElFTkSuQmCC",
+        "columns": 2,
+        "rows": 2,
+        "fps": 6
+      },
+      "light": {
+        "intensity": 3,
+        "range": 6
+      },
+      "spawn": "let spread = rand(-0.3, 0.3);\nposition = origin + vector(spread, 0, rand(-0.2, 0.2));\nvelocity = vector(rand(-0.2, 0.2), rand(0.8, 1.4), 0) + wind;\nsize = rand(0.2, 0.35) * power;\ncolor = rgba(tint.r * 4, tint.g * 4, tint.b * 4, 1);\nrotation = rand(0, tau);\nspin = rand(-2, 2);\nu0 = size;",
+      "update": "size = u0 * (1 - t * 0.5);\nacceleration = wind * 0.5 + vector(noise(time * 3 + index) * 0.4, 0.3, 0);\ncolor.a = smoothstep(0, 0.15, t) * (1 - t);\nlightIntensity = 3 * (1 - t);\nlightRange = 4 + 2 * sin(age * 9);\nif (t > 0.6 && u1 == 0) { u1 = 1; color.g *= 0.5; } else { u2 += dt; }",
+      "trail": {
+        "emitter": "ember",
+        "interval": 0.1,
+        "count": 1
+      },
+      "death": {
+        "emitter": "smoke",
+        "count": 2
+      }
+    },
+    {
+      "id": "ember",
+      "enabled": true,
+      "root": false,
+      "duration": 0,
+      "rate": 0,
+      "bursts": [],
+      "lifetime": 0.5,
+      "renderer": "textured",
+      "texture": {
+        "source": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAJElEQVR4nGP4//8/Aw6MDrCqw6V51AASDaAIDBMDBj4WRroBAMgTbL72rES3AAAAAElFTkSuQmCC"
+      },
+      "spawn": "velocity = parentVelocity * 0.3 + vector(rand(-0.5, 0.5), rand(0, 0.5), 0);\nsize = 0.06;\ncolor = rgba(3, 1.2, 0.3, 1);",
+      "update": "color.a = 1 - t;\ndrag = 2;"
+    },
+    {
+      "id": "smoke",
+      "enabled": true,
+      "root": false,
+      "duration": 0,
+      "rate": 0,
+      "bursts": [],
+      "lifetime": 1.2,
+      "renderer": "billow",
+      "spawn": "velocity = vector(rand(-0.3, 0.3), rand(0.4, 0.8), 0);\nsize = rand(0.2, 0.4);\ncolor = rgba(0.3, 0.3, 0.32, 0.5);\nrotation = rand(0, tau);",
+      "update": "size += dt * 0.4;\ncolor.a = 0.5 * (1 - t) ^ 2;"
+    },
+    {
+      "id": "halo",
+      "enabled": true,
+      "root": true,
+      "duration": 0,
+      "rate": 0,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 1
+        }
+      ],
+      "lifetime": 3,
+      "renderer": "ring",
+      "light": {
+        "intensity": 1,
+        "range": 3
+      },
+      "spawn": "size = 0.6; color = rgba(tint.r, tint.g, tint.b, 0.6); y = 0.5;",
+      "update": "size = 0.6 + 0.1 * cos(time * 4); alpha = 0.6 * (1 - t);"
+    },
+    {
+      "id": "dust",
+      "enabled": true,
+      "root": true,
+      "duration": 1,
+      "rate": 10,
+      "bursts": [],
+      "lifetime": 0.6,
+      "renderer": "circle",
+      "spawn": "x = origin.x + rand(-1, 1); velocity = vector(0, rand(0.1, 0.3), 0); size = 0.03; color = rgba(1, 0.9, 0.7, 0.8);",
+      "update": "alpha = 0.8 * (1 - t);"
+    },
+    {
+      "id": "spark",
+      "enabled": true,
+      "root": true,
+      "duration": 0.2,
+      "rate": 0,
+      "bursts": [
+        {
+          "time": 0.1,
+          "count": 5
+        }
+      ],
+      "lifetime": 0.4,
+      "renderer": "streak",
+      "spawn": "let angle = rand(0, tau); velocity = vector(cos(angle), 1, sin(angle)) * rand(2, 4); size = 0.02; color = rgba(4, 2, 0.5, 1);",
+      "update": "velocity.y -= 9.8 * dt; alpha = 1 - t;"
+    },
+    {
+      "id": "disabled",
+      "enabled": false,
+      "root": true,
+      "duration": 0,
+      "rate": 0,
+      "bursts": [
+        {
+          "time": 0,
+          "count": 5
+        }
+      ],
+      "lifetime": 1,
+      "renderer": "square",
+      "spawn": "",
+      "update": ""
+    }
+  ]
+}

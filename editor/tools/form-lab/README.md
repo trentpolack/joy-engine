@@ -7,6 +7,19 @@ New scripts use object-first geometry: `box(width,height,depth)`, `sphere(radius
 
 See the [project documentation](https://github.com/trentpolack/JoyGames/blob/develop/docs/projects/form-lab/README.md) for the application overview, controls, architecture, development workflow, and validation guidance.
 
+### Rust FORM LAB
+The `form-lab` Cargo package in this folder is FORM LAB on the Rust Joy Engine: the same documents, examples, inspectors, and exports, running natively (Windows, macOS, Linux) and in browsers (WebGPU or WebGL 2) without Electron, standalone or as a Joy Editor tab (`form_lab::FormLab` implements `AuthoringTool`). The TypeScript tool stays beside it.
+
+```bash
+cargo run -p form-lab                      # native window
+cargo test -p form-lab                     # ported JavaScript tests plus headless interface tests
+node ../../../scripts/rust/build-web.mjs --package form-lab --canvas form-lab --title "FORM LAB" --release
+```
+
+The preview has no renderer of its own: FORM geometry becomes a mesh through the engine's `form_mesh_asset` (the path games and Joy Editor use), shaded by the PBR pass with document material maps (PNG, JPEG, or WebP), lit by the procedural studio environment through `Renderer::prepare_environment_map`, shadowed by the direct light (masked materials cast alpha-tested shadows), with the engine's `EditorGrid`; the TypeScript `shaders/preview.*` and triangle batches are not used. Shadows render on WebGL 2 as well as WebGPU. The engine's PBR pass turns interpolated normals toward the camera, so smooth-shaded silhouettes (the Vessel workshop's edges) keep the surface color where the TypeScript preview, which flips normals only on back faces, shows a pale rim.
+
+Rust modules sit beside the TypeScript they replace (`document.rs` beside `document.ts`; `site/src/main.rs` and `site/src/form_assets.rs` beside their `.ts`). Document and model modules (`document`, `form_library`, `export`, `export_glb`, `materialx`, `compiler`, `parameter_values`, `session`, `output_inspection`, `rendering/*`) carry no UI; UI modules draw them with the engine's authoring kit (egui): the workbench, inspectors, dialogs, and script editor, with the kit's `viewport_input` gestures and the engine's `RegionCamera` framing the preview between panels. Native builds read the Examples library from `assets/examples` and `assets/form` on disk; browser builds bundle it through `build.rs`. Browser recovery uses `runtime::Storage` under the TypeScript key `joy-form-lab-v1`, so both tools recover the same study in one browser.
+
 
 ### Workspace navigation
 The Examples picker recursively discovers `.form` and `.formlab` assets from `joy-engine/assets/examples` and `joy-engine/assets/form`, grouped by their folders and shown by filename. Full examples are authored files rather than embedded TypeScript scripts; adding or removing a file updates the development library, and production builds bundle the discovered text for offline use. Opened assets are independent working copies: editing, browser recovery, and Save do not automatically write back to the bundled file. `.formlab` assets retain their overrides, materials, imported meshes, and variants. Appendable Recipes remain available separately beside Script Reference.

@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../schemas/joyproject.schema.json",
+  "schemaVersion": 1,
+  "name": "JOY EDITOR EXAMPLES",
+  "preview": {
+    "root": "dist",
+    "entry": "index.html"
+  },
+  "capabilities": [
+    {
+      "id": "authored-levels",
+      "label": "Authored levels",
+      "extensions": [".joylevel", ".joyobject"],
+      "features": {"primitiveMeshes": true, "formMeshes": true, "particleEffects": true},
+      "assetRoot": "assets",
+      "renderer": "asset-scene"
+    }
+  ]
+}

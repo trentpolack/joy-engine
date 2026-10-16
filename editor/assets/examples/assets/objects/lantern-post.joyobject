@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "name": "Lantern post",
+  "entity": {
+    "id": "object",
+    "name": "Lantern post",
+    "type": "prop",
+    "tags": [
+      "light"
+    ],
+    "transform": {
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    "components": {
+      "render": {
+        "shape": "box",
+        "size": [
+          0.2,
+          2.2,
+          0.2
+        ],
+        "color": [
+          0.2,
+          0.22,
+          0.25
+        ]
+      },
+      "effect": {
+        "asset": "assets/effects/lantern.joyfx",
+        "enabled": true,
+        "loop": true,
+        "seed": 7777
+      }
+    }
+  }
+}

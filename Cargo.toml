@@ -1,50 +1,57 @@
 # Copyright (c) 2026 Trent Polack. All Rights Reserved.
 # Licensed under the MIT License.
 
-# Joy Engine's Rust implementation. Each crate owns one dependency layer from
-# `architecture/layers.json`, so the crate graph enforces the same one-way
-# model the TypeScript boundary checker records:
+# Joy Engine's Rust implementation: one crate whose modules live beside the
+# TypeScript engine in `src/`, in the same folders and dependency layers
+# (`architecture/layers.json`, enforced by `npm run check`).
 #
-#   joy-foundation  shared data and algorithms (math, transforms, random, display profiles)
-#   joy-simulation  environment, physics, entities, controllers, and levels; headless
-#   joy-form        the FORM procedural language; renderer-free geometry
-#   joy-render      the definitive wgpu renderer for games, tools, and examples
-#   joy-platform    windows, browser canvases, the frame-phase runner, input, and dev UI
-#   joy-engine      the facade games depend on; re-exports the layers above
+#   cargo test                          # unit, parity, and headless GPU tests
+#   cargo run --example form-viewer     # FORM assets through the engine renderer
+#   cargo run --example terrain         # resident continuous-LOD terrain (Dragon Pit)
+#   npm run rust:web -- --example form-viewer
 #
-#   cargo test --workspace            # every Rust test
-#   cargo run -p joy-engine --example form-viewer
-#
-# Versions are pinned once here and match joy-apps, so editor tools and games
-# build against the same wgpu and egui.
+# Versions match joy-apps, so editor tools and games build against the same
+# wgpu and egui.
 
-[workspace]
-resolver = "3"
-members = [
-    "crates/joy-foundation",
-    "crates/joy-simulation",
-    "crates/joy-form",
-    "crates/joy-render",
-    "crates/joy-platform",
-    "crates/joy-engine",
-]
-
-[workspace.package]
+[package]
+name = "joy-engine"
+description = "Joy Engine: deterministic simulation, FORM procedural content, and one wgpu renderer for games and tools on native and browser targets."
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.90"
 license = "MIT"
 authors = ["Trent Polack"]
 repository = "https://github.com/trentpolack/joy-engine"
+publish = false
+# Examples and tests share folders with the TypeScript engine, so targets are listed explicitly.
+autoexamples = false
+autotests = false
 
-[workspace.dependencies]
-# Engine layers.
-joy-foundation = { path = "crates/joy-foundation" }
-joy-simulation = { path = "crates/joy-simulation" }
-joy-form = { path = "crates/joy-form" }
-joy-render = { path = "crates/joy-render" }
-joy-platform = { path = "crates/joy-platform" }
+[[example]]
+name = "form-viewer"
+path = "examples/form-viewer/main.rs"
 
+[[example]]
+name = "terrain"
+path = "examples/terrain/main.rs"
+
+[[example]]
+name = "scene-effects"
+path = "examples/scene-effects/main.rs"
+
+[[example]]
+name = "form-building"
+path = "examples/form-building/main.rs"
+
+[[example]]
+name = "form-destruction"
+path = "examples/form-destruction/main.rs"
+
+[[test]]
+name = "engine"
+path = "test/rust/main.rs"
+
+[dependencies]
 # Math and data.
 glam = { version = "0.34.1", features = ["bytemuck", "serde"] }
 bytemuck = { version = "1.25.2", features = ["derive"] }
@@ -54,36 +61,67 @@ serde_json = { version = "1.0.154", features = ["preserve_order", "float_roundtr
 indexmap = { version = "2.14.2", features = ["serde"] }
 thiserror = "2.0.21"
 log = "0.4.34"
+web-time = "1.1.0"
+# WAV decoding for the audio bank.
+hound = "3.5.1"
+# Portable IEEE math (FreeBSD msun ports) so particle scripts compute identical transcendental results natively and
+# in WebAssembly, and match the TypeScript engine's V8 results for exp, tan, and atan2 bit for bit.
+libm = "0.2.16"
+# PNG decoding for embedded particle textures on every target (browsers included); already used by `image` natively.
+png = "0.18.1"
+# JPEG and WebP decoding for embedded FORM material maps (PNG, JPEG, or WebP) on every target, browsers included.
+zune-jpeg = "0.5.15"
+image-webp = "0.2.4"
 
-# Physics. Enhanced determinism keeps native and WebAssembly simulations identical.
+# Physics (simulation layer). Enhanced determinism keeps native and WebAssembly simulations identical.
 rapier3d = { version = "0.36.1", features = ["enhanced-determinism"] }
 
-# Rendering, windows, and development UI. These match joy-apps' pins.
+# Rendering, windows, and UI (rendering and platform layers). These match joy-apps' pins.
 wgpu = { version = "30.0.1", default-features = false, features = ["std", "wgsl", "webgpu", "webgl", "vulkan", "metal", "dx12", "gles"] }
 winit = "0.30.13"
 egui = "0.36.2"
 egui-wgpu = { version = "0.36.2", default-features = false }
-egui-winit = { version = "0.36.2", default-features = false }
-pollster = "0.4.0"
-image = { version = "0.25.10", default-features = false, features = ["png"] }
-env_logger = "0.11.11"
-web-time = "1.1.0"
 
-# Browser targets.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# egui-winit's pinned release does not build for WebAssembly; browsers use `browser::egui_input` instead.
+egui-winit = { version = "0.36.2", default-features = false, features = ["clipboard"] }
+pollster = "0.4.0"
+env_logger = "0.11.11"
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+# Gamepads and audio output (platform layer). Linux builds need the udev and ALSA development packages.
+gilrs = "0.11.2"
+cpal = "0.18.2"
+# Native file dialogs for authoring tools (platform layer, behind development::FileDialogs); the version joy-apps uses.
+# The desktop portal backend loads libdbus at run time (falling back to zenity), so Linux builds need no system
+# packages; Wayland parent-window support is left out.
+rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2.106"
 wasm-bindgen-futures = "0.4.56"
-web-sys = "0.3.83"
 js-sys = "0.3.83"
+web-sys = { version = "0.3.83", features = [
+  "AudioBuffer", "AudioBufferSourceNode", "AudioContext", "AudioContextOptions", "AudioContextState", "AudioDestinationNode",
+  "AudioNode", "AudioParam", "AudioScheduledSourceNode", "BaseAudioContext", "Blob", "BlobPropertyBag", "Clipboard", "ClipboardEvent", "CssStyleDeclaration",
+  "DataTransfer", "Document", "Element", "EventTarget", "File", "FileList", "GainNode", "Gamepad", "GamepadButton", "GamepadMappingType", "HtmlCanvasElement", "HtmlElement", "HtmlInputElement", "Location",
+  "Navigator", "Storage", "Url", "UrlSearchParams", "Window",
+] }
 console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
 
-[workspace.lints.rust]
+[lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
 
-[workspace.lints.clippy]
+[lints.clippy]
 # Explicit parenthesized arithmetic is part of the house style; keep clippy from fighting it.
 precedence = "allow"
+
+# This crate is its own workspace root, including when it is checked out inside a hosting repository. Tools are member
+# packages beside their TypeScript; `cargo test` at the root still tests only the engine.
+[workspace]
+members = ["editor", "editor/tools/form-lab", "editor/tools/particle-lab"]
+default-members = ["."]
 
 [profile.dev]
 # Line tables keep backtraces useful without multi-gigabyte debug info.

@@ -18,6 +18,9 @@ npm run capture:example:form-destruction -- --built
 ```
 From the standalone engine repository, use the workspace command, for example `npm run dev --workspace @joy-engine/example-form-destruction`.
 
+## Rust Versions
+Scene Effects, FORM Building, and FORM Destruction also have Rust versions on the Rust engine: a `main.rs` composition root at the example root and Rust modules beside the TypeScript modules in `src/`, registered as `[[example]]` targets in `Cargo.toml`. Run one with `cargo run --example scene-effects` or build it for browsers with `node scripts/rust/build-web.mjs --example scene-effects`; each README's Rust Version section lists differences. Their headless tests in `test/rust/` include the same module trees.
+
 ## Hosting and adding examples
 Add examples under `examples/<feature>/` with a private npm package, a README, focused checks, explicit cleanup, and a browser capture command. To publish one, add `gameSite` metadata with `category: "example"`, a title, description, status, start date, and optional preview filename. JoyGames discovers that metadata for both development and static export at `/examples/<feature>/`. Published examples join the host's automatic builds and release captures; examples without site metadata remain local.
 

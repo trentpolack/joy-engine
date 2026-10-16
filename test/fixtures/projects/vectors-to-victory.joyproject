@@ -1,0 +1,52 @@
+{
+  "$schema": "../../joy-engine/schemas/joyproject.schema.json",
+  "schemaVersion": 1,
+  "name": "VECTORS TO VICTORY",
+  "preview": {
+    "root": "dist",
+    "entry": "index.html"
+  },
+  "capabilities": [
+    {
+      "id": "procedural-meshes",
+      "label": "Unit and battlefield prop FORM scripts",
+      "extensions": [
+        ".form"
+      ],
+      "assetRoot": "assets/form",
+      "renderer": "lit-triangles",
+      "features": {
+        "vertexColors": true,
+        "materials": false,
+        "materialTextures": false
+      }
+    },
+    {
+      "id": "particle-effects",
+      "label": "Combat and ceremony effects",
+      "extensions": [
+        ".joyfx"
+      ],
+      "assetRoot": "assets/joyfx",
+      "renderer": "particle-billboards",
+      "features": {
+        "untexturedParticles": true,
+        "texturedParticles": false,
+        "materialTint": true
+      }
+    },
+    {
+      "id": "authored-levels",
+      "label": "Display settings",
+      "extensions": [
+        ".joylevel"
+      ],
+      "assetRoot": "assets",
+      "renderer": "project-scene",
+      "features": {
+        "postProcessing": true,
+        "proceduralWorld": true
+      }
+    }
+  ]
+}

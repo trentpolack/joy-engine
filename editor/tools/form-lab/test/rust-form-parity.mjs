@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-// Differential check of the Rust `joy-form` evaluator against the TypeScript FORM runtime.
+// Differential check of the Rust FORM evaluator (`joy_engine::form`) against the TypeScript FORM runtime.
 //
-//   cargo build --release -p joy-form --bin joy-form-evaluate     (from the engine root)
+//   cargo build --release --bin joy-form-evaluate     (from the engine root)
 //   npm run test:rust-parity -- [--binary path] [--output directory] [--reference-only]
 //
 // Every corpus case is evaluated twice by TypeScript and twice by the native evaluator over its
@@ -24,7 +24,7 @@ const TOOL_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const ENGINE_ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 const DEFAULT_BINARY = resolve(ENGINE_ROOT, 'target/release/joy-form-evaluate');
 const DEFAULT_OUTPUT = resolve(TOOL_ROOT, 'artifacts/rust-form-parity');
-const BUILD_COMMAND = 'cargo build --release -p joy-form --bin joy-form-evaluate';
+const BUILD_COMMAND = 'cargo build --release --bin joy-form-evaluate';
 const MAX_NATIVE_OUTPUT_BYTES = 128*1024*1024;
 const NATIVE_TIMEOUT_MILLISECONDS = 30000;
 const DIAGNOSTIC_PREVIEW_CHARACTERS = 1500;
@@ -86,7 +86,7 @@ async function main() {
     native_binary_unchanged_during_run: nativeAvailable ? nativeBinaryUnchanged : null,
     counts: { total: rows.length, passed: rows.length - failures.length, failed: failures.length, groups: groupCounts(corpus) },
     reference_ownership: referenceOwnership,
-    ownership_limit: 'CLI JSON transport cannot prove Rust buffer ownership; the joy-form crate tests own evaluation-isolation assertions.',
+    ownership_limit: 'CLI JSON transport cannot prove Rust buffer ownership; the Rust FORM tests own evaluation-isolation assertions.',
     cases: rows
   };
   const filename = settings.referenceOnly ? 'form-reference-results.json' : 'form-diff-results.json';

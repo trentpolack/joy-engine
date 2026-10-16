@@ -26,3 +26,13 @@ The browser script starts an isolated random-port Vite server and a temporary Pl
 Every available backend captures baseline, every individual effect, bloom, combined low/medium/high, motion, camera cut, replacement, step/reset, resize, repeated toggling and effects disabled again. The script checks shader/page errors, SSAO/GTAO exclusivity, nonempty timing samples and production log silence. It retains screenshots, an HTML gallery and `report.json` beneath ignored `artifacts/captures/`. The JSON includes hardware/browser/backend, capabilities, logical/backing resolution, all settings, camera pose and two separate timing distributions. Appearance must be inspected from the screenshots; these measurements are not a GPU benchmark.
 
 CPU render submission is `performance.now()` around `SceneRenderer.render`, including CPU frame preparation and command submission. RAF cadence is the difference between browser animation-frame timestamps. GPU execution time is explicitly unavailable. Frozen simulation time does not freeze cadence measurement; neither measure is relabeled as GPU time. Adaptive exposure still receives deterministic delta seconds while the scene clock is frozen, allowing repeatable convergence after a fixed frame count.
+
+## Rust Version
+`main.rs` and `src/*.rs` port the lab to the Rust engine: the same room, lights, camera, tuning, and temporal tests, drawn by the engine renderer with egui controls. Effect toggles, presets (All off, Combined), quality, and HDR bloom come from the engine's `SceneEffectsControls` with this lab's per-quality tuning; the effect notes appear under EFFECT GUIDE. Every room light casts point-light shadows, on WebGL 2 as well. From the repository root:
+
+```sh
+cargo run --example scene-effects
+node scripts/rust/build-web.mjs --example scene-effects --release
+```
+
+The web build writes a static page under `target/web/scene-effects/`; serve that folder and append `?backend=webgl` or `?backend=webgpu` to choose a backend. Scene effects need WebGPU (or native Vulkan, Metal, or DirectX 12); on WebGL 2 the controls report them unavailable and HDR bloom remains. `cargo test` drives the lab headlessly (`test/rust/example_scene_effects.rs`), including the shadow fixture and the shadow-material fixture; set `JOY_RENDER_CAPTURE_DIR` to keep captures. The Rust lab has no `window.sceneEffectsExample` capture API or Resize test, and its stats report CPU frame encoding (the shell submits the frame) and frame cadence.

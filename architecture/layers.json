@@ -68,14 +68,6 @@
     "editor",
     "examples"
   ],
-  "rustCrates": {
-    "joy-foundation": "foundation",
-    "joy-simulation": "simulation",
-    "joy-form": "content",
-    "joy-render": "rendering",
-    "joy-platform": "platform"
-  },
-  "rustFacadeCrate": "joy-engine",
   "rustBackendCrates": {
     "rapier3d": {
       "layers": [
@@ -104,6 +96,21 @@
       ]
     },
     "egui-winit": {
+      "layers": [
+        "platform"
+      ]
+    },
+    "gilrs": {
+      "layers": [
+        "platform"
+      ]
+    },
+    "cpal": {
+      "layers": [
+        "platform"
+      ]
+    },
+    "rfd": {
       "layers": [
         "platform"
       ]

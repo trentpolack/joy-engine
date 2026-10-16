@@ -4,7 +4,7 @@
 Joy Engine is the repository's browser-native JavaScript package. Games import runtime services from `joy-engine`. Authoring UI (the CodeMirror script editor, preview fullscreen) and the Electron lab host live in Joy Editor (`@joy-games/joy-editor`, `@joy-games/joy-editor/desktop`), so the engine carries no editor dependencies. Each workspace uses the engine source from the same repository revision.
 
 ## Read next
-- [Rust engine](rust.md): the native and WebAssembly implementation in `crates/`, its single renderer, browser builds, parity, and migration path.
+- [Rust engine](rust.md): the native and WebAssembly `joy-engine` crate beside the TypeScript in `src/`, its single renderer, browser builds, parity, and migration path.
 - [Gameplay, levels and physics](gameplay.md): possession, data-driven entities, level authoring and tunable vehicles.
 - [Public API reference](api/README.md): signatures, JSDoc contracts, and source links grouped by subsystem.
 - [Rendering architecture](overview.md): triangle batches, depth, postprocessing, cameras, and browser resources.
