@@ -12,10 +12,20 @@
 
 use glam::Vec3;
 use indexmap::IndexSet;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
-use super::{BodyOptions, PhysicsError, PhysicsWorld};
-use crate::core::{PrimitiveShape, Vector3};
+use super::{
+    BodyOptions,
+    PhysicsError,
+    PhysicsWorld,
+};
+use crate::core::{
+    PrimitiveShape,
+    Vector3,
+};
 
 /// Where a backend keeps simulation state, serialized as `cpu` or `gpu`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

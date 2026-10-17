@@ -11,7 +11,12 @@
 
 use indexmap::IndexMap;
 
-use crate::core::{ConfigError, ConfigField, ConfigValues, create_config_values};
+use crate::core::{
+    ConfigError,
+    ConfigField,
+    ConfigValues,
+    create_config_values,
+};
 
 /// Undo steps retained per session.
 const MAXIMUM_HISTORY_LENGTH: usize = 100;

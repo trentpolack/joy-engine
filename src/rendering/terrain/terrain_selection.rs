@@ -11,7 +11,12 @@
 use crate::core::js_hypot;
 use glam::DVec3;
 
-use crate::rendering::terrain::terrain_asset::{TerrainAsset, TerrainError, TerrainPatch, sample_height_triangle};
+use crate::rendering::terrain::terrain_asset::{
+    TerrainAsset,
+    TerrainError,
+    TerrainPatch,
+    sample_height_triangle,
+};
 
 /// Smallest camera distance used for the error budget, in world units.
 const MINIMUM_DISTANCE: f64 = 0.01;

@@ -5,8 +5,15 @@
 //! mesh decoding (strides, sparse accessors, embedded buffers, and a FORM LAB export), compared exactly against the
 //! TypeScript engine.
 
-use joy_engine::dcc::{GlbError, parse_glb_mesh};
-use joy_engine::project::{JOY_PROJECT_MANIFEST, parse_project_manifest, parse_project_manifest_text};
+use joy_engine::dcc::{
+    GlbError,
+    parse_glb_mesh,
+};
+use joy_engine::project::{
+    JOY_PROJECT_MANIFEST,
+    parse_project_manifest,
+    parse_project_manifest_text,
+};
 use serde_json::Value;
 
 use crate::parity_support::assert_matches_recording;

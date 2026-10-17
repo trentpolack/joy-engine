@@ -7,8 +7,14 @@
 //! levels can validate their profile without depending on rendering. Serialized names, defaults, ranges, presets, and
 //! the version-one `blue-noise` migration preserve the authored `.joylevel` profile contract.
 
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use serde_json::{
+    Map,
+    Value,
+};
 
 use crate::core::JsonRecord;
 

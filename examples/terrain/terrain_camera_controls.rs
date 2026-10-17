@@ -10,7 +10,10 @@
 
 use std::collections::HashSet;
 
-use joy_engine::glam::{Vec2, Vec3};
+use joy_engine::glam::{
+    Vec2,
+    Vec3,
+};
 use joy_engine::rendering::OrbitCamera;
 use joy_engine::runtime::InputManager;
 

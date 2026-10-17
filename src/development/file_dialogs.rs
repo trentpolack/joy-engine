@@ -364,9 +364,16 @@ mod native {
     use std::future::Future;
     use std::path::PathBuf;
     use std::pin::Pin;
-    use std::task::{Context, Poll, Waker};
+    use std::task::{
+        Context,
+        Poll,
+        Waker,
+    };
 
-    use super::{OpenRequest, SaveRequest};
+    use super::{
+        OpenRequest,
+        SaveRequest,
+    };
 
     /// A running dialog.
     pub(super) type DialogFuture = Pin<Box<dyn Future<Output = Option<rfd::FileHandle>>>>;

@@ -5,10 +5,24 @@
 //! vehicles, transform conventions, and determinism, plus signed distance field colliders.
 
 use glam::Vec3;
-use joy_engine::core::{PrimitiveShape, quat_from_euler};
+use joy_engine::core::{
+    PrimitiveShape,
+    quat_from_euler,
+};
 use joy_engine::physics::{
-    BodyHandle, BodyOptions, PhysicsError, PhysicsWorld, PhysicsWorldOptions, SdfBakeOptions, SdfPrimitive, SdfShape,
-    VehicleHandle, VehicleInput, VehicleOptions, VehicleTuning, WheelOptions,
+    BodyHandle,
+    BodyOptions,
+    PhysicsError,
+    PhysicsWorld,
+    PhysicsWorldOptions,
+    SdfBakeOptions,
+    SdfPrimitive,
+    SdfShape,
+    VehicleHandle,
+    VehicleInput,
+    VehicleOptions,
+    VehicleTuning,
+    WheelOptions,
 };
 
 /// Advance in 60 Hz frames for a number of seconds.
@@ -415,7 +429,8 @@ fn sdf_shapes_validate_input_and_bake_open_meshes() {
     // Procedural meshes are often open or inconsistently wound: an open-top crate with flipped winding still bakes a
     // solid whose inside, outside, and volume match the closed box.
     let (positions, mut indices) = box_mesh(Vec3::splat(0.5), true);
-    for triangle in indices.chunks_exact_mut(3) {
+    let (triangles, _) = indices.as_chunks_mut::<3>();
+    for triangle in triangles {
         triangle.swap(1, 2);
     }
     let crate_shape = SdfShape::from_triangle_mesh(&positions, &indices, options).unwrap();

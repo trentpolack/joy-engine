@@ -10,11 +10,17 @@
 //!
 //! Positions and distances are meters in the mesh's own frame, which becomes the shape's local frame.
 
-use rapier3d::math::{Real, Vector};
+use rapier3d::math::{
+    Real,
+    Vector,
+};
 use rapier3d::parry::bounding_volume::Aabb;
 
 use super::sdf_primitives::FieldSample;
-use crate::core::{RandomSource, SeededRandom};
+use crate::core::{
+    RandomSource,
+    SeededRandom,
+};
 
 /// Empty grid cells around the mesh bounds on every side, so near-surface queries stay inside the grid.
 const GRID_PADDING_CELLS: usize = 3;
@@ -73,8 +79,9 @@ impl TriangleMesh {
             return Err("mesh indices must reference existing positions");
         }
 
-        let mut triangles: Vec<[usize; 3]> = indices
-            .chunks_exact(3)
+        let (triangle_indices, _) = indices.as_chunks::<3>();
+        let mut triangles: Vec<[usize; 3]> = triangle_indices
+            .iter()
             .map(|triangle| [triangle[0] as usize, triangle[1] as usize, triangle[2] as usize])
             .collect();
         let bounds = Aabb::from_points(triangles.iter().flatten().map(|index| positions[*index]));

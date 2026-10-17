@@ -4,7 +4,10 @@
 //! The seeded destructible structure (TypeScript `structure.ts`): a 13×6 front wall of masonry chunks and a shallow
 //! U-shaped return shell of stronger frame chunks. Coordinate-derived ids stay stable; the seed only varies materials.
 
-use joy_engine::core::{RandomSource, SeededRandom};
+use joy_engine::core::{
+    RandomSource,
+    SeededRandom,
+};
 use joy_engine::physics::DestructibleChunkDefinition;
 
 use super::config::destruction_config::DESTRUCTION;

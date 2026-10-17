@@ -13,17 +13,50 @@
 
 use std::sync::Arc;
 
-use egui::text::{ByteIndex, CCursor, CCursorRange, CharIndex, LayoutJob, TextFormat};
+use egui::text::{
+    ByteIndex,
+    CCursor,
+    CCursorRange,
+    CharIndex,
+    LayoutJob,
+    TextFormat,
+};
 use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Galley, Id, Key, Modifiers, Order, Pos2, Rect, Sense, Shape, Stroke,
-    TextBuffer, TextEdit, Ui, pos2, vec2,
+    Align,
+    Align2,
+    Color32,
+    CornerRadius,
+    FontId,
+    Galley,
+    Id,
+    Key,
+    Modifiers,
+    Order,
+    Pos2,
+    Rect,
+    Sense,
+    Shape,
+    Stroke,
+    TextBuffer,
+    TextEdit,
+    Ui,
+    pos2,
+    vec2,
 };
 
 use crate::development::script_language_tools::{
-    self, CompletionItem, DiagnosticSeverity, ScriptDiagnostic, ScriptSyntax, TokenKind,
+    self,
+    CompletionItem,
+    DiagnosticSeverity,
+    ScriptDiagnostic,
+    ScriptSyntax,
+    TokenKind,
 };
 use crate::runtime::theme::tokens;
-use crate::scripting::{ScriptLanguageCatalog, ScriptSymbolKind};
+use crate::scripting::{
+    ScriptLanguageCatalog,
+    ScriptSymbolKind,
+};
 
 /// Script font size in points.
 const SCRIPT_FONT_SIZE: f32 = 13.0;

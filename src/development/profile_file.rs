@@ -6,13 +6,23 @@
 //! since it was read.
 
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::time::{
+    Duration,
+    SystemTime,
+};
 
 use serde_json::Value;
 use web_time::Instant;
 
 use crate::core::PostProcessingProfile;
-use crate::development::files::{WriteError, pretty_json, read_document, revision_of, stamp, write_atomically};
+use crate::development::files::{
+    WriteError,
+    pretty_json,
+    read_document,
+    revision_of,
+    stamp,
+    write_atomically,
+};
 use crate::development::post_processing_session::profile_json;
 
 /// How often the file is checked for outside edits.

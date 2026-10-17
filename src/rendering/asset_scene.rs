@@ -22,24 +22,61 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use crate::gameplay::{
-    AssetPathError, ComponentError, EFFECT_COMPONENT_DEFAULTS, EntityDefinition, LevelData, LightComponent,
-    ObjectError, RenderComponent, RenderSource, asset_path, component_type, resolve_level_objects,
+    AssetPathError,
+    ComponentError,
+    EFFECT_COMPONENT_DEFAULTS,
+    EntityDefinition,
+    LevelData,
+    LightComponent,
+    ObjectError,
+    RenderComponent,
+    RenderSource,
+    asset_path,
+    component_type,
+    resolve_level_objects,
 };
 use crate::particles::{
-    CompiledParticleEffect, ParticleAssetError, ParticleBatch, ParticleCameraBasis, ParticleEffect,
-    ParticleEffectError, ParticleEffectOptions, ParticleLightSelection, ParticleParameterValue, ParticleRenderError,
-    ParticleTextureError, ParticleTextureSet, ParticleTriangle, batch_particle_triangles, collect_particle_lights,
-    collect_particle_triangles, parse_particle_effect, particle_seed, rank_particle_lights, textured_sources,
+    CompiledParticleEffect,
+    ParticleAssetError,
+    ParticleBatch,
+    ParticleCameraBasis,
+    ParticleEffect,
+    ParticleEffectError,
+    ParticleEffectOptions,
+    ParticleLightSelection,
+    ParticleParameterValue,
+    ParticleRenderError,
+    ParticleTextureError,
+    ParticleTextureSet,
+    ParticleTriangle,
+    batch_particle_triangles,
+    collect_particle_lights,
+    collect_particle_triangles,
+    parse_particle_effect,
+    particle_seed,
+    rank_particle_lights,
+    textured_sources,
 };
 use indexmap::IndexMap;
 use serde_json::Value;
 
 use crate::rendering::error::RenderError;
 use crate::rendering::form_assets::FormAssetLibrary;
-use crate::rendering::frame::{ColorVertex, MAX_POINT_LIGHTS, PointLight, TransparentDraw};
-use crate::rendering::level_scene::{LevelScene, LevelSceneError};
+use crate::rendering::frame::{
+    ColorVertex,
+    MAX_POINT_LIGHTS,
+    PointLight,
+    TransparentDraw,
+};
+use crate::rendering::level_scene::{
+    LevelScene,
+    LevelSceneError,
+};
 use crate::rendering::mesh::MeshAsset;
-use crate::rendering::scene::{RenderScene, Shading};
+use crate::rendering::scene::{
+    RenderScene,
+    Shading,
+};
 use crate::rendering::texture::TextureAsset;
 
 /// Longest step, in seconds, that [`AssetScene::step`] simulates at once; longer stalls are clamped.

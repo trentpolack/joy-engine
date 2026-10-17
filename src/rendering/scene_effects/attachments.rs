@@ -5,10 +5,18 @@
 //! view-space normals with roughness (drawn against the scene depth with an equal test) and screen-space motion vectors
 //! from each instance's current and previous model matrices.
 
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{
+    Pod,
+    Zeroable,
+};
 use glam::Mat4;
 
-use crate::rendering::materials::{DEPTH_FORMAT, INSTANCE_ATTRIBUTES, InstanceRaw, surface_pipeline};
+use crate::rendering::materials::{
+    DEPTH_FORMAT,
+    INSTANCE_ATTRIBUTES,
+    InstanceRaw,
+    surface_pipeline,
+};
 use crate::rendering::mesh::MeshVertex;
 
 /// Normal and roughness attachment format.

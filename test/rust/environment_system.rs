@@ -3,7 +3,12 @@
 
 //! Environment parity with frames recorded from the TypeScript `EnvironmentSystem`.
 
-use joy_engine::environment::{AtmosphereLight, CelestialBody, EnvironmentOptions, EnvironmentSystem};
+use joy_engine::environment::{
+    AtmosphereLight,
+    CelestialBody,
+    EnvironmentOptions,
+    EnvironmentSystem,
+};
 use serde_json::Value;
 
 /// Frames recorded from the TypeScript engine; see the fixture's `source` field.

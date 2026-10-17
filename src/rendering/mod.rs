@@ -44,43 +44,146 @@ pub mod terrain;
 mod texture;
 mod triangle_renderer;
 
-pub use asset_scene::{AssetScene, AssetSceneError, AssetSceneStage, EffectInstance};
-pub use camera::{
-    Camera, CameraBasis, CameraFrame, OrbitCamera, RegionCamera, ShiftedCamera, TopDownCamera, WorldRay,
-    intersect_ray_plane, look_at, orthographic, perspective, project_to_viewport, screen_ray,
-    sort_top_down_transparent_triangles, top_down_orthographic,
+pub use asset_scene::{
+    AssetScene,
+    AssetSceneError,
+    AssetSceneStage,
+    EffectInstance,
 };
-pub use capture::{CAPTURE_FORMAT, OffscreenTarget};
-pub use display::{BackingLimits, backing_pixel_ratio};
-pub use editor_grid::{EditorGrid, EditorGridFrame, EditorGridView};
+pub use camera::{
+    Camera,
+    CameraBasis,
+    CameraFrame,
+    OrbitCamera,
+    RegionCamera,
+    ShiftedCamera,
+    TopDownCamera,
+    WorldRay,
+    intersect_ray_plane,
+    look_at,
+    orthographic,
+    perspective,
+    project_to_viewport,
+    screen_ray,
+    sort_top_down_transparent_triangles,
+    top_down_orthographic,
+};
+pub use capture::{
+    CAPTURE_FORMAT,
+    OffscreenTarget,
+};
+pub use display::{
+    BackingLimits,
+    backing_pixel_ratio,
+};
+pub use editor_grid::{
+    EditorGrid,
+    EditorGridFrame,
+    EditorGridView,
+};
 pub use environment::{
-    EnvironmentData, EnvironmentEncoding, EnvironmentMap, EnvironmentMapOptions, EnvironmentPixels, ImageLighting,
+    EnvironmentData,
+    EnvironmentEncoding,
+    EnvironmentMap,
+    EnvironmentMapOptions,
+    EnvironmentPixels,
+    ImageLighting,
 };
 pub use error::RenderError;
 pub use form_assets::{
-    FormAssetLibrary, FormTextureCache, compile_form_mesh, form_mesh_asset, form_mesh_asset_with_textures,
-    primitive_box, primitive_sphere,
+    FormAssetLibrary,
+    FormTextureCache,
+    compile_form_mesh,
+    form_mesh_asset,
+    form_mesh_asset_with_textures,
+    primitive_box,
+    primitive_sphere,
 };
 pub use frame::{
-    CelestialLight, ColorVertex, DEFAULT_AMBIENT_WITHOUT_ENVIRONMENT, EnvironmentLighting, FrameInputs,
-    MAX_POINT_LIGHTS, PointLight, TexturedVertex, TransparentDraw, sort_transparent_triangles,
+    CelestialLight,
+    ColorVertex,
+    DEFAULT_AMBIENT_WITHOUT_ENVIRONMENT,
+    EnvironmentLighting,
+    FrameInputs,
+    MAX_POINT_LIGHTS,
+    PointLight,
+    TexturedVertex,
+    TransparentDraw,
+    sort_transparent_triangles,
 };
 pub use geometry::{
-    add_circle, add_gradient_radial_polygon, add_line, add_mesh, add_polygon, add_quad, add_radial_polygon, add_ring,
+    add_circle,
+    add_gradient_radial_polygon,
+    add_line,
+    add_mesh,
+    add_polygon,
+    add_quad,
+    add_radial_polygon,
+    add_ring,
     add_triangle,
 };
-pub use gpu::{BackendPreference, GpuBackend, GpuCapabilities, GpuContext};
-pub use level_scene::{LevelEntity, LevelScene, LevelSceneError};
+pub use gpu::{
+    BackendPreference,
+    GpuBackend,
+    GpuCapabilities,
+    GpuContext,
+};
+pub use level_scene::{
+    LevelEntity,
+    LevelScene,
+    LevelSceneError,
+};
 pub use mesh::{
-    AlphaMode, Bounds, DEFAULT_ROUGHNESS, MaterialTextures, MeshAsset, MeshChannels, MeshData, MeshVertex, Submesh,
-    TextureMaps, VertexMaterial,
+    AlphaMode,
+    Bounds,
+    DEFAULT_ROUGHNESS,
+    MaterialTextures,
+    MeshAsset,
+    MeshChannels,
+    MeshData,
+    MeshVertex,
+    Submesh,
+    TextureMaps,
+    VertexMaterial,
 };
-pub use renderer::{Renderer, RendererDiagnostics, RendererOptions};
+pub use renderer::{
+    Renderer,
+    RendererDiagnostics,
+    RendererOptions,
+};
 pub use scene::{
-    DEFAULT_TERRAIN_TOLERANCE, MeshCollection, MeshInstance, MeshInstanceId, RenderPassKind, RenderScene,
-    SceneGraphError, SceneNode, SceneNodeId, Shading, TerrainInstance, TerrainInstanceId,
+    DEFAULT_TERRAIN_TOLERANCE,
+    MeshCollection,
+    MeshInstance,
+    MeshInstanceId,
+    RenderPassKind,
+    RenderScene,
+    SceneGraphError,
+    SceneNode,
+    SceneNodeId,
+    Shading,
+    TerrainInstance,
+    TerrainInstanceId,
 };
-pub use shadows::{ShadowOptions, ShadowQuality};
-pub use terrain::{TerrainAsset, TerrainDiagnostic, TerrainError, TerrainFrame, TerrainRenderer, TerrainView};
-pub use texture::{ImageFormat, MAX_TEXTURE_DIMENSION, TextureAsset};
-pub use triangle_renderer::{TriangleFrame, TriangleRenderer, TriangleRendererOptions};
+pub use shadows::{
+    ShadowOptions,
+    ShadowQuality,
+};
+pub use terrain::{
+    TerrainAsset,
+    TerrainDiagnostic,
+    TerrainError,
+    TerrainFrame,
+    TerrainRenderer,
+    TerrainView,
+};
+pub use texture::{
+    ImageFormat,
+    MAX_TEXTURE_DIMENSION,
+    TextureAsset,
+};
+pub use triangle_renderer::{
+    TriangleFrame,
+    TriangleRenderer,
+    TriangleRendererOptions,
+};

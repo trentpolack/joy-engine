@@ -29,19 +29,48 @@ mod physics_world;
 mod sdf;
 
 pub use backend_contract::{
-    PhysicsBackend, PhysicsCollisionShape, PhysicsMutationBatch, PhysicsQueryHit, PhysicsResidency,
+    PhysicsBackend,
+    PhysicsCollisionShape,
+    PhysicsMutationBatch,
+    PhysicsQueryHit,
+    PhysicsResidency,
     create_removal_mutation_batch,
 };
 pub use destruction::{
-    ChunkChangeSet, ChunkDamageState, ChunkRaycastHit, ChunkStructure, ChunkSupportOptions, ChunkSupportState,
-    DestructibleChunkDefinition, DestructionError, RadialDamage, create_chunk_mesh_data,
+    ChunkChangeSet,
+    ChunkDamageState,
+    ChunkRaycastHit,
+    ChunkStructure,
+    ChunkSupportOptions,
+    ChunkSupportState,
+    DestructibleChunkDefinition,
+    DestructionError,
+    RadialDamage,
+    create_chunk_mesh_data,
 };
-pub use physics_body::{BODY_DEFAULTS, BodyOptions};
+pub use physics_body::{
+    BODY_DEFAULTS,
+    BodyOptions,
+};
 pub use physics_vehicle::{
-    VEHICLE_DEFAULTS, VehicleInput, VehicleOptions, VehicleTuning, WHEEL_DEFAULTS, WheelOptions,
+    VEHICLE_DEFAULTS,
+    VehicleInput,
+    VehicleOptions,
+    VehicleTuning,
+    WHEEL_DEFAULTS,
+    WheelOptions,
 };
-pub use physics_world::{PhysicsWorld, PhysicsWorldOptions};
-pub use sdf::{SDF_BAKE_DEFAULTS, SdfBakeOptions, SdfCollisionStatistics, SdfPrimitive, SdfShape};
+pub use physics_world::{
+    PhysicsWorld,
+    PhysicsWorldOptions,
+};
+pub use sdf::{
+    SDF_BAKE_DEFAULTS,
+    SdfBakeOptions,
+    SdfCollisionStatistics,
+    SdfPrimitive,
+    SdfShape,
+};
 
 use glam::Vec3;
 

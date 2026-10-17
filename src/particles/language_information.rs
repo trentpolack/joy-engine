@@ -5,8 +5,16 @@
 //! documentation. Generated from the same tables the compiler uses, so it cannot drift from the runtime. Records are the
 //! shared `scripting` catalog types, so editors treat FORM and JOYFX alike.
 
-use crate::particles::script::{PARTICLE_FIELDS, PARTICLE_FUNCTION_ARITIES, PARTICLE_INPUTS};
-use crate::scripting::{ScriptLanguageCatalog, ScriptLanguageSymbol, ScriptSymbolKind};
+use crate::particles::script::{
+    PARTICLE_FIELDS,
+    PARTICLE_FUNCTION_ARITIES,
+    PARTICLE_INPUTS,
+};
+use crate::scripting::{
+    ScriptLanguageCatalog,
+    ScriptLanguageSymbol,
+    ScriptSymbolKind,
+};
 
 /// Language keywords.
 const KEYWORDS: [&str; 3] = ["let", "if", "else"];

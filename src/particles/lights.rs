@@ -3,7 +3,10 @@
 
 //! Point lights emitted by particles of emitters with a `light` record.
 
-use crate::rendering::{MAX_POINT_LIGHTS, PointLight};
+use crate::rendering::{
+    MAX_POINT_LIGHTS,
+    PointLight,
+};
 use glam::Vec3;
 
 use crate::particles::math;

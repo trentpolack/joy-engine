@@ -3,7 +3,10 @@
 
 //! The owned geometry record every evaluation returns.
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use serde_json::Value as Json;
 
 use crate::form::materials::FormMaterial;

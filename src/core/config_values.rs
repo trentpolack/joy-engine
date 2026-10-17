@@ -10,10 +10,19 @@
 //! error messages preserve the authored format's established validation contract.
 
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use serde_json::{
+    Map,
+    Value,
+};
 
-use crate::core::format::{format_js_number, json_number};
+use crate::core::format::{
+    format_js_number,
+    json_number,
+};
 
 /// JSON Schema dialect written by [`create_config_schema`].
 const JSON_SCHEMA_DIALECT: &str = "https://json-schema.org/draft/2020-12/schema";

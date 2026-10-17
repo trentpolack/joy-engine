@@ -4,12 +4,26 @@
 //! Scene effects lab configuration (TypeScript `config.ts`): effect notes, the per-quality effect tuning, and the
 //! view, lighting, bloom, and motion values the lab renders with. Distances are world units and times are seconds.
 
-use joy_engine::core::post_processing::{AgxLook, BloomQuality, ToneMapper};
+use joy_engine::core::post_processing::{
+    AgxLook,
+    BloomQuality,
+    ToneMapper,
+};
 use joy_engine::development::EffectQuality;
 use joy_engine::prelude::*;
 use joy_engine::rendering::scene_effects::{
-    AdaptiveExposureOptions, ClusteredLightingOptions, DepthAwareBlurOptions, GtaoOptions, HeightFogOptions,
-    MotionBlurOptions, OutlineOptions, Reprojection, SceneEffectsOptions, SsaoOptions, SsgiOptions, SsrOptions,
+    AdaptiveExposureOptions,
+    ClusteredLightingOptions,
+    DepthAwareBlurOptions,
+    GtaoOptions,
+    HeightFogOptions,
+    MotionBlurOptions,
+    OutlineOptions,
+    Reprojection,
+    SceneEffectsOptions,
+    SsaoOptions,
+    SsgiOptions,
+    SsrOptions,
     TaaOptions,
 };
 

@@ -5,7 +5,11 @@
 //! exactly, `.formlab` saves keep overrides, materials, meshes, and variants, and the tab draws inside its area.
 
 use form_lab::FormLab;
-use joy_engine::development::{AuthoringTool, ToolDocument, ToolHosting};
+use joy_engine::development::{
+    AuthoringTool,
+    ToolDocument,
+    ToolHosting,
+};
 use joy_engine::egui;
 use joy_engine::serde_json::json;
 

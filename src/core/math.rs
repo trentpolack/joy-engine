@@ -6,7 +6,10 @@
 //! Distances use [`js_hypot`], a port of V8's `Math.hypot`, rather than the platform `hypot`, so lengths (and every
 //! threshold compared against them) match the TypeScript engine bit for bit on native and WebAssembly targets.
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use crate::core::random::RandomSource;
 use crate::core::types::Vector2;

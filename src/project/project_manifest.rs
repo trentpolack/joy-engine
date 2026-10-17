@@ -10,8 +10,14 @@
 //! authoring tools and never fetched. Diagnostics preserve the established manifest contract.
 
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use serde_json::{
+    Map,
+    Value,
+};
 
 /// The manifest filename shared by browser directory handles and the desktop host.
 pub const JOY_PROJECT_MANIFEST: &str = "project.joyproject";

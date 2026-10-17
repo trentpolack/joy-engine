@@ -13,10 +13,20 @@
 use glam::Vec2;
 
 use crate::core::post_processing::ToneMapper;
-use crate::core::{PostProcessingConfig, Rgba};
-use crate::rendering::materials::{DEPTH_FORMAT, uniform_entry};
+use crate::core::{
+    PostProcessingConfig,
+    Rgba,
+};
+use crate::rendering::materials::{
+    DEPTH_FORMAT,
+    uniform_entry,
+};
 use crate::rendering::postprocessor::PostProcessor;
-use crate::rendering::{ColorVertex, GpuContext, RenderError};
+use crate::rendering::{
+    ColorVertex,
+    GpuContext,
+    RenderError,
+};
 
 /// Shader markers the TypeScript engine expands so geometry shaders leave display processing to the post chain.
 const POST_UNIFORMS_MARKER: &str = "// JOY_POST_UNIFORMS_MACRO";

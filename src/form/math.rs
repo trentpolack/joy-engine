@@ -4,7 +4,10 @@
 //! Scalar and vector arithmetic, built-in math functions, and deterministic noise.
 //! Ported from `src/form/compiler.ts` and `src/form/procedural-math.ts`.
 
-use crate::form::value::{Value, arity};
+use crate::form::value::{
+    Value,
+    arity,
+};
 
 pub fn arithmetic(operator: &str, left: &Value, right: &Value) -> Result<Value, String> {
     if let (Value::Number(a), Value::Number(b)) = (left, right) {

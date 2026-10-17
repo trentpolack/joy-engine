@@ -3,7 +3,10 @@
 
 //! Primitive shape vocabulary shared by render, physics, and level components.
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 /// Primitive shapes recognized by `render` and `physics` components. Serialized spellings match the TypeScript engine.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

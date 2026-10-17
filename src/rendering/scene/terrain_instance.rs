@@ -7,7 +7,11 @@
 use crate::core::Transform;
 
 use crate::rendering::mesh::Bounds;
-use crate::rendering::terrain::{TerrainAsset, TerrainDiagnostic, TerrainError};
+use crate::rendering::terrain::{
+    TerrainAsset,
+    TerrainDiagnostic,
+    TerrainError,
+};
 
 /// Default screen-space error tolerance in CSS pixels.
 pub const DEFAULT_TERRAIN_TOLERANCE: f32 = 2.0;

@@ -3,7 +3,10 @@
 
 //! World-owned processors for entities selected by runtime component composition.
 
-use super::entity::{Entity, SimulationContext};
+use super::entity::{
+    Entity,
+    SimulationContext,
+};
 use super::error::GameplayError;
 
 /// Identifier of a system added with [`EntityWorld::add_system`](super::EntityWorld::add_system).

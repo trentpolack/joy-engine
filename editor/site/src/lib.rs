@@ -31,7 +31,10 @@ pub mod interaction;
 pub mod level;
 pub mod workspace;
 
-pub use editor::{EditorOptions, JoyEditor};
+pub use editor::{
+    EditorOptions,
+    JoyEditor,
+};
 
 use joy_engine::rendering::RendererOptions;
 use joy_engine::runtime::ShellOptions;

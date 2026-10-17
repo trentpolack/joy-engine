@@ -9,9 +9,15 @@
 //!
 //! [`TriangleRenderer`]: crate::rendering::TriangleRenderer
 
-use std::f64::consts::{PI, TAU};
+use std::f64::consts::{
+    PI,
+    TAU,
+};
 
-use crate::core::{Rgba, ShadedMesh3D};
+use crate::core::{
+    Rgba,
+    ShadedMesh3D,
+};
 use crate::rendering::ColorVertex;
 
 /// Append one vertex at `(x, y, z)`.

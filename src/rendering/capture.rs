@@ -3,7 +3,10 @@
 
 //! Offscreen presentation targets with CPU readback, for headless captures, golden images, and tests.
 
-use crate::rendering::{GpuContext, RenderError};
+use crate::rendering::{
+    GpuContext,
+    RenderError,
+};
 
 /// Presentation format of offscreen captures. Non-sRGB, matching the engine's canvas output path.
 pub const CAPTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;

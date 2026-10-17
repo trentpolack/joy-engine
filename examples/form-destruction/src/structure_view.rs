@@ -8,9 +8,18 @@
 use std::collections::HashMap;
 
 use joy_engine::core::MeshAssetData;
-use joy_engine::physics::{ChunkStructure, DestructibleChunkDefinition, create_chunk_mesh_data};
+use joy_engine::physics::{
+    ChunkStructure,
+    DestructibleChunkDefinition,
+    create_chunk_mesh_data,
+};
 
-use super::config::destruction_config::{DESTRUCTION, INTEGRITY, SUPPORT, StructureView};
+use super::config::destruction_config::{
+    DESTRUCTION,
+    INTEGRITY,
+    SUPPORT,
+    StructureView,
+};
 
 /// Mesh data for the structure's active chunks in `view`.
 pub fn create_structure_mesh_data(structure: &ChunkStructure, view: StructureView) -> MeshAssetData {

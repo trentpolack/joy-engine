@@ -11,22 +11,47 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use bytemuck::{Pod, Zeroable};
-use glam::{DMat4, DVec3, Mat4, Vec3};
+use bytemuck::{
+    Pod,
+    Zeroable,
+};
+use glam::{
+    DMat4,
+    DVec3,
+    Mat4,
+    Vec3,
+};
 
 use crate::rendering::GpuContext;
 use crate::rendering::camera::CameraFrame;
-use crate::rendering::materials::{CasterBias, DEPTH_FORMAT, SHADOW_FORMAT, ScenePipelines, scene_common};
+use crate::rendering::materials::{
+    CasterBias,
+    DEPTH_FORMAT,
+    SHADOW_FORMAT,
+    ScenePipelines,
+    scene_common,
+};
 use crate::rendering::mesh::Bounds;
-use crate::rendering::scene::{RenderScene, TerrainInstance, TerrainInstanceId};
+use crate::rendering::scene::{
+    RenderScene,
+    TerrainInstance,
+    TerrainInstanceId,
+};
 use crate::rendering::scene_effects::MotionUniforms;
 use crate::rendering::terrain::terrain_asset::TerrainError;
 use crate::rendering::terrain::terrain_renderer::{
-    ModelUniforms, TerrainGeometry, grid_buffer_layout, terrain_bind_group_layout,
+    ModelUniforms,
+    TerrainGeometry,
+    grid_buffer_layout,
+    terrain_bind_group_layout,
 };
 use crate::rendering::terrain::terrain_selection::TerrainView;
 use crate::rendering::terrain::{
-    TERRAIN_CASTER_SOURCE, TERRAIN_MOTION_SOURCE, TERRAIN_SCENE_SOURCE, TERRAIN_SURFACE_SOURCE, terrain_geometry_source,
+    TERRAIN_CASTER_SOURCE,
+    TERRAIN_MOTION_SOURCE,
+    TERRAIN_SCENE_SOURCE,
+    TERRAIN_SURFACE_SOURCE,
+    terrain_geometry_source,
 };
 
 /// Scene effect attachment formats (normals and motion), matching `scene_effects::attachments`.

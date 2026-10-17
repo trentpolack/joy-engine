@@ -138,7 +138,13 @@ pub mod tokens {
 ///
 /// [`Game::start`]: crate::runtime::Game::start
 pub fn apply_authoring(context: &egui::Context) {
-    use egui::{CornerRadius, FontFamily, FontId, Stroke, TextStyle};
+    use egui::{
+        CornerRadius,
+        FontFamily,
+        FontId,
+        Stroke,
+        TextStyle,
+    };
 
     let square = CornerRadius::same(tokens::RADIUS_NONE);
     let rounded = CornerRadius::same(tokens::RADIUS_SM);

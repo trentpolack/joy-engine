@@ -14,20 +14,45 @@
 //! to commit as one transaction, and gizmo drags preview through [`AssetScene::update`] until they finish.
 
 use joy_engine::development::SceneEffectsControls;
-use joy_engine::gameplay::{EntityDefinition, component_type};
-use joy_engine::glam::{Vec2, Vec3};
+use joy_engine::gameplay::{
+    EntityDefinition,
+    component_type,
+};
+use joy_engine::glam::{
+    Vec2,
+    Vec3,
+};
 use joy_engine::particles::ParticleCameraBasis;
 use joy_engine::rendering::{
-    AssetScene, Camera, EditorGrid, EditorGridView, FrameInputs, OrbitCamera, RegionCamera, RenderScene, WorldRay,
-    intersect_ray_plane, project_to_viewport, screen_ray,
+    AssetScene,
+    Camera,
+    EditorGrid,
+    EditorGridView,
+    FrameInputs,
+    OrbitCamera,
+    RegionCamera,
+    RenderScene,
+    WorldRay,
+    intersect_ray_plane,
+    project_to_viewport,
+    screen_ray,
 };
 use joy_engine::runtime::RenderTarget;
 
 use super::constants::{
-    CLEAR_COLOR, DEFAULT_CAMERA_DISTANCE, DEFAULT_CAMERA_PITCH, DEFAULT_CAMERA_YAW, GIZMO_HIT_PIXELS,
-    GIZMO_SCREEN_FRACTION, LevelTool, VIEWPORT_AMBIENT,
+    CLEAR_COLOR,
+    DEFAULT_CAMERA_DISTANCE,
+    DEFAULT_CAMERA_PITCH,
+    DEFAULT_CAMERA_YAW,
+    GIZMO_HIT_PIXELS,
+    GIZMO_SCREEN_FRACTION,
+    LevelTool,
+    VIEWPORT_AMBIENT,
 };
-use crate::interaction::viewport_input::{snap_point, snap_value};
+use crate::interaction::viewport_input::{
+    snap_point,
+    snap_value,
+};
 
 /// A rectangle of the window in logical pixels with a top-left origin.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

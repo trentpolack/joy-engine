@@ -5,11 +5,27 @@
 //! nested field lookup, and registration errors, compared exactly against the TypeScript engine.
 
 use joy_engine::gameplay::{
-    ComponentSchema, ComponentSchemaCatalog, EntityDefinition, EntityId, EntityRegistry, LevelData, LevelRuntime,
-    LightComponent, RenderComponent, RenderSource, built_in_component_schemas, component_preset, component_type,
-    is_component_field_active, parse_level, serialize_level,
+    ComponentSchema,
+    ComponentSchemaCatalog,
+    EntityDefinition,
+    EntityId,
+    EntityRegistry,
+    LevelData,
+    LevelRuntime,
+    LightComponent,
+    RenderComponent,
+    RenderSource,
+    built_in_component_schemas,
+    component_preset,
+    component_type,
+    is_component_field_active,
+    parse_level,
+    serialize_level,
 };
-use serde_json::{Value, json};
+use serde_json::{
+    Value,
+    json,
+};
 
 use crate::parity_support::assert_matches_recording;
 

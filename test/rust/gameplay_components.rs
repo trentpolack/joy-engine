@@ -8,11 +8,31 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use joy_engine::gameplay::{
-    ComponentRegistry, ControlIntent, Controller, Entity, EntityBehavior, EntityComponent, EntityDefinition, EntityId,
-    EntityRegistry, EntityState, EntitySystem, EntityWorld, GameplayError, IntentController, SimulationContext, World,
+    ComponentRegistry,
+    ControlIntent,
+    Controller,
+    Entity,
+    EntityBehavior,
+    EntityComponent,
+    EntityDefinition,
+    EntityId,
+    EntityRegistry,
+    EntityState,
+    EntitySystem,
+    EntityWorld,
+    GameplayError,
+    IntentController,
+    SimulationContext,
+    World,
 };
-use joy_engine::physics::{PhysicsWorld, PhysicsWorldOptions};
-use serde_json::{Value, json};
+use joy_engine::physics::{
+    PhysicsWorld,
+    PhysicsWorldOptions,
+};
+use serde_json::{
+    Value,
+    json,
+};
 
 /// Shared, ordered lifecycle log.
 type Events = Rc<RefCell<Vec<String>>>;

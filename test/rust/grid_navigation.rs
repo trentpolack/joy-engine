@@ -4,7 +4,12 @@
 //! Grid navigation parity with results recorded from the TypeScript `searchGrid` and `traceGridRoute`.
 
 use joy_engine::gameplay::{
-    DEFAULT_CELL_LIMIT, GridRoutes, GridSearchError, GridSearchOptions, search_grid, trace_grid_route,
+    DEFAULT_CELL_LIMIT,
+    GridRoutes,
+    GridSearchError,
+    GridSearchOptions,
+    search_grid,
+    trace_grid_route,
 };
 
 /// Orthogonal grid rules from rows of step costs; `#` is impassable. Cells are row-major indices, and neighbors are

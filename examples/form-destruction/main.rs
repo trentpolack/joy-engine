@@ -12,7 +12,10 @@
 #[path = "src/mod.rs"]
 mod example;
 
-use example::destruction_demo::{FormDestructionDemo, input_map};
+use example::destruction_demo::{
+    FormDestructionDemo,
+    input_map,
+};
 use joy_engine::prelude::*;
 
 /// Shell settings: default renderer with click-or-drag input, reset, and cancel.

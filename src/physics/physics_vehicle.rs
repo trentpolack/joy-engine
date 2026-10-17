@@ -19,12 +19,27 @@
 //! - Rapier does not apply the equal-and-opposite side impulse to a dynamic ground body.
 
 use glam::Vec3;
-use rapier3d::control::{DynamicRayCastVehicleController, WheelTuning};
+use rapier3d::control::{
+    DynamicRayCastVehicleController,
+    WheelTuning,
+};
 use rapier3d::math::Rotation;
 
-use super::convert::{euler_from_solver_rotation, finite_number, finite_vector, from_solver_vector, to_solver_vector};
+use super::convert::{
+    euler_from_solver_rotation,
+    finite_number,
+    finite_vector,
+    from_solver_vector,
+    to_solver_vector,
+};
 use super::physics_world::VehicleRecord;
-use super::{BodyHandle, PhysicsError, PhysicsTransform, PhysicsWorld, VehicleHandle};
+use super::{
+    BodyHandle,
+    PhysicsError,
+    PhysicsTransform,
+    PhysicsWorld,
+    VehicleHandle,
+};
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Constants

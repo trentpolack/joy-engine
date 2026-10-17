@@ -7,9 +7,16 @@
 //! their vertex tint, material base color, and emission, with alpha following the material's glTF policy. The engine
 //! draws them as unlit transparent runs after the scene, so FORM points get no renderer of their own.
 
-use joy_engine::form::{AlphaMode, FormMaterial, GeometryData};
+use joy_engine::form::{
+    AlphaMode,
+    FormMaterial,
+    GeometryData,
+};
 use joy_engine::glam::Vec3;
-use joy_engine::rendering::{CameraBasis, ColorVertex};
+use joy_engine::rendering::{
+    CameraBasis,
+    ColorVertex,
+};
 
 /// Most markers drawn at once; denser data is sampled at a regular stride. Exports keep every point.
 pub const MAXIMUM_PREVIEW_MARKERS: usize = 40_000;

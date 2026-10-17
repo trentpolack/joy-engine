@@ -12,7 +12,12 @@ use joy_engine::egui;
 use joy_engine::gameplay::parse_level;
 use joy_engine::glam::Vec2;
 
-use crate::support::{Driver, TempFolder, editor, ui_shell};
+use crate::support::{
+    Driver,
+    TempFolder,
+    editor,
+    ui_shell,
+};
 
 fn level_workspace() -> TempFolder {
     let workspace = TempFolder::new("level-ui");

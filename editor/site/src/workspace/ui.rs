@@ -8,21 +8,72 @@
 //! [`LevelUi`]; a hosted tool receives the region as its tab area.
 
 use joy_engine::egui::{
-    self, Align, Color32, Id, Key, KeyboardShortcut, Modifiers, Order, Rect, RichText, ScrollArea, Sense, Stroke,
-    StrokeKind, TextEdit, Ui, pos2, vec2,
+    self,
+    Align,
+    Color32,
+    Id,
+    Key,
+    KeyboardShortcut,
+    Modifiers,
+    Order,
+    Rect,
+    RichText,
+    ScrollArea,
+    Sense,
+    Stroke,
+    StrokeKind,
+    TextEdit,
+    Ui,
+    pos2,
+    vec2,
 };
 use std::collections::HashMap;
 
-use joy_engine::development::{FileDialogEvent, FileDialogs, FileFilter, OpenRequest, ScriptEditor, ScriptSyntax};
+use joy_engine::development::{
+    FileDialogEvent,
+    FileDialogs,
+    FileFilter,
+    OpenRequest,
+    ScriptEditor,
+    ScriptSyntax,
+};
 use joy_engine::runtime::Storage;
-use joy_engine::runtime::hud_text::{self, Style};
+use joy_engine::runtime::hud_text::{
+    self,
+    Style,
+};
 
-use super::asset_types::{DEFAULT_NEW_ASSET_KIND, NEW_ASSET_KINDS, new_asset_hint};
-use super::constants::{CONTENT_BROWSER_MAXIMUM_WIDTH, CONTENT_BROWSER_MINIMUM_WIDTH, DIVIDER_KEY_STEP};
-use super::main::{Confirmation, Outcome, SourceView, TabContent, Workspace};
+use super::asset_types::{
+    DEFAULT_NEW_ASSET_KIND,
+    NEW_ASSET_KINDS,
+    new_asset_hint,
+};
+use super::constants::{
+    CONTENT_BROWSER_MAXIMUM_WIDTH,
+    CONTENT_BROWSER_MINIMUM_WIDTH,
+    DIVIDER_KEY_STEP,
+};
+use super::main::{
+    Confirmation,
+    Outcome,
+    SourceView,
+    TabContent,
+    Workspace,
+};
 use crate::interaction::widgets::{
-    self, ControlMap, Icon, badge, button, caption, danger_button, dialog_frame, icon_button, palette, primary_button,
-    region, toggle_button,
+    self,
+    ControlMap,
+    Icon,
+    badge,
+    button,
+    caption,
+    danger_button,
+    dialog_frame,
+    icon_button,
+    palette,
+    primary_button,
+    region,
+    toggle_button,
 };
 use crate::level::ui::LevelUi;
 

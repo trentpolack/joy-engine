@@ -5,19 +5,43 @@
 
 use std::fmt;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{
+    AtomicU64,
+    Ordering,
+};
 
 use glam::Vec3;
 use indexmap::IndexMap;
 use rapier3d::control::DynamicRayCastVehicleController;
 use rapier3d::dynamics::RigidBodyHandle;
-use rapier3d::geometry::{ColliderHandle, NarrowPhase, Ray};
-use rapier3d::parry::query::{DefaultQueryDispatcher, QueryDispatcher};
+use rapier3d::geometry::{
+    ColliderHandle,
+    NarrowPhase,
+    Ray,
+};
+use rapier3d::parry::query::{
+    DefaultQueryDispatcher,
+    QueryDispatcher,
+};
 use rapier3d::pipeline::QueryFilter;
 
-use super::convert::{finite_number, finite_vector, from_solver_vector, to_solver_vector};
-use super::sdf::{SdfCollisionCounters, SdfQueryDispatcher};
-use super::{BodyHandle, PhysicsError, RaycastHit, SdfCollisionStatistics, WheelOptions};
+use super::convert::{
+    finite_number,
+    finite_vector,
+    from_solver_vector,
+    to_solver_vector,
+};
+use super::sdf::{
+    SdfCollisionCounters,
+    SdfQueryDispatcher,
+};
+use super::{
+    BodyHandle,
+    PhysicsError,
+    RaycastHit,
+    SdfCollisionStatistics,
+    WheelOptions,
+};
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Constants

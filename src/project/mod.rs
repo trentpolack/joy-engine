@@ -6,6 +6,12 @@
 pub mod project_manifest;
 
 pub use project_manifest::{
-    JOY_PROJECT_MANIFEST, PROJECT_SCHEMA_VERSION, ProjectCapability, ProjectManifest, ProjectManifestError,
-    ProjectPreview, parse_project_manifest, parse_project_manifest_text,
+    JOY_PROJECT_MANIFEST,
+    PROJECT_SCHEMA_VERSION,
+    ProjectCapability,
+    ProjectManifest,
+    ProjectManifestError,
+    ProjectPreview,
+    parse_project_manifest,
+    parse_project_manifest_text,
 };

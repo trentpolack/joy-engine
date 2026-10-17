@@ -6,13 +6,22 @@
 //! only redraw the preview; they never change a document, a save, or an export.
 
 use joy_engine::development::components;
-use joy_engine::development::{NumericDrafts, ScalarControl};
-use joy_engine::egui::{self, Ui};
+use joy_engine::development::{
+    NumericDrafts,
+    ScalarControl,
+};
+use joy_engine::egui::{
+    self,
+    Ui,
+};
 use joy_engine::rendering::ShadowQuality;
 use joy_engine::runtime::theme::tokens;
 
 use crate::rendering::preview_lighting::{
-    DEFAULT_PREVIEW_LIGHTING, PREVIEW_LIGHTING_FIELDS, PreviewLightingSettings, quality_name,
+    DEFAULT_PREVIEW_LIGHTING,
+    PREVIEW_LIGHTING_FIELDS,
+    PreviewLightingSettings,
+    quality_name,
 };
 
 /// The validation message of the last rejected change.

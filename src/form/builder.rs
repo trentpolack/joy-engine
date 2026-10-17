@@ -7,11 +7,26 @@
 use crate::form::{
     GeometryData,
     materials::read_materials,
-    resources::{read_mesh, transform_mesh},
-    value::{DataRef, SharedBudget, SharedObject, Value, integer_range},
+    resources::{
+        read_mesh,
+        transform_mesh,
+    },
+    value::{
+        DataRef,
+        SharedBudget,
+        SharedObject,
+        Value,
+        integer_range,
+    },
 };
-use serde_json::{Value as Json, json};
-use std::{collections::HashMap, rc::Rc};
+use serde_json::{
+    Value as Json,
+    json,
+};
+use std::{
+    collections::HashMap,
+    rc::Rc,
+};
 
 const MAX_VERTICES: usize = 150_000;
 const MAX_TRIANGLES: usize = 180_000;

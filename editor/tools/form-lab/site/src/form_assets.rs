@@ -8,7 +8,11 @@
 //! use the text bundled at build time (`build.rs`). Nothing here writes back to an asset.
 
 use crate::document::FormDocument;
-use crate::form_library::{FormLibraryAsset, create_form_library, open_form_library_asset};
+use crate::form_library::{
+    FormLibraryAsset,
+    create_form_library,
+    open_form_library_asset,
+};
 
 include!(concat!(env!("OUT_DIR"), "/form_assets.rs"));
 

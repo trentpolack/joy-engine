@@ -5,7 +5,11 @@
 //! contributors; see `LICENSE-luma.gl`). Each pass's WGSL lives in `shaders/`; this table records its uniform block
 //! in declaration order with luma.gl's default values. The table was generated from the upstream npm package.
 
-use crate::rendering::scene_effects::pass::{PassDefinition, UniformField, UniformKind};
+use crate::rendering::scene_effects::pass::{
+    PassDefinition,
+    UniformField,
+    UniformKind,
+};
 
 /// Every pass the scene-effect pipelines run, sorted by name.
 // One field per line keeps the generated table diffable; rustfmt would reflow the longer rows.

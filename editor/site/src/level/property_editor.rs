@@ -12,11 +12,21 @@
 use std::collections::HashMap;
 
 use joy_engine::gameplay::{
-    ComponentFieldKind, ComponentFieldSchema, ComponentIssue, ComponentSchemaCatalog, is_component_field_active,
+    ComponentFieldKind,
+    ComponentFieldSchema,
+    ComponentIssue,
+    ComponentSchemaCatalog,
+    is_component_field_active,
 };
-use joy_engine::serde_json::{Map, Value};
+use joy_engine::serde_json::{
+    Map,
+    Value,
+};
 
-use crate::interaction::numeric_controls::{NumberBounds, format_number};
+use crate::interaction::numeric_controls::{
+    NumberBounds,
+    format_number,
+};
 use crate::server::AssetEntry;
 
 /// Inspector rows rendered before large data is left to Advanced Source.

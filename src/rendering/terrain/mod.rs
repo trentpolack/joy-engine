@@ -27,16 +27,40 @@ mod terrain_selection;
 mod terrain_timing;
 
 pub use terrain_asset::{
-    TerrainAsset, TerrainError, TerrainManifest, TerrainPatch, decode_terrain, load_terrain, parse_terrain,
-    sample_height_triangle, sample_terrain,
+    TerrainAsset,
+    TerrainError,
+    TerrainManifest,
+    TerrainPatch,
+    decode_terrain,
+    load_terrain,
+    parse_terrain,
+    sample_height_triangle,
+    sample_terrain,
 };
-pub use terrain_grid::{TerrainGrid, TerrainIndexRange, create_terrain_grid};
-pub use terrain_renderer::{TerrainDiagnostic, TerrainFrame, TerrainRenderer, TerrainStats, TerrainTriangleCount};
+pub use terrain_grid::{
+    TerrainGrid,
+    TerrainIndexRange,
+    create_terrain_grid,
+};
+pub use terrain_renderer::{
+    TerrainDiagnostic,
+    TerrainFrame,
+    TerrainRenderer,
+    TerrainStats,
+    TerrainTriangleCount,
+};
 pub use terrain_selection::{
-    TerrainSelection, TerrainView, reconcile_terrain_edges, sample_morphed_height, select_terrain,
+    TerrainSelection,
+    TerrainView,
+    reconcile_terrain_edges,
+    sample_morphed_height,
+    select_terrain,
     validate_terrain_view,
 };
-pub use terrain_timing::{TerrainTiming, TerrainTimingStatus};
+pub use terrain_timing::{
+    TerrainTiming,
+    TerrainTimingStatus,
+};
 
 // WGSL sources. Terrain shaders are the shared geometry file followed by their own entry points.
 const TERRAIN_GEOMETRY_SOURCE: &str = include_str!("../shaders/terrain-geometry.wgsl");

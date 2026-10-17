@@ -58,35 +58,92 @@ mod texture_set;
 mod texture_source;
 
 pub use asset::{
-    CompiledEmitter, CompiledParticleEffect, MAXIMUM_EFFECT_PARTICLES, PARTICLE_EFFECT_VERSION, ParticleAssetError,
-    ParticleBurst, ParticleChild, ParticleEffectAsset, ParticleEmitterAsset, ParticleLight, ParticleParameter,
-    ParticleParameterValue, ParticleTexture, ParticleTrail, compile_particle_effect, parse_particle_effect,
+    CompiledEmitter,
+    CompiledParticleEffect,
+    MAXIMUM_EFFECT_PARTICLES,
+    PARTICLE_EFFECT_VERSION,
+    ParticleAssetError,
+    ParticleBurst,
+    ParticleChild,
+    ParticleEffectAsset,
+    ParticleEmitterAsset,
+    ParticleLight,
+    ParticleParameter,
+    ParticleParameterValue,
+    ParticleTexture,
+    ParticleTrail,
+    compile_particle_effect,
+    parse_particle_effect,
 };
-pub use constants::{ParticleParameterType, ParticleRenderer, ParticleValueKind};
+pub use constants::{
+    ParticleParameterType,
+    ParticleRenderer,
+    ParticleValueKind,
+};
 pub use language_information::particle_language_catalog;
-pub use lights::{ParticleLightSelection, ParticlePointLight, collect_particle_lights};
+pub use lights::{
+    ParticleLightSelection,
+    ParticlePointLight,
+    collect_particle_lights,
+};
 pub use particle_effect::{
-    EffectParticle, PARTICLE_STEP_SECONDS, ParticleEffect, ParticleEffectError, ParticleEffectOptions, ParticleFault,
-    ParticlePhase, particle_seed,
+    EffectParticle,
+    PARTICLE_STEP_SECONDS,
+    ParticleEffect,
+    ParticleEffectError,
+    ParticleEffectOptions,
+    ParticleFault,
+    ParticlePhase,
+    particle_seed,
 };
 pub use profile::{
-    ParticleProfile, ParticleProfileRow, create_particle_profile, refresh_particle_profile_live, reset_particle_profile,
+    ParticleProfile,
+    ParticleProfileRow,
+    create_particle_profile,
+    refresh_particle_profile_live,
+    reset_particle_profile,
 };
 pub use rendering::{
-    PARTICLE_XY_BASIS, ParticleBatch, ParticleCameraBasis, ParticleRenderError, ParticleRenderMetrics,
-    ParticleRenderMetricsRow, append_particle_effect, create_particle_effect_batches, create_particle_render_metrics,
+    PARTICLE_XY_BASIS,
+    ParticleBatch,
+    ParticleCameraBasis,
+    ParticleRenderError,
+    ParticleRenderMetrics,
+    ParticleRenderMetricsRow,
+    append_particle_effect,
+    create_particle_effect_batches,
+    create_particle_render_metrics,
 };
 pub use script::{
-    MAXIMUM_SCRIPT_LENGTH, MAXIMUM_SCRIPT_TOKENS, PARTICLE_CONTAINERS, PARTICLE_FIELDS, PARTICLE_FUNCTION_ARITIES,
-    PARTICLE_INPUTS, ParticleScript, ParticleScriptBudget, ParticleScriptError, compile_particle_script,
+    MAXIMUM_SCRIPT_LENGTH,
+    MAXIMUM_SCRIPT_TOKENS,
+    PARTICLE_CONTAINERS,
+    PARTICLE_FIELDS,
+    PARTICLE_FUNCTION_ARITIES,
+    PARTICLE_INPUTS,
+    ParticleScript,
+    ParticleScriptBudget,
+    ParticleScriptError,
+    compile_particle_script,
 };
-pub use texture_set::{ParticleTextureSet, decode_particle_texture};
+pub use texture_set::{
+    ParticleTextureSet,
+    decode_particle_texture,
+};
 pub use texture_source::{
-    DEFAULT_PARTICLE_TEXTURE, MAXIMUM_PARTICLE_TEXTURE_SIZE, ParticleTextureDimensions, ParticleTextureError,
-    encode_particle_texture_source, read_particle_texture_source,
+    DEFAULT_PARTICLE_TEXTURE,
+    MAXIMUM_PARTICLE_TEXTURE_SIZE,
+    ParticleTextureDimensions,
+    ParticleTextureError,
+    encode_particle_texture_source,
+    read_particle_texture_source,
 };
 
 // Crate-internal geometry and light helpers shared with `crate::rendering::AssetScene`.
 pub(crate) use lights::rank_particle_lights;
-pub(crate) use rendering::{ParticleTriangle, batch_particle_triangles, collect_particle_triangles};
+pub(crate) use rendering::{
+    ParticleTriangle,
+    batch_particle_triangles,
+    collect_particle_triangles,
+};
 pub(crate) use texture_set::textured_sources;

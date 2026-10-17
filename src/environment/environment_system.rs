@@ -12,9 +12,15 @@
 
 use std::f64::consts::PI;
 
-use crate::core::{Rgb, smoothstep};
+use crate::core::{
+    Rgb,
+    smoothstep,
+};
 use glam::Vec3;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use crate::core::format::format_bound;
 

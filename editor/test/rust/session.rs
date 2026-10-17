@@ -5,7 +5,10 @@
 //! invalid stored data starts empty.
 
 use joy_editor::workspace::constants::SESSION_STORAGE_KEY;
-use joy_editor::workspace::session::{LayoutPreferences, WorkspaceSession};
+use joy_editor::workspace::session::{
+    LayoutPreferences,
+    WorkspaceSession,
+};
 use joy_engine::runtime::Storage;
 
 use crate::support::TempFolder;

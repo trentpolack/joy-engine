@@ -6,18 +6,36 @@
 
 use std::collections::HashMap;
 
-use crate::core::{JsonRecord, PrimitiveShape, Rgb, Transform};
+use crate::core::{
+    JsonRecord,
+    PrimitiveShape,
+    Rgb,
+    Transform,
+};
 use crate::gameplay::{
-    ComponentError, EntityDefinition, EntityState, EntityTransform, LightComponent, RENDER_COMPONENT_DEFAULTS,
-    RenderComponent, RenderSource, component_type,
+    ComponentError,
+    EntityDefinition,
+    EntityState,
+    EntityTransform,
+    LightComponent,
+    RENDER_COMPONENT_DEFAULTS,
+    RenderComponent,
+    RenderSource,
+    component_type,
 };
 use indexmap::IndexMap;
 
 use crate::rendering::error::RenderError;
-use crate::rendering::form_assets::{primitive_box, primitive_sphere};
+use crate::rendering::form_assets::{
+    primitive_box,
+    primitive_sphere,
+};
 use crate::rendering::frame::PointLight;
 use crate::rendering::mesh::MeshAsset;
-use crate::rendering::scene::{MeshInstanceId, RenderScene};
+use crate::rendering::scene::{
+    MeshInstanceId,
+    RenderScene,
+};
 
 /// Read access to an entity's presentation data; implemented for authored definitions and runtime entity state.
 pub trait LevelEntity {

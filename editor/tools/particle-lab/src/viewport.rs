@@ -10,18 +10,44 @@
 //! only and never change the exported effect.
 
 use joy_engine::core::post_processing::ToneMapper;
-use joy_engine::core::{PostProcessingConfig, Rgba};
-use joy_engine::glam::{Vec2, Vec3};
+use joy_engine::core::{
+    PostProcessingConfig,
+    Rgba,
+};
+use joy_engine::glam::{
+    Vec2,
+    Vec3,
+};
 use joy_engine::particles::{
-    CompiledParticleEffect, ParticleBatch, ParticleCameraBasis, ParticleEffect, ParticleRenderMetrics,
-    ParticleTextureSet, collect_particle_lights, create_particle_effect_batches, create_particle_render_metrics,
+    CompiledParticleEffect,
+    ParticleBatch,
+    ParticleCameraBasis,
+    ParticleEffect,
+    ParticleRenderMetrics,
+    ParticleTextureSet,
+    collect_particle_lights,
+    create_particle_effect_batches,
+    create_particle_render_metrics,
 };
 use joy_engine::rendering::{
-    ColorVertex, EditorGrid, EditorGridView, FrameInputs, OrbitCamera, RegionCamera, RenderScene, TransparentDraw,
+    ColorVertex,
+    EditorGrid,
+    EditorGridView,
+    FrameInputs,
+    OrbitCamera,
+    RegionCamera,
+    RenderScene,
+    TransparentDraw,
 };
-use joy_engine::runtime::{RenderTarget, Stopwatch};
+use joy_engine::runtime::{
+    RenderTarget,
+    Stopwatch,
+};
 
-use crate::constants::{PREVIEW_LIGHT_LIMIT, PerformanceMode};
+use crate::constants::{
+    PREVIEW_LIGHT_LIMIT,
+    PerformanceMode,
+};
 
 /// Height of the light-receiver surface; the grid floats two units above it.
 pub const PREVIEW_RECEIVER_HEIGHT: f64 = -120.0;

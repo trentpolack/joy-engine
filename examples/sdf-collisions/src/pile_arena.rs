@@ -11,11 +11,21 @@
 
 use joy_engine::core::PrimitiveShape;
 use joy_engine::core::js_math;
-use joy_engine::physics::{BodyHandle, BodyOptions, PhysicsError, SdfCollisionStatistics};
+use joy_engine::physics::{
+    BodyHandle,
+    BodyOptions,
+    PhysicsError,
+    SdfCollisionStatistics,
+};
 use joy_engine::prelude::*;
 use joy_engine::runtime::Stopwatch;
 
-use super::config::sdf_collisions_config::{ARENA, PHYSICS, PRESENTATION, SPAWN};
+use super::config::sdf_collisions_config::{
+    ARENA,
+    PHYSICS,
+    PRESENTATION,
+    SPAWN,
+};
 use super::prop_library::PropLibrary;
 
 /// Which collider each prop receives.

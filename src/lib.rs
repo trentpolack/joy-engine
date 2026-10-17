@@ -85,11 +85,29 @@ pub mod runtime;
 
 pub use development::DevTools;
 pub use runtime::{
-    AudioBank, Frame, FrameTime, Game, GameError, GameResult, InputBinding, InputManager, InputMap, RenderTarget,
-    ShellError, ShellOptions, StartContext, Viewport, key, run, theme,
+    AudioBank,
+    Frame,
+    FrameTime,
+    Game,
+    GameError,
+    GameResult,
+    InputBinding,
+    InputManager,
+    InputMap,
+    RenderTarget,
+    ShellError,
+    ShellOptions,
+    StartContext,
+    Viewport,
+    key,
+    run,
+    theme,
 };
 #[cfg(not(target_arch = "wasm32"))]
-pub use runtime::{HeadlessOptions, HeadlessShell};
+pub use runtime::{
+    HeadlessOptions,
+    HeadlessShell,
+};
 
 /// Immediate-mode UI for HUDs and tools.
 pub use egui;
@@ -108,33 +126,110 @@ pub use wasm_bindgen;
 /// The names most games use.
 pub mod prelude {
     pub use crate::core::{
-        PostProcessingConfig, PostProcessingProfile, RandomSource, Rgb, Rgba, SeededRandom, Transform,
+        PostProcessingConfig,
+        PostProcessingProfile,
+        RandomSource,
+        Rgb,
+        Rgba,
+        SeededRandom,
+        Transform,
     };
     pub use crate::development::DevTools;
-    pub use crate::environment::{EnvironmentFrame, EnvironmentOptions, EnvironmentSystem};
+    pub use crate::environment::{
+        EnvironmentFrame,
+        EnvironmentOptions,
+        EnvironmentSystem,
+    };
     pub use crate::gameplay::{
-        ControlIntent, EntityBehavior, EntityDefinition, EntityId, EntityRegistry, EntityState, IntentController,
-        LevelData, LevelRuntime, SimulationContext, parse_level,
+        ControlIntent,
+        EntityBehavior,
+        EntityDefinition,
+        EntityId,
+        EntityRegistry,
+        EntityState,
+        IntentController,
+        LevelData,
+        LevelRuntime,
+        SimulationContext,
+        parse_level,
     };
     pub use crate::particles::{
-        CompiledParticleEffect, PARTICLE_STEP_SECONDS, PARTICLE_XY_BASIS, ParticleCameraBasis, ParticleEffect,
-        ParticleEffectOptions, ParticleTextureSet, append_particle_effect, collect_particle_lights,
-        compile_particle_effect, create_particle_effect_batches, parse_particle_effect,
+        CompiledParticleEffect,
+        PARTICLE_STEP_SECONDS,
+        PARTICLE_XY_BASIS,
+        ParticleCameraBasis,
+        ParticleEffect,
+        ParticleEffectOptions,
+        ParticleTextureSet,
+        append_particle_effect,
+        collect_particle_lights,
+        compile_particle_effect,
+        create_particle_effect_batches,
+        parse_particle_effect,
     };
-    pub use crate::physics::{PhysicsWorld, PhysicsWorldOptions, VehicleInput, VehicleTuning};
+    pub use crate::physics::{
+        PhysicsWorld,
+        PhysicsWorldOptions,
+        VehicleInput,
+        VehicleTuning,
+    };
     pub use crate::rendering::{
-        AssetScene, BackendPreference, Camera, EnvironmentLighting, FormAssetLibrary, FrameInputs, LevelScene,
-        MeshAsset, MeshCollection, MeshInstance, MeshInstanceId, OrbitCamera, PointLight, RenderScene, RendererOptions,
-        Shading, ShadowOptions, ShadowQuality, TextureAsset, TransparentDraw, compile_form_mesh, primitive_box,
+        AssetScene,
+        BackendPreference,
+        Camera,
+        EnvironmentLighting,
+        FormAssetLibrary,
+        FrameInputs,
+        LevelScene,
+        MeshAsset,
+        MeshCollection,
+        MeshInstance,
+        MeshInstanceId,
+        OrbitCamera,
+        PointLight,
+        RenderScene,
+        RendererOptions,
+        Shading,
+        ShadowOptions,
+        ShadowQuality,
+        TextureAsset,
+        TransparentDraw,
+        compile_form_mesh,
+        primitive_box,
         primitive_sphere,
     };
     pub use crate::runtime::{
-        AudioBank, AudioBankOptions, FixedStepLoop, Frame, FrameTime, Game, GameError, GameResult, InputAxis,
-        InputBinding, InputManager, InputMap, PcmSound, RenderTarget, ShellError, ShellOptions, SoundDefinition,
-        StartContext, Viewport, gamepad, key, run,
+        AudioBank,
+        AudioBankOptions,
+        FixedStepLoop,
+        Frame,
+        FrameTime,
+        Game,
+        GameError,
+        GameResult,
+        InputAxis,
+        InputBinding,
+        InputManager,
+        InputMap,
+        PcmSound,
+        RenderTarget,
+        ShellError,
+        ShellOptions,
+        SoundDefinition,
+        StartContext,
+        Viewport,
+        gamepad,
+        key,
+        run,
     };
     pub use egui;
-    pub use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
+    pub use glam::{
+        Mat4,
+        Quat,
+        Vec2,
+        Vec3,
+        Vec4,
+    };
 }
 
 /// Declare `$run` (a `fn()`) as the browser entry point when compiling for WebAssembly; expands to nothing natively.

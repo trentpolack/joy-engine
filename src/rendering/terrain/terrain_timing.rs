@@ -3,7 +3,10 @@
 
 //! Optional, non-blocking timestamp profiling of the standalone terrain render pass.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 /// Timestamps per sample: the beginning and end of the render pass.
 const TIMESTAMP_QUERY_COUNT: u32 = 2;

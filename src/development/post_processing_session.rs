@@ -7,7 +7,11 @@
 use serde_json::Value;
 
 use crate::core::format::json_number;
-use crate::core::{PostProcessingConfig, PostProcessingError, PostProcessingProfile};
+use crate::core::{
+    PostProcessingConfig,
+    PostProcessingError,
+    PostProcessingProfile,
+};
 
 /// Undo steps retained per session.
 const MAXIMUM_HISTORY_LENGTH: usize = 100;

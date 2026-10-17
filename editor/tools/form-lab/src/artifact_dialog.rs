@@ -7,10 +7,17 @@
 //! this dialog open and writes nothing, and a failed write keeps it open with the error.
 
 use joy_engine::development::components;
-use joy_engine::egui::{self, RichText};
+use joy_engine::egui::{
+    self,
+    RichText,
+};
 use joy_engine::runtime::theme::tokens;
 
-use crate::session::{ArtifactFormat, EXPORT_FORMATS, SAVE_FORMATS};
+use crate::session::{
+    ArtifactFormat,
+    EXPORT_FORMATS,
+    SAVE_FORMATS,
+};
 
 /// Which dialog is open.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

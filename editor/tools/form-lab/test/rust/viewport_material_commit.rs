@@ -6,7 +6,10 @@
 //! markers, and framing in place.
 
 use form_lab::rendering::viewport::Viewport;
-use joy_engine::form::{GeometryData, default_material};
+use joy_engine::form::{
+    GeometryData,
+    default_material,
+};
 use joy_engine::serde_json::json;
 
 /// A one-triangle mesh whose material carries `source` as its base color map.

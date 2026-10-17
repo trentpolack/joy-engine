@@ -12,10 +12,22 @@
 //! Everything is expressed in the first shape's local frame; `pose12` places the second shape in that frame. Lengths
 //! are meters, and the paper's unit-size tolerances scale with the smaller shape's size.
 
-use rapier3d::math::{Pose, Real, Vector};
-use rapier3d::parry::bounding_volume::{Aabb, BoundingVolume};
+use rapier3d::math::{
+    Pose,
+    Real,
+    Vector,
+};
+use rapier3d::parry::bounding_volume::{
+    Aabb,
+    BoundingVolume,
+};
 
-use super::sdf_primitives::{FieldSample, box_field, half_space_field, sphere_field};
+use super::sdf_primitives::{
+    FieldSample,
+    box_field,
+    half_space_field,
+    sphere_field,
+};
 use super::sdf_shape::SdfShapeData;
 use super::sdf_voxel::unit;
 use crate::core::SeededRandom;

@@ -4,9 +4,18 @@
 //! Mesh and material resources, palettes, typed materials, and primitive helpers.
 
 use joy_engine::form::{
-    AlphaMode, DEFAULT_SPHERE_SEGMENTS, FormMaterial, GeometryData, compile, mesh_box, mesh_sphere,
+    AlphaMode,
+    DEFAULT_SPHERE_SEGMENTS,
+    FormMaterial,
+    GeometryData,
+    compile,
+    mesh_box,
+    mesh_sphere,
 };
-use serde_json::{Value, json};
+use serde_json::{
+    Value,
+    json,
+};
 
 fn evaluate(source: &str) -> GeometryData {
     compile(source, &json!({}), None).expect("valid FORM resource script")

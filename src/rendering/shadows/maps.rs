@@ -4,12 +4,20 @@
 //! GPU resources for shadows: the cascade and point-light depth arrays, the receiver uniform block, and per-view
 //! caster matrices. Layouts here mirror the `Shadows` block and bindings in scene-common.wgsl.
 
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{
+    Pod,
+    Zeroable,
+};
 use glam::Mat4;
 
 use crate::rendering::frame::MAX_POINT_LIGHTS;
 use crate::rendering::materials::SHADOW_FORMAT;
-use crate::rendering::shadows::{MAX_CASCADES, POINT_FACES, SHADOW_LIGHTS_PER_BATCH, ShadowOptions};
+use crate::rendering::shadows::{
+    MAX_CASCADES,
+    POINT_FACES,
+    SHADOW_LIGHTS_PER_BATCH,
+    ShadowOptions,
+};
 
 /// Byte stride between caster matrices; the portable minimum uniform offset alignment.
 const CASTER_STRIDE: u64 = 256;

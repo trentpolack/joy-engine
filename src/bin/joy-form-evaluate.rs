@@ -16,11 +16,22 @@
 //! it, and the next line is processed normally. The process exits when input ends or output
 //! can no longer be written.
 
-use std::io::{self, BufRead, Read, Write};
+use std::io::{
+    self,
+    BufRead,
+    Read,
+    Write,
+};
 use std::time::Instant;
 
-use joy_engine::form::{Diagnostic, compile};
-use serde_json::{Value, json};
+use joy_engine::form::{
+    Diagnostic,
+    compile,
+};
+use serde_json::{
+    Value,
+    json,
+};
 
 /// Largest accepted request, excluding its line terminator.
 const MAX_REQUEST_BYTES: usize = 32 * 1024 * 1024;

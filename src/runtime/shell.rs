@@ -13,21 +13,58 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::rendering::{BackendPreference, GpuContext, RenderError, Renderer, RendererOptions};
+use crate::rendering::{
+    BackendPreference,
+    GpuContext,
+    RenderError,
+    Renderer,
+    RendererOptions,
+};
 use web_time::Instant;
 use winit::application::ApplicationHandler;
-use winit::event::{DeviceEvent, DeviceId, ElementState, MouseButton, TouchPhase, WindowEvent};
-use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::event::{
+    DeviceEvent,
+    DeviceId,
+    ElementState,
+    MouseButton,
+    TouchPhase,
+    WindowEvent,
+};
+use winit::event_loop::{
+    ActiveEventLoop,
+    ControlFlow,
+    EventLoop,
+};
 use winit::keyboard::PhysicalKey;
-use winit::window::{CursorGrabMode, Window, WindowId};
+use winit::window::{
+    CursorGrabMode,
+    Window,
+    WindowId,
+};
 
 use crate::development::DevTools;
 use crate::development::dock;
-use crate::runtime::clock::{DEFAULT_MAXIMUM_FRAME_SECONDS, FrameClock};
+use crate::runtime::clock::{
+    DEFAULT_MAXIMUM_FRAME_SECONDS,
+    FrameClock,
+};
 use crate::runtime::egui_layer::EguiLayer;
-use crate::runtime::game::{Frame, Game, GameResult, RenderTarget, ShellRequests, StartContext, Viewport};
+use crate::runtime::game::{
+    Frame,
+    Game,
+    GameResult,
+    RenderTarget,
+    ShellRequests,
+    StartContext,
+    Viewport,
+};
 use crate::runtime::gamepads::GamepadPoller;
-use crate::runtime::input::{InputManager, InputMap, key, key_code_name};
+use crate::runtime::input::{
+    InputManager,
+    InputMap,
+    key,
+    key_code_name,
+};
 use crate::runtime::surface::ConfiguredSurface;
 
 /// Shell configuration; copied at startup.

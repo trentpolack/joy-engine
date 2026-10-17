@@ -10,11 +10,37 @@ use std::hash::Hash;
 
 use joy_engine::development::components;
 use joy_engine::egui::{
-    self, Align, Color32, CornerRadius, Id, Key, Modifiers, Order, Pos2, Rect, Response, RichText, Sense, Shape,
-    Stroke, StrokeKind, TextEdit, Ui, UiBuilder, Vec2, pos2, vec2,
+    self,
+    Align,
+    Color32,
+    CornerRadius,
+    Id,
+    Key,
+    Modifiers,
+    Order,
+    Pos2,
+    Rect,
+    Response,
+    RichText,
+    Sense,
+    Shape,
+    Stroke,
+    StrokeKind,
+    TextEdit,
+    Ui,
+    UiBuilder,
+    Vec2,
+    pos2,
+    vec2,
 };
-use joy_engine::runtime::hud_text::{self, Style};
-use joy_engine::theme::{self, tokens};
+use joy_engine::runtime::hud_text::{
+    self,
+    Style,
+};
+use joy_engine::theme::{
+    self,
+    tokens,
+};
 
 use joy_engine::development::lab_values::StepScale;
 

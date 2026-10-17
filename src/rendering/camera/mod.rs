@@ -9,9 +9,18 @@
 
 mod top_down_camera;
 
-pub use top_down_camera::{TopDownCamera, sort_top_down_transparent_triangles, top_down_orthographic};
+pub use top_down_camera::{
+    TopDownCamera,
+    sort_top_down_transparent_triangles,
+    top_down_orthographic,
+};
 
-use glam::{Mat4, Vec2, Vec3, Vec4};
+use glam::{
+    Mat4,
+    Vec2,
+    Vec3,
+    Vec4,
+};
 
 /// Smallest automatic near plane in world units.
 const MINIMUM_NEAR_PLANE: f32 = 0.001;

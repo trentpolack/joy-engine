@@ -3,6 +3,9 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-17-2026
+### Development Workflow
+- Aligned CI and local validation with nightly rustfmt for vertical imports, formatted the Rust workspace, and retained stable Rust for Clippy and builds. Resolved fixed-size chunk iteration lints in SDF mesh validation, the collision example, and its tests without changing mesh handling.
+
 ### Repository Audits
 - Added a standalone repository audit, shared read-only checks, and an independent fixture suite. Reports identify maintenance issues and review candidates without requiring a hosting repository.
 

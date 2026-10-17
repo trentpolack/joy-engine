@@ -9,14 +9,24 @@
 
 use std::path::PathBuf;
 
-use egui::{Context, RichText};
+use egui::{
+    Context,
+    RichText,
+};
 use indexmap::IndexMap;
 
-use crate::core::{ConfigApplyMode, ConfigError, ConfigValues};
+use crate::core::{
+    ConfigApplyMode,
+    ConfigError,
+    ConfigValues,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::development::config_file::ConfigFile;
 use crate::development::config_session::ConfigSession;
-use crate::development::dock::{self, DockTool};
+use crate::development::dock::{
+    self,
+    DockTool,
+};
 
 /// One user request from the panel, applied after drawing.
 enum Action {

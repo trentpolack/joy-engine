@@ -10,7 +10,10 @@
 //! use, so what you see here is what a level shows.
 
 use joy_engine::prelude::*;
-use joy_engine::serde_json::{Map, Value};
+use joy_engine::serde_json::{
+    Map,
+    Value,
+};
 
 /// Built-in assets, compiled from source at startup so the viewer runs identically natively and in browsers.
 const ASSETS: [(&str, &str); 6] = [

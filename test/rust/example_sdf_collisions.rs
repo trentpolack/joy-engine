@@ -14,10 +14,19 @@ mod example;
 
 use example::benchmark::run_benchmark;
 use example::config::sdf_collisions_config::SPAWN;
-use example::prop_library::{PROPS, PropLibrary};
-use example::sdf_collisions_demo::{SdfCollisionsDemo, input_map};
+use example::prop_library::{
+    PROPS,
+    PropLibrary,
+};
+use example::sdf_collisions_demo::{
+    SdfCollisionsDemo,
+    input_map,
+};
 use joy_engine::runtime::key;
-use joy_engine::{HeadlessOptions, HeadlessShell};
+use joy_engine::{
+    HeadlessOptions,
+    HeadlessShell,
+};
 
 #[test]
 fn props_bake_into_colliders_that_fit_their_meshes() {

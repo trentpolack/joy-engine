@@ -4,7 +4,11 @@
 //! Editor-neutral information about the FORM language's built-in symbols for completion, hover text, highlighting,
 //! and documentation.
 
-use crate::scripting::{ScriptLanguageCatalog, ScriptLanguageSymbol, ScriptSymbolKind};
+use crate::scripting::{
+    ScriptLanguageCatalog,
+    ScriptLanguageSymbol,
+    ScriptSymbolKind,
+};
 
 /// FORM language keywords in TypeScript `FORM_KEYWORD` order (`userData` is also a command and is listed there).
 pub const FORM_KEYWORDS: [&str; 11] =

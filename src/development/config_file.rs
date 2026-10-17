@@ -6,11 +6,24 @@
 
 use std::path::PathBuf;
 
-use serde_json::{Map, Value};
+use serde_json::{
+    Map,
+    Value,
+};
 
 use crate::core::format::json_number;
-use crate::core::{ConfigField, ConfigValues, create_config_document_values};
-use crate::development::files::{WriteError, pretty_json, read_document, revision_of, write_atomically};
+use crate::core::{
+    ConfigField,
+    ConfigValues,
+    create_config_document_values,
+};
+use crate::development::files::{
+    WriteError,
+    pretty_json,
+    read_document,
+    revision_of,
+    write_atomically,
+};
 
 /// Schema reference written into saved documents, beside the document in each game's `config` folder.
 const SCHEMA_REFERENCE: &str = "./tuning-overrides.schema.json";

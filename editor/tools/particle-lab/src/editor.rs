@@ -6,7 +6,13 @@
 //! and a fresh history whenever the owner switches emitters or documents, so programmatic refreshes never become undo
 //! entries.
 
-use joy_engine::development::{ScriptDiagnostic, ScriptEditor, ScriptEditorResponse, ScriptSyntax, components};
+use joy_engine::development::{
+    ScriptDiagnostic,
+    ScriptEditor,
+    ScriptEditorResponse,
+    ScriptSyntax,
+    components,
+};
 use joy_engine::egui;
 use joy_engine::particles::particle_language_catalog;
 

@@ -5,7 +5,13 @@
 //! replacement protection a source-only save keeps.
 
 use form_lab::document::FormDocument;
-use form_lab::session::{PreviewState, SaveFormat, Session, SessionEvent, StatusState};
+use form_lab::session::{
+    PreviewState,
+    SaveFormat,
+    Session,
+    SessionEvent,
+    StatusState,
+};
 use joy_engine::serde_json::json;
 
 const SOURCE: &str = "param height = 2 meta(min=0, max=5, step=0.5)\nbox(0, height/2, 0, 1, height, 1)\n";

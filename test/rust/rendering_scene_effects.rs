@@ -10,14 +10,35 @@
 
 use glam::Vec3;
 use joy_engine::core::Transform;
-use joy_engine::development::{EffectPreset, SceneEffectsControls};
+use joy_engine::development::{
+    EffectPreset,
+    SceneEffectsControls,
+};
 use joy_engine::rendering::scene_effects::{
-    ClusteredLightingOptions, NormalSource, OutlineOptions, Reprojection, SceneEffectsError, SceneEffectsOptions,
+    ClusteredLightingOptions,
+    NormalSource,
+    OutlineOptions,
+    Reprojection,
+    SceneEffectsError,
+    SceneEffectsOptions,
     TaaOptions,
 };
 use joy_engine::rendering::{
-    BackendPreference, CAPTURE_FORMAT, CelestialLight, EnvironmentLighting, FrameInputs, GpuContext, MeshAsset,
-    MeshChannels, MeshInstance, MeshInstanceId, OffscreenTarget, OrbitCamera, PointLight, RenderScene, Renderer,
+    BackendPreference,
+    CAPTURE_FORMAT,
+    CelestialLight,
+    EnvironmentLighting,
+    FrameInputs,
+    GpuContext,
+    MeshAsset,
+    MeshChannels,
+    MeshInstance,
+    MeshInstanceId,
+    OffscreenTarget,
+    OrbitCamera,
+    PointLight,
+    RenderScene,
+    Renderer,
     RendererOptions,
 };
 

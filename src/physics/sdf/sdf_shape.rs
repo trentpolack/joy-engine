@@ -13,13 +13,34 @@ use std::fmt;
 use std::sync::Arc;
 
 use glam::Vec3;
-use rapier3d::math::{Matrix, Real, Vector};
-use rapier3d::parry::bounding_volume::{Aabb, BoundingVolume};
+use rapier3d::math::{
+    Matrix,
+    Real,
+    Vector,
+};
+use rapier3d::parry::bounding_volume::{
+    Aabb,
+    BoundingVolume,
+};
 
 use super::super::PhysicsError;
-use super::super::convert::{from_solver_vector, to_solver_vector};
-use super::sdf_primitives::{FieldSample, box_field, capsule_field, cylinder_field, sphere_field, torus_field};
-use super::sdf_voxel::{TriangleMesh, VoxelField, unit};
+use super::super::convert::{
+    from_solver_vector,
+    to_solver_vector,
+};
+use super::sdf_primitives::{
+    FieldSample,
+    box_field,
+    capsule_field,
+    cylinder_field,
+    sphere_field,
+    torus_field,
+};
+use super::sdf_voxel::{
+    TriangleMesh,
+    VoxelField,
+    unit,
+};
 use crate::core::SeededRandom;
 
 // ---------------------------------------------------------------------------------------------------------------------

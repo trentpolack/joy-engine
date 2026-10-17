@@ -14,18 +14,38 @@
 
 use crate::core::PrimitiveShape;
 use glam::Vec3;
-use rapier3d::dynamics::{CoefficientCombineRule, RigidBodyBuilder};
-use rapier3d::geometry::{ColliderBuilder, SharedShape};
-use rapier3d::math::{Pose, Vector};
+use rapier3d::dynamics::{
+    CoefficientCombineRule,
+    RigidBodyBuilder,
+};
+use rapier3d::geometry::{
+    ColliderBuilder,
+    SharedShape,
+};
+use rapier3d::math::{
+    Pose,
+    Vector,
+};
 use rapier3d::pipeline::ActiveHooks;
 
 use super::convert::{
-    deterministic_ln_1p, euler_from_solver_rotation, finite_number, finite_vector, from_solver_vector,
-    solver_rotation_from_euler, to_solver_vector,
+    deterministic_ln_1p,
+    euler_from_solver_rotation,
+    finite_number,
+    finite_vector,
+    from_solver_vector,
+    solver_rotation_from_euler,
+    to_solver_vector,
 };
 use super::physics_world::BodyRecord;
 use super::sdf::SdfCollider;
-use super::{BodyHandle, PhysicsError, PhysicsTransform, PhysicsWorld, SdfShape};
+use super::{
+    BodyHandle,
+    PhysicsError,
+    PhysicsTransform,
+    PhysicsWorld,
+    SdfShape,
+};
 
 /// Smallest accepted sphere radius (JavaScript `Number.EPSILON`), compared in `f64`.
 const MIN_SPHERE_RADIUS: f64 = f64::EPSILON;

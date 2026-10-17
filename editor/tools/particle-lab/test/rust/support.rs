@@ -3,8 +3,18 @@
 
 //! Headless harness: the real tool on a software or hardware adapter, driven through the UI phase with synthetic input.
 
-use joy_engine::egui::{self, Event, Key, Modifiers, PointerButton, Pos2};
-use joy_engine::{HeadlessOptions, HeadlessShell};
+use joy_engine::egui::{
+    self,
+    Event,
+    Key,
+    Modifiers,
+    PointerButton,
+    Pos2,
+};
+use joy_engine::{
+    HeadlessOptions,
+    HeadlessShell,
+};
 use particle_lab::ParticleLabTool;
 
 /// Capture width, matching the TypeScript screenshots.

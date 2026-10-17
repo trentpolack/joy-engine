@@ -9,13 +9,37 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use joy_engine::development::{
-    ColorControl, ComponentGroup, NumberField, NumericDrafts, PanelLayout, PanelLayoutOptions, PropertyHistory,
-    ScalarControl, ScriptDiagnostic, ScriptEditor, ScriptSyntax, components,
+    ColorControl,
+    ComponentGroup,
+    NumberField,
+    NumericDrafts,
+    PanelLayout,
+    PanelLayoutOptions,
+    PropertyHistory,
+    ScalarControl,
+    ScriptDiagnostic,
+    ScriptEditor,
+    ScriptSyntax,
+    components,
 };
 use joy_engine::egui;
-use joy_engine::rendering::{FrameInputs, OrbitCamera, RenderScene};
-use joy_engine::runtime::{Frame, Game, GameResult, RenderTarget, StartContext, theme};
-use joy_engine::{HeadlessOptions, HeadlessShell};
+use joy_engine::rendering::{
+    FrameInputs,
+    OrbitCamera,
+    RenderScene,
+};
+use joy_engine::runtime::{
+    Frame,
+    Game,
+    GameResult,
+    RenderTarget,
+    StartContext,
+    theme,
+};
+use joy_engine::{
+    HeadlessOptions,
+    HeadlessShell,
+};
 
 const WIDTH: u32 = 1100;
 const HEIGHT: u32 = 520;

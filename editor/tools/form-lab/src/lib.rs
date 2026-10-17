@@ -44,7 +44,10 @@ pub mod workbench;
 
 pub use workbench::FormLab;
 
-use joy_engine::runtime::{ShellError, ShellOptions};
+use joy_engine::runtime::{
+    ShellError,
+    ShellOptions,
+};
 
 /// The shell settings FORM LAB runs with standalone: its title and canvas, a plain studio background (no sky), and
 /// the development overlay off.

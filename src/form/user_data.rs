@@ -3,7 +3,11 @@
 
 //! Authored user-data records and their allocation budget. Ported from `src/form/user-data.ts`.
 
-use crate::form::value::{DataRef, SharedBudget, Value};
+use crate::form::value::{
+    DataRef,
+    SharedBudget,
+    Value,
+};
 use serde_json::Value as Json;
 
 pub fn copy(value: &Json, budget: &SharedBudget) -> Result<Json, String> {

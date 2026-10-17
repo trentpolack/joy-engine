@@ -16,10 +16,21 @@ use crate::core::JsonRecord;
 use indexmap::IndexMap;
 
 use super::character::ControlIntent;
-use super::component::{EntityComponent, downcast_component, downcast_component_mut};
-use super::entity_definition::{EntityDefinition, EntityTransform};
+use super::component::{
+    EntityComponent,
+    downcast_component,
+    downcast_component_mut,
+};
+use super::entity_definition::{
+    EntityDefinition,
+    EntityTransform,
+};
 use super::error::GameplayError;
-use crate::physics::{BodyHandle, PhysicsWorld, VehicleHandle};
+use crate::physics::{
+    BodyHandle,
+    PhysicsWorld,
+    VehicleHandle,
+};
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Identifiers

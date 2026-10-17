@@ -18,31 +18,92 @@ use std::collections::HashMap;
 use std::sync::Weak;
 
 use crate::core::post_processing::PostProcessingConfig;
-use glam::{Mat4, Vec2, Vec3};
+use glam::{
+    Mat4,
+    Vec2,
+    Vec3,
+};
 use wgpu::util::DeviceExt;
 
 use crate::rendering::RenderError;
-use crate::rendering::camera::{Camera, CameraFrame, WorldRay, intersect_ray_plane, project_to_viewport, screen_ray};
-use crate::rendering::environment::{
-    EnvironmentMap, EnvironmentMapOptions, EnvironmentPixels, environment_format, image_lighting_group,
-    lighting_textures, lighting_views, prepare_environment_map,
+use crate::rendering::camera::{
+    Camera,
+    CameraFrame,
+    WorldRay,
+    intersect_ray_plane,
+    project_to_viewport,
+    screen_ray,
 };
-use crate::rendering::frame::{ColorVertex, FrameInputs, MAX_POINT_LIGHTS, sort_transparent_triangles};
+use crate::rendering::environment::{
+    EnvironmentMap,
+    EnvironmentMapOptions,
+    EnvironmentPixels,
+    environment_format,
+    image_lighting_group,
+    lighting_textures,
+    lighting_views,
+    prepare_environment_map,
+};
+use crate::rendering::frame::{
+    ColorVertex,
+    FrameInputs,
+    MAX_POINT_LIGHTS,
+    sort_transparent_triangles,
+};
 use crate::rendering::gpu::GpuContext;
 use crate::rendering::materials::{
-    AtmosphereUniforms, CasterBias, FrameUniforms, GpuPointLight, InstanceRaw, MaterialMaps, PlannedDraw,
-    ScenePipelines, TexturedPass,
+    AtmosphereUniforms,
+    CasterBias,
+    FrameUniforms,
+    GpuPointLight,
+    InstanceRaw,
+    MaterialMaps,
+    PlannedDraw,
+    ScenePipelines,
+    TexturedPass,
 };
-use crate::rendering::mesh::{Bounds, MaterialTextures, MeshAsset, MeshVertex, Submesh, VertexMaterial};
+use crate::rendering::mesh::{
+    Bounds,
+    MaterialTextures,
+    MeshAsset,
+    MeshVertex,
+    Submesh,
+    VertexMaterial,
+};
 use crate::rendering::postprocessor::PostProcessor;
-use crate::rendering::scene::{MeshInstance, MeshInstanceId, RenderScene, Shading};
+use crate::rendering::scene::{
+    MeshInstance,
+    MeshInstanceId,
+    RenderScene,
+    Shading,
+};
 use crate::rendering::scene_effects::{
-    EffectsFrame, MotionPass, MotionUniforms, SceneEffectsCapabilities, SceneEffectsError, SceneEffectsOptions,
-    SceneEffectsRuntime, SceneVolumeStats, SurfacePass, VolumeCamera, VolumeLights, capabilities,
+    EffectsFrame,
+    MotionPass,
+    MotionUniforms,
+    SceneEffectsCapabilities,
+    SceneEffectsError,
+    SceneEffectsOptions,
+    SceneEffectsRuntime,
+    SceneVolumeStats,
+    SurfacePass,
+    VolumeCamera,
+    VolumeLights,
+    capabilities,
 };
 use crate::rendering::shadows::{
-    CASCADE_BLEND_FRACTION, CASCADE_TEXEL_BIAS, FAR_FADE_FRACTION, POINT_FACES, POINT_SOURCE_RADIUS, PointShadowRaw,
-    ShadowMaps, ShadowOptions, ShadowUniforms, directional_cascades, point_face_views, point_near_plane,
+    CASCADE_BLEND_FRACTION,
+    CASCADE_TEXEL_BIAS,
+    FAR_FADE_FRACTION,
+    POINT_FACES,
+    POINT_SOURCE_RADIUS,
+    PointShadowRaw,
+    ShadowMaps,
+    ShadowOptions,
+    ShadowUniforms,
+    directional_cascades,
+    point_face_views,
+    point_near_plane,
     practical_cascade_splits,
 };
 use crate::rendering::terrain::terrain_scene_pass::SceneTerrain;

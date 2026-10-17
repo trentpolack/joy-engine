@@ -5,7 +5,13 @@
 
 use joy_engine::particles::compile_particle_effect;
 use particle_lab::constants::EmitterPreset;
-use particle_lab::examples::{EMITTER_PRESETS, EXAMPLES, copy_example, create_emitter_template, example_json};
+use particle_lab::examples::{
+    EMITTER_PRESETS,
+    EXAMPLES,
+    copy_example,
+    create_emitter_template,
+    example_json,
+};
 
 #[test]
 fn bundled_examples_compile_with_current_aggregate_scripting_syntax() {

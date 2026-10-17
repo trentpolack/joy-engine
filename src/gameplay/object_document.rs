@@ -11,10 +11,16 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use serde_json::{Map, Value};
+use serde_json::{
+    Map,
+    Value,
+};
 
 use super::asset_path::asset_path;
-use super::entity_definition::{EntityDefinition, OBJECT_EXTENSION};
+use super::entity_definition::{
+    EntityDefinition,
+    OBJECT_EXTENSION,
+};
 use super::error::ObjectError;
 use super::level_document::LevelData;
 

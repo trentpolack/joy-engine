@@ -12,14 +12,27 @@
 //! filtering cannot bleed between atlas frames.
 
 use std::f64::consts::PI;
-use std::sync::{Arc, OnceLock};
+use std::sync::{
+    Arc,
+    OnceLock,
+};
 
-use crate::rendering::{CameraBasis, ColorVertex, TexturedVertex};
+use crate::rendering::{
+    CameraBasis,
+    ColorVertex,
+    TexturedVertex,
+};
 
-use crate::particles::asset::{CompiledParticleEffect, ParticleTexture};
+use crate::particles::asset::{
+    CompiledParticleEffect,
+    ParticleTexture,
+};
 use crate::particles::constants::ParticleRenderer;
 use crate::particles::math;
-use crate::particles::particle_effect::{EffectParticle, ParticleEffect};
+use crate::particles::particle_effect::{
+    EffectParticle,
+    ParticleEffect,
+};
 use crate::particles::texture_source::ParticleTextureDimensions;
 
 /// Floats per colored vertex in the reference stream (XYZ, RGBA).

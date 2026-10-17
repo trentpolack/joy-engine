@@ -11,12 +11,25 @@ mod store;
 
 use crate::form::{
     builder::Builder,
-    resources, user_data,
-    value::{SharedBudget, SharedObject, Value, integer_range},
+    resources,
+    user_data,
+    value::{
+        SharedBudget,
+        SharedObject,
+        Value,
+        integer_range,
+    },
 };
-use serde_json::{Value as Json, json};
+use serde_json::{
+    Value as Json,
+    json,
+};
 use std::collections::HashSet;
-use store::{Store, attribute_at, count};
+use store::{
+    Store,
+    attribute_at,
+    count,
+};
 
 /// One evaluation owns procedural allocations, wrangle context, and output snapshots.
 pub struct Procedural {

@@ -5,10 +5,17 @@
 //! `script_guide`. Appending never replaces source or touches parameters.
 
 use joy_engine::development::components;
-use joy_engine::egui::{self, RichText, Ui};
+use joy_engine::egui::{
+    self,
+    RichText,
+    Ui,
+};
 use joy_engine::runtime::theme::tokens;
 
-use crate::script_guide::{RECIPES, matching_recipes};
+use crate::script_guide::{
+    RECIPES,
+    matching_recipes,
+};
 
 /// A block of the field guide.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

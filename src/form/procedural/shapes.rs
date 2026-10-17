@@ -3,9 +3,21 @@
 
 //! Revolve, tube, and smooth-normal generators. Ported from `src/form/procedural-shapes.ts`.
 
-use super::store::{self, Store, count, number, numbers};
-use crate::form::{math::hypot, value::integer_range};
-use serde_json::{Value as Json, json};
+use super::store::{
+    self,
+    Store,
+    count,
+    number,
+    numbers,
+};
+use crate::form::{
+    math::hypot,
+    value::integer_range,
+};
+use serde_json::{
+    Value as Json,
+    json,
+};
 
 pub fn revolve(store: &mut Store, profile: &Json, segments: f64) -> Result<Json, String> {
     let segments = integer_range(segments, 3.0, 96.0)?;

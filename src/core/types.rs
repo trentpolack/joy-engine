@@ -10,7 +10,10 @@
 //! Renderer-facing records that reference scene nodes, prepared environments, point lights, or shadow cameras belong
 //! to the rendering layer and are intentionally not part of these foundation contracts.
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use crate::core::JsonRecord;
 

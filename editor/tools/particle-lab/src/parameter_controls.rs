@@ -9,13 +9,33 @@
 use std::collections::HashMap;
 
 use joy_engine::development::lab_values::format_number;
-use joy_engine::development::{ColorControl, ComponentGroup, NumberField, ScalarControl};
-use joy_engine::egui::{self, FontId, RichText, Sense, Stroke, Ui, pos2, vec2};
+use joy_engine::development::{
+    ColorControl,
+    ComponentGroup,
+    NumberField,
+    ScalarControl,
+};
+use joy_engine::egui::{
+    self,
+    FontId,
+    RichText,
+    Sense,
+    Stroke,
+    Ui,
+    pos2,
+    vec2,
+};
 use joy_engine::particles::ParticleParameter;
 use joy_engine::runtime::theme::tokens;
 
 use crate::document::{
-    self, Bound, ParameterKind, bound_limits, check_bound, clamp_parameter_value, parameter_components,
+    self,
+    Bound,
+    ParameterKind,
+    bound_limits,
+    check_bound,
+    clamp_parameter_value,
+    parameter_components,
 };
 use crate::lab::ParticleLab;
 

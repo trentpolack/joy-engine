@@ -7,7 +7,16 @@
 //! Opening one panel closes the others. Tools may claim keys (for example a pause shortcut) so the shell keeps them
 //! from gameplay.
 
-use egui::{Align2, Color32, Context, Id, RichText, Stroke, Ui, Vec2};
+use egui::{
+    Align2,
+    Color32,
+    Context,
+    Id,
+    RichText,
+    Stroke,
+    Ui,
+    Vec2,
+};
 
 /// Development widget accent.
 pub const ACCENT: Color32 = Color32::from_rgb(0xed, 0x6c, 0x39);

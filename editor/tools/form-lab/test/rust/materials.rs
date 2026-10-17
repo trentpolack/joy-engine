@@ -3,9 +3,18 @@
 
 //! Material palettes and MaterialX, ported from `test/materials.test.js`, plus the TypeScript tool's MaterialX text.
 
-use form_lab::materialx::{export_materialx, import_materialx};
-use joy_engine::form::{default_material, read_materials};
-use joy_engine::serde_json::{Value as Json, json};
+use form_lab::materialx::{
+    export_materialx,
+    import_materialx,
+};
+use joy_engine::form::{
+    default_material,
+    read_materials,
+};
+use joy_engine::serde_json::{
+    Value as Json,
+    json,
+};
 
 use crate::support::fixture;
 

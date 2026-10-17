@@ -5,7 +5,12 @@
 //! availability policy belongs to site builds): the nearest `joy.joyconfig`, `--workspace`, and
 //! `JOY_EDITOR_WORKSPACE`.
 
-use joy_editor::desktop::workspace::{WorkspaceSource, find_workspace_root, launch_option, locate_workspace};
+use joy_editor::desktop::workspace::{
+    WorkspaceSource,
+    find_workspace_root,
+    launch_option,
+    locate_workspace,
+};
 
 use crate::support::TempFolder;
 

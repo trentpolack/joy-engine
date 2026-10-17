@@ -17,15 +17,41 @@ use std::collections::HashMap;
 
 use example::config;
 use example::scene_effects_example::SceneEffectsExample;
-use glam::{Vec2, Vec3};
-use joy_engine::core::{MaterialAlphaMode, PbrMaterial, PbrMaterialTextures, PbrMesh};
+use glam::{
+    Vec2,
+    Vec3,
+};
+use joy_engine::core::{
+    MaterialAlphaMode,
+    PbrMaterial,
+    PbrMaterialTextures,
+    PbrMesh,
+};
 use joy_engine::development::EffectPreset;
 use joy_engine::rendering::{
-    BackendPreference, CAPTURE_FORMAT, Camera, CelestialLight, EnvironmentLighting, FrameInputs, GpuContext, MeshAsset,
-    MeshChannels, MeshInstance, OffscreenTarget, OrbitCamera, RenderScene, Renderer, RendererOptions, Shading,
-    TextureAsset, project_to_viewport,
+    BackendPreference,
+    CAPTURE_FORMAT,
+    Camera,
+    CelestialLight,
+    EnvironmentLighting,
+    FrameInputs,
+    GpuContext,
+    MeshAsset,
+    MeshChannels,
+    MeshInstance,
+    OffscreenTarget,
+    OrbitCamera,
+    RenderScene,
+    Renderer,
+    RendererOptions,
+    Shading,
+    TextureAsset,
+    project_to_viewport,
 };
-use joy_engine::{HeadlessOptions, HeadlessShell};
+use joy_engine::{
+    HeadlessOptions,
+    HeadlessShell,
+};
 
 const WIDTH: u32 = 640;
 const HEIGHT: u32 = 400;

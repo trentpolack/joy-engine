@@ -7,14 +7,31 @@
 //! counterpart, because Rust decodes during prepare.
 
 use joy_engine::particles::{
-    DEFAULT_PARTICLE_TEXTURE, ParticleEffect, ParticleEffectOptions, compile_particle_effect,
+    DEFAULT_PARTICLE_TEXTURE,
+    ParticleEffect,
+    ParticleEffectOptions,
+    compile_particle_effect,
     encode_particle_texture_source,
 };
 use joy_engine::rendering::FrameInputs;
-use joy_engine::runtime::{Frame, Game, GameResult, RenderTarget};
-use joy_engine::serde_json::{Value, json};
-use joy_engine::{HeadlessOptions, HeadlessShell};
-use particle_lab::viewport::{ParticleViewport, PreviewRegion};
+use joy_engine::runtime::{
+    Frame,
+    Game,
+    GameResult,
+    RenderTarget,
+};
+use joy_engine::serde_json::{
+    Value,
+    json,
+};
+use joy_engine::{
+    HeadlessOptions,
+    HeadlessShell,
+};
+use particle_lab::viewport::{
+    ParticleViewport,
+    PreviewRegion,
+};
 
 /// Distinct embedded PNG sources: the default texture with one trailing byte each (trailing bytes do not change the
 /// image header or pixels).

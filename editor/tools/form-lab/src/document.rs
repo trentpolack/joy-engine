@@ -9,8 +9,16 @@
 //! documents are compact JSON with stable key order (`version`, `name`, `source`, `overrides`, `materials`,
 //! `variants`), shared by standalone and hosted FORM LAB, Joy Editor, and the engine's scene asset loader.
 
-use joy_engine::form::{DOCUMENT_FILE_BYTES, read_materials, read_parameter_value};
-use joy_engine::serde_json::{self, Map, Value as Json};
+use joy_engine::form::{
+    DOCUMENT_FILE_BYTES,
+    read_materials,
+    read_parameter_value,
+};
+use joy_engine::serde_json::{
+    self,
+    Map,
+    Value as Json,
+};
 
 use crate::export::javascript_json;
 

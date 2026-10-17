@@ -15,16 +15,43 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::{ErrorKind, Write};
-use std::path::{Component, Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::io::{
+    ErrorKind,
+    Write,
+};
+use std::path::{
+    Component,
+    Path,
+    PathBuf,
+};
+use std::sync::atomic::{
+    AtomicU64,
+    Ordering,
+};
 
-use joy_engine::gameplay::{parse_level, parse_object};
-use joy_engine::project::{JOY_PROJECT_MANIFEST, ProjectManifest, parse_project_manifest_text};
+use joy_engine::gameplay::{
+    parse_level,
+    parse_object,
+};
+use joy_engine::project::{
+    JOY_PROJECT_MANIFEST,
+    ProjectManifest,
+    parse_project_manifest_text,
+};
 
 use super::{
-    ASSET_DIRECTORY, AssetEntry, DiskDocument, MAXIMUM_ASSET_BYTES, ProjectError, ProjectStore, ProjectSummary,
-    compare_paths, extension_of, is_project_asset_path, project_formats, revision,
+    ASSET_DIRECTORY,
+    AssetEntry,
+    DiskDocument,
+    MAXIMUM_ASSET_BYTES,
+    ProjectError,
+    ProjectStore,
+    ProjectSummary,
+    compare_paths,
+    extension_of,
+    is_project_asset_path,
+    project_formats,
+    revision,
 };
 
 /// Folder, relative to the workspace root, whose child folders are authorable projects.

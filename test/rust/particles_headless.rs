@@ -9,15 +9,34 @@
 //! returns. Set `JOY_RENDER_CAPTURE_DIR` to keep a PNG capture. Native only.
 #![cfg(not(target_arch = "wasm32"))]
 
-use glam::{Vec2, Vec3};
+use glam::{
+    Vec2,
+    Vec3,
+};
 use joy_engine::core::Transform;
 use joy_engine::particles::{
-    ParticleCameraBasis, ParticleEffect, ParticleEffectOptions, ParticleTextureSet, compile_particle_effect,
+    ParticleCameraBasis,
+    ParticleEffect,
+    ParticleEffectOptions,
+    ParticleTextureSet,
+    compile_particle_effect,
     create_particle_effect_batches,
 };
 use joy_engine::rendering::{
-    BackendPreference, Camera, FrameInputs, GpuContext, MeshAsset, MeshChannels, MeshInstance, OffscreenTarget,
-    OrbitCamera, RenderScene, Renderer, RendererOptions, Shading, project_to_viewport,
+    BackendPreference,
+    Camera,
+    FrameInputs,
+    GpuContext,
+    MeshAsset,
+    MeshChannels,
+    MeshInstance,
+    OffscreenTarget,
+    OrbitCamera,
+    RenderScene,
+    Renderer,
+    RendererOptions,
+    Shading,
+    project_to_viewport,
 };
 use serde_json::json;
 

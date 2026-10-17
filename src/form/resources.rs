@@ -5,11 +5,20 @@
 
 use crate::form::{
     builder::Builder,
-    materials::{default_material, read_materials},
+    materials::{
+        default_material,
+        read_materials,
+    },
     value::Budget,
 };
-use serde_json::{Value as Json, json};
-use std::{cell::RefCell, rc::Rc};
+use serde_json::{
+    Value as Json,
+    json,
+};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+};
 
 const MAX_VERTICES: usize = 150_000;
 const MAX_INDICES: usize = 180_000 * 3;

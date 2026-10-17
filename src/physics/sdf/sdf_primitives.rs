@@ -7,7 +7,10 @@
 //! nearest surface. Symmetric primitives use +Y as their axis; the torus lies in the XZ plane. Values are meters in the
 //! solver's scalar math, so native and WebAssembly builds evaluate them bit for bit alike.
 
-use rapier3d::math::{Real, Vector};
+use rapier3d::math::{
+    Real,
+    Vector,
+};
 
 /// Distances below this are treated as zero when normalizing a gradient direction.
 const DIRECTION_EPSILON: Real = 1.0e-9;

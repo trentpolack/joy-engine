@@ -9,7 +9,10 @@
 //! Issue paths identify the authored fields that need attention.
 
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use serde_json::Value;
 
 use super::built_in_component_schemas::built_in_component_schemas;

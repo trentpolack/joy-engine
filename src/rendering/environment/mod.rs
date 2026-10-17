@@ -6,16 +6,31 @@
 mod image_lighting;
 
 pub use image_lighting::{
-    EnvironmentData, EnvironmentEncoding, EnvironmentMap, EnvironmentMapOptions, EnvironmentPixels, ImageLighting,
+    EnvironmentData,
+    EnvironmentEncoding,
+    EnvironmentMap,
+    EnvironmentMapOptions,
+    EnvironmentPixels,
+    ImageLighting,
 };
 pub(crate) use image_lighting::{
-    environment_format, image_lighting_group, image_lighting_layout, lighting_textures, lighting_views,
+    environment_format,
+    image_lighting_group,
+    image_lighting_layout,
+    lighting_textures,
+    lighting_views,
     prepare_environment_map,
 };
 
-use crate::environment::{AtmosphereLight, EnvironmentFrame};
+use crate::environment::{
+    AtmosphereLight,
+    EnvironmentFrame,
+};
 
-use crate::rendering::frame::{CelestialLight, EnvironmentLighting};
+use crate::rendering::frame::{
+    CelestialLight,
+    EnvironmentLighting,
+};
 
 impl From<&AtmosphereLight> for CelestialLight {
     fn from(light: &AtmosphereLight) -> Self {
@@ -58,7 +73,10 @@ impl From<&EnvironmentFrame> for EnvironmentLighting {
 
 #[cfg(test)]
 mod tests {
-    use crate::environment::{EnvironmentOptions, EnvironmentSystem};
+    use crate::environment::{
+        EnvironmentOptions,
+        EnvironmentSystem,
+    };
 
     use super::*;
 

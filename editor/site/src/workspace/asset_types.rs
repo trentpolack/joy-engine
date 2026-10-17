@@ -4,7 +4,11 @@
 //! Asset formats the workspace routes to an owned editor, and the starter content it creates.
 
 use joy_engine::gameplay::entity_type;
-use joy_engine::serde_json::{self, Value, json};
+use joy_engine::serde_json::{
+    self,
+    Value,
+    json,
+};
 
 /// Formats the workspace can create, import, and open, without dots.
 pub const SUPPORTED_ASSET_KINDS: [&str; 5] = ["joylevel", "joyobject", "form", "formlab", "joyfx"];

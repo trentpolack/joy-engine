@@ -5,12 +5,28 @@
 //! examples, script whitespace, and vector parameters; plus the Rust document edits and property snapshots.
 
 use joy_engine::particles::{
-    ParticleEffect, ParticleEffectOptions, ParticleParameter, ParticleParameterValue, compile_particle_effect,
+    ParticleEffect,
+    ParticleEffectOptions,
+    ParticleParameter,
+    ParticleParameterValue,
+    compile_particle_effect,
 };
-use joy_engine::serde_json::{self, json};
+use joy_engine::serde_json::{
+    self,
+    json,
+};
 use particle_lab::document::{
-    self, Bound, ChildLink, MAX_ASSET_BYTES, ParameterKind, check_bound, property_snapshot, read_asset,
-    read_recovery_asset, restore_properties, write_asset,
+    self,
+    Bound,
+    ChildLink,
+    MAX_ASSET_BYTES,
+    ParameterKind,
+    check_bound,
+    property_snapshot,
+    read_asset,
+    read_recovery_asset,
+    restore_properties,
+    write_asset,
 };
 use particle_lab::examples::copy_example;
 

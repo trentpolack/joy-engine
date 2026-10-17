@@ -11,7 +11,10 @@ use form_lab::FormLab;
 use joy_engine::development::ToolHosting;
 use joy_engine::egui;
 use joy_engine::runtime::Storage;
-use joy_engine::{HeadlessOptions, HeadlessShell};
+use joy_engine::{
+    HeadlessOptions,
+    HeadlessShell,
+};
 
 /// Capture size, matching the TypeScript screenshots.
 pub const WIDTH: u32 = 1280;

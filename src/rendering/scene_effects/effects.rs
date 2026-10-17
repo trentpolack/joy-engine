@@ -9,13 +9,23 @@ use std::collections::HashMap;
 
 use glam::Mat4;
 
-use crate::rendering::scene_effects::chain::{ChainResources, ExternalBindings, ShaderPassChain};
+use crate::rendering::scene_effects::chain::{
+    ChainResources,
+    ExternalBindings,
+    ShaderPassChain,
+};
 use crate::rendering::scene_effects::config::{
-    Reprojection, SCENE_EFFECT_NAMES, SceneEffectsError, SceneEffectsOptions,
+    Reprojection,
+    SCENE_EFFECT_NAMES,
+    SceneEffectsError,
+    SceneEffectsOptions,
 };
 use crate::rendering::scene_effects::pass::UniformValues;
 use crate::rendering::scene_effects::pipelines::scene_effect_pipelines;
-use crate::rendering::scene_effects::volume_lights::{ClusterBindings, MAX_LIGHTS_PER_CLUSTER};
+use crate::rendering::scene_effects::volume_lights::{
+    ClusterBindings,
+    MAX_LIGHTS_PER_CLUSTER,
+};
 
 /// Per-frame inputs to the effect graph.
 pub(crate) struct EffectsFrame<'a> {

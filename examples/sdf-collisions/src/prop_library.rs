@@ -7,12 +7,21 @@
 //! Four props bake their FORM triangles into voxel distance grids; the ring uses the analytical torus field, and its
 //! FORM mesh only draws it. Every prop is evaluated once at startup and shared by every body that uses it.
 
-use joy_engine::form::{CompiledScript, GeometryData};
-use joy_engine::physics::{SdfPrimitive, SdfShape};
+use joy_engine::form::{
+    CompiledScript,
+    GeometryData,
+};
+use joy_engine::physics::{
+    SdfPrimitive,
+    SdfShape,
+};
 use joy_engine::prelude::*;
 use joy_engine::rendering::form_mesh_asset;
 use joy_engine::runtime::Stopwatch;
-use joy_engine::serde_json::{Map, Value};
+use joy_engine::serde_json::{
+    Map,
+    Value,
+};
 
 use super::config::sdf_collisions_config::PHYSICS;
 
@@ -136,5 +145,6 @@ fn build_prop(definition: &PropDefinition) -> GameResult<Prop> {
 
 /// FORM positions (script units, which these sources author in meters) as vectors.
 fn positions(geometry: &GeometryData) -> Vec<Vec3> {
-    geometry.positions.chunks_exact(3).map(|xyz| Vec3::new(xyz[0] as f32, xyz[1] as f32, xyz[2] as f32)).collect()
+    let (positions, _) = geometry.positions.as_chunks::<3>();
+    positions.iter().map(|xyz| Vec3::new(xyz[0] as f32, xyz[1] as f32, xyz[2] as f32)).collect()
 }

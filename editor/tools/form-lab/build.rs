@@ -5,7 +5,10 @@
 //! read them from disk, such as browsers: writes `form_assets.rs` into `OUT_DIR` with one `include_str!` per file.
 //! Adding or removing a file rebuilds the list.
 
-use std::path::{Path, PathBuf};
+use std::path::{
+    Path,
+    PathBuf,
+};
 
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR"));

@@ -6,12 +6,24 @@
 //! emission. Numeric fields are kit number fields, so they share drafts, keyboard steps, and property undo with the
 //! parameter panel; switches and menus are structural edits.
 
-use joy_engine::development::{ControlResponse, NumberField, NumericDrafts, components};
-use joy_engine::egui::{self, RichText, Ui};
+use joy_engine::development::{
+    ControlResponse,
+    NumberField,
+    NumericDrafts,
+    components,
+};
+use joy_engine::egui::{
+    self,
+    RichText,
+    Ui,
+};
 use joy_engine::particles::ParticleRenderer;
 use joy_engine::runtime::theme::tokens;
 
-use crate::document::{self, ChildLink};
+use crate::document::{
+    self,
+    ChildLink,
+};
 use crate::lab::ParticleLab;
 
 /// What the inspector asks its owner to do.

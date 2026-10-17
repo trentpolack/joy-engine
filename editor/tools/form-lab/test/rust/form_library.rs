@@ -3,8 +3,15 @@
 
 //! The Examples library, ported from `test/form-library.test.js`, plus the bundled copy browsers use.
 
-use form_lab::form_assets::{bundled_form_assets, create_initial_form_document, form_assets};
-use form_lab::form_library::{create_form_library, open_form_library_asset};
+use form_lab::form_assets::{
+    bundled_form_assets,
+    create_initial_form_document,
+    form_assets,
+};
+use form_lab::form_library::{
+    create_form_library,
+    open_form_library_asset,
+};
 use joy_engine::form::default_material;
 use joy_engine::serde_json::json;
 

@@ -13,15 +13,39 @@
 #[path = "../../examples/form-destruction/src/mod.rs"]
 mod example;
 
-use example::config::destruction_config::{DESTRUCTION, IMPACT_DEBUG, SUPPORT, StructureView, VIEW};
+use example::config::destruction_config::{
+    DESTRUCTION,
+    IMPACT_DEBUG,
+    SUPPORT,
+    StructureView,
+    VIEW,
+};
 use example::destruction_debris::DestructionDebris;
-use example::destruction_demo::{FormDestructionDemo, input_map};
+use example::destruction_demo::{
+    FormDestructionDemo,
+    input_map,
+};
 use example::impact_debug::ImpactDebugDraw;
 use example::structure::generate_structure;
-use glam::{Vec2, Vec3};
-use joy_engine::physics::{ChunkStructure, DestructibleChunkDefinition, RadialDamage};
-use joy_engine::rendering::{Camera, OrbitCamera, RenderScene, project_to_viewport};
-use joy_engine::{HeadlessOptions, HeadlessShell};
+use glam::{
+    Vec2,
+    Vec3,
+};
+use joy_engine::physics::{
+    ChunkStructure,
+    DestructibleChunkDefinition,
+    RadialDamage,
+};
+use joy_engine::rendering::{
+    Camera,
+    OrbitCamera,
+    RenderScene,
+    project_to_viewport,
+};
+use joy_engine::{
+    HeadlessOptions,
+    HeadlessShell,
+};
 
 const STEP: f32 = 1.0 / 60.0;
 

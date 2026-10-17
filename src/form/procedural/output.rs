@@ -4,8 +4,17 @@
 //! Realizes editable geometry and instance collections into the output builder.
 //! Ported from `src/form/procedural-output.ts`.
 
-use super::store::{count, number, numbers, rotate};
-use crate::form::{builder::Builder, math::hypot, value::DataRef};
+use super::store::{
+    count,
+    number,
+    numbers,
+    rotate,
+};
+use crate::form::{
+    builder::Builder,
+    math::hypot,
+    value::DataRef,
+};
 use serde_json::Value as Json;
 use std::collections::HashSet;
 

@@ -3,7 +3,10 @@
 
 //! Parser grammar, UTF-16 diagnostics, metadata validation, and source budgets.
 
-use joy_engine::form::{CompiledScript, compile};
+use joy_engine::form::{
+    CompiledScript,
+    compile,
+};
 use serde_json::json;
 
 fn assert_error(source: &str, message: &str, line: usize, column: usize) {

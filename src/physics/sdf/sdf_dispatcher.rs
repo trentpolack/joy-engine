@@ -12,20 +12,50 @@
 //! step. Cached points align with the pair's manifolds, so a carried point also carries its solver impulses.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{
+    AtomicU32,
+    Ordering,
+};
 
-use rapier3d::math::{Pose, Real, Vector};
+use rapier3d::math::{
+    Pose,
+    Real,
+    Vector,
+};
 use rapier3d::parry::query::details::NormalConstraints;
 use rapier3d::parry::query::{
-    ClosestPoints, Contact, ContactManifold, ContactManifoldsWorkspace, NonlinearRigidMotion,
-    PersistentQueryDispatcher, QueryDispatcher, ShapeCastHit, ShapeCastOptions, ShapeDistance, ShapeIntersection,
-    TrackedContact, TypedWorkspaceData, Unsupported, WorkspaceData,
+    ClosestPoints,
+    Contact,
+    ContactManifold,
+    ContactManifoldsWorkspace,
+    NonlinearRigidMotion,
+    PersistentQueryDispatcher,
+    QueryDispatcher,
+    ShapeCastHit,
+    ShapeCastOptions,
+    ShapeDistance,
+    ShapeIntersection,
+    TrackedContact,
+    TypedWorkspaceData,
+    Unsupported,
+    WorkspaceData,
 };
-use rapier3d::parry::shape::{Ball, Cuboid, HalfSpace, PackedFeatureId, Shape};
+use rapier3d::parry::shape::{
+    Ball,
+    Cuboid,
+    HalfSpace,
+    PackedFeatureId,
+    Shape,
+};
 
 use super::SdfCollisionStatistics;
 use super::sdf_collider::SdfCollider;
-use super::sdf_contact::{CachedContact, PairShape, SearchWork, search_contacts};
+use super::sdf_contact::{
+    CachedContact,
+    PairShape,
+    SearchWork,
+    search_contacts,
+};
 use crate::core::SeededRandom;
 
 /// Seed of every pair's sampling stream. Pairs start identically, so identical worlds stay identical.

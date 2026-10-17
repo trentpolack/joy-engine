@@ -8,7 +8,10 @@
 //! [`IntentController`](super::IntentController)s. Update controllers before the entity world so behaviors see the new
 //! intent in the same frame.
 
-use super::entity::{ControllerId, EntityId};
+use super::entity::{
+    ControllerId,
+    EntityId,
+};
 use super::entity_world::EntityWorld;
 use super::error::GameplayError;
 

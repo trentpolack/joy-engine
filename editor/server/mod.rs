@@ -20,7 +20,10 @@ use std::fmt;
 
 use joy_engine::project::ProjectManifest;
 
-pub use bundled_projects::{BUNDLED_PROJECT_ID, BundledProjects};
+pub use bundled_projects::{
+    BUNDLED_PROJECT_ID,
+    BundledProjects,
+};
 
 /// Largest asset the editor reads or writes, in bytes (the TypeScript service's 6 MB bound).
 pub const MAXIMUM_ASSET_BYTES: usize = 6_000_000;

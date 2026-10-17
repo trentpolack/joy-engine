@@ -4,8 +4,14 @@
 //! FORM material palettes: serialized validation (ported from `src/form/materials.ts`) and the
 //! typed [`FormMaterial`] view renderers consume.
 
-use serde::{Deserialize, Serialize};
-use serde_json::{Value as Json, json};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use serde_json::{
+    Value as Json,
+    json,
+};
 use std::collections::HashSet;
 
 const MAX_MATERIALS: usize = 128;

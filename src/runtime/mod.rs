@@ -30,19 +30,74 @@ mod surface;
 pub mod theme;
 
 pub use audio::{
-    AudioBank, AudioBankOptions, AudioError, DEFAULT_MAXIMUM_VOICES, PcmSound, SoundDefinition, SoundSource,
+    AudioBank,
+    AudioBankOptions,
+    AudioError,
+    DEFAULT_MAXIMUM_VOICES,
+    PcmSound,
+    SoundDefinition,
+    SoundSource,
 };
-pub use clock::{DEFAULT_MAXIMUM_FRAME_SECONDS, FrameClock, Stopwatch, unix_time_milliseconds};
-pub use game::{Frame, FrameTime, Game, GameError, GameResult, RenderTarget, StartContext, Viewport};
-pub use game_loop::{DEFAULT_UPDATES_PER_SECOND, FixedStepLoop, MAXIMUM_FRAME_SECONDS};
+pub use clock::{
+    DEFAULT_MAXIMUM_FRAME_SECONDS,
+    FrameClock,
+    Stopwatch,
+    unix_time_milliseconds,
+};
+pub use game::{
+    Frame,
+    FrameTime,
+    Game,
+    GameError,
+    GameResult,
+    RenderTarget,
+    StartContext,
+    Viewport,
+};
+pub use game_loop::{
+    DEFAULT_UPDATES_PER_SECOND,
+    FixedStepLoop,
+    MAXIMUM_FRAME_SECONDS,
+};
 #[cfg(not(target_arch = "wasm32"))]
-pub use headless::{HeadlessOptions, HeadlessShell};
+pub use headless::{
+    HeadlessOptions,
+    HeadlessShell,
+};
 pub use input::{
-    ActionState, DEFAULT_DEAD_ZONE, GAMEPLAY_CONTEXT, GamepadState, InputAction, InputAxis, InputBinding, InputError,
-    InputManager, InputMap, PRESS_THRESHOLD, PointerState, gamepad, key,
+    ActionState,
+    DEFAULT_DEAD_ZONE,
+    GAMEPLAY_CONTEXT,
+    GamepadState,
+    InputAction,
+    InputAxis,
+    InputBinding,
+    InputError,
+    InputManager,
+    InputMap,
+    PRESS_THRESHOLD,
+    PointerState,
+    gamepad,
+    key,
 };
 pub use launch::launch_parameter;
-pub use save_file::{SaveFileError, save_binary_file, save_text_file};
-pub use save_slot::{SaveGuard, SaveSlot, SaveWrite};
-pub use shell::{ShellError, ShellOptions, run};
-pub use storage::{MAXIMUM_STORAGE_BYTES, Storage, StorageError};
+pub use save_file::{
+    SaveFileError,
+    save_binary_file,
+    save_text_file,
+};
+pub use save_slot::{
+    SaveGuard,
+    SaveSlot,
+    SaveWrite,
+};
+pub use shell::{
+    ShellError,
+    ShellOptions,
+    run,
+};
+pub use storage::{
+    MAXIMUM_STORAGE_BYTES,
+    Storage,
+    StorageError,
+};

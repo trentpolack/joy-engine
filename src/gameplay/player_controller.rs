@@ -12,7 +12,11 @@ use std::fmt;
 
 use super::character::ControlIntent;
 use super::controller::validate_controller_delta;
-use super::entity::{ControllerId, EntityId, EntityState};
+use super::entity::{
+    ControllerId,
+    EntityId,
+    EntityState,
+};
 use super::entity_world::EntityWorld;
 use super::error::GameplayError;
 

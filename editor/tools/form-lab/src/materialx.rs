@@ -10,7 +10,10 @@
 
 use joy_engine::core::format_js_number;
 use joy_engine::form::read_materials;
-use joy_engine::serde_json::{Value as Json, json};
+use joy_engine::serde_json::{
+    Value as Json,
+    json,
+};
 
 /// Constant `gltf_pbr` inputs FORM materials map to, with their MaterialX types.
 const INPUTS: [(&str, &str); 7] = [

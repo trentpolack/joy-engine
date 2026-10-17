@@ -10,14 +10,39 @@
 //! Recipes and baked meshes save as downloads in browsers and into the working directory natively.
 
 use joy_engine::development::dock;
-use joy_engine::egui::{Align2, Color32, FontId, Id, Margin, RichText, Stroke, Vec2 as UiVec2};
-use joy_engine::form::{CompiledScript, GeometryData};
+use joy_engine::egui::{
+    Align2,
+    Color32,
+    FontId,
+    Id,
+    Margin,
+    RichText,
+    Stroke,
+    Vec2 as UiVec2,
+};
+use joy_engine::form::{
+    CompiledScript,
+    GeometryData,
+};
 use joy_engine::prelude::*;
 use joy_engine::rendering::ShiftedCamera;
-use joy_engine::runtime::{Stopwatch, launch_parameter, save_text_file};
-use joy_engine::serde_json::{self, Map, Value, json};
+use joy_engine::runtime::{
+    Stopwatch,
+    launch_parameter,
+    save_text_file,
+};
+use joy_engine::serde_json::{
+    self,
+    Map,
+    Value,
+    json,
+};
 
-use super::asset::{asset_from_evaluation, geometry_from_mesh_data, mesh_data_from_evaluation};
+use super::asset::{
+    asset_from_evaluation,
+    geometry_from_mesh_data,
+    mesh_data_from_evaluation,
+};
 use super::presentation::populate_building_scene;
 
 /// The canonical building source and its presets.

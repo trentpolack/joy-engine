@@ -9,34 +9,114 @@
 
 use joy_engine::development::components;
 use joy_engine::development::{
-    AuthoringTool, FileDialogEvent, FileDialogs, FileFilter, NumericDrafts, OpenRequest, PanelLayout, SaveRequest,
-    ScriptDiagnostic, ScriptEditor, ToolDocument, ToolHosting, ViewportGesture, ViewportShortcut, viewport_input,
+    AuthoringTool,
+    FileDialogEvent,
+    FileDialogs,
+    FileFilter,
+    NumericDrafts,
+    OpenRequest,
+    PanelLayout,
+    SaveRequest,
+    ScriptDiagnostic,
+    ScriptEditor,
+    ToolDocument,
+    ToolHosting,
+    ViewportGesture,
+    ViewportShortcut,
+    viewport_input,
 };
-use joy_engine::egui::{self, Color32, RichText, Ui, UiBuilder};
+use joy_engine::egui::{
+    self,
+    Color32,
+    RichText,
+    Ui,
+    UiBuilder,
+};
 use joy_engine::glam::Vec2;
 use joy_engine::rendering::GpuBackend;
 use joy_engine::runtime::theme::tokens;
-use joy_engine::runtime::{Frame, Game, GameResult, RenderTarget, StartContext, Storage};
+use joy_engine::runtime::{
+    Frame,
+    Game,
+    GameResult,
+    RenderTarget,
+    StartContext,
+    Storage,
+};
 
-use crate::artifact_dialog::{ArtifactDialog, ArtifactKind, ArtifactRequest};
+use crate::artifact_dialog::{
+    ArtifactDialog,
+    ArtifactKind,
+    ArtifactRequest,
+};
 use crate::constants::ViewMode;
-use crate::document::{FormDocument, file_stem, read_document};
+use crate::document::{
+    FormDocument,
+    file_stem,
+    read_document,
+};
 use crate::editor::create_editor;
-use crate::form_assets::{create_initial_form_document, form_assets};
-use crate::form_library::{FormLibraryAsset, open_form_library_asset};
-use crate::material_controls::{MaterialAction, MaterialControls, image_data_url, merge_materialx, with_texture};
-use crate::materialx::{export_materialx, import_materialx};
+use crate::form_assets::{
+    create_initial_form_document,
+    form_assets,
+};
+use crate::form_library::{
+    FormLibraryAsset,
+    open_form_library_asset,
+};
+use crate::material_controls::{
+    MaterialAction,
+    MaterialControls,
+    image_data_url,
+    merge_materialx,
+    with_texture,
+};
+use crate::materialx::{
+    export_materialx,
+    import_materialx,
+};
 use crate::output_inspection::OutputInspection;
-use crate::output_inspector::{attribute_panel, result_toolbar};
-use crate::parameter_controls::{ParameterAction, ParameterControls};
-use crate::parameter_values::{MAXIMUM_GLB_BYTES, import_glb_mesh};
+use crate::output_inspector::{
+    attribute_panel,
+    result_toolbar,
+};
+use crate::parameter_controls::{
+    ParameterAction,
+    ParameterControls,
+};
+use crate::parameter_values::{
+    MAXIMUM_GLB_BYTES,
+    import_glb_mesh,
+};
 use crate::preview_lighting_controls::PreviewLightingControls;
 use crate::reference_dialog::ReferenceDialog;
-use crate::rendering::viewport::{PaneRect, Viewport};
-use crate::script_guide::{RECIPES, append_recipe};
-use crate::session::{ExportFormat, PreviewState, SaveFormat, Session, SessionEvent, StatusState, group_thousands};
-use crate::variant_controls::{VariantAction, VariantControls};
-use crate::workspace_layout::{InspectorTab, create_panel_layout, inspector_tabs, view_menu};
+use crate::rendering::viewport::{
+    PaneRect,
+    Viewport,
+};
+use crate::script_guide::{
+    RECIPES,
+    append_recipe,
+};
+use crate::session::{
+    ExportFormat,
+    PreviewState,
+    SaveFormat,
+    Session,
+    SessionEvent,
+    StatusState,
+    group_thousands,
+};
+use crate::variant_controls::{
+    VariantAction,
+    VariantControls,
+};
+use crate::workspace_layout::{
+    InspectorTab,
+    create_panel_layout,
+    inspector_tabs,
+    view_menu,
+};
 
 /// The tool's version, shown beside its name.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

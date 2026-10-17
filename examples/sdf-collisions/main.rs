@@ -14,7 +14,10 @@
 #[path = "src/mod.rs"]
 mod example;
 
-use example::sdf_collisions_demo::{SdfCollisionsDemo, input_map};
+use example::sdf_collisions_demo::{
+    SdfCollisionsDemo,
+    input_map,
+};
 use joy_engine::prelude::*;
 
 /// Shell settings: default renderer with drag-to-orbit and the demo's keys.

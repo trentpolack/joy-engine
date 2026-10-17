@@ -8,9 +8,21 @@
 use std::collections::HashMap;
 
 use joy_engine::gameplay::EntityDefinition;
-use joy_engine::particles::{DEFAULT_PARTICLE_TEXTURE, ParticleBatch, ParticleCameraBasis};
-use joy_engine::rendering::{AssetScene, AssetSceneError, RenderScene, TransparentDraw};
-use serde_json::{Value, json};
+use joy_engine::particles::{
+    DEFAULT_PARTICLE_TEXTURE,
+    ParticleBatch,
+    ParticleCameraBasis,
+};
+use joy_engine::rendering::{
+    AssetScene,
+    AssetSceneError,
+    RenderScene,
+    TransparentDraw,
+};
+use serde_json::{
+    Value,
+    json,
+};
 
 const BOX_FORM: &str = "project meta(name=\"Box\")\nbox(0, 0, 0, 2, 2, 2)";
 

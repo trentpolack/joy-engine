@@ -6,7 +6,10 @@
 //! Signatures are display text; consumers must not infer runtime behavior from them. Records preserve the established
 //! serialized field names for JSON interchange with authoring integrations.
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 /// Editor-neutral symbol categories, serialized as `keyword`, `function`, `variable`, or `property`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

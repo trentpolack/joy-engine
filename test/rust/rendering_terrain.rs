@@ -9,17 +9,44 @@
 //! `JOY_RENDER_CAPTURE_DIR` to keep PNG captures. Native only.
 #![cfg(not(target_arch = "wasm32"))]
 
-use glam::{DVec3, Vec3};
+use glam::{
+    DVec3,
+    Vec3,
+};
 use joy_engine::core::Transform;
 use joy_engine::rendering::scene_effects::SceneEffectsOptions;
 use joy_engine::rendering::terrain::{
-    TerrainAsset, TerrainDiagnostic, TerrainFrame, TerrainRenderer, TerrainTimingStatus, TerrainTriangleCount,
-    TerrainView, parse_terrain, sample_terrain,
+    TerrainAsset,
+    TerrainDiagnostic,
+    TerrainFrame,
+    TerrainRenderer,
+    TerrainTimingStatus,
+    TerrainTriangleCount,
+    TerrainView,
+    parse_terrain,
+    sample_terrain,
 };
 use joy_engine::rendering::{
-    BackendPreference, CAPTURE_FORMAT, Camera, CelestialLight, EnvironmentLighting, FrameInputs, GpuBackend,
-    GpuContext, MeshAsset, MeshChannels, MeshInstance, OffscreenTarget, OrbitCamera, PointLight, RenderError,
-    RenderScene, Renderer, RendererOptions, TerrainInstance, TerrainInstanceId,
+    BackendPreference,
+    CAPTURE_FORMAT,
+    Camera,
+    CelestialLight,
+    EnvironmentLighting,
+    FrameInputs,
+    GpuBackend,
+    GpuContext,
+    MeshAsset,
+    MeshChannels,
+    MeshInstance,
+    OffscreenTarget,
+    OrbitCamera,
+    PointLight,
+    RenderError,
+    RenderScene,
+    Renderer,
+    RendererOptions,
+    TerrainInstance,
+    TerrainInstanceId,
 };
 
 const WIDTH: u32 = 320;

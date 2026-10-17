@@ -10,16 +10,33 @@
 //! it writes no recovery drafts, hides its header and footer, and the editor owns files through
 //! [`AuthoringTool::open_document`] and [`AuthoringTool::save_document`].
 
-use joy_engine::development::{AuthoringTool, ToolDocument, ToolHosting};
+use joy_engine::development::{
+    AuthoringTool,
+    ToolDocument,
+    ToolHosting,
+};
 use joy_engine::egui;
 use joy_engine::glam::Vec2;
-use joy_engine::runtime::{Frame, Game, GameResult, RenderTarget, StartContext, Storage};
+use joy_engine::runtime::{
+    Frame,
+    Game,
+    GameResult,
+    RenderTarget,
+    StartContext,
+    Storage,
+};
 
 use crate::constants::STORAGE_APPLICATION;
 use crate::document::write_asset;
-use crate::interface::{Interface, apply_look};
+use crate::interface::{
+    Interface,
+    apply_look,
+};
 use crate::lab::ParticleLab;
-use crate::viewport::{PreviewRegion, post_processing};
+use crate::viewport::{
+    PreviewRegion,
+    post_processing,
+};
 
 /// The tool's display name.
 pub const TOOL_NAME: &str = "PARTICLE LAB";

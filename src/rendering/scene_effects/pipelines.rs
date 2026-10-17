@@ -7,7 +7,13 @@
 //! sampling.
 
 use crate::rendering::scene_effects::config::{
-    ClusteredLightingOptions, GtaoOptions, NormalSource, Reprojection, SceneEffectsOptions, SsaoOptions, SsgiOptions,
+    ClusteredLightingOptions,
+    GtaoOptions,
+    NormalSource,
+    Reprojection,
+    SceneEffectsOptions,
+    SsaoOptions,
+    SsgiOptions,
     SsrOptions,
 };
 use crate::rendering::scene_effects::pass::UniformValues;
@@ -90,7 +96,11 @@ pub(crate) struct PipelineGroups {
 const RAW_DEPTH_HISTORY: [&str; 5] =
     ["gtaoHistoryDepth", "ssgiHistoryDepth", "ssrHistoryDepth", "taaHistoryDepth", "cameraReprojectionTaaHistoryDepth"];
 
-use wgpu::TextureFormat::{Rg16Float, Rgba8Unorm, Rgba16Float};
+use wgpu::TextureFormat::{
+    Rg16Float,
+    Rgba8Unorm,
+    Rgba16Float,
+};
 
 /// A target before the Joy overrides; `None` format means the chain's color format.
 fn target(name: &'static str, scale: f32, format: Option<wgpu::TextureFormat>, lifetime: TargetLifetime) -> RawTarget {
@@ -120,7 +130,10 @@ fn step(
     StepSpec { pass, inputs: inputs.to_vec(), output, uniforms }
 }
 
-use InputSource::{Previous, Target};
+use InputSource::{
+    Previous,
+    Target,
+};
 
 fn ssao(options: &SsaoOptions) -> (Vec<RawTarget>, Vec<StepSpec>) {
     let scale = options.resolution_scale;

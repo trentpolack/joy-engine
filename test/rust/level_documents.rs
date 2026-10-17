@@ -6,11 +6,25 @@
 
 use glam::Vec3;
 use joy_engine::gameplay::{
-    DefinitionError, EntityDefinition, LEVEL_HISTORY_LIMIT, LevelData, LevelDocument, LevelError, ObjectError,
-    create_object_instance, parse_level, parse_object, resolve_level_objects, resolve_object_instance, serialize_level,
+    DefinitionError,
+    EntityDefinition,
+    LEVEL_HISTORY_LIMIT,
+    LevelData,
+    LevelDocument,
+    LevelError,
+    ObjectError,
+    create_object_instance,
+    parse_level,
+    parse_object,
+    resolve_level_objects,
+    resolve_object_instance,
+    serialize_level,
     serialize_object,
 };
-use serde_json::{Value, json};
+use serde_json::{
+    Value,
+    json,
+};
 
 /// LevelDocument operations recorded from the TypeScript engine.
 const GAMEPLAY_REFERENCE: &str = include_str!("../fixtures/gameplay-reference.json");

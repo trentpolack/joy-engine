@@ -6,8 +6,16 @@
 
 use indexmap::IndexMap;
 use joy_engine::core::{
-    ConfigApplyMode, ConfigField, Vector2, create_config_document_values, create_config_schema, create_config_values,
-    direction_between, distance_between, js_hypot, parse_hex_color,
+    ConfigApplyMode,
+    ConfigField,
+    Vector2,
+    create_config_document_values,
+    create_config_schema,
+    create_config_values,
+    direction_between,
+    distance_between,
+    js_hypot,
+    parse_hex_color,
 };
 use serde_json::Value;
 

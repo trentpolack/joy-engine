@@ -35,7 +35,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "check": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts test editor/tooling editor/test editor/tools/form-lab/test",
+    "check": "cargo +nightly fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts test editor/tooling editor/test editor/tools/form-lab/test",
     "test": "cargo test --workspace && npm run test:tooling",
     "test:tooling": "node --test test/*.test.mjs editor/test/*.test.mjs",
     "fetch-joy-engine-patch": "node scripts/patching/fetch-joy-engine-patch.mjs",

@@ -7,8 +7,18 @@
 
 use glam::Vec2;
 use joy_engine::rendering::{
-    BackendPreference, CAPTURE_FORMAT, ColorVertex, GpuContext, OffscreenTarget, TopDownCamera, TriangleFrame,
-    TriangleRenderer, TriangleRendererOptions, add_circle, add_quad, sort_top_down_transparent_triangles,
+    BackendPreference,
+    CAPTURE_FORMAT,
+    ColorVertex,
+    GpuContext,
+    OffscreenTarget,
+    TopDownCamera,
+    TriangleFrame,
+    TriangleRenderer,
+    TriangleRendererOptions,
+    add_circle,
+    add_quad,
+    sort_top_down_transparent_triangles,
     top_down_orthographic,
 };
 

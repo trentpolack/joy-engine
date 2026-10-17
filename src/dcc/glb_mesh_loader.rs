@@ -15,7 +15,10 @@
 //! transforms, materials, animation, and other primitives are not interpreted. Error messages for authored-content
 //! problems preserve the established asset contract; container and accessor errors are specific to this decoder.
 
-use serde_json::{Map, Value};
+use serde_json::{
+    Map,
+    Value,
+};
 
 use crate::core::IndexedMesh3D;
 

@@ -8,6 +8,7 @@ Requires Rust 1.95 or newer, Node.js 24.18.0 or newer for repository tooling, an
 
 ```bash
 npm ci
+rustup toolchain install nightly --profile minimal --component rustfmt
 rustup target add wasm32-unknown-unknown
 npm run check
 npm test

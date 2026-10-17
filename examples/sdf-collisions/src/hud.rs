@@ -6,7 +6,16 @@
 //! mutating the demo.
 
 use joy_engine::development::dock;
-use joy_engine::egui::{Align2, Color32, FontId, Id, Margin, RichText, Stroke, Vec2 as UiVec2};
+use joy_engine::egui::{
+    Align2,
+    Color32,
+    FontId,
+    Id,
+    Margin,
+    RichText,
+    Stroke,
+    Vec2 as UiVec2,
+};
 use joy_engine::prelude::*;
 
 use super::config::sdf_collisions_config::PRESENTATION;

@@ -8,16 +8,48 @@
 use std::collections::HashMap;
 
 use joy_editor::level::property_editor::{
-    CustomFieldKind, FieldControl, PropertyContext, PropertyNode, add_custom_field, append_list_item,
+    CustomFieldKind,
+    FieldControl,
+    PropertyContext,
+    PropertyNode,
+    add_custom_field,
+    append_list_item,
     build_property_tree,
 };
-use joy_editor::level::viewport::{LevelViewport, ViewRegion, pick_entity};
-use joy_editor::level::{AssetAccess, ComponentChoice, FieldKey, LevelEditor, TransformField};
+use joy_editor::level::viewport::{
+    LevelViewport,
+    ViewRegion,
+    pick_entity,
+};
+use joy_editor::level::{
+    AssetAccess,
+    ComponentChoice,
+    FieldKey,
+    LevelEditor,
+    TransformField,
+};
 use joy_editor::server::AssetEntry;
-use joy_engine::gameplay::{ComponentSchemaCatalog, EntityDefinition, parse_level, parse_object};
-use joy_engine::glam::{Vec2, Vec3};
-use joy_engine::rendering::{Camera, OrbitCamera, WorldRay, project_to_viewport};
-use joy_engine::serde_json::{Map, Value, json};
+use joy_engine::gameplay::{
+    ComponentSchemaCatalog,
+    EntityDefinition,
+    parse_level,
+    parse_object,
+};
+use joy_engine::glam::{
+    Vec2,
+    Vec3,
+};
+use joy_engine::rendering::{
+    Camera,
+    OrbitCamera,
+    WorldRay,
+    project_to_viewport,
+};
+use joy_engine::serde_json::{
+    Map,
+    Value,
+    json,
+};
 
 use crate::support::level_text;
 

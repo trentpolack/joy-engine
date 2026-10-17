@@ -6,9 +6,15 @@
 
 use form_lab::document::read_document;
 use form_lab::export_glb::export_glb;
-use form_lab::parameter_values::{import_glb_mesh, read_parameters};
+use form_lab::parameter_values::{
+    import_glb_mesh,
+    read_parameters,
+};
 use joy_engine::form::CompiledScript;
-use joy_engine::serde_json::{Value as Json, json};
+use joy_engine::serde_json::{
+    Value as Json,
+    json,
+};
 
 use crate::support::compile;
 

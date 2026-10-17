@@ -5,11 +5,22 @@
 //! runtime readers accept, and names follow the naming rule.
 
 use joy_editor::workspace::asset_types::{
-    AssetEditor, asset_editor, create_asset_text, is_supported_asset_path, new_asset_path,
+    AssetEditor,
+    asset_editor,
+    create_asset_text,
+    is_supported_asset_path,
+    new_asset_path,
 };
-use joy_engine::gameplay::{parse_level, parse_object};
+use joy_engine::gameplay::{
+    parse_level,
+    parse_object,
+};
 use joy_engine::particles::parse_particle_effect;
-use joy_engine::serde_json::{self, Value, json};
+use joy_engine::serde_json::{
+    self,
+    Value,
+    json,
+};
 
 #[test]
 fn new_workspace_assets_open_in_their_editor_with_immediately_usable_content() {

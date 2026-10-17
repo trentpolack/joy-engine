@@ -11,8 +11,21 @@
 use glam::Vec3;
 use joy_engine::core::Transform;
 use joy_engine::rendering::{
-    BackendPreference, CelestialLight, EnvironmentLighting, FrameInputs, GpuContext, MeshAsset, MeshChannels,
-    MeshInstance, OffscreenTarget, OrbitCamera, PointLight, RenderScene, Renderer, RendererOptions, SceneNode,
+    BackendPreference,
+    CelestialLight,
+    EnvironmentLighting,
+    FrameInputs,
+    GpuContext,
+    MeshAsset,
+    MeshChannels,
+    MeshInstance,
+    OffscreenTarget,
+    OrbitCamera,
+    PointLight,
+    RenderScene,
+    Renderer,
+    RendererOptions,
+    SceneNode,
 };
 
 const WIDTH: u32 = 320;

@@ -18,7 +18,10 @@
 //! every entity type may be possessed.
 
 use indexmap::IndexMap;
-use serde_json::{Map, Value};
+use serde_json::{
+    Map,
+    Value,
+};
 
 use super::error::GameplayError;
 use crate::core::format::json_number;

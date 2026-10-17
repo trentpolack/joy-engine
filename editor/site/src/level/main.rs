@@ -13,21 +13,58 @@
 
 use std::collections::HashMap;
 
-use joy_engine::core::{RandomSource, SeededRandom};
+use joy_engine::core::{
+    RandomSource,
+    SeededRandom,
+};
 use joy_engine::gameplay::{
-    ComponentFieldKind, ComponentIssue, ComponentSchemaCatalog, EntityDefinition, LevelData, LevelDocument, LevelError,
-    ObjectDocument, component_preset, component_type, create_object_instance, entity_type, parse_level, parse_object,
-    resolve_object_instance, serialize_level, serialize_object,
+    ComponentFieldKind,
+    ComponentIssue,
+    ComponentSchemaCatalog,
+    EntityDefinition,
+    LevelData,
+    LevelDocument,
+    LevelError,
+    ObjectDocument,
+    component_preset,
+    component_type,
+    create_object_instance,
+    entity_type,
+    parse_level,
+    parse_object,
+    resolve_object_instance,
+    serialize_level,
+    serialize_object,
 };
 use joy_engine::glam::Vec3;
-use joy_engine::particles::{ParticleParameter, parse_particle_effect};
+use joy_engine::particles::{
+    ParticleParameter,
+    parse_particle_effect,
+};
 use joy_engine::runtime::unix_time_milliseconds;
-use joy_engine::serde_json::{self, Map, Value, json};
+use joy_engine::serde_json::{
+    self,
+    Map,
+    Value,
+    json,
+};
 
-use super::constants::{LevelTool, PRIMITIVE_COLOR};
-use super::property_editor::{FieldMetadata, value_at};
+use super::constants::{
+    LevelTool,
+    PRIMITIVE_COLOR,
+};
+use super::property_editor::{
+    FieldMetadata,
+    value_at,
+};
 use super::viewport::LevelViewport;
-use crate::interaction::numeric_controls::{FieldDrafts, NumberBounds, display_number, json_number, parse_number};
+use crate::interaction::numeric_controls::{
+    FieldDrafts,
+    NumberBounds,
+    display_number,
+    json_number,
+    parse_number,
+};
 use crate::interaction::viewport_input::snap_point;
 use crate::server::AssetEntry;
 

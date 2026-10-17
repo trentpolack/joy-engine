@@ -4,7 +4,13 @@
 //! Tokenizer and recursive-descent parser for FORM source. Ported from `src/form/parser.ts`.
 
 use crate::form::Diagnostic;
-use crate::form::ast::{ExprKind, Expression, Statement, StmtKind, Token};
+use crate::form::ast::{
+    ExprKind,
+    Expression,
+    Statement,
+    StmtKind,
+    Token,
+};
 use std::collections::HashSet;
 
 const SOURCE_LIMIT: usize = 200_000;

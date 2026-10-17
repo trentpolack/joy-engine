@@ -6,7 +6,17 @@
 
 pub use crate::particles::language_information::particle_language_catalog;
 pub use crate::particles::script::{
-    PARTICLE_CONTAINERS, PARTICLE_FIELDS, PARTICLE_FUNCTION_ARITIES, PARTICLE_INPUTS, ParticleScript,
-    ParticleScriptBudget, ParticleScriptError, compile_particle_script,
+    PARTICLE_CONTAINERS,
+    PARTICLE_FIELDS,
+    PARTICLE_FUNCTION_ARITIES,
+    PARTICLE_INPUTS,
+    ParticleScript,
+    ParticleScriptBudget,
+    ParticleScriptError,
+    compile_particle_script,
 };
-pub use crate::scripting::{ScriptLanguageCatalog, ScriptLanguageSymbol, ScriptSymbolKind};
+pub use crate::scripting::{
+    ScriptLanguageCatalog,
+    ScriptLanguageSymbol,
+    ScriptSymbolKind,
+};

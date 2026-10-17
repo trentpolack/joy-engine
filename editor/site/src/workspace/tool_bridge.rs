@@ -9,7 +9,11 @@
 //! active tab, so inactive previews suspend. [`ToolRegistry`] maps extensions to tool factories (FORM LAB for `.form`
 //! and `.formlab`, PARTICLE LAB for `.joyfx`); tests register their own tools.
 
-use joy_engine::development::{AuthoringTool, ToolDocument, ToolHosting};
+use joy_engine::development::{
+    AuthoringTool,
+    ToolDocument,
+    ToolHosting,
+};
 use joy_engine::egui;
 use joy_engine::runtime::StartContext;
 

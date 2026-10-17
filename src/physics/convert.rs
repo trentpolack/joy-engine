@@ -10,9 +10,16 @@
 //! and scalar (non-SIMD) arithmetic, so native and WebAssembly builds create bit-identical bodies. Values reported back
 //! to callers use the engine's foundation helpers.
 
-use glam::{Quat, Vec3};
+use glam::{
+    Quat,
+    Vec3,
+};
 use rapier3d::glamx::EulerRot;
-use rapier3d::math::{ComplexField, Rotation, Vector};
+use rapier3d::math::{
+    ComplexField,
+    Rotation,
+    Vector,
+};
 
 use super::PhysicsError;
 

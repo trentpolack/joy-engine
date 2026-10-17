@@ -26,12 +26,35 @@
 use indexmap::IndexMap;
 
 use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Id, Key, Pos2, Rect, Response, Sense, Stroke, StrokeKind, TextEdit,
-    Ui, Vec2, pos2, vec2,
+    Align,
+    Align2,
+    Color32,
+    CornerRadius,
+    FontId,
+    Id,
+    Key,
+    Pos2,
+    Rect,
+    Response,
+    Sense,
+    Stroke,
+    StrokeKind,
+    TextEdit,
+    Ui,
+    Vec2,
+    pos2,
+    vec2,
 };
 
 use crate::development::lab_values::{
-    self, NumericRules, REPAIR_DRAFTS_MESSAGE, StepScale, format_number, parse_number, stepped_value, validate_draft,
+    self,
+    NumericRules,
+    REPAIR_DRAFTS_MESSAGE,
+    StepScale,
+    format_number,
+    parse_number,
+    stepped_value,
+    validate_draft,
 };
 use crate::runtime::theme::tokens;
 

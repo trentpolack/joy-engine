@@ -5,11 +5,21 @@
 //! detached document, so editing one never changes the bundled original.
 
 use joy_engine::particles::{
-    ParticleBurst, ParticleEffectAsset, ParticleEmitterAsset, ParticleRenderer, compile_particle_effect,
+    ParticleBurst,
+    ParticleEffectAsset,
+    ParticleEmitterAsset,
+    ParticleRenderer,
+    compile_particle_effect,
 };
-use joy_engine::serde_json::{Value, json};
+use joy_engine::serde_json::{
+    Value,
+    json,
+};
 
-use crate::constants::{EmitterPreset, example_emitter};
+use crate::constants::{
+    EmitterPreset,
+    example_emitter,
+};
 use crate::document::read_asset;
 
 /// The orbiting point-light example, shared with the TypeScript lab.

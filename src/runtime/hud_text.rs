@@ -10,8 +10,25 @@
 
 use std::sync::Arc;
 
-use egui::text::{Galley, LayoutJob, TextFormat};
-use egui::{Align, Color32, FontFamily, FontId, Painter, Pos2, Rect, Shape, Stroke, Vec2, pos2, vec2};
+use egui::text::{
+    Galley,
+    LayoutJob,
+    TextFormat,
+};
+use egui::{
+    Align,
+    Color32,
+    FontFamily,
+    FontId,
+    Painter,
+    Pos2,
+    Rect,
+    Shape,
+    Stroke,
+    Vec2,
+    pos2,
+    vec2,
+};
 
 /// Character that reserves a symbol's space in a layout; drawn transparent.
 const PLACEHOLDER: char = '¤';

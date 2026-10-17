@@ -2,7 +2,9 @@
 Joy Engine follows this reading model: a small procedural composition root, stateful owners with documented lifetimes, and plain records for data. A reader should be able to follow startup, one frame, failure, and teardown without reconstructing hidden state. This guide applies [the shared coding standards](coding-standards.md) and JoyCore's organization to Rust and WGSL.
 
 ## Formatting
-`rustfmt` (configured by `rustfmt.toml`, matching joy-apps) is authoritative for layout. The retained Node tooling spacing conventions do not apply to Rust. Run `cargo fmt --all` before validation; CI-equivalent checks use `cargo fmt --all -- --check`.
+The vertical import layout requires nightly rustfmt. Install it with `rustup toolchain install nightly --profile minimal --component rustfmt`. Formatting commands select nightly explicitly; Clippy, tests, and builds use the stable toolchain.
+
+`rustfmt` (configured by `rustfmt.toml`, matching joy-apps) is authoritative for layout. The retained Node tooling spacing conventions do not apply to Rust. Run `cargo +nightly fmt --all` before validation; CI-equivalent checks use `cargo +nightly fmt --all -- --check`.
 
 The intent rules still apply:
 - Put every multi-step branch in braces and keep one meaningful action per line.
@@ -57,4 +59,4 @@ Follow the repository's [unit test scope](../AGENTS.md#unit-test-scope). Prefer 
 - Are units, coordinate spaces, ownership, and failure documented at public boundaries?
 - Is authored data validated once, with typed errors rather than panics?
 - Do native and WebAssembly builds share the same simulation and content code?
-- Were `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, and `cargo test` run?
+- Were `cargo +nightly fmt`, `cargo clippy --all-targets -- -D warnings`, and `cargo test` run?

@@ -5,8 +5,16 @@
 //! the overrides property history covers, mesh sources (presets and geometry-only GLB import), and material resource
 //! edits. These models stay independent of the parameter controls' UI.
 
-use joy_engine::form::{mesh_box_value, mesh_sphere_value, read_material_value, read_mesh};
-use joy_engine::serde_json::{Value as Json, json};
+use joy_engine::form::{
+    mesh_box_value,
+    mesh_sphere_value,
+    read_material_value,
+    read_mesh,
+};
+use joy_engine::serde_json::{
+    Value as Json,
+    json,
+};
 
 /// Largest GLB a mesh parameter imports, in bytes.
 pub const MAXIMUM_GLB_BYTES: usize = 16_000_000;

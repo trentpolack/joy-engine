@@ -4,8 +4,14 @@
 //! Per-frame renderer inputs: lights, environment lighting, timing, transient effect triangles, and pre-sorted
 //! transparent runs (colored or textured) such as particle batches.
 
-use crate::core::{Rgb, Rgba};
-use bytemuck::{Pod, Zeroable};
+use crate::core::{
+    Rgb,
+    Rgba,
+};
+use bytemuck::{
+    Pod,
+    Zeroable,
+};
 use glam::Vec3;
 
 use crate::rendering::environment::ImageLighting;

@@ -8,10 +8,17 @@
 //! queued damage. Arithmetic uses `f64` in the established evaluation order to preserve recorded parity results.
 
 use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use super::DestructionError;
-use super::chunk_support::{ChunkSupportGraph, ChunkSupportOptions, ChunkSupportState};
+use super::chunk_support::{
+    ChunkSupportGraph,
+    ChunkSupportOptions,
+    ChunkSupportState,
+};
 use crate::core::Vector3;
 
 /// Direction components smaller than this are treated as parallel to a slab in ray tests.

@@ -6,7 +6,10 @@
 use serde_json::Value;
 
 use super::chunk_structure::DestructibleChunkDefinition;
-use crate::core::{JsonRecord, MeshAssetData};
+use crate::core::{
+    JsonRecord,
+    MeshAssetData,
+};
 
 /// Material whose chunks draw with the dark frame tint.
 pub const FRAME_MATERIAL: &str = "frame";

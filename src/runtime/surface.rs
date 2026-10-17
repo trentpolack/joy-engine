@@ -7,7 +7,10 @@
 //! always rendered through a non-sRGB view. When a platform only offers sRGB swapchain formats, the surface keeps the
 //! sRGB format and exposes a non-sRGB view format of the same texture.
 
-use crate::rendering::{GpuContext, RenderError};
+use crate::rendering::{
+    GpuContext,
+    RenderError,
+};
 
 /// A configured surface and the view format the renderer presents into.
 pub(crate) struct ConfiguredSurface {

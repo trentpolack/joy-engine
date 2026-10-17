@@ -7,7 +7,20 @@
 //! structure behind them; drawing returns the requested changes instead of mutating the demo.
 
 use joy_engine::development::dock;
-use joy_engine::egui::{Align2, Color32, FontId, Id, Margin, Pos2, Rect, RichText, Sense, Stroke, Ui, Vec2 as UiVec2};
+use joy_engine::egui::{
+    Align2,
+    Color32,
+    FontId,
+    Id,
+    Margin,
+    Pos2,
+    Rect,
+    RichText,
+    Sense,
+    Stroke,
+    Ui,
+    Vec2 as UiVec2,
+};
 use joy_engine::prelude::*;
 
 use super::config::destruction_config::StructureView;

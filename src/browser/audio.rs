@@ -9,10 +9,19 @@ use std::rc::Rc;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 use web_sys::{
-    AudioBuffer, AudioBufferSourceNode, AudioContext, AudioContextState, AudioScheduledSourceNode, GainNode,
+    AudioBuffer,
+    AudioBufferSourceNode,
+    AudioContext,
+    AudioContextState,
+    AudioScheduledSourceNode,
+    GainNode,
 };
 
-use crate::runtime::audio::{DecodedSound, VoiceRecord, voices_to_steal};
+use crate::runtime::audio::{
+    DecodedSound,
+    VoiceRecord,
+    voices_to_steal,
+};
 
 /// Page events that count as user activation and resume a suspended context.
 const UNLOCK_EVENTS: [&str; 3] = ["pointerdown", "keydown", "touchend"];

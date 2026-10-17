@@ -11,12 +11,21 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    use joy_editor::desktop::workspace::{WORKSPACE_ENVIRONMENT_VARIABLE, launch_option, locate_workspace};
+    use joy_editor::desktop::workspace::{
+        WORKSPACE_ENVIRONMENT_VARIABLE,
+        launch_option,
+        locate_workspace,
+    };
     use joy_editor::server::BundledProjects;
     use joy_editor::server::ProjectStore;
     use joy_editor::server::project_files::ProjectFiles;
     use joy_editor::workspace::constants::STORAGE_APPLICATION;
-    use joy_editor::{EditorOptions, JoyEditor, default_tools, shell_options};
+    use joy_editor::{
+        EditorOptions,
+        JoyEditor,
+        default_tools,
+        shell_options,
+    };
 
     let arguments: Vec<String> = std::env::args().skip(1).collect();
     if arguments.iter().any(|argument| argument == "--help" || argument == "-h") {

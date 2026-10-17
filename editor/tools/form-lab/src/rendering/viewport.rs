@@ -15,20 +15,50 @@
 
 use joy_engine::core::Transform;
 use joy_engine::form::GeometryData;
-use joy_engine::glam::{Vec2, Vec3};
+use joy_engine::glam::{
+    Vec2,
+    Vec3,
+};
 use joy_engine::rendering::{
-    Camera, CelestialLight, ColorVertex, EditorGrid, EditorGridView, EnvironmentData, EnvironmentLighting,
-    EnvironmentMap, EnvironmentPixels, FormTextureCache, FrameInputs, ImageLighting, MeshInstance, MeshInstanceId,
-    OrbitCamera, RegionCamera, RenderPassKind, RenderScene, Renderer, Shading, ShadowOptions, TransparentDraw,
-    form_mesh_asset_with_textures, sort_transparent_triangles,
+    Camera,
+    CelestialLight,
+    ColorVertex,
+    EditorGrid,
+    EditorGridView,
+    EnvironmentData,
+    EnvironmentLighting,
+    EnvironmentMap,
+    EnvironmentPixels,
+    FormTextureCache,
+    FrameInputs,
+    ImageLighting,
+    MeshInstance,
+    MeshInstanceId,
+    OrbitCamera,
+    RegionCamera,
+    RenderPassKind,
+    RenderScene,
+    Renderer,
+    Shading,
+    ShadowOptions,
+    TransparentDraw,
+    form_mesh_asset_with_textures,
+    sort_transparent_triangles,
 };
 use joy_engine::runtime::RenderTarget;
 
 use crate::constants::ViewMode;
-use crate::rendering::batches::{MarkerCamera, point_batch};
+use crate::rendering::batches::{
+    MarkerCamera,
+    point_batch,
+};
 use crate::rendering::inspection_overlay::InspectionOverlay;
 use crate::rendering::preview_lighting::{
-    EDITOR_AMBIENT, EDITOR_BACKGROUND, PreviewLightingSettings, STUDIO_ENVIRONMENT, create_studio_pixels,
+    EDITOR_AMBIENT,
+    EDITOR_BACKGROUND,
+    PreviewLightingSettings,
+    STUDIO_ENVIRONMENT,
+    create_studio_pixels,
     studio_environment_options,
 };
 

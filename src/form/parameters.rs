@@ -3,8 +3,14 @@
 
 //! Parameter declarations, override validation, and clamping. Ported from `src/form/parameters.ts`.
 
-use crate::form::{resources, value::Value};
-use serde_json::{Value as Json, json};
+use crate::form::{
+    resources,
+    value::Value,
+};
+use serde_json::{
+    Value as Json,
+    json,
+};
 
 pub fn read(value: &Value) -> Result<Value, String> {
     if matches!(value, Value::Number(_) | Value::Array(_) | Value::Object(_)) {

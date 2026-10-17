@@ -11,17 +11,42 @@
 use std::collections::BTreeSet;
 
 use joy_engine::development::ToolDocument;
-use joy_engine::runtime::{StartContext, Storage};
+use joy_engine::runtime::{
+    StartContext,
+    Storage,
+};
 
 use super::asset_types::{
-    AssetEditor, asset_editor, asset_kind, create_asset_text, is_supported_asset_path, new_asset_path,
+    AssetEditor,
+    asset_editor,
+    asset_kind,
+    create_asset_text,
+    is_supported_asset_path,
+    new_asset_path,
 };
-use super::constants::{POLL_SECONDS, REFRESH_SECONDS};
+use super::constants::{
+    POLL_SECONDS,
+    REFRESH_SECONDS,
+};
 use super::documents::WorkspaceDocument;
-use super::session::{LayoutPreferences, WorkspaceSession};
-use super::tool_bridge::{ToolRegistry, ToolTab};
-use crate::level::{AssetAccess, LevelEditor};
-use crate::server::{AssetEntry, ProjectError, ProjectStore, ProjectSummary};
+use super::session::{
+    LayoutPreferences,
+    WorkspaceSession,
+};
+use super::tool_bridge::{
+    ToolRegistry,
+    ToolTab,
+};
+use crate::level::{
+    AssetAccess,
+    LevelEditor,
+};
+use crate::server::{
+    AssetEntry,
+    ProjectError,
+    ProjectStore,
+    ProjectSummary,
+};
 
 /// The result of an operation that may need the author's confirmation.
 #[derive(Clone, Debug, PartialEq, Eq)]

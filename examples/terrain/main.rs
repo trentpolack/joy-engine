@@ -18,15 +18,28 @@
 mod terrain_camera_controls;
 mod terrain_config;
 
-use joy_engine::development::dock::{self, DockTool};
+use joy_engine::development::dock::{
+    self,
+    DockTool,
+};
 use joy_engine::prelude::*;
 use joy_engine::rendering::TerrainInstanceId;
 use joy_engine::rendering::terrain::{
-    TerrainAsset, TerrainDiagnostic, TerrainFrame, TerrainRenderer, TerrainStats, TerrainView, parse_terrain,
+    TerrainAsset,
+    TerrainDiagnostic,
+    TerrainFrame,
+    TerrainRenderer,
+    TerrainStats,
+    TerrainView,
+    parse_terrain,
     sample_terrain,
 };
 
-use terrain_camera_controls::{TerrainCameraControls, WheelGesture, actions};
+use terrain_camera_controls::{
+    TerrainCameraControls,
+    WheelGesture,
+    actions,
+};
 use terrain_config::TERRAIN_CONFIG;
 
 /// The compiled Dragon Pit heightfield, embedded so the example runs identically natively and in browsers.

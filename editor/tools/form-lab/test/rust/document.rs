@@ -4,13 +4,25 @@
 //! Documents, ported from `test/document.test.js`: reading, budgets, malformed input, every shipped asset at default
 //! and maximum parameters, typed overrides, project renames, variants, and the gameplay examples' entity records.
 
-use form_lab::document::{DocumentError, FormDocument, read_document, serialize_document};
+use form_lab::document::{
+    DocumentError,
+    FormDocument,
+    read_document,
+    serialize_document,
+};
 use form_lab::form_assets::form_assets;
 use form_lab::form_library::open_form_library_asset;
 use form_lab::project_metadata::project_name_change;
 use form_lab::script_guide::RECIPES;
-use joy_engine::form::{CompiledScript, default_material};
-use joy_engine::serde_json::{self, Value as Json, json};
+use joy_engine::form::{
+    CompiledScript,
+    default_material,
+};
+use joy_engine::serde_json::{
+    self,
+    Value as Json,
+    json,
+};
 
 use crate::support::compile;
 

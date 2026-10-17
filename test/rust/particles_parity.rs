@@ -19,9 +19,20 @@ use std::path::Path;
 use indexmap::IndexMap;
 use joy_engine::core::SeededRandom;
 use joy_engine::particles::{
-    EffectParticle, ParticleBatch, ParticleCameraBasis, ParticleEffect, ParticleEffectOptions, ParticleParameterValue,
-    ParticleScript, ParticleScriptBudget, ParticleValueKind, append_particle_effect, collect_particle_lights,
-    compile_particle_effect, create_particle_effect_batches, particle_seed,
+    EffectParticle,
+    ParticleBatch,
+    ParticleCameraBasis,
+    ParticleEffect,
+    ParticleEffectOptions,
+    ParticleParameterValue,
+    ParticleScript,
+    ParticleScriptBudget,
+    ParticleValueKind,
+    append_particle_effect,
+    collect_particle_lights,
+    compile_particle_effect,
+    create_particle_effect_batches,
+    particle_seed,
 };
 use serde_json::Value;
 

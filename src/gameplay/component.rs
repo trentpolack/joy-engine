@@ -19,7 +19,10 @@
 
 use std::any::Any;
 
-use super::entity::{EntityState, SimulationContext};
+use super::entity::{
+    EntityState,
+    SimulationContext,
+};
 use super::error::GameplayError;
 
 /// Project logic and resources for one component type on one entity.

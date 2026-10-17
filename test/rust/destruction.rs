@@ -10,14 +10,32 @@
 //! and evaluation order, including V8's `Math.hypot`.
 
 use glam::Vec3;
-use joy_engine::core::{RandomSource, SeededRandom};
+use joy_engine::core::{
+    RandomSource,
+    SeededRandom,
+};
 use joy_engine::physics::destruction::DEFAULT_CONTACT_TOLERANCE;
 use joy_engine::physics::{
-    BodyOptions, ChunkStructure, ChunkSupportOptions, DestructibleChunkDefinition, DestructionError, PhysicsBackend,
-    PhysicsCollisionShape, PhysicsError, PhysicsMutationBatch, PhysicsResidency, PhysicsWorld, PhysicsWorldOptions,
-    RadialDamage, create_chunk_mesh_data, create_removal_mutation_batch,
+    BodyOptions,
+    ChunkStructure,
+    ChunkSupportOptions,
+    DestructibleChunkDefinition,
+    DestructionError,
+    PhysicsBackend,
+    PhysicsCollisionShape,
+    PhysicsError,
+    PhysicsMutationBatch,
+    PhysicsResidency,
+    PhysicsWorld,
+    PhysicsWorldOptions,
+    RadialDamage,
+    create_chunk_mesh_data,
+    create_removal_mutation_batch,
 };
-use serde_json::{Value, json};
+use serde_json::{
+    Value,
+    json,
+};
 
 use crate::parity_support::assert_matches_recording;
 

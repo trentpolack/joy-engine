@@ -4,7 +4,10 @@
 //! The real interface on a headless device with synthetic input, ported from the TypeScript `live-apply-browser.mjs`
 //! and `browser.mjs` checks.
 
-use joy_engine::egui::{Key, Modifiers};
+use joy_engine::egui::{
+    Key,
+    Modifiers,
+};
 use particle_lab::lab::PreviewState;
 
 use crate::support::Harness;
@@ -205,7 +208,10 @@ fn hosted_tabs_hide_their_file_chrome() {
     let Some(mut harness) = Harness::new() else {
         return;
     };
-    use joy_engine::development::{AuthoringTool, ToolHosting};
+    use joy_engine::development::{
+        AuthoringTool,
+        ToolHosting,
+    };
     let area =
         joy_engine::egui::Rect::from_min_size(joy_engine::egui::pos2(0.0, 40.0), joy_engine::egui::vec2(1280.0, 760.0));
     harness.tool.set_hosting(ToolHosting::Hosted { area });

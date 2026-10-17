@@ -3,12 +3,30 @@
 
 //! Native audio output: a cpal stream on the default device mixing voices with linear resampling.
 
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{
+    Arc,
+    Mutex,
+    MutexGuard,
+    PoisonError,
+};
 
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{FromSample, SampleFormat, SizedSample, StreamConfig};
+use cpal::traits::{
+    DeviceTrait,
+    HostTrait,
+    StreamTrait,
+};
+use cpal::{
+    FromSample,
+    SampleFormat,
+    SizedSample,
+    StreamConfig,
+};
 
-use crate::runtime::audio::{DecodedSound, VoiceRecord, voices_to_steal};
+use crate::runtime::audio::{
+    DecodedSound,
+    VoiceRecord,
+    voices_to_steal,
+};
 
 /// One playing voice in the mixer.
 struct MixVoice {

@@ -13,7 +13,10 @@
 //! [`GAMEPLAY_CONTEXT`]); only actions in an active context respond. Focus loss, hidden windows, and UI text entry
 //! suspend every device, and gamepads must return to neutral after any release before they count again.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 
 use glam::Vec2;
 

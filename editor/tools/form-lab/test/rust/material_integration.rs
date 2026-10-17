@@ -4,9 +4,15 @@
 //! Materials through the language, documents, and point markers, ported from `test/material-integration.test.js`.
 
 use form_lab::document::read_document;
-use form_lab::rendering::batches::{MarkerCamera, point_batch};
+use form_lab::rendering::batches::{
+    MarkerCamera,
+    point_batch,
+};
 use joy_engine::rendering::OrbitCamera;
-use joy_engine::serde_json::{Value as Json, json};
+use joy_engine::serde_json::{
+    Value as Json,
+    json,
+};
 
 use crate::support::compile;
 

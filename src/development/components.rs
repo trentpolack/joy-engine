@@ -6,9 +6,20 @@
 //! [`theme::apply_authoring`](crate::runtime::theme::apply_authoring) once for the base widget style; these helpers add
 //! the pieces egui has no style slot for.
 
-use egui::{Color32, CornerRadius, Frame, Margin, RichText, Stroke, Ui};
+use egui::{
+    Color32,
+    CornerRadius,
+    Frame,
+    Margin,
+    RichText,
+    Stroke,
+    Ui,
+};
 
-use crate::runtime::hud_text::{self, Style};
+use crate::runtime::hud_text::{
+    self,
+    Style,
+};
 use crate::runtime::theme::tokens;
 
 /// A panel: the panel fill with a hairline border.

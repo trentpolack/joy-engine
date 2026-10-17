@@ -7,7 +7,11 @@
 //! The library describes files without evaluating scripts or touching the GPU. Opening an asset parses a fresh working
 //! copy each time, so editing, recovery, and saving never change the bundled text or an earlier copy.
 
-use crate::document::{DocumentError, FormDocument, read_document};
+use crate::document::{
+    DocumentError,
+    FormDocument,
+    read_document,
+};
 
 /// A read-only authored asset, with its path relative to the engine root (for example
 /// `assets/examples/wave-study.form`).

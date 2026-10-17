@@ -12,10 +12,17 @@
 use std::collections::BTreeMap;
 
 use joy_engine::runtime::Storage;
-use joy_engine::serde_json::{self, Map, Value};
+use joy_engine::serde_json::{
+    self,
+    Map,
+    Value,
+};
 
 use super::constants::{
-    CONTENT_BROWSER_DEFAULT_WIDTH, CONTENT_BROWSER_MAXIMUM_WIDTH, CONTENT_BROWSER_MINIMUM_WIDTH, SESSION_STORAGE_KEY,
+    CONTENT_BROWSER_DEFAULT_WIDTH,
+    CONTENT_BROWSER_MAXIMUM_WIDTH,
+    CONTENT_BROWSER_MINIMUM_WIDTH,
+    SESSION_STORAGE_KEY,
 };
 
 /// Panel layout preferences, in logical pixels.

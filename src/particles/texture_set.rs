@@ -10,14 +10,23 @@
 //! The textured shader is `src/rendering/shaders/textured.wgsl`, drawn through
 //! [`FrameInputs::transparent_draws`](crate::rendering::FrameInputs).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 use std::sync::Arc;
 
-use crate::rendering::{TextureAsset, TransparentDraw};
+use crate::rendering::{
+    TextureAsset,
+    TransparentDraw,
+};
 
 use crate::particles::asset::CompiledParticleEffect;
 use crate::particles::rendering::ParticleBatch;
-use crate::particles::texture_source::{ParticleTextureError, decode_particle_texture_source};
+use crate::particles::texture_source::{
+    ParticleTextureError,
+    decode_particle_texture_source,
+};
 
 /// Decode one embedded PNG particle texture source into an image, for previews of textures that are not part of a
 /// prepared definition yet (PARTICLE LAB's sprite thumbnail).

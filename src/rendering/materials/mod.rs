@@ -6,7 +6,10 @@
 //! Every surface material shares one vertex layout, one instance layout, the frame uniform group, and the shadow group,
 //! so material passes differ only in shading and blend state. Struct layouts here mirror the WGSL declarations exactly.
 
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{
+    Pod,
+    Zeroable,
+};
 
 use crate::rendering::frame::MAX_POINT_LIGHTS;
 use crate::rendering::mesh::MeshVertex;
@@ -15,7 +18,10 @@ mod maps;
 mod textured;
 
 pub(crate) use maps::MaterialMaps;
-pub(crate) use textured::{PlannedDraw, TexturedPass};
+pub(crate) use textured::{
+    PlannedDraw,
+    TexturedPass,
+};
 
 /// Main depth buffer format (matches the TypeScript renderer's `depth24plus`).
 pub(crate) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;

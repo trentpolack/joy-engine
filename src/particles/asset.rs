@@ -13,14 +13,30 @@
 use std::sync::Arc;
 
 use indexmap::IndexMap;
-use serde_json::{Map, Value};
+use serde_json::{
+    Map,
+    Value,
+};
 
-use crate::particles::constants::{ParticleParameterType, ParticleRenderer, ParticleValueKind};
+use crate::particles::constants::{
+    ParticleParameterType,
+    ParticleRenderer,
+    ParticleValueKind,
+};
 use crate::particles::math;
 use crate::particles::script::{
-    FIXED_SLOT_COUNT, PARTICLE_FIELDS, PARTICLE_INPUTS, ParticleScript, ParticleScriptError, compile_particle_script,
+    FIXED_SLOT_COUNT,
+    PARTICLE_FIELDS,
+    PARTICLE_INPUTS,
+    ParticleScript,
+    ParticleScriptError,
+    compile_particle_script,
 };
-use crate::particles::texture_source::{ParticleTextureDimensions, ParticleTextureError, read_particle_texture_source};
+use crate::particles::texture_source::{
+    ParticleTextureDimensions,
+    ParticleTextureError,
+    read_particle_texture_source,
+};
 
 /// The only supported `.joyfx` format version.
 pub const PARTICLE_EFFECT_VERSION: u32 = 1;

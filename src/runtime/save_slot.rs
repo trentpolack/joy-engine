@@ -10,7 +10,10 @@
 //! (a damaged save, or one from a newer version, kept so a fixed build can still read it), until the game explicitly
 //! [replaces](SaveSlot::replace) the value, for example when the player starts a new campaign.
 
-use crate::runtime::storage::{Storage, StorageError};
+use crate::runtime::storage::{
+    Storage,
+    StorageError,
+};
 
 /// Why a save slot refuses ordinary writes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

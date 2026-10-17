@@ -9,12 +9,32 @@
 use std::collections::HashMap;
 
 use joy_engine::development::components;
-use joy_engine::development::{ColorControl, ComponentGroup, EditPhase, NumericDrafts, ScalarControl};
-use joy_engine::egui::{self, RichText, Ui};
-use joy_engine::form::{DOCUMENT_TEXTURE_BYTES, default_material, read_materials};
-use joy_engine::rendering::{ImageFormat, TextureAsset};
+use joy_engine::development::{
+    ColorControl,
+    ComponentGroup,
+    EditPhase,
+    NumericDrafts,
+    ScalarControl,
+};
+use joy_engine::egui::{
+    self,
+    RichText,
+    Ui,
+};
+use joy_engine::form::{
+    DOCUMENT_TEXTURE_BYTES,
+    default_material,
+    read_materials,
+};
+use joy_engine::rendering::{
+    ImageFormat,
+    TextureAsset,
+};
 use joy_engine::runtime::theme::tokens;
-use joy_engine::serde_json::{Value as Json, json};
+use joy_engine::serde_json::{
+    Value as Json,
+    json,
+};
 
 /// Texture slots in inspector order with their titles.
 pub const TEXTURE_FIELDS: [(&str, &str); 6] = [

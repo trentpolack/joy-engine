@@ -3,7 +3,10 @@
 
 //! Renaming a document through its script's `project meta(name="…")` declaration.
 
-use joy_engine::form::{CompiledScript, project_name_tokens};
+use joy_engine::form::{
+    CompiledScript,
+    project_name_tokens,
+};
 use joy_engine::serde_json;
 
 /// A replacement of the byte range `from..to` of the script with `insert`.

@@ -19,8 +19,21 @@
 //! layout.dividers(ui, &panes);
 //! ```
 
-use egui::{Color32, CursorIcon, Id, Key, Rect, Sense, Stroke, Ui, pos2};
-use serde::{Deserialize, Serialize};
+use egui::{
+    Color32,
+    CursorIcon,
+    Id,
+    Key,
+    Rect,
+    Sense,
+    Stroke,
+    Ui,
+    pos2,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use crate::runtime::Storage;
 use crate::runtime::theme::tokens;

@@ -12,11 +12,25 @@
 
 use std::collections::HashMap;
 
-use crate::core::{MaterialAlphaMode, PbrMaterial, PbrMaterialTextures, PbrMesh};
-use crate::form::{FormMaterial, GeometryData};
+use crate::core::{
+    MaterialAlphaMode,
+    PbrMaterial,
+    PbrMaterialTextures,
+    PbrMesh,
+};
+use crate::form::{
+    FormMaterial,
+    GeometryData,
+};
 
 use crate::rendering::RenderError;
-use crate::rendering::mesh::{AlphaMode, MeshAsset, MeshData, MeshVertex, VertexMaterial};
+use crate::rendering::mesh::{
+    AlphaMode,
+    MeshAsset,
+    MeshData,
+    MeshVertex,
+    VertexMaterial,
+};
 use crate::rendering::scene::Shading;
 use crate::rendering::texture::TextureAsset;
 

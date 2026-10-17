@@ -51,11 +51,28 @@ mod value;
 
 use serde_json::Value as Json;
 
-pub use diagnostic::{Diagnostic, FormValueError, SourceToken};
+pub use diagnostic::{
+    Diagnostic,
+    FormValueError,
+    SourceToken,
+};
 pub use geometry_data::GeometryData;
-pub use language_information::{FORM_ATTRIBUTE_DOMAINS, FORM_COMMANDS, FORM_KEYWORDS, form_language_catalog};
-pub use materials::{AlphaMode, FormMaterial, FormMaterialTextures};
-pub use primitives::{DEFAULT_SPHERE_SEGMENTS, mesh_box, mesh_sphere};
+pub use language_information::{
+    FORM_ATTRIBUTE_DOMAINS,
+    FORM_COMMANDS,
+    FORM_KEYWORDS,
+    form_language_catalog,
+};
+pub use materials::{
+    AlphaMode,
+    FormMaterial,
+    FormMaterialTextures,
+};
+pub use primitives::{
+    DEFAULT_SPHERE_SEGMENTS,
+    mesh_box,
+    mesh_sphere,
+};
 
 /// Largest FORM LAB document, in bytes (and UTF-16 code units); capacity includes base64 texture expansion. Matches
 /// the TypeScript `DOCUMENT_LIMITS.fileBytes`.

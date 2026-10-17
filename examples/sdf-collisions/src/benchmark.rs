@@ -9,11 +9,18 @@
 
 use std::fmt;
 
-use joy_engine::physics::{PhysicsError, SdfCollisionStatistics};
+use joy_engine::physics::{
+    PhysicsError,
+    SdfCollisionStatistics,
+};
 use joy_engine::runtime::Stopwatch;
 
 use super::config::sdf_collisions_config::PHYSICS;
-use super::pile_arena::{ArenaSnapshot, ColliderMode, PileArena};
+use super::pile_arena::{
+    ArenaSnapshot,
+    ColliderMode,
+    PileArena,
+};
 use super::prop_library::PropLibrary;
 
 /// Final steps averaged for the settled-pile timing.

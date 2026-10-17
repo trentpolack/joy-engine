@@ -3,9 +3,17 @@
 
 //! Box and sphere primitives as ready-to-draw geometry.
 
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+};
 
-use crate::form::{Diagnostic, GeometryData, builder::Builder, value::Budget};
+use crate::form::{
+    Diagnostic,
+    GeometryData,
+    builder::Builder,
+    value::Budget,
+};
 
 /// Longitudinal segment count the TypeScript `meshSphere(radius)` uses when none is given.
 pub const DEFAULT_SPHERE_SEGMENTS: u32 = 20;

@@ -4,7 +4,13 @@
 //! The compile lifecycle: builds report geometry or located diagnostics, budgets expire runaway or stalled builds,
 //! and a newer request abandons an older one.
 
-use form_lab::compiler::{Budgets, CompileOutcome, CompilePhase, CompileRequest, Compiler};
+use form_lab::compiler::{
+    Budgets,
+    CompileOutcome,
+    CompilePhase,
+    CompileRequest,
+    Compiler,
+};
 use joy_engine::serde_json::json;
 
 fn request(source: &str) -> CompileRequest {

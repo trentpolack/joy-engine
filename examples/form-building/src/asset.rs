@@ -4,10 +4,16 @@
 //! FORM evaluations as renderable assets and portable records (TypeScript `asset.ts`): the PBR mesh the scene draws,
 //! the baked `.mesh.json` record, and the reverse conversion that lets baked mode draw without evaluating FORM.
 
-use joy_engine::core::{JsonRecord, MeshAssetData};
+use joy_engine::core::{
+    JsonRecord,
+    MeshAssetData,
+};
 use joy_engine::form::GeometryData;
 use joy_engine::prelude::*;
-use joy_engine::rendering::{RenderError, form_mesh_asset};
+use joy_engine::rendering::{
+    RenderError,
+    form_mesh_asset,
+};
 use joy_engine::serde_json::Value;
 
 /// Metadata keys of a baked record, matching the TypeScript `{project, userData}`.

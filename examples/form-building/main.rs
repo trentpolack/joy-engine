@@ -13,7 +13,10 @@
 #[path = "src/mod.rs"]
 mod example;
 
-use example::building_example::{BuildingExample, ORBIT_ACTION};
+use example::building_example::{
+    BuildingExample,
+    ORBIT_ACTION,
+};
 use joy_engine::prelude::*;
 
 /// Shell settings: default renderer and drag-to-orbit input.

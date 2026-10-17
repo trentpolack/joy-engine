@@ -9,10 +9,23 @@
 use std::collections::HashMap;
 
 use crate::rendering::scene_effects::pass::{
-    Binding, BindingKind, PassDefinition, TEXTURE_TRANSFORM, UniformValues, assemble, find_pass, pack_uniforms,
+    Binding,
+    BindingKind,
+    PassDefinition,
+    TEXTURE_TRANSFORM,
+    UniformValues,
+    assemble,
+    find_pass,
+    pack_uniforms,
 };
 use crate::rendering::scene_effects::pipelines::{
-    HistoryStart, InputSource, PipelineSpec, StepSpec, TargetLifetime, TargetSampling, TargetSpec,
+    HistoryStart,
+    InputSource,
+    PipelineSpec,
+    StepSpec,
+    TargetLifetime,
+    TargetSampling,
+    TargetSpec,
 };
 
 /// Textures and buffers the renderer supplies by binding name.

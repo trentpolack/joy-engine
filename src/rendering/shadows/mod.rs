@@ -11,11 +11,26 @@
 
 mod maps;
 
-use glam::{Mat4, Vec3, Vec4};
+use glam::{
+    Mat4,
+    Vec3,
+    Vec4,
+};
 
-use crate::rendering::camera::{CameraFrame, look_at, orthographic, perspective};
+use crate::rendering::camera::{
+    CameraFrame,
+    look_at,
+    orthographic,
+    perspective,
+};
 
-pub(crate) use maps::{PointShadowRaw, ShadowMaps, ShadowUniforms, caster_layout, receiver_layout};
+pub(crate) use maps::{
+    PointShadowRaw,
+    ShadowMaps,
+    ShadowUniforms,
+    caster_layout,
+    receiver_layout,
+};
 
 /// Cascades at most; the receiver uniform always holds this many matrices.
 pub(crate) const MAX_CASCADES: usize = 4;

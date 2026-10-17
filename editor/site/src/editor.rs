@@ -8,10 +8,20 @@
 
 use joy_engine::egui;
 use joy_engine::rendering::GpuCapabilities;
-use joy_engine::runtime::{Frame, Game, GameResult, RenderTarget, StartContext, Storage};
+use joy_engine::runtime::{
+    Frame,
+    Game,
+    GameResult,
+    RenderTarget,
+    StartContext,
+    Storage,
+};
 
 use crate::server::ProjectStore;
-use crate::workspace::main::{TabContent, Workspace};
+use crate::workspace::main::{
+    TabContent,
+    Workspace,
+};
 use crate::workspace::tool_bridge::ToolRegistry;
 use crate::workspace::ui::WorkspaceView;
 

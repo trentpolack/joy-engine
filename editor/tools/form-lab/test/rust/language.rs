@@ -4,8 +4,16 @@
 //! The language as FORM LAB uses it and the geometry exports, ported from `test/language.test.js`. OBJ and PLY text is
 //! also compared with the TypeScript tool's output for the same build.
 
-use form_lab::export::{export_geometry_json, export_obj, export_ply};
-use joy_engine::serde_json::{self, Value as Json, json};
+use form_lab::export::{
+    export_geometry_json,
+    export_obj,
+    export_ply,
+};
+use joy_engine::serde_json::{
+    self,
+    Value as Json,
+    json,
+};
 
 use crate::support::compile;
 

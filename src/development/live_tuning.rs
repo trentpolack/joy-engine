@@ -11,9 +11,18 @@ use std::collections::HashSet;
 use egui::Context;
 use indexmap::IndexMap;
 
-use crate::core::{ConfigApplyMode, ConfigError, ConfigField, ConfigValues};
+use crate::core::{
+    ConfigApplyMode,
+    ConfigError,
+    ConfigField,
+    ConfigValues,
+};
 use crate::development::config_panel::ConfigPanel;
-use crate::development::config_session::{ConfigSaveAdapter, ConfigSession, ConfigSessionError};
+use crate::development::config_session::{
+    ConfigSaveAdapter,
+    ConfigSession,
+    ConfigSessionError,
+};
 
 /// One live numeric value of a registered object.
 #[derive(Clone, Debug, PartialEq)]

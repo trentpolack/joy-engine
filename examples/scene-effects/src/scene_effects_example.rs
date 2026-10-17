@@ -9,20 +9,60 @@
 //! still image. The sidebar covers the right of the canvas; a lens shift keeps the room centered in the rest. Scene
 //! effects need a WebGPU-class backend; on WebGL 2 the controls report them unavailable while HDR bloom still works.
 
-use joy_engine::development::{EffectPreset, EffectQuality, SceneEffectsControls, dock};
-use joy_engine::egui::{Align2, Color32, FontId, Id, Margin, RichText, Stroke, Vec2 as UiVec2};
+use joy_engine::development::{
+    EffectPreset,
+    EffectQuality,
+    SceneEffectsControls,
+    dock,
+};
+use joy_engine::egui::{
+    Align2,
+    Color32,
+    FontId,
+    Id,
+    Margin,
+    RichText,
+    Stroke,
+    Vec2 as UiVec2,
+};
 use joy_engine::prelude::*;
 use joy_engine::rendering::scene_effects::SceneEffectsOptions;
-use joy_engine::rendering::{RendererDiagnostics, ShiftedCamera};
+use joy_engine::rendering::{
+    RendererDiagnostics,
+    ShiftedCamera,
+};
 use joy_engine::runtime::Stopwatch;
 
 use super::config::{
-    AMBIENT, BLOOM_STRENGTH, CAMERA_CLIPS, CAMERA_CUT_YAW, CAMERA_DISTANCE, CAMERA_DISTANCE_LIMITS, CAMERA_MOTION,
-    CAMERA_PITCH, CAMERA_PITCH_LIMITS, CAMERA_RADIUS, CAMERA_TARGET, CAMERA_YAW, CLEAR_COLOR, EFFECT_NOTES,
-    MAXIMUM_STEP_SECONDS, OBJECT_MOTION, ORBIT_SENSITIVITY, START_SECONDS, STATS_INTERVAL_FRAMES, STEP_SECONDS,
-    TIMING_SAMPLES, ZOOM_SENSITIVITY, quality_config,
+    AMBIENT,
+    BLOOM_STRENGTH,
+    CAMERA_CLIPS,
+    CAMERA_CUT_YAW,
+    CAMERA_DISTANCE,
+    CAMERA_DISTANCE_LIMITS,
+    CAMERA_MOTION,
+    CAMERA_PITCH,
+    CAMERA_PITCH_LIMITS,
+    CAMERA_RADIUS,
+    CAMERA_TARGET,
+    CAMERA_YAW,
+    CLEAR_COLOR,
+    EFFECT_NOTES,
+    MAXIMUM_STEP_SECONDS,
+    OBJECT_MOTION,
+    ORBIT_SENSITIVITY,
+    START_SECONDS,
+    STATS_INTERVAL_FRAMES,
+    STEP_SECONDS,
+    TIMING_SAMPLES,
+    ZOOM_SENSITIVITY,
+    quality_config,
 };
-use super::room::{MOVING_POSITION, Room, create_room};
+use super::room::{
+    MOVING_POSITION,
+    Room,
+    create_room,
+};
 
 /// Input action held to orbit (primary mouse button or a touch).
 pub const ORBIT_ACTION: &str = "orbit";

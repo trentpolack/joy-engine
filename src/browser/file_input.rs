@@ -8,9 +8,17 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::{
+    JsCast,
+    JsValue,
+};
 
-use crate::development::file_dialogs::{FileDialogEvent, OpenedFile, decode_contents, too_large_message};
+use crate::development::file_dialogs::{
+    FileDialogEvent,
+    OpenedFile,
+    decode_contents,
+    too_large_message,
+};
 
 /// One running open request.
 pub(crate) struct FileInputRequest {

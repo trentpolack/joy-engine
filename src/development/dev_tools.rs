@@ -9,7 +9,10 @@
 use egui::RichText;
 use indexmap::IndexMap;
 
-use crate::development::dock::{self, DockTool};
+use crate::development::dock::{
+    self,
+    DockTool,
+};
 use crate::rendering::RendererDiagnostics;
 use crate::runtime::Viewport;
 

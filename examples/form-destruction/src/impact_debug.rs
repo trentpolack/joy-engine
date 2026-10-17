@@ -6,7 +6,10 @@
 //! tested), fade before expiry, and are released when disabled or cleared. Scenes are borrowed per call.
 
 use joy_engine::prelude::*;
-use joy_engine::rendering::{MeshChannels, RenderPassKind};
+use joy_engine::rendering::{
+    MeshChannels,
+    RenderPassKind,
+};
 
 use super::config::destruction_config::IMPACT_DEBUG;
 

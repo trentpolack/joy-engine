@@ -10,9 +10,19 @@
 //! the geometry has one pair per vertex. Materials stay two-sided metallic-roughness materials; WebP maps declare the
 //! required `EXT_texture_webp` extension without inventing a fallback.
 
-use joy_engine::core::{decode_base64, js_hypot};
-use joy_engine::form::{GeometryData, read_materials};
-use joy_engine::serde_json::{Map, Value as Json, json};
+use joy_engine::core::{
+    decode_base64,
+    js_hypot,
+};
+use joy_engine::form::{
+    GeometryData,
+    read_materials,
+};
+use joy_engine::serde_json::{
+    Map,
+    Value as Json,
+    json,
+};
 
 use crate::export::javascript_json;
 

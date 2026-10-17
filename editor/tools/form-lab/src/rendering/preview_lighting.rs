@@ -8,7 +8,10 @@
 //! integrates into image-based lighting once; intensity and rotation are per-frame inputs that reuse it.
 
 use joy_engine::core::js_math;
-use joy_engine::rendering::{EnvironmentMapOptions, ShadowQuality};
+use joy_engine::rendering::{
+    EnvironmentMapOptions,
+    ShadowQuality,
+};
 
 /// Editor-only ambient irradiance under the studio light.
 pub const EDITOR_AMBIENT: f32 = 0.03;

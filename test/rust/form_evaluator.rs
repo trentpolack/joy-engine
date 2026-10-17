@@ -3,7 +3,10 @@
 
 //! Evaluation isolation, determinism, precedence, geometry commands, scoped user data, diagnostics, and budgets.
 
-use joy_engine::form::{CompiledScript, compile};
+use joy_engine::form::{
+    CompiledScript,
+    compile,
+};
 use serde_json::json;
 
 #[test]

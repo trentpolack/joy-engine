@@ -7,10 +7,21 @@
 use std::cell::Cell;
 use std::rc::Rc;
 
-use joy_editor::server::project_files::{ProjectFiles, RECOVERY_DIRECTORY};
-use joy_editor::server::{AssetEntry, ProjectError, ProjectStore};
+use joy_editor::server::project_files::{
+    ProjectFiles,
+    RECOVERY_DIRECTORY,
+};
+use joy_editor::server::{
+    AssetEntry,
+    ProjectError,
+    ProjectStore,
+};
 
-use crate::support::{TempFolder, level_text, manifest};
+use crate::support::{
+    TempFolder,
+    level_text,
+    manifest,
+};
 
 #[test]
 fn project_saves_preserve_bytes_reject_stale_and_concurrent_writes_and_confine_access() {

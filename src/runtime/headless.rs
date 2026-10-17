@@ -8,12 +8,30 @@
 //! [`HeadlessShell::step_with_ui`] runs it with synthetic egui input (pointer, keys, text) and paints the UI over the
 //! capture, so tools can be driven and screenshotted through their real interface. Native only.
 
-use crate::rendering::{BackendPreference, GpuContext, OffscreenTarget, RenderError, Renderer, RendererOptions};
+use crate::rendering::{
+    BackendPreference,
+    GpuContext,
+    OffscreenTarget,
+    RenderError,
+    Renderer,
+    RendererOptions,
+};
 
 use crate::development::DevTools;
 use crate::runtime::clock::FrameClock;
-use crate::runtime::game::{Frame, Game, GameResult, RenderTarget, ShellRequests, StartContext, Viewport};
-use crate::runtime::input::{InputManager, InputMap};
+use crate::runtime::game::{
+    Frame,
+    Game,
+    GameResult,
+    RenderTarget,
+    ShellRequests,
+    StartContext,
+    Viewport,
+};
+use crate::runtime::input::{
+    InputManager,
+    InputMap,
+};
 use crate::runtime::shell::ShellError;
 
 /// Headless runner configuration.

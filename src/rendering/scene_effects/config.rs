@@ -6,7 +6,10 @@
 //! Each effect is off (`None`) or on with its settings. `Some(Default::default())` enables an effect with its default
 //! settings. [`SceneEffectsOptions::validate`] checks every setting's accepted range and relationships.
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 /// Where depth-based effects read surface normals.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -5,13 +5,34 @@
 //! ray casts, and Newton point projection. Contacts between it and other shapes come from
 //! [`SdfQueryDispatcher`](super::sdf_dispatcher::SdfQueryDispatcher); the solver itself treats it like any collider.
 
-use rapier3d::math::{Real, Vector};
-use rapier3d::parry::bounding_volume::{Aabb, BoundingSphere, BoundingVolume};
+use rapier3d::math::{
+    Real,
+    Vector,
+};
+use rapier3d::parry::bounding_volume::{
+    Aabb,
+    BoundingSphere,
+    BoundingVolume,
+};
 use rapier3d::parry::mass_properties::MassProperties;
-use rapier3d::parry::query::{PointProjection, PointQuery, Ray, RayCast, RayIntersection};
-use rapier3d::parry::shape::{FeatureId, Shape, ShapeType, TypedShape};
+use rapier3d::parry::query::{
+    PointProjection,
+    PointQuery,
+    Ray,
+    RayCast,
+    RayIntersection,
+};
+use rapier3d::parry::shape::{
+    FeatureId,
+    Shape,
+    ShapeType,
+    TypedShape,
+};
 
-use super::sdf_shape::{SdfShape, SdfShapeData};
+use super::sdf_shape::{
+    SdfShape,
+    SdfShapeData,
+};
 
 /// Sphere-tracing steps before a ray gives up.
 const RAY_MAX_STEPS: usize = 256;

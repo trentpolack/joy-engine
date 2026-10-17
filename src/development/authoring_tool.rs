@@ -12,7 +12,10 @@
 //! renderer settings (post-processing, scene effects, image lighting) when it becomes active again, because every tab
 //! shares the editor's one renderer.
 
-use crate::runtime::{Game, StartContext};
+use crate::runtime::{
+    Game,
+    StartContext,
+};
 
 /// A text document a tool opens or saves: a file name with its extension and the file's contents.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

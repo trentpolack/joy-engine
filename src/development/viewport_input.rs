@@ -10,7 +10,19 @@
 //! reported actions onto its camera.
 
 use egui::{
-    Event, EventFilter, Id, Key, Modifiers, MouseWheelUnit, PointerButton, Pos2, Rect, Response, Sense, Ui, Vec2,
+    Event,
+    EventFilter,
+    Id,
+    Key,
+    Modifiers,
+    MouseWheelUnit,
+    PointerButton,
+    Pos2,
+    Rect,
+    Response,
+    Sense,
+    Ui,
+    Vec2,
 };
 
 /// Wheel line height in pixels (browsers' `deltaMode` 1).
@@ -147,7 +159,10 @@ pub fn viewport_input(ui: &mut Ui, rect: Rect, id: Id) -> ViewportActions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egui::{pos2, vec2};
+    use egui::{
+        pos2,
+        vec2,
+    };
 
     fn frame(context: &egui::Context, events: Vec<Event>) -> ViewportActions {
         let input = egui::RawInput {

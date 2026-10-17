@@ -13,7 +13,13 @@ use joy_engine::gameplay::parse_level;
 use joy_engine::glam::Vec2;
 use joy_engine::runtime::Game;
 
-use crate::support::{Driver, TempFolder, editor, level_text, ui_shell};
+use crate::support::{
+    Driver,
+    TempFolder,
+    editor,
+    level_text,
+    ui_shell,
+};
 
 fn sample_workspace() -> TempFolder {
     let workspace = TempFolder::new("workspace-ui");

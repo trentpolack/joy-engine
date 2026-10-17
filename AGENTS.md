@@ -14,7 +14,7 @@ npm run check
 npm test
 ```
 
-`npm run check` and `npm test` validate the Rust engine/workspace and retained Node tooling. Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `cargo build --target wasm32-unknown-unknown --lib --examples` as appropriate; see [the runtime guide](docs/rust.md). Run `npm run docs:api` when public API documentation changes and review the generated rustdoc; do not commit generated `target/doc/`.
+`npm run check` and `npm test` validate the Rust engine/workspace and retained Node tooling. Run `cargo +nightly fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `cargo build --target wasm32-unknown-unknown --lib --examples` as appropriate; see [the runtime guide](docs/rust.md). Run `npm run docs:api` when public API documentation changes and review the generated rustdoc; do not commit generated `target/doc/`.
 
 Before completing a change:
 1. Run the narrowest relevant check while iterating.

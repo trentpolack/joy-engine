@@ -11,15 +11,35 @@
 
 use std::path::PathBuf;
 
-use egui::{Context, RichText};
+use egui::{
+    Context,
+    RichText,
+};
 use serde_json::Value;
 
-use crate::core::post_processing::{ControlDefault, POST_PROCESSING_SCHEMA, PRESET_NAMES, ToneMapper};
-use crate::core::{PostProcessingConfig, PostProcessingError};
-use crate::development::dock::{self, DockTool};
-use crate::development::post_processing_session::{ControlValue, PostProcessingSession};
+use crate::core::post_processing::{
+    ControlDefault,
+    POST_PROCESSING_SCHEMA,
+    PRESET_NAMES,
+    ToneMapper,
+};
+use crate::core::{
+    PostProcessingConfig,
+    PostProcessingError,
+};
+use crate::development::dock::{
+    self,
+    DockTool,
+};
+use crate::development::post_processing_session::{
+    ControlValue,
+    PostProcessingSession,
+};
 #[cfg(not(target_arch = "wasm32"))]
-use crate::development::profile_file::{ProfileFile, SaveError};
+use crate::development::profile_file::{
+    ProfileFile,
+    SaveError,
+};
 
 /// Largest profile accepted by Import.
 const MAXIMUM_IMPORT_BYTES: usize = 16 * 1024;

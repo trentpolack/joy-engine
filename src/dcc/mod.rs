@@ -5,4 +5,7 @@
 
 pub mod glb_mesh_loader;
 
-pub use glb_mesh_loader::{GlbError, parse_glb_mesh};
+pub use glb_mesh_loader::{
+    GlbError,
+    parse_glb_mesh,
+};

@@ -15,7 +15,12 @@ use crate::core::post_processing::BloomQuality;
 use crate::development::dock;
 use crate::rendering::Renderer;
 use crate::rendering::scene_effects::{
-    ClusteredLightingOptions, GtaoOptions, SceneEffectsOptions, SsaoOptions, SsgiOptions, SsrOptions,
+    ClusteredLightingOptions,
+    GtaoOptions,
+    SceneEffectsOptions,
+    SsaoOptions,
+    SsgiOptions,
+    SsrOptions,
 };
 
 /// Effects in display order with their labels.

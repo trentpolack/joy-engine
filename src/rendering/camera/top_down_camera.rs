@@ -3,9 +3,15 @@
 
 //! Fixed top-down orthographic camera for arcade games.
 
-use glam::{Mat4, Vec2};
+use glam::{
+    Mat4,
+    Vec2,
+};
 
-use crate::rendering::{ColorVertex, RenderError};
+use crate::rendering::{
+    ColorVertex,
+    RenderError,
+};
 
 /// Camera placement for [`top_down_orthographic`]: the camera sits at world `height` on +Z looking down -Z.
 #[derive(Clone, Copy, Debug, PartialEq)]

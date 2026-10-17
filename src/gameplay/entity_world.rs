@@ -24,10 +24,21 @@ use indexmap::IndexMap;
 use super::character::ControlIntent;
 use super::component::EntityComponent;
 use super::component_registry::ComponentRegistry;
-use super::entity::{ControllerId, Entity, EntityBehavior, EntityCommand, EntityId, EntityState, SimulationContext};
+use super::entity::{
+    ControllerId,
+    Entity,
+    EntityBehavior,
+    EntityCommand,
+    EntityId,
+    EntityState,
+    SimulationContext,
+};
 use super::entity_definition::EntityDefinition;
 use super::entity_registry::EntityRegistry;
-use super::entity_system::{EntitySystem, SystemId};
+use super::entity_system::{
+    EntitySystem,
+    SystemId,
+};
 use super::error::GameplayError;
 
 /// Caller name used in delta-time errors.

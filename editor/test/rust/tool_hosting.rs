@@ -10,11 +10,27 @@ use std::rc::Rc;
 
 use joy_editor::workspace::main::TabContent;
 use joy_editor::workspace::tool_bridge::ToolRegistry;
-use joy_engine::development::{AuthoringTool, ToolDocument, ToolHosting};
+use joy_engine::development::{
+    AuthoringTool,
+    ToolDocument,
+    ToolHosting,
+};
 use joy_engine::egui;
-use joy_engine::runtime::{Frame, Game, GameResult, RenderTarget, StartContext};
+use joy_engine::runtime::{
+    Frame,
+    Game,
+    GameResult,
+    RenderTarget,
+    StartContext,
+};
 
-use crate::support::{Driver, TempFolder, editor, level_text, ui_shell};
+use crate::support::{
+    Driver,
+    TempFolder,
+    editor,
+    level_text,
+    ui_shell,
+};
 
 /// What one test tool instance observed.
 #[derive(Debug, Default)]

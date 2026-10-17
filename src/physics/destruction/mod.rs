@@ -13,11 +13,24 @@ mod chunk_geometry;
 mod chunk_structure;
 mod chunk_support;
 
-pub use chunk_geometry::{FRAME_MATERIAL, INTERIOR_MATERIAL, create_chunk_mesh_data};
-pub use chunk_structure::{
-    ChunkChangeSet, ChunkDamageState, ChunkRaycastHit, ChunkStructure, DestructibleChunkDefinition, RadialDamage,
+pub use chunk_geometry::{
+    FRAME_MATERIAL,
+    INTERIOR_MATERIAL,
+    create_chunk_mesh_data,
 };
-pub use chunk_support::{ChunkSupportOptions, ChunkSupportState, DEFAULT_CONTACT_TOLERANCE};
+pub use chunk_structure::{
+    ChunkChangeSet,
+    ChunkDamageState,
+    ChunkRaycastHit,
+    ChunkStructure,
+    DestructibleChunkDefinition,
+    RadialDamage,
+};
+pub use chunk_support::{
+    ChunkSupportOptions,
+    ChunkSupportState,
+    DEFAULT_CONTACT_TOLERANCE,
+};
 
 /// Invalid chunk definitions, damage, queries, or support options. Messages match the TypeScript engine.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]

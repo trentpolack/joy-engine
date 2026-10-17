@@ -7,13 +7,33 @@
 //! publishes an explicit override.
 
 use joy_engine::development::components;
-use joy_engine::development::{ColorControl, ComponentGroup, ControlResponse, EditPhase, NumericDrafts, ScalarControl};
-use joy_engine::egui::{self, RichText, Ui};
+use joy_engine::development::{
+    ColorControl,
+    ComponentGroup,
+    ControlResponse,
+    EditPhase,
+    NumericDrafts,
+    ScalarControl,
+};
+use joy_engine::egui::{
+    self,
+    RichText,
+    Ui,
+};
 use joy_engine::runtime::theme::tokens;
 
-use crate::parameter_controls::{ParameterAction, reset_override_button};
+use crate::parameter_controls::{
+    ParameterAction,
+    reset_override_button,
+};
 use crate::parameter_values::{
-    MeshPreset, ParameterKind, ResourceParameter, material_factors, mesh_name, mesh_summary, with_material_color,
+    MeshPreset,
+    ParameterKind,
+    ResourceParameter,
+    material_factors,
+    mesh_name,
+    mesh_summary,
+    with_material_color,
     with_material_factor,
 };
 

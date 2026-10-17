@@ -6,8 +6,16 @@
 //! Euler angles are XYZ radians applied X, then Y, then Z, which is the matrix `Rz * Ry * Rx`. Transforms apply scale,
 //! then rotation, then translation. The authored level format and physics adapter share these conventions.
 
-use glam::{EulerRot, Mat4, Quat, Vec3};
-use serde::{Deserialize, Serialize};
+use glam::{
+    EulerRot,
+    Mat4,
+    Quat,
+    Vec3,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 /// Below this cosine the Euler decomposition treats the rotation as gimbal locked.
 const GIMBAL_LOCK_EPSILON: f32 = 1e-6;

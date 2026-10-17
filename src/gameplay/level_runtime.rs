@@ -16,21 +16,38 @@
 //!   Entities spawned by behaviors through `SimulationContext::request_spawn` bypass physics setup, as do entities
 //!   spawned directly on `EntityWorld`.
 
-use crate::core::{JsonRecord, PrimitiveShape};
+use crate::core::{
+    JsonRecord,
+    PrimitiveShape,
+};
 use glam::Vec3;
 use serde_json::Value;
 
 use super::components::component_type;
 use super::entity::EntityId;
-use super::entity_definition::{EntityDefinition, read_vector};
+use super::entity_definition::{
+    EntityDefinition,
+    read_vector,
+};
 use super::entity_registry::EntityRegistry;
 use super::entity_world::EntityWorld;
-use super::error::{GameplayError, PhysicsComponentError};
+use super::error::{
+    GameplayError,
+    PhysicsComponentError,
+};
 use super::level_document::LevelData;
 use super::world::World;
 use crate::physics::{
-    BODY_DEFAULTS, BodyHandle, BodyOptions, PhysicsWorld, PhysicsWorldOptions, VEHICLE_DEFAULTS, VehicleHandle,
-    VehicleOptions, WHEEL_DEFAULTS, WheelOptions,
+    BODY_DEFAULTS,
+    BodyHandle,
+    BodyOptions,
+    PhysicsWorld,
+    PhysicsWorldOptions,
+    VEHICLE_DEFAULTS,
+    VehicleHandle,
+    VehicleOptions,
+    WHEEL_DEFAULTS,
+    WheelOptions,
 };
 
 /// Longest entity update per step in seconds; physics still receives the full elapsed time and bounds its own catch-up.

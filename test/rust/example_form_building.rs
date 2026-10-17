@@ -13,13 +13,35 @@
 #[path = "../../examples/form-building/src/mod.rs"]
 mod example;
 
-use example::asset::{asset_from_evaluation, geometry_from_mesh_data, mesh_data_from_evaluation};
-use example::building_example::{BAKED_COTTAGE, BuildingExample, BuildingMode, SOURCE};
+use example::asset::{
+    asset_from_evaluation,
+    geometry_from_mesh_data,
+    mesh_data_from_evaluation,
+};
+use example::building_example::{
+    BAKED_COTTAGE,
+    BuildingExample,
+    BuildingMode,
+    SOURCE,
+};
 use joy_engine::core::MeshAssetData;
-use joy_engine::form::{CompiledScript, GeometryData};
-use joy_engine::rendering::{FormAssetLibrary, Shading};
-use joy_engine::{HeadlessOptions, HeadlessShell};
-use serde_json::{Map, Value, json};
+use joy_engine::form::{
+    CompiledScript,
+    GeometryData,
+};
+use joy_engine::rendering::{
+    FormAssetLibrary,
+    Shading,
+};
+use joy_engine::{
+    HeadlessOptions,
+    HeadlessShell,
+};
+use serde_json::{
+    Map,
+    Value,
+    json,
+};
 
 const PRESETS: &str = include_str!("../../examples/form-building/assets/presets.json");
 

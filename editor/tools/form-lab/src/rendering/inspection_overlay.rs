@@ -4,10 +4,18 @@
 //! CPU inspection data for the Output inspector: element locations, optional attribute colors, the selected element,
 //! and screen-space picking. Its markers draw through the engine like point markers.
 
-use joy_engine::glam::{Mat4, Vec2, Vec3, Vec4};
+use joy_engine::glam::{
+    Mat4,
+    Vec2,
+    Vec3,
+    Vec4,
+};
 use joy_engine::rendering::ColorVertex;
 
-use crate::rendering::batches::{MarkerCamera, append_marker};
+use crate::rendering::batches::{
+    MarkerCamera,
+    append_marker,
+};
 
 /// Most attribute markers drawn at once; denser data is sampled at a regular stride.
 pub const MAXIMUM_INSPECTION_MARKERS: usize = 12_000;

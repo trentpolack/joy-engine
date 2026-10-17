@@ -7,11 +7,19 @@
 //! and limits, and snaps placements to the grid. Deltas are logical pixels; wheel deltas follow the DOM
 //! convention (positive scrolls toward the author and zooms out).
 
-use joy_engine::development::{ViewportGesture, ViewportShortcut};
+use joy_engine::development::{
+    ViewportGesture,
+    ViewportShortcut,
+};
 use joy_engine::glam::Vec3;
 use joy_engine::rendering::OrbitCamera;
 
-use super::constants::{MAXIMUM_PITCH, MINIMUM_PITCH, ORBIT_RADIANS_PER_PIXEL, PAN_SPEED_PER_DISTANCE};
+use super::constants::{
+    MAXIMUM_PITCH,
+    MINIMUM_PITCH,
+    ORBIT_RADIANS_PER_PIXEL,
+    PAN_SPEED_PER_DISTANCE,
+};
 
 /// Apply one drag step of `gesture` to `camera`; deltas are logical pixels.
 pub fn drag_camera(camera: &mut OrbitCamera, gesture: ViewportGesture, dx: f32, dy: f32) {

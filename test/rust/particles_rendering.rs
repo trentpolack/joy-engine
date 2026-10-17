@@ -6,13 +6,31 @@
 //! `test/particle-materials.test.mjs` and `test/particle-3d.test.mjs`.
 
 use joy_engine::particles::{
-    DEFAULT_PARTICLE_TEXTURE, PARTICLE_XY_BASIS, ParticleBatch, ParticleCameraBasis, ParticleEffect,
-    ParticleEffectOptions, ParticleRenderError, ParticleTextureDimensions, ParticleTextureError, ParticleTextureSet,
-    append_particle_effect, compile_particle_effect, create_particle_effect_batches, create_particle_render_metrics,
+    DEFAULT_PARTICLE_TEXTURE,
+    PARTICLE_XY_BASIS,
+    ParticleBatch,
+    ParticleCameraBasis,
+    ParticleEffect,
+    ParticleEffectOptions,
+    ParticleRenderError,
+    ParticleTextureDimensions,
+    ParticleTextureError,
+    ParticleTextureSet,
+    append_particle_effect,
+    compile_particle_effect,
+    create_particle_effect_batches,
+    create_particle_render_metrics,
     read_particle_texture_source,
 };
-use joy_engine::rendering::{ColorVertex, OrbitCamera, TransparentDraw};
-use serde_json::{Value, json};
+use joy_engine::rendering::{
+    ColorVertex,
+    OrbitCamera,
+    TransparentDraw,
+};
+use serde_json::{
+    Value,
+    json,
+};
 
 fn single(renderer: &str, texture: Option<Value>, spawn: &str) -> Value {
     let mut emitter = json!({"id": "one", "enabled": true, "root": true, "duration": 0, "rate": 0,

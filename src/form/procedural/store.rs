@@ -7,9 +7,15 @@
 use crate::form::{
     math::hypot,
     user_data,
-    value::{SharedBudget, integer_range},
+    value::{
+        SharedBudget,
+        integer_range,
+    },
 };
-use serde_json::{Value as Json, json};
+use serde_json::{
+    Value as Json,
+    json,
+};
 
 pub struct Store {
     pub budget: SharedBudget,

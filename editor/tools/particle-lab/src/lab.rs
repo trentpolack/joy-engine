@@ -10,27 +10,61 @@
 //! draft (a script that does not compile, a rejected numeric field) never replaces the accepted preview, and export
 //! refuses rejected numeric drafts.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 
 use joy_engine::development::lab_values::REPAIR_DRAFTS_MESSAGE;
-use joy_engine::development::{NumericDrafts, PropertyHistory, ScriptDiagnostic};
+use joy_engine::development::{
+    NumericDrafts,
+    PropertyHistory,
+    ScriptDiagnostic,
+};
 use joy_engine::glam::Vec2;
 use joy_engine::particles::{
-    CompiledParticleEffect, PARTICLE_STEP_SECONDS, ParticleEffect, ParticleEffectAsset, ParticleEffectOptions,
-    ParticleParameter, ParticleParameterValue, ParticleValueKind, compile_particle_effect, compile_particle_script,
-    encode_particle_texture_source, read_particle_texture_source,
+    CompiledParticleEffect,
+    PARTICLE_STEP_SECONDS,
+    ParticleEffect,
+    ParticleEffectAsset,
+    ParticleEffectOptions,
+    ParticleParameter,
+    ParticleParameterValue,
+    ParticleValueKind,
+    compile_particle_effect,
+    compile_particle_script,
+    encode_particle_texture_source,
+    read_particle_texture_source,
 };
-use joy_engine::runtime::{Stopwatch, Storage};
+use joy_engine::runtime::{
+    Stopwatch,
+    Storage,
+};
 
 use crate::constants::{
-    DEFAULT_SEED, EmitterPreset, LIVE_DELAY_SECONDS, MAXIMUM_FRAME_SECONDS, MAXIMUM_REPLAY_SECONDS,
-    PERFORMANCE_REFRESH_SECONDS, PerformanceMode, SEEK_STEPS_PER_FRAME, STORAGE_KEY,
+    DEFAULT_SEED,
+    EmitterPreset,
+    LIVE_DELAY_SECONDS,
+    MAXIMUM_FRAME_SECONDS,
+    MAXIMUM_REPLAY_SECONDS,
+    PERFORMANCE_REFRESH_SECONDS,
+    PerformanceMode,
+    SEEK_STEPS_PER_FRAME,
+    STORAGE_KEY,
 };
 use crate::document::{
-    self, PropertySnapshot, calculate_duration, property_snapshot, read_recovery_asset, write_asset,
+    self,
+    PropertySnapshot,
+    calculate_duration,
+    property_snapshot,
+    read_recovery_asset,
+    write_asset,
 };
 use crate::examples::copy_example;
-use crate::storage::{read_stored_text, store_text};
+use crate::storage::{
+    read_stored_text,
+    store_text,
+};
 use crate::viewport::ParticleViewport;
 
 /// Largest uploaded texture, in bytes.

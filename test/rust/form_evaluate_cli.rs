@@ -4,9 +4,15 @@
 //! Process-level checks for the `joy-form-evaluate` JSON-lines protocol.
 
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::{
+    Command,
+    Stdio,
+};
 
-use serde_json::{Value, json};
+use serde_json::{
+    Value,
+    json,
+};
 
 #[test]
 fn oversized_unicode_request_is_rejected_once_and_next_request_survives() {

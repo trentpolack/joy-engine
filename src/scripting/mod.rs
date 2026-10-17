@@ -5,4 +5,8 @@
 
 pub mod language_information;
 
-pub use language_information::{ScriptLanguageCatalog, ScriptLanguageSymbol, ScriptSymbolKind};
+pub use language_information::{
+    ScriptLanguageCatalog,
+    ScriptLanguageSymbol,
+    ScriptSymbolKind,
+};

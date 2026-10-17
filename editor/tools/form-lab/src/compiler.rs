@@ -10,7 +10,10 @@
 //! abandoned native job always finishes; its result is dropped. Callers keep the last accepted geometry whenever a job
 //! fails, times out, or is abandoned.
 
-use joy_engine::form::{Diagnostic, GeometryData};
+use joy_engine::form::{
+    Diagnostic,
+    GeometryData,
+};
 use joy_engine::runtime::Stopwatch;
 use joy_engine::serde_json::Value as Json;
 

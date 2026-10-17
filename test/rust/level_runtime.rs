@@ -9,8 +9,20 @@ use std::rc::Rc;
 
 use glam::Vec3;
 use joy_engine::gameplay::{
-    ControlIntent, EntityBehavior, EntityDefinition, EntityId, EntityRegistry, EntityState, GameplayError,
-    IntentController, LevelData, LevelRuntime, PhysicsComponentError, SimulationContext, parse_level, serialize_level,
+    ControlIntent,
+    EntityBehavior,
+    EntityDefinition,
+    EntityId,
+    EntityRegistry,
+    EntityState,
+    GameplayError,
+    IntentController,
+    LevelData,
+    LevelRuntime,
+    PhysicsComponentError,
+    SimulationContext,
+    parse_level,
+    serialize_level,
 };
 use joy_engine::physics::VehicleInput;
 use serde_json::json;

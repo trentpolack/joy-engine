@@ -7,8 +7,19 @@
 
 use glam::DVec3;
 use joy_engine::rendering::terrain::{
-    TerrainAsset, TerrainError, TerrainManifest, TerrainPatch, TerrainSelection, TerrainView, create_terrain_grid,
-    decode_terrain, parse_terrain, reconcile_terrain_edges, sample_morphed_height, sample_terrain, select_terrain,
+    TerrainAsset,
+    TerrainError,
+    TerrainManifest,
+    TerrainPatch,
+    TerrainSelection,
+    TerrainView,
+    create_terrain_grid,
+    decode_terrain,
+    parse_terrain,
+    reconcile_terrain_edges,
+    sample_morphed_height,
+    sample_terrain,
+    select_terrain,
 };
 use serde_json::Value;
 

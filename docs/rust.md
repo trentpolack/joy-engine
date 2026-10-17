@@ -46,7 +46,8 @@ Browser rendering chooses WebGPU when available and falls back to WebGL 2. Appen
 Rust 1.95 or newer is required. On Debian/Ubuntu, install `pkg-config`, `libudev-dev`, and `libasound2-dev` for native gamepads and audio. Native GPU tests also need a Vulkan driver; `mesa-vulkan-drivers` supplies Mesa's hardware and software Vulkan implementations. The OpenGL fallback lacks the scene effects required by some renderer tests.
 
 ```bash
-cargo fmt --all -- --check
+rustup toolchain install nightly --profile minimal --component rustfmt
+cargo +nightly fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo build --target wasm32-unknown-unknown --lib --examples

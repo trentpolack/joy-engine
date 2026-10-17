@@ -5,14 +5,30 @@
 //! preview, property undo, recovery storage, playback and seeking, texture uploads, monitoring, and the hosting
 //! contract.
 
-use joy_engine::development::{AuthoringTool, ToolDocument, ToolHosting};
-use joy_engine::particles::{DEFAULT_PARTICLE_TEXTURE, ParticleParameter, ParticleRenderer};
+use joy_engine::development::{
+    AuthoringTool,
+    ToolDocument,
+    ToolHosting,
+};
+use joy_engine::particles::{
+    DEFAULT_PARTICLE_TEXTURE,
+    ParticleParameter,
+    ParticleRenderer,
+};
 use joy_engine::runtime::Storage;
 use particle_lab::ParticleLabTool;
-use particle_lab::constants::{EmitterPreset, PerformanceMode, STORAGE_KEY};
+use particle_lab::constants::{
+    EmitterPreset,
+    PerformanceMode,
+    STORAGE_KEY,
+};
 use particle_lab::document::write_asset;
 use particle_lab::examples::copy_example;
-use particle_lab::lab::{ParticleLab, PreviewState, ReplayWindow};
+use particle_lab::lab::{
+    ParticleLab,
+    PreviewState,
+    ReplayWindow,
+};
 
 const FRAME: f64 = 1.0 / 60.0;
 

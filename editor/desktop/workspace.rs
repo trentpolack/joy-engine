@@ -7,7 +7,10 @@
 //! environment variable, and the nearest folder at or above the current directory that holds `joy.joyconfig`.
 //! Without any of them the editor still opens: Open Folder can add any project folder.
 
-use std::path::{Path, PathBuf};
+use std::path::{
+    Path,
+    PathBuf,
+};
 
 /// The environment variable naming the hosting workspace.
 pub const WORKSPACE_ENVIRONMENT_VARIABLE: &str = "JOY_EDITOR_WORKSPACE";

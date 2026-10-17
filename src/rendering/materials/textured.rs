@@ -13,12 +13,23 @@ use std::ops::Range;
 use std::sync::Weak;
 
 use crate::rendering::RenderError;
-use crate::rendering::frame::{TexturedVertex, TransparentDraw};
+use crate::rendering::frame::{
+    TexturedVertex,
+    TransparentDraw,
+};
 use crate::rendering::gpu::GpuContext;
-use crate::rendering::mesh::{MeshVertex, VertexMaterial};
+use crate::rendering::mesh::{
+    MeshVertex,
+    VertexMaterial,
+};
 use crate::rendering::texture::TextureAsset;
 
-use super::{DEPTH_FORMAT, sampler_entry, scene_common, texture_entry};
+use super::{
+    DEPTH_FORMAT,
+    sampler_entry,
+    scene_common,
+    texture_entry,
+};
 
 /// The textured material's entry points, appended to the shared scene contract.
 const TEXTURED_SOURCE: &str = include_str!("../shaders/textured.wgsl");

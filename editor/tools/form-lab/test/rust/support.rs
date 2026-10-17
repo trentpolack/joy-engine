@@ -3,8 +3,14 @@
 
 //! Shared fixtures: the TypeScript tests' sample geometry, GLB readers, and compile helpers.
 
-use joy_engine::form::{GeometryData, default_material};
-use joy_engine::serde_json::{Value as Json, json};
+use joy_engine::form::{
+    GeometryData,
+    default_material,
+};
+use joy_engine::serde_json::{
+    Value as Json,
+    json,
+};
 
 /// The `Glass` material of the TypeScript GLB and material tests.
 pub fn glass() -> Json {

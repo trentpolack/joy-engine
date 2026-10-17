@@ -7,18 +7,40 @@
 //! [`LIGHT_COMPONENT_DEFAULTS`], [`EFFECT_COMPONENT_DEFAULTS`], and the physics body, vehicle, and wheel defaults), so
 //! the inspector always shows what the runtime assumes for an omitted field.
 
-use serde_json::{Value, json};
+use serde_json::{
+    Value,
+    json,
+};
 
 use super::component_schema::{
-    ComponentFieldCondition, ComponentFieldKind, ComponentFieldSchema, ComponentPreset, ComponentSchema,
+    ComponentFieldCondition,
+    ComponentFieldKind,
+    ComponentFieldSchema,
+    ComponentPreset,
+    ComponentSchema,
 };
 use super::components::{
-    EFFECT_COMPONENT_DEFAULTS, LIGHT_COMPONENT_DEFAULTS, RENDER_COMPONENT_DEFAULTS, component_asset_kind,
-    component_category, component_preset, component_type,
+    EFFECT_COMPONENT_DEFAULTS,
+    LIGHT_COMPONENT_DEFAULTS,
+    RENDER_COMPONENT_DEFAULTS,
+    component_asset_kind,
+    component_category,
+    component_preset,
+    component_type,
 };
-use super::entity_definition::{number_to_json, vector_to_json};
-use crate::core::{JsonRecord, PrimitiveShape};
-use crate::physics::{BODY_DEFAULTS, VEHICLE_DEFAULTS, WHEEL_DEFAULTS};
+use super::entity_definition::{
+    number_to_json,
+    vector_to_json,
+};
+use crate::core::{
+    JsonRecord,
+    PrimitiveShape,
+};
+use crate::physics::{
+    BODY_DEFAULTS,
+    VEHICLE_DEFAULTS,
+    WHEEL_DEFAULTS,
+};
 
 /// Largest authored steering angle in radians (`Math.PI / 2`).
 const MAX_STEER_RADIANS: f64 = std::f64::consts::FRAC_PI_2;

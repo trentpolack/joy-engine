@@ -4,14 +4,29 @@
 //! Area- and weight-proportional point scattering. Ported from `src/form/procedural-scatter.ts`.
 
 use super::{
-    shapes::{cross, subtract},
-    store::{self, Store, attribute_at, number, numbers},
+    shapes::{
+        cross,
+        subtract,
+    },
+    store::{
+        self,
+        Store,
+        attribute_at,
+        number,
+        numbers,
+    },
 };
 use crate::form::{
-    math::{hypot, to_u32},
+    math::{
+        hypot,
+        to_u32,
+    },
     value::integer_range,
 };
-use serde_json::{Value as Json, json};
+use serde_json::{
+    Value as Json,
+    json,
+};
 
 /// Area times linearly interpolated point density; its PRNG is local to this call.
 pub fn scatter(store: &mut Store, source: &Json, amount: f64, seed: f64, weight: &str) -> Result<Json, String> {

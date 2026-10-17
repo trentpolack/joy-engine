@@ -39,10 +39,18 @@ mod sdf_primitives;
 mod sdf_shape;
 mod sdf_voxel;
 
-pub use sdf_shape::{SDF_BAKE_DEFAULTS, SdfBakeOptions, SdfPrimitive, SdfShape};
+pub use sdf_shape::{
+    SDF_BAKE_DEFAULTS,
+    SdfBakeOptions,
+    SdfPrimitive,
+    SdfShape,
+};
 
 pub(crate) use sdf_collider::SdfCollider;
-pub(crate) use sdf_dispatcher::{SdfCollisionCounters, SdfQueryDispatcher};
+pub(crate) use sdf_dispatcher::{
+    SdfCollisionCounters,
+    SdfQueryDispatcher,
+};
 
 /// SDF contact search work during the most recent fixed step, for diagnostics. Counts never affect simulation.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

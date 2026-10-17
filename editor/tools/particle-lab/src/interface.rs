@@ -13,26 +13,74 @@
 use std::sync::Arc;
 
 use joy_engine::development::{
-    FileDialogEvent, FileDialogs, FileFilter, MaximizeMode, OpenRequest, PaneLimits, PanelLayout, PanelLayoutOptions,
-    SaveRequest, ViewportShortcut, components, viewport_input,
+    FileDialogEvent,
+    FileDialogs,
+    FileFilter,
+    MaximizeMode,
+    OpenRequest,
+    PaneLimits,
+    PanelLayout,
+    PanelLayoutOptions,
+    SaveRequest,
+    ViewportShortcut,
+    components,
+    viewport_input,
 };
 use joy_engine::egui::{
-    self, Align, Align2, CornerRadius, FontId, Layout, Rect, RichText, Sense, Stroke, Ui, UiBuilder, pos2, vec2,
+    self,
+    Align,
+    Align2,
+    CornerRadius,
+    FontId,
+    Layout,
+    Rect,
+    RichText,
+    Sense,
+    Stroke,
+    Ui,
+    UiBuilder,
+    pos2,
+    vec2,
 };
 use joy_engine::glam::Vec2;
 use joy_engine::particles::decode_particle_texture;
-use joy_engine::runtime::hud_text::{self, Style};
+use joy_engine::runtime::hud_text::{
+    self,
+    Style,
+};
 use joy_engine::runtime::theme::tokens;
-use joy_engine::runtime::{Storage, theme};
+use joy_engine::runtime::{
+    Storage,
+    theme,
+};
 
-use crate::constants::{EmitterPreset, PANEL_LAYOUT_KEY, PerformanceMode, SPEEDS};
+use crate::constants::{
+    EmitterPreset,
+    PANEL_LAYOUT_KEY,
+    PerformanceMode,
+    SPEEDS,
+};
 use crate::document::export_file_name;
 use crate::editor::ParticleScriptEditor;
-use crate::emitter_inspector::{EmitterInspector, InspectorAction};
-use crate::examples::{EMITTER_PRESETS, EXAMPLES};
-use crate::lab::{ParticleLab, PreviewState, ReplayWindow};
+use crate::emitter_inspector::{
+    EmitterInspector,
+    InspectorAction,
+};
+use crate::examples::{
+    EMITTER_PRESETS,
+    EXAMPLES,
+};
+use crate::lab::{
+    ParticleLab,
+    PreviewState,
+    ReplayWindow,
+};
 use crate::parameter_controls::ParameterPanel;
-use crate::viewport::{CameraGesture, PREVIEW_BACKGROUNDS, PreviewRegion};
+use crate::viewport::{
+    CameraGesture,
+    PREVIEW_BACKGROUNDS,
+    PreviewRegion,
+};
 
 /// Header height in standalone mode, including the accent rule.
 const HEADER_HEIGHT: f32 = 100.0;

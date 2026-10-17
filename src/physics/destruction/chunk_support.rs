@@ -7,7 +7,10 @@
 //! geometric support rule, not a stress, torque, or material-load solver. Contact topology is built once for the fixed
 //! chunk collection; damage only changes which chunks are active.
 
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use super::DestructionError;
 use super::chunk_structure::DestructibleChunkDefinition;

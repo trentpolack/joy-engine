@@ -8,8 +8,16 @@
 //! render, UI, and after-frame order every frame. Time is in seconds.
 
 use crate::rendering::{
-    Camera, FrameInputs, GpuCapabilities, RenderError, RenderScene, Renderer, TerrainFrame, TerrainRenderer,
-    TriangleFrame, TriangleRenderer,
+    Camera,
+    FrameInputs,
+    GpuCapabilities,
+    RenderError,
+    RenderScene,
+    Renderer,
+    TerrainFrame,
+    TerrainRenderer,
+    TriangleFrame,
+    TriangleRenderer,
 };
 use glam::Vec2;
 

@@ -8,7 +8,14 @@ use form_lab::export_glb::export_glb;
 use joy_engine::form::default_material;
 use joy_engine::serde_json::json;
 
-use crate::support::{compile, fixture, glass, parse_glb, read_accessor, sample_geometry};
+use crate::support::{
+    compile,
+    fixture,
+    glass,
+    parse_glb,
+    read_accessor,
+    sample_geometry,
+};
 
 #[test]
 fn glb_contains_aligned_json_and_binary_chunks_with_declared_total_length() {

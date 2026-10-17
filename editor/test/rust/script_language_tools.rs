@@ -4,7 +4,11 @@
 //! Script language catalogs (the applicable part of TypeScript `script-language-tools.test.mjs`): hover adapters
 //! resolve exact symbols. Completion presentation moved to the shared authoring kit's script editor.
 
-use joy_engine::scripting::{ScriptLanguageCatalog, ScriptLanguageSymbol, ScriptSymbolKind};
+use joy_engine::scripting::{
+    ScriptLanguageCatalog,
+    ScriptLanguageSymbol,
+    ScriptSymbolKind,
+};
 
 #[test]
 fn catalogs_resolve_exact_symbols_for_hover_documentation() {

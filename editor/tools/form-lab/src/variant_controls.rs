@@ -6,7 +6,10 @@
 //! palette stay shared by every take, and script defaults stay live for parameters a take leaves out.
 
 use joy_engine::development::components;
-use joy_engine::egui::{self, Ui};
+use joy_engine::egui::{
+    self,
+    Ui,
+};
 use joy_engine::runtime::theme::tokens;
 
 use crate::document::ParameterVariant;

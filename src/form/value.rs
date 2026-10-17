@@ -4,7 +4,10 @@
 //! Runtime values and the shared per-evaluation work budget.
 
 use serde_json::Value as Json;
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+};
 
 pub type SharedObject = Rc<RefCell<Json>>;
 pub type SharedBudget = Rc<RefCell<Budget>>;

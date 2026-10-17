@@ -5,9 +5,16 @@
 //! preserves byte compatibility with the retired TypeScript exporter's reference output. None of these formats
 //! carries the procedural recipe.
 
-use joy_engine::core::{format_js_number, json_number};
+use joy_engine::core::{
+    format_js_number,
+    json_number,
+};
 use joy_engine::form::GeometryData;
-use joy_engine::serde_json::{self, Map, Value as Json};
+use joy_engine::serde_json::{
+    self,
+    Map,
+    Value as Json,
+};
 
 /// Indexed faces and independent points in Wavefront OBJ, Y-up in script units (`exportObj`).
 pub fn export_obj(data: &GeometryData) -> String {

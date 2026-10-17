@@ -5,12 +5,20 @@
 
 use indexmap::IndexMap;
 
-use super::entity::{EntityId, SimulationContext};
+use super::entity::{
+    EntityId,
+    SimulationContext,
+};
 use super::entity_definition::EntityDefinition;
 use super::entity_registry::EntityRegistry;
 use super::entity_world::EntityWorld;
 use super::error::GameplayError;
-use crate::physics::{BodyHandle, PhysicsWorld, PhysicsWorldOptions, VehicleHandle};
+use crate::physics::{
+    BodyHandle,
+    PhysicsWorld,
+    PhysicsWorldOptions,
+    VehicleHandle,
+};
 
 /// Caller name used in delta-time errors.
 const WORLD_DELTA: &str = "World delta";

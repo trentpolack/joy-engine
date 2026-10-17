@@ -14,7 +14,10 @@
 //! toward the expression limit, as in TypeScript). Every intermediate expression result must be finite and within
 //! ±1 billion.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 
 use crate::core::RandomSource;
 use indexmap::IndexMap;
@@ -922,7 +925,12 @@ fn binary_kind(
     right: ParticleValueKind,
     token: &Token<'_>,
 ) -> Result<ParticleValueKind, ParticleScriptError> {
-    use BinaryOperator::{Add, Divide, Multiply, Subtract};
+    use BinaryOperator::{
+        Add,
+        Divide,
+        Multiply,
+        Subtract,
+    };
     if left == ParticleValueKind::Scalar && right == ParticleValueKind::Scalar {
         return Ok(ParticleValueKind::Scalar);
     }

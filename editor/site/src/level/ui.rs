@@ -12,28 +12,94 @@
 use std::collections::HashMap;
 
 use joy_engine::development::{
-    NumberField, NumericDrafts, PaneLimits, PanelLayout, PanelLayoutOptions, ScriptEditor, ScriptSyntax,
-    ViewportShortcut, viewport_input,
+    NumberField,
+    NumericDrafts,
+    PaneLimits,
+    PanelLayout,
+    PanelLayoutOptions,
+    ScriptEditor,
+    ScriptSyntax,
+    ViewportShortcut,
+    viewport_input,
 };
 use joy_engine::egui::{
-    self, Align, Color32, Id, Key, KeyboardShortcut, Modifiers, Order, Rect, RichText, ScrollArea, Sense, Stroke,
-    TextEdit, Ui, pos2, vec2,
+    self,
+    Align,
+    Color32,
+    Id,
+    Key,
+    KeyboardShortcut,
+    Modifiers,
+    Order,
+    Rect,
+    RichText,
+    ScrollArea,
+    Sense,
+    Stroke,
+    TextEdit,
+    Ui,
+    pos2,
+    vec2,
 };
 use joy_engine::glam::Vec2;
 use joy_engine::runtime::Storage;
-use joy_engine::serde_json::{Map, Value};
-
-use super::constants::{DEFAULT_CUSTOM_COMPONENT, LevelTool};
-use super::main::{AssetAccess, ComponentChoice, FieldKey, LevelEditor, TransformField, transform_bounds};
-use super::property_editor::{
-    CustomFieldKind, FieldControl, PropertyContext, PropertyGroup, PropertyNode, add_custom_field, append_list_item,
-    build_property_tree, display_string, initial_field_value, value_at,
+use joy_engine::serde_json::{
+    Map,
+    Value,
 };
-use super::viewport::{GizmoHandle, ViewRegion};
-use crate::interaction::numeric_controls::{NumberBounds, display_number, format_number, parse_number, step_number};
-use crate::interaction::viewport_input::{drag_camera, orbit_shortcut, zoom_camera};
+
+use super::constants::{
+    DEFAULT_CUSTOM_COMPONENT,
+    LevelTool,
+};
+use super::main::{
+    AssetAccess,
+    ComponentChoice,
+    FieldKey,
+    LevelEditor,
+    TransformField,
+    transform_bounds,
+};
+use super::property_editor::{
+    CustomFieldKind,
+    FieldControl,
+    PropertyContext,
+    PropertyGroup,
+    PropertyNode,
+    add_custom_field,
+    append_list_item,
+    build_property_tree,
+    display_string,
+    initial_field_value,
+    value_at,
+};
+use super::viewport::{
+    GizmoHandle,
+    ViewRegion,
+};
+use crate::interaction::numeric_controls::{
+    NumberBounds,
+    display_number,
+    format_number,
+    parse_number,
+    step_number,
+};
+use crate::interaction::viewport_input::{
+    drag_camera,
+    orbit_shortcut,
+    zoom_camera,
+};
 use crate::interaction::widgets::{
-    self, ControlMap, button, caption, dialog_frame, draft_field, heading, palette, primary_button, region,
+    self,
+    ControlMap,
+    button,
+    caption,
+    dialog_frame,
+    draft_field,
+    heading,
+    palette,
+    primary_button,
+    region,
     toggle_button,
 };
 

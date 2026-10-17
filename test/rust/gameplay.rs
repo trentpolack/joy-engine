@@ -3,15 +3,35 @@
 
 //! Entity lifetime, update order, systems, possession, and controller semantics protected by the TypeScript suite.
 
-use std::cell::{Cell, RefCell};
+use std::cell::{
+    Cell,
+    RefCell,
+};
 use std::rc::Rc;
 
 use joy_engine::gameplay::{
-    ComponentRegistry, ControlIntent, Entity, EntityBehavior, EntityComponent, EntityDefinition, EntityId,
-    EntityRegistry, EntityState, EntitySystem, EntityWorld, GameplayError, IntentController, SimulationContext, World,
-    WorldStep, entity_type,
+    ComponentRegistry,
+    ControlIntent,
+    Entity,
+    EntityBehavior,
+    EntityComponent,
+    EntityDefinition,
+    EntityId,
+    EntityRegistry,
+    EntityState,
+    EntitySystem,
+    EntityWorld,
+    GameplayError,
+    IntentController,
+    SimulationContext,
+    World,
+    WorldStep,
+    entity_type,
 };
-use joy_engine::physics::{PhysicsWorld, PhysicsWorldOptions};
+use joy_engine::physics::{
+    PhysicsWorld,
+    PhysicsWorldOptions,
+};
 use serde_json::json;
 
 fn world(registry: EntityRegistry) -> World {

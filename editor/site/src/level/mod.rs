@@ -11,4 +11,10 @@ pub mod property_editor;
 pub mod ui;
 pub mod viewport;
 
-pub use main::{AssetAccess, ComponentChoice, FieldKey, LevelEditor, TransformField};
+pub use main::{
+    AssetAccess,
+    ComponentChoice,
+    FieldKey,
+    LevelEditor,
+    TransformField,
+};

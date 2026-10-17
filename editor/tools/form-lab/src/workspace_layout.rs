@@ -6,8 +6,16 @@
 //! persisted widths, the View menu hides or restores each panel (keeping at least one), and Maximize keeps the panes
 //! while the tool hides its own chrome. Preferences never alter a study.
 
-use joy_engine::development::{MaximizeMode, PaneLimits, PanelLayout, PanelLayoutOptions};
-use joy_engine::egui::{self, Ui};
+use joy_engine::development::{
+    MaximizeMode,
+    PaneLimits,
+    PanelLayout,
+    PanelLayoutOptions,
+};
+use joy_engine::egui::{
+    self,
+    Ui,
+};
 use joy_engine::runtime::Storage;
 
 /// Storage key of the pane widths and visibility, shared with the TypeScript tool.

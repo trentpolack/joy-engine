@@ -9,12 +9,20 @@
 
 use joy_engine::core::PrimitiveShape;
 use joy_engine::physics::{
-    BodyHandle, BodyOptions, DestructibleChunkDefinition, PhysicsError, PhysicsWorld, PhysicsWorldOptions,
+    BodyHandle,
+    BodyOptions,
+    DestructibleChunkDefinition,
+    PhysicsError,
+    PhysicsWorld,
+    PhysicsWorldOptions,
     create_chunk_mesh_data,
 };
 use joy_engine::prelude::*;
 
-use super::config::destruction_config::{DESTRUCTION, GROUND};
+use super::config::destruction_config::{
+    DESTRUCTION,
+    GROUND,
+};
 
 /// Material name of the ground's chunk record (only its geometry is used).
 const GROUND_MATERIAL: &str = "frame";

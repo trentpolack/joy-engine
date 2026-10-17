@@ -7,7 +7,11 @@
 //! named here. The schema catalog and runtime readers share these defaults, so authoring tools display the values
 //! that scene adapters use when a field is omitted.
 
-use crate::core::{JsonRecord, PrimitiveShape, Rgb};
+use crate::core::{
+    JsonRecord,
+    PrimitiveShape,
+    Rgb,
+};
 use glam::Vec3;
 use serde_json::Value;
 

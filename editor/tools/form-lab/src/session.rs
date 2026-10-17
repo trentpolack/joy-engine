@@ -11,18 +11,51 @@
 //! exports (which never carry the recipe).
 
 use joy_engine::development::PropertyHistory;
-use joy_engine::form::{Diagnostic, GeometryData, default_material, read_materials};
-use joy_engine::runtime::{Stopwatch, Storage};
-use joy_engine::serde_json::{Map, Value as Json};
-
-use crate::compiler::{CompileOutcome, CompilePhase, CompileRequest, Compiler};
-use crate::document::{
-    DocumentError, FormDocument, MAXIMUM_SOURCE_LENGTH, Overrides, ParameterVariant, read_document, read_overrides,
-    read_variants, serialize_document, utf16_length,
+use joy_engine::form::{
+    Diagnostic,
+    GeometryData,
+    default_material,
+    read_materials,
 };
-use crate::export::{export_geometry_json, export_obj, export_ply};
+use joy_engine::runtime::{
+    Stopwatch,
+    Storage,
+};
+use joy_engine::serde_json::{
+    Map,
+    Value as Json,
+};
+
+use crate::compiler::{
+    CompileOutcome,
+    CompilePhase,
+    CompileRequest,
+    Compiler,
+};
+use crate::document::{
+    DocumentError,
+    FormDocument,
+    MAXIMUM_SOURCE_LENGTH,
+    Overrides,
+    ParameterVariant,
+    read_document,
+    read_overrides,
+    read_variants,
+    serialize_document,
+    utf16_length,
+};
+use crate::export::{
+    export_geometry_json,
+    export_obj,
+    export_ply,
+};
 use crate::export_glb::export_glb;
-use crate::parameter_values::{Parameter, is_property_override, parameter_signature, read_parameters};
+use crate::parameter_values::{
+    Parameter,
+    is_property_override,
+    parameter_signature,
+    read_parameters,
+};
 use crate::project_metadata::project_name_change;
 
 /// Storage key of browser recovery, shared with the TypeScript tool's `localStorage` key.

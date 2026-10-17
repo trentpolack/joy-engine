@@ -3,8 +3,14 @@
 
 //! FORM asset resolution for level presentation, using the engine's own authored structures.
 
-use joy_engine::rendering::{FormAssetLibrary, Shading};
-use serde_json::{Map, json};
+use joy_engine::rendering::{
+    FormAssetLibrary,
+    Shading,
+};
+use serde_json::{
+    Map,
+    json,
+};
 
 const COTTAGE_PATH: &str = "assets/form/structures/cottage.formlab";
 const COTTAGE: &str = include_str!("../../assets/form/structures/cottage.formlab");

@@ -15,7 +15,10 @@
 mod example;
 
 use example::config;
-use example::scene_effects_example::{ORBIT_ACTION, SceneEffectsExample};
+use example::scene_effects_example::{
+    ORBIT_ACTION,
+    SceneEffectsExample,
+};
 use joy_engine::prelude::*;
 
 /// Shell settings: the lab's display baseline, effects created off, and drag-to-orbit input.

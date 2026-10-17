@@ -14,15 +14,29 @@
 
 use std::f64::consts::PI;
 
-use crate::core::{RandomSource, SeededRandom};
+use crate::core::{
+    RandomSource,
+    SeededRandom,
+};
 
-use crate::particles::asset::{CompiledEmitter, CompiledParticleEffect, ParticleParameterValue};
+use crate::particles::asset::{
+    CompiledEmitter,
+    CompiledParticleEffect,
+    ParticleParameterValue,
+};
 use crate::particles::math;
 use crate::particles::profile::{
-    ParticleProfile, create_particle_profile, refresh_particle_profile_live, reset_particle_profile,
+    ParticleProfile,
+    create_particle_profile,
+    refresh_particle_profile_live,
+    reset_particle_profile,
 };
 use crate::particles::script::{
-    FIXED_SLOT_COUNT, INPUT_SLOT_BASE, PARTICLE_FIELDS, ParticleScript, ParticleScriptError,
+    FIXED_SLOT_COUNT,
+    INPUT_SLOT_BASE,
+    PARTICLE_FIELDS,
+    ParticleScript,
+    ParticleScriptError,
 };
 
 /// Fixed simulation step in seconds (60 Hz).

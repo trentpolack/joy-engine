@@ -12,12 +12,28 @@
 //! (bloom levels, streaks, blur passes) changes; radii,
 //! thresholds, and intensities are plain uniforms.
 
-use crate::core::post_processing::{AgxLook, FilmGrainNoise, PostProcessingConfig, ToneMapper};
-use bytemuck::{Pod, Zeroable};
+use crate::core::post_processing::{
+    AgxLook,
+    FilmGrainNoise,
+    PostProcessingConfig,
+    ToneMapper,
+};
+use bytemuck::{
+    Pod,
+    Zeroable,
+};
 
 use crate::rendering::materials::{
-    BLOOM_SOURCE, BLUR_SOURCE, DEPTH_FORMAT, DISPLAY_FORMAT, FINAL_SOURCE, RESOLVE_SOURCE, fullscreen_pipeline,
-    sampler_entry, texture_entry, uniform_entry,
+    BLOOM_SOURCE,
+    BLUR_SOURCE,
+    DEPTH_FORMAT,
+    DISPLAY_FORMAT,
+    FINAL_SOURCE,
+    RESOLVE_SOURCE,
+    fullscreen_pipeline,
+    sampler_entry,
+    texture_entry,
+    uniform_entry,
 };
 
 /// Maps the authored bloom radius to the TypeScript renderer's kernel scale: 0.025 at 720 pixels is eight texels.

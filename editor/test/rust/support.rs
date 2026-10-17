@@ -3,16 +3,28 @@
 
 //! Temporary hosting workspaces, project manifests, and a headless editor driver shared by the tests.
 
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::path::{
+    Path,
+    PathBuf,
+};
+use std::sync::atomic::{
+    AtomicU64,
+    Ordering,
+};
 
 use joy_editor::server::project_files::ProjectFiles;
 use joy_editor::workspace::tool_bridge::ToolRegistry;
-use joy_editor::{EditorOptions, JoyEditor};
+use joy_editor::{
+    EditorOptions,
+    JoyEditor,
+};
 use joy_engine::egui;
 use joy_engine::glam::Vec2;
 use joy_engine::runtime::Storage;
-use joy_engine::{HeadlessOptions, HeadlessShell};
+use joy_engine::{
+    HeadlessOptions,
+    HeadlessShell,
+};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 

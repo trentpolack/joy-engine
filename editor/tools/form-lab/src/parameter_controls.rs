@@ -7,15 +7,33 @@
 //! with a swatch and sRGB picker. Controls edit the build's resolved values in place and report overrides; the session
 //! owns the document and property history.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 
 use joy_engine::development::components;
-use joy_engine::development::{ColorControl, ComponentGroup, ControlResponse, NumericDrafts, ScalarControl};
-use joy_engine::egui::{self, RichText, Ui};
+use joy_engine::development::{
+    ColorControl,
+    ComponentGroup,
+    ControlResponse,
+    NumericDrafts,
+    ScalarControl,
+};
+use joy_engine::egui::{
+    self,
+    RichText,
+    Ui,
+};
 use joy_engine::runtime::theme::tokens;
 use joy_engine::serde_json::Value as Json;
 
-use crate::parameter_values::{NumericParameter, Parameter, ParameterKind, parameter_title};
+use crate::parameter_values::{
+    NumericParameter,
+    Parameter,
+    ParameterKind,
+    parameter_title,
+};
 use crate::resource_parameter_controls::resource_group;
 
 /// What the author did in the Parameters inspector this frame.

@@ -4,17 +4,39 @@
 //! Statement and expression evaluation for one script run. Ported from `src/form/compiler.ts`.
 
 use crate::form::{
-    Diagnostic, GeometryData,
-    ast::{ExprKind, Expression, Statement, StmtKind, Token},
+    Diagnostic,
+    GeometryData,
+    ast::{
+        ExprKind,
+        Expression,
+        Statement,
+        StmtKind,
+        Token,
+    },
     builder::Builder,
     materials::DEFAULT_MATERIAL_NAME,
-    math, parameters,
+    math,
+    parameters,
     procedural::Procedural,
-    resources, user_data,
-    value::{Budget, SharedBudget, Value, arity, integer_range},
+    resources,
+    user_data,
+    value::{
+        Budget,
+        SharedBudget,
+        Value,
+        arity,
+        integer_range,
+    },
 };
-use serde_json::{Value as Json, json};
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+use serde_json::{
+    Value as Json,
+    json,
+};
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    rc::Rc,
+};
 
 type Scope = BTreeMap<String, Value>;
 type Result<T> = std::result::Result<T, Failure>;

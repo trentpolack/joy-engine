@@ -10,12 +10,39 @@
 
 use std::collections::HashMap;
 
-use glam::{Vec2, Vec3};
-use joy_engine::core::{MaterialAlphaMode, PbrMaterial, PbrMaterialTextures, PbrMesh, Transform};
+use glam::{
+    Vec2,
+    Vec3,
+};
+use joy_engine::core::{
+    MaterialAlphaMode,
+    PbrMaterial,
+    PbrMaterialTextures,
+    PbrMesh,
+    Transform,
+};
 use joy_engine::rendering::{
-    BackendPreference, CAPTURE_FORMAT, Camera, CelestialLight, EnvironmentData, EnvironmentLighting,
-    EnvironmentMapOptions, EnvironmentPixels, FrameInputs, GpuContext, ImageLighting, MeshAsset, MeshInstance,
-    OffscreenTarget, OrbitCamera, PointLight, RenderScene, Renderer, RendererOptions, Shading, TextureAsset,
+    BackendPreference,
+    CAPTURE_FORMAT,
+    Camera,
+    CelestialLight,
+    EnvironmentData,
+    EnvironmentLighting,
+    EnvironmentMapOptions,
+    EnvironmentPixels,
+    FrameInputs,
+    GpuContext,
+    ImageLighting,
+    MeshAsset,
+    MeshInstance,
+    OffscreenTarget,
+    OrbitCamera,
+    PointLight,
+    RenderScene,
+    Renderer,
+    RendererOptions,
+    Shading,
+    TextureAsset,
     project_to_viewport,
 };
 

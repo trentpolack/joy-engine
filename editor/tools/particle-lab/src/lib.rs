@@ -22,7 +22,10 @@ pub mod storage;
 pub mod tool;
 pub mod viewport;
 
-use joy_engine::{ShellError, ShellOptions};
+use joy_engine::{
+    ShellError,
+    ShellOptions,
+};
 
 pub use tool::ParticleLabTool;
 

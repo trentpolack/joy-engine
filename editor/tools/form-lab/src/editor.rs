@@ -5,7 +5,10 @@
 //! language catalog for completion, call insertion, hover documentation, and diagnostics. The kit's `ScriptSyntax::form`
 //! supplies highlighting rules.
 
-use joy_engine::development::{ScriptEditor, ScriptSyntax};
+use joy_engine::development::{
+    ScriptEditor,
+    ScriptSyntax,
+};
 
 /// A FORM script editor for one FORM LAB view.
 pub fn create_editor() -> ScriptEditor {

@@ -5,9 +5,15 @@
 //! revisions, and atomic replacement that refuses to overwrite a file changed since it was read.
 
 use std::fs;
-use std::hash::{DefaultHasher, Hasher};
+use std::hash::{
+    DefaultHasher,
+    Hasher,
+};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::{
+    Path,
+    PathBuf,
+};
 use std::time::SystemTime;
 
 /// Largest document an editor reads or writes.

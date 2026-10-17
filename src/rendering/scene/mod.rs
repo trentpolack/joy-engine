@@ -15,14 +15,20 @@ mod terrain_instance;
 
 use std::collections::HashSet;
 
-use crate::core::{Rgb, Transform};
+use crate::core::{
+    Rgb,
+    Transform,
+};
 use glam::Mat4;
 use indexmap::IndexMap;
 
 use crate::rendering::mesh::MeshAsset;
 use crate::rendering::terrain::TerrainAsset;
 
-pub use terrain_instance::{DEFAULT_TERRAIN_TOLERANCE, TerrainInstance};
+pub use terrain_instance::{
+    DEFAULT_TERRAIN_TOLERANCE,
+    TerrainInstance,
+};
 
 /// Which queue an instance draws in.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

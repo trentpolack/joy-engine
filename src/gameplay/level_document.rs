@@ -11,8 +11,16 @@ use std::collections::VecDeque;
 
 use crate::core::PostProcessingProfile;
 use serde::de::Error as _;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::{Map, Value};
+use serde::{
+    Deserialize,
+    Deserializer,
+    Serialize,
+    Serializer,
+};
+use serde_json::{
+    Map,
+    Value,
+};
 
 use super::entity_definition::EntityDefinition;
 use super::error::LevelError;

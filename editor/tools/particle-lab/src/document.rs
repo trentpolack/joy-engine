@@ -11,11 +11,24 @@
 //! the interface.
 
 use joy_engine::particles::{
-    DEFAULT_PARTICLE_TEXTURE, PARTICLE_EFFECT_VERSION, ParticleBurst, ParticleChild, ParticleEffectAsset,
-    ParticleEmitterAsset, ParticleLight, ParticleParameter, ParticleRenderer, ParticleTexture, ParticleTrail,
+    DEFAULT_PARTICLE_TEXTURE,
+    PARTICLE_EFFECT_VERSION,
+    ParticleBurst,
+    ParticleChild,
+    ParticleEffectAsset,
+    ParticleEmitterAsset,
+    ParticleLight,
+    ParticleParameter,
+    ParticleRenderer,
+    ParticleTexture,
+    ParticleTrail,
     parse_particle_effect,
 };
-use joy_engine::serde_json::{self, Map, Value};
+use joy_engine::serde_json::{
+    self,
+    Map,
+    Value,
+};
 
 use crate::constants::EmitterPreset;
 use crate::examples::create_emitter_template;

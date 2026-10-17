@@ -12,7 +12,11 @@
 use std::collections::HashSet;
 use std::ops::Range;
 
-use crate::scripting::{ScriptLanguageCatalog, ScriptLanguageSymbol, ScriptSymbolKind};
+use crate::scripting::{
+    ScriptLanguageCatalog,
+    ScriptLanguageSymbol,
+    ScriptSymbolKind,
+};
 
 /// What a highlighted span is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

@@ -5,7 +5,11 @@
 //! preview, and the collapsible ATTRIBUTES panel with its domain and visualization menus, paging, selection readout,
 //! and a read-only table whose index buttons select elements.
 
-use joy_engine::egui::{self, RichText, Ui};
+use joy_engine::egui::{
+    self,
+    RichText,
+    Ui,
+};
 use joy_engine::runtime::theme::tokens;
 
 use crate::output_inspection::OutputInspection;

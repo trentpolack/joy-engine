@@ -13,10 +13,19 @@ use std::rc::Rc;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
 use web_time::Instant;
-use winit::event::{ElementState, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent};
+use winit::event::{
+    ElementState,
+    MouseButton,
+    MouseScrollDelta,
+    TouchPhase,
+    WindowEvent,
+};
 use winit::window::Window;
 
-use crate::runtime::egui_layer::{browser_modifiers, claims_press};
+use crate::runtime::egui_layer::{
+    browser_modifiers,
+    claims_press,
+};
 
 /// A page clipboard listener, kept so it can be removed.
 type ClipboardListener = (&'static str, Closure<dyn FnMut(web_sys::ClipboardEvent)>);

@@ -11,8 +11,15 @@
 
 use std::collections::BTreeMap;
 
-use joy_engine::development::lab_values::{self, NumericRules, StepScale};
-use joy_engine::serde_json::{Number, Value};
+use joy_engine::development::lab_values::{
+    self,
+    NumericRules,
+    StepScale,
+};
+use joy_engine::serde_json::{
+    Number,
+    Value,
+};
 
 /// Largest magnitude written as a JSON integer (JavaScript's safe integer range).
 const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;

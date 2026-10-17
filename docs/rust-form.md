@@ -35,7 +35,7 @@ Quoted text must contain valid Unicode scalar values; unpaired surrogate escapes
 The tests (`src/form/` unit tests and the `form_*` modules in `test/rust/`) cover parse and evaluation isolation, ownership, parameter clamping, precedence and numerical rounding, resources and transforms, scoped user data, diagnostics and operation limits, procedural topology and attribute rules, wrangles, retained instances, shapes and scatter, material and texture validation, typed materials, primitive parity with recorded reference values, and the evaluator's request framing.
 
 ```sh
-cargo fmt --check
+cargo +nightly fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test form
 cargo build --target wasm32-unknown-unknown --lib

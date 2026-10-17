@@ -13,16 +13,30 @@
 //! so documents round trip byte for byte. Transforms are stored as `f32`: authored values that need more than single
 //! precision are rounded to the nearest `f32` and written back in its shortest decimal form.
 
-use crate::core::{JsonRecord, Transform};
+use crate::core::{
+    JsonRecord,
+    Transform,
+};
 use glam::Vec3;
 use indexmap::IndexMap;
 use serde::de::Error as _;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::{Map, Value};
+use serde::{
+    Deserialize,
+    Deserializer,
+    Serialize,
+    Serializer,
+};
+use serde_json::{
+    Map,
+    Value,
+};
 
 use super::asset_path::asset_path;
 use super::components::entity_type;
-use super::error::{AssetPathError, DefinitionError};
+use super::error::{
+    AssetPathError,
+    DefinitionError,
+};
 
 /// Extension required for object template links.
 pub(crate) const OBJECT_EXTENSION: &str = ".joyobject";

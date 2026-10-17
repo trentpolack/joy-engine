@@ -10,14 +10,34 @@
 
 use std::collections::HashSet;
 
-use joy_engine::physics::{ChunkDamageState, ChunkStructure, ChunkSupportState, RadialDamage};
+use joy_engine::physics::{
+    ChunkDamageState,
+    ChunkStructure,
+    ChunkSupportState,
+    RadialDamage,
+};
 use joy_engine::prelude::*;
 use joy_engine::rendering::screen_ray;
 use joy_engine::runtime::Stopwatch;
 
-use super::config::destruction_config::{DESTRUCTION, INTEGRITY, PRESENTATION, SUPPORT, StructureView, VIEW};
-use super::destruction_debris::{DebrisSnapshot, DestructionDebris};
-use super::hud::{self, HudCommand, HudSettings, HudState};
+use super::config::destruction_config::{
+    DESTRUCTION,
+    INTEGRITY,
+    PRESENTATION,
+    SUPPORT,
+    StructureView,
+    VIEW,
+};
+use super::destruction_debris::{
+    DebrisSnapshot,
+    DestructionDebris,
+};
+use super::hud::{
+    self,
+    HudCommand,
+    HudSettings,
+    HudState,
+};
 use super::impact_debug::ImpactDebugDraw;
 use super::structure::generate_structure;
 use super::structure_view::create_structure_mesh_data;

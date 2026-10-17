@@ -10,10 +10,21 @@
 
 use glam::Vec2;
 use joy_engine::core::PostProcessingConfig;
-use joy_engine::core::post_processing::{BloomQuality, ToneMapper};
+use joy_engine::core::post_processing::{
+    BloomQuality,
+    ToneMapper,
+};
 use joy_engine::rendering::{
-    BackendPreference, CAPTURE_FORMAT, ColorVertex, GpuContext, OffscreenTarget, TopDownCamera, TriangleFrame,
-    TriangleRenderer, TriangleRendererOptions, top_down_orthographic,
+    BackendPreference,
+    CAPTURE_FORMAT,
+    ColorVertex,
+    GpuContext,
+    OffscreenTarget,
+    TopDownCamera,
+    TriangleFrame,
+    TriangleRenderer,
+    TriangleRendererOptions,
+    top_down_orthographic,
 };
 
 /// Passes vertex colors through unchanged, so patches carry exact HDR values into the scene target.

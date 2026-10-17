@@ -5,7 +5,11 @@
 
 use std::io::Cursor;
 
-use crate::runtime::audio::{DecodedSound, PcmSound, SoundSource};
+use crate::runtime::audio::{
+    DecodedSound,
+    PcmSound,
+    SoundSource,
+};
 
 /// Sample rates every browser's Web Audio accepts for buffers.
 const SAMPLE_RATES: std::ops::RangeInclusive<u32> = 8_000..=96_000;

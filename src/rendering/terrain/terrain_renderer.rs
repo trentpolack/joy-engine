@@ -9,7 +9,10 @@
 //! the records. Either way, each draw binds its patch record at a dynamic uniform offset, so indirect draws keep
 //! `firstInstance` at zero and need no optional features.
 
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{
+    Pod,
+    Zeroable,
+};
 use glam::Mat4;
 use web_time::Instant;
 use wgpu::util::DeviceExt;
@@ -17,13 +20,29 @@ use wgpu::util::DeviceExt;
 use crate::core::Rgba;
 use crate::rendering::GpuContext;
 use crate::rendering::materials::DEPTH_FORMAT;
-use crate::rendering::terrain::terrain_asset::{TerrainAsset, TerrainError};
-use crate::rendering::terrain::terrain_grid::{TerrainGrid, create_terrain_grid};
-use crate::rendering::terrain::terrain_selection::{
-    TerrainSelection, TerrainView, select_terrain, validate_terrain_view,
+use crate::rendering::terrain::terrain_asset::{
+    TerrainAsset,
+    TerrainError,
 };
-use crate::rendering::terrain::terrain_timing::{TerrainTiming, TerrainTimingStatus};
-use crate::rendering::terrain::{TERRAIN_SELECT_SOURCE, TERRAIN_SOURCE, terrain_geometry_source};
+use crate::rendering::terrain::terrain_grid::{
+    TerrainGrid,
+    create_terrain_grid,
+};
+use crate::rendering::terrain::terrain_selection::{
+    TerrainSelection,
+    TerrainView,
+    select_terrain,
+    validate_terrain_view,
+};
+use crate::rendering::terrain::terrain_timing::{
+    TerrainTiming,
+    TerrainTimingStatus,
+};
+use crate::rendering::terrain::{
+    TERRAIN_SELECT_SOURCE,
+    TERRAIN_SOURCE,
+    terrain_geometry_source,
+};
 
 /// Bytes of the per-terrain scene block (`TerrainScene`: a matrix and four vectors).
 const SCENE_BUFFER_BYTES: u64 = 128;

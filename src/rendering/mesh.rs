@@ -12,12 +12,23 @@
 //! [`MeshAsset::from_pbr_mesh`] builds such assets from a `PbrMesh` document.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{
+    AtomicU64,
+    Ordering,
+};
 
-use bytemuck::{Pod, Zeroable};
+use bytemuck::{
+    Pod,
+    Zeroable,
+};
 use glam::Vec3;
 
-use crate::core::{MaterialAlphaMode, MeshAssetData, PbrMaterial, PbrMesh};
+use crate::core::{
+    MaterialAlphaMode,
+    MeshAssetData,
+    PbrMaterial,
+    PbrMesh,
+};
 use crate::rendering::RenderError;
 use crate::rendering::texture::TextureAsset;
 

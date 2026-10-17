@@ -7,9 +7,20 @@
 //! every editor (levels, objects, FORM, JOYFX) can be explored; saves explain that project files need the native
 //! editor, and Download hands the current document to the browser.
 
-use joy_engine::project::{ProjectManifest, parse_project_manifest_text};
+use joy_engine::project::{
+    ProjectManifest,
+    parse_project_manifest_text,
+};
 
-use super::{AssetEntry, DiskDocument, ProjectError, ProjectStore, ProjectSummary, compare_paths, extension_of};
+use super::{
+    AssetEntry,
+    DiskDocument,
+    ProjectError,
+    ProjectStore,
+    ProjectSummary,
+    compare_paths,
+    extension_of,
+};
 
 /// The id of the bundled example project.
 pub const BUNDLED_PROJECT_ID: &str = "examples";

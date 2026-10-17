@@ -16,14 +16,43 @@ mod passes;
 mod pipelines;
 mod volume_lights;
 
-pub(crate) use attachments::{MotionPass, MotionUniforms, SurfacePass};
-pub(crate) use effects::{EffectsFrame, SceneEffectsRuntime, capabilities};
-pub(crate) use volume_lights::{VolumeCamera, VolumeLights};
+pub(crate) use attachments::{
+    MotionPass,
+    MotionUniforms,
+    SurfacePass,
+};
+pub(crate) use effects::{
+    EffectsFrame,
+    SceneEffectsRuntime,
+    capabilities,
+};
+pub(crate) use volume_lights::{
+    VolumeCamera,
+    VolumeLights,
+};
 
 pub use config::{
-    AdaptiveExposureOptions, ClusteredLightingOptions, DepthAwareBlurOptions, GtaoOptions, HeightFogOptions,
-    MotionBlurOptions, NormalSource, OutlineOptions, Reprojection, SCENE_EFFECT_NAMES, SceneEffectsColorFormat,
-    SceneEffectsError, SceneEffectsOptions, SceneEffectsRequirements, SsaoOptions, SsgiOptions, SsrOptions, TaaOptions,
+    AdaptiveExposureOptions,
+    ClusteredLightingOptions,
+    DepthAwareBlurOptions,
+    GtaoOptions,
+    HeightFogOptions,
+    MotionBlurOptions,
+    NormalSource,
+    OutlineOptions,
+    Reprojection,
+    SCENE_EFFECT_NAMES,
+    SceneEffectsColorFormat,
+    SceneEffectsError,
+    SceneEffectsOptions,
+    SceneEffectsRequirements,
+    SsaoOptions,
+    SsgiOptions,
+    SsrOptions,
+    TaaOptions,
 };
-pub use effects::{SceneEffectCapability, SceneEffectsCapabilities};
+pub use effects::{
+    SceneEffectCapability,
+    SceneEffectsCapabilities,
+};
 pub use volume_lights::SceneVolumeStats;

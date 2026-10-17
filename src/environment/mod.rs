@@ -7,6 +7,17 @@
 mod environment_system;
 
 pub use environment_system::{
-    AmbientOcclusionOptions, AtmosphereLight, AtmosphereOptions, CelestialBody, CloudOptions, EnvironmentError,
-    EnvironmentFrame, EnvironmentOptions, EnvironmentSystem, LightShaftOptions, Skylight, WindFrame, WindOptions,
+    AmbientOcclusionOptions,
+    AtmosphereLight,
+    AtmosphereOptions,
+    CelestialBody,
+    CloudOptions,
+    EnvironmentError,
+    EnvironmentFrame,
+    EnvironmentOptions,
+    EnvironmentSystem,
+    LightShaftOptions,
+    Skylight,
+    WindFrame,
+    WindOptions,
 };

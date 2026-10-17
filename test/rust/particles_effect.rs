@@ -10,10 +10,18 @@ use std::rc::Rc;
 
 use joy_engine::core::RandomSource;
 use joy_engine::particles::{
-    CompiledParticleEffect, ParticleEffect, ParticleEffectError, ParticleEffectOptions, ParticleParameterValue,
-    collect_particle_lights, compile_particle_effect,
+    CompiledParticleEffect,
+    ParticleEffect,
+    ParticleEffectError,
+    ParticleEffectOptions,
+    ParticleParameterValue,
+    collect_particle_lights,
+    compile_particle_effect,
 };
-use serde_json::{Value, json};
+use serde_json::{
+    Value,
+    json,
+};
 
 /// The TypeScript suite's base document with emitter overrides merged in.
 fn document(overrides: Value) -> Value {
