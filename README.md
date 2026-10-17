@@ -31,5 +31,3 @@ The engine owns its Cargo workspace, tests, assets, schemas, and build tooling. 
 - [FORM](docs/rust-form.md), [particles](docs/particles.md), and [terrain](docs/terrain.md)
 - [Authoring kit](docs/rust-authoring.md)
 - [Changelog](CHANGELOG.md)
-
-Cloud patch bundles use `npm run fetch-joy-engine-patch -- <task-id>` and `npm run apply-joy-engine-patch`. Standalone commands use this repository's ignored `.patches/`; a hosting workspace may choose its own delivery location. See [Patch Delivery](docs/patch-delivery.md).
