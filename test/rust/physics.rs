@@ -2,13 +2,13 @@
 // Licensed under the MIT License.
 
 //! Physics behavior the TypeScript suite protects: resting contact, bounded fixed stepping, ownership, raycast
-//! vehicles, transform conventions, and determinism.
+//! vehicles, transform conventions, and determinism, plus signed distance field colliders.
 
 use glam::Vec3;
 use joy_engine::core::{PrimitiveShape, quat_from_euler};
 use joy_engine::physics::{
-    BodyHandle, BodyOptions, PhysicsError, PhysicsWorld, PhysicsWorldOptions, VehicleHandle, VehicleInput,
-    VehicleOptions, VehicleTuning, WheelOptions,
+    BodyHandle, BodyOptions, PhysicsError, PhysicsWorld, PhysicsWorldOptions, SdfBakeOptions, SdfPrimitive, SdfShape,
+    VehicleHandle, VehicleInput, VehicleOptions, VehicleTuning, WheelOptions,
 };
 
 /// Advance in 60 Hz frames for a number of seconds.
@@ -57,6 +57,25 @@ fn make_vehicle(world: &mut PhysicsWorld) -> (BodyHandle, VehicleHandle) {
         VehicleOptions { wheels, engine_force: 400.0, max_steer: 0.4, brake_force: 20.0, ..Default::default() };
     let vehicle = world.create_vehicle(chassis, options).unwrap();
     (chassis, vehicle)
+}
+
+/// An axis-aligned box mesh of `half` extents centered on the origin, optionally without its top face (an open crate).
+fn box_mesh(half: Vec3, open_top: bool) -> (Vec<Vec3>, Vec<u32>) {
+    let corner = |index: u32| {
+        let sign = |bit: u32| if index & bit == 0 { -1.0 } else { 1.0 };
+        Vec3::new(sign(1), sign(2), sign(4)) * half
+    };
+    let positions = (0..8).map(corner).collect();
+    // Faces as quads (outward winding): -X, +X, -Y, +Y, -Z, +Z.
+    let faces: [[u32; 4]; 6] = [[0, 4, 6, 2], [1, 3, 7, 5], [0, 1, 5, 4], [2, 6, 7, 3], [0, 2, 3, 1], [4, 5, 7, 6]];
+    let mut indices = Vec::new();
+    for (face, [a, b, c, d]) in faces.into_iter().enumerate() {
+        if open_top && face == 3 {
+            continue;
+        }
+        indices.extend([a, b, c, a, c, d]);
+    }
+    (positions, indices)
 }
 
 #[test]
@@ -314,6 +333,101 @@ fn colliders_and_wheels_follow_the_x_then_y_then_z_rotation_convention() {
 }
 
 #[test]
+fn sdf_bodies_rest_stack_and_answer_raycasts() {
+    let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    ground(&mut world);
+    let crate_shape = SdfShape::primitive(SdfPrimitive::Box { half_extents: Vec3::splat(0.5) }).unwrap();
+    let ring_shape = SdfShape::primitive(SdfPrimitive::Torus { major_radius: 0.5, minor_radius: 0.15 }).unwrap();
+    let (positions, indices) = box_mesh(Vec3::new(0.6, 0.3, 0.4), true);
+    let baked = SdfShape::from_triangle_mesh(&positions, &indices, SdfBakeOptions { resolution: 16 }).unwrap();
+
+    // A three-high SDF stack, a non-convex ring, and a baked mesh, all dropped onto a primitive box ground.
+    let stack: Vec<BodyHandle> = (0..3)
+        .map(|level| {
+            let position = Vec3::new(-3.0, 0.55 + (level as f32 * 1.02), 0.0);
+            world.create_sdf_body(&crate_shape, BodyOptions { mass: 1.0, position, ..BodyOptions::default() }).unwrap()
+        })
+        .collect();
+    let ring = world
+        .create_sdf_body(
+            &ring_shape,
+            BodyOptions {
+                mass: 1.0,
+                position: Vec3::new(0.0, 1.0, 0.0),
+                rotation: Vec3::new(0.3, 0.0, 0.2),
+                ..BodyOptions::default()
+            },
+        )
+        .unwrap();
+    let tray = world
+        .create_sdf_body(
+            &baked,
+            BodyOptions { mass: 1.0, position: Vec3::new(3.0, 1.0, 0.0), ..BodyOptions::default() },
+        )
+        .unwrap();
+    simulate(&mut world, 4.0);
+
+    // Everything settles at its resting height without tipping, sinking, or drifting.
+    for (level, body) in stack.iter().enumerate() {
+        let transform = world.body_transform(*body).unwrap();
+        assert!((transform.position.y - (0.5 + level as f32)).abs() < 0.02, "level {level}: {transform:?}");
+        assert!((transform.position.x + 3.0).abs() < 0.02 && transform.rotation.abs().max_element() < 0.02);
+        assert!(world.body_velocity(*body).unwrap().length() < 0.02);
+    }
+    let ring_pose = world.body_transform(ring).unwrap();
+    assert!((ring_pose.position.y - 0.15).abs() < 0.01, "{ring_pose:?}");
+    assert!(ring_pose.rotation.x.abs() < 0.02 && ring_pose.rotation.z.abs() < 0.02);
+    assert!((world.body_transform(tray).unwrap().position.y - 0.3).abs() < 0.02);
+    let statistics = world.sdf_collision_statistics();
+    assert!(statistics.pairs >= 5 && statistics.contacts >= 5, "{statistics:?}");
+
+    // Rays stop at SDF surfaces, pass through the ring's hole to the ground, and report outward normals.
+    let top = world.raycast(Vec3::new(-3.0, 5.0, 0.0), Vec3::new(-3.0, -1.0, 0.0)).unwrap();
+    assert_eq!(top.body, stack[2]);
+    assert!((top.point.y - 3.0).abs() < 0.03 && top.normal.y > 0.95);
+    let tube = world.raycast(Vec3::new(0.5, 2.0, 0.0), Vec3::new(0.5, -1.0, 0.0)).unwrap();
+    assert_eq!(tube.body, ring);
+    assert!((tube.point.y - 0.3).abs() < 0.03);
+    let hole = world.raycast(Vec3::new(0.0, 2.0, 0.0), Vec3::new(0.0, -1.0, 0.0)).unwrap();
+    assert_ne!(hole.body, ring);
+    assert!(hole.point.y.abs() < 0.01);
+}
+
+#[test]
+fn sdf_shapes_validate_input_and_bake_open_meshes() {
+    let invalid = [
+        SdfPrimitive::Box { half_extents: Vec3::new(0.5, 0.0, 0.5) },
+        SdfPrimitive::Sphere { radius: f32::NAN },
+        SdfPrimitive::Torus { major_radius: 0.2, minor_radius: 0.3 },
+    ];
+    for primitive in invalid {
+        assert!(matches!(SdfShape::primitive(primitive), Err(PhysicsError::InvalidSdfShape(_))), "{primitive:?}");
+    }
+    let (positions, indices) = box_mesh(Vec3::splat(0.5), false);
+    let coarse = SdfBakeOptions { resolution: 4 };
+    assert!(matches!(SdfShape::from_triangle_mesh(&positions, &indices, coarse), Err(PhysicsError::OutOfRange { .. })));
+    let options = SdfBakeOptions { resolution: 16 };
+    assert!(SdfShape::from_triangle_mesh(&positions, &indices[..4], options).is_err());
+    assert!(SdfShape::from_triangle_mesh(&positions, &[0, 1, 99], options).is_err());
+    let flat = [Vec3::ZERO, Vec3::X, Vec3::Z];
+    assert!(matches!(SdfShape::from_triangle_mesh(&flat, &[0, 1, 2], options), Err(PhysicsError::InvalidSdfShape(_))));
+
+    // Procedural meshes are often open or inconsistently wound: an open-top crate with flipped winding still bakes a
+    // solid whose inside, outside, and volume match the closed box.
+    let (positions, mut indices) = box_mesh(Vec3::splat(0.5), true);
+    for triangle in indices.chunks_exact_mut(3) {
+        triangle.swap(1, 2);
+    }
+    let crate_shape = SdfShape::from_triangle_mesh(&positions, &indices, options).unwrap();
+    assert!((crate_shape.distance(Vec3::ZERO) + 0.5).abs() < 0.02);
+    assert!((crate_shape.distance(Vec3::new(1.0, 0.0, 0.0)) - 0.5).abs() < 0.02);
+    assert!((crate_shape.distance(Vec3::new(0.0, -1.0, 0.0)) - 0.5).abs() < 0.02);
+    assert!((crate_shape.volume() - 1.0).abs() < 0.05, "{crate_shape:?}");
+    assert_eq!(crate_shape.local_bounds(), (Vec3::splat(-0.5), Vec3::splat(0.5)));
+    assert!(crate_shape.seed_count() > 0 && !crate_shape.is_convex());
+}
+
+#[test]
 fn identical_worlds_produce_bit_identical_results() {
     let run = || {
         let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
@@ -327,12 +441,41 @@ fn identical_worlds_produce_bit_identical_results() {
                 ..BodyOptions::new(PrimitiveShape::Box)
             })
             .unwrap();
+
+        // SDF contacts sample seeded random streams; tumbling non-convex bodies exercise them every step.
+        let ring = SdfShape::primitive(SdfPrimitive::Torus { major_radius: 0.4, minor_radius: 0.12 }).unwrap();
+        let (positions, indices) = box_mesh(Vec3::new(0.3, 0.2, 0.25), true);
+        let tray = SdfShape::from_triangle_mesh(&positions, &indices, SdfBakeOptions { resolution: 12 }).unwrap();
+        let tumbling = [
+            world
+                .create_sdf_body(
+                    &ring,
+                    BodyOptions {
+                        mass: 1.0,
+                        position: Vec3::new(-0.3, 4.5, 4.0),
+                        rotation: Vec3::new(0.9, 0.2, 0.4),
+                        ..BodyOptions::default()
+                    },
+                )
+                .unwrap(),
+            world
+                .create_sdf_body(
+                    &tray,
+                    BodyOptions {
+                        mass: 1.0,
+                        position: Vec3::new(0.4, 5.5, 4.2),
+                        rotation: Vec3::new(-0.5, 0.7, 0.1),
+                        ..BodyOptions::default()
+                    },
+                )
+                .unwrap(),
+        ];
         let mut trace = Vec::new();
         for frame in 0..240 {
             let input = VehicleInput { throttle: 1.0, steer: if frame > 90 { 0.6 } else { 0.0 }, brake: 0.0 };
             world.set_vehicle_input(vehicle, input).unwrap();
             world.step(1.0 / 60.0).unwrap();
-            for body in [chassis, crate_box] {
+            for body in [chassis, crate_box, tumbling[0], tumbling[1]] {
                 let transform = world.body_transform(body).unwrap();
                 trace.extend(transform.position.to_array().map(f32::to_bits));
                 trace.extend(transform.rotation.to_array().map(f32::to_bits));

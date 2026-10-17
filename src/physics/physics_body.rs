@@ -17,13 +17,15 @@ use glam::Vec3;
 use rapier3d::dynamics::{CoefficientCombineRule, RigidBodyBuilder};
 use rapier3d::geometry::{ColliderBuilder, SharedShape};
 use rapier3d::math::{Pose, Vector};
+use rapier3d::pipeline::ActiveHooks;
 
 use super::convert::{
     deterministic_ln_1p, euler_from_solver_rotation, finite_number, finite_vector, from_solver_vector,
     solver_rotation_from_euler, to_solver_vector,
 };
 use super::physics_world::BodyRecord;
-use super::{BodyHandle, PhysicsError, PhysicsTransform, PhysicsWorld};
+use super::sdf::SdfCollider;
+use super::{BodyHandle, PhysicsError, PhysicsTransform, PhysicsWorld, SdfShape};
 
 /// Smallest accepted sphere radius (JavaScript `Number.EPSILON`), compared in `f64`.
 const MIN_SPHERE_RADIUS: f64 = f64::EPSILON;
@@ -91,43 +93,28 @@ impl PhysicsWorld {
     /// Options are validated in the TypeScript engine's order (mass, friction, restitution, position, rotation,
     /// damping, shape dimensions, static planes); invalid configuration leaves the world unchanged.
     pub fn create_body(&mut self, options: BodyOptions) -> Result<BodyHandle, PhysicsError> {
-        let mass = finite_number(options.mass, "mass", 0.0, f64::INFINITY)?;
-        let friction = finite_number(options.friction, "friction", 0.0, f64::INFINITY)?;
-        let restitution = finite_number(options.restitution, "restitution", 0.0, 1.0)?;
-        let position = finite_vector(options.position, "position")?;
-        let rotation = finite_vector(options.rotation, "rotation")?;
-        let linear_damping = finite_number(options.linear_damping, "linearDamping", 0.0, 1.0)?;
-        let angular_damping = finite_number(options.angular_damping, "angularDamping", 0.0, 1.0)?;
+        let validated = ValidatedBody::new(&options)?;
         let shape = create_shape(&options)?;
-        if options.shape == PrimitiveShape::Plane && mass != 0.0 {
+        if options.shape == PrimitiveShape::Plane && validated.mass != 0.0 {
             return Err(PhysicsError::DynamicPlane);
         }
+        Ok(self.insert_body(validated, shape, ActiveHooks::empty()))
+    }
 
-        // Mass 0 is static, exactly like cannon-es.
-        let dynamic = mass > 0.0;
-        let builder = if dynamic { RigidBodyBuilder::dynamic() } else { RigidBodyBuilder::fixed() };
-        let body = builder
-            .pose(Pose::from_parts(to_solver_vector(position), solver_rotation_from_euler(rotation)))
-            .linear_damping(damping_coefficient(linear_damping))
-            .angular_damping(damping_coefficient(angular_damping))
-            .can_sleep(false)
-            .build();
+    /// Create a world-owned rigid body whose collider is a signed distance shape, and return its handle.
+    ///
+    /// The shape replaces the primitive collider: `options.shape`, `half_extents`, and `radius` are ignored, while mass,
+    /// pose, friction, restitution, and damping are validated and applied exactly as in [`PhysicsWorld::create_body`].
+    /// The shape's local frame is the body frame, and its center of mass and inertia come from the field. The body
+    /// shares `shape`'s data; dropping the last body and handle releases it. Invalid options leave the world unchanged.
+    pub fn create_sdf_body(&mut self, shape: &SdfShape, options: BodyOptions) -> Result<BodyHandle, PhysicsError> {
+        let validated = ValidatedBody::new(&options)?;
 
-        let collider = ColliderBuilder::new(shape)
-            .friction(friction)
-            .friction_combine_rule(CoefficientCombineRule::Multiply)
-            .restitution(restitution)
-            .restitution_combine_rule(CoefficientCombineRule::Multiply);
-        let collider = if dynamic { collider.mass(mass) } else { collider.density(0.0) };
-
-        let raw = self.solver.bodies.insert(body);
-        let collider = self.solver.colliders.insert_with_parent(collider.build(), raw, &mut self.solver.bodies);
-        if let Some(body) = self.solver.bodies.get_mut(raw) {
-            // Mass is queried (and used by vehicles) before the first step, so resolve it immediately.
-            body.recompute_mass_properties_from_colliders(&self.solver.colliders);
-        }
-        self.bodies.insert(raw, BodyRecord { collider, dynamic, vehicle: None });
-        Ok(BodyHandle { world: self.world_id, raw })
+        // Rapier recycles a pair's previous contacts while its relative pose barely moves, but SDF manifolds are sparse
+        // and refine themselves step by step (each new sample can displace a worse cached point), so stale ones let
+        // bodies tip. Pairs with active hooks are never recycled; the world's default hooks keep every solver flag.
+        let collider = SharedShape::new(SdfCollider { shape: shape.clone() });
+        Ok(self.insert_body(validated, collider, ActiveHooks::FILTER_CONTACT_PAIRS))
     }
 
     /// Remove a body and any vehicle using it as a chassis. Returns whether a live body was removed.
@@ -241,6 +228,66 @@ impl PhysicsWorld {
             return Some(0.0);
         }
         Some(self.solver.bodies.get(raw)?.mass())
+    }
+}
+
+impl PhysicsWorld {
+    /// Insert a validated body with its single collider; static bodies (mass zero) are fixed, exactly like cannon-es.
+    fn insert_body(&mut self, validated: ValidatedBody, shape: SharedShape, hooks: ActiveHooks) -> BodyHandle {
+        let dynamic = validated.mass > 0.0;
+        let builder = if dynamic { RigidBodyBuilder::dynamic() } else { RigidBodyBuilder::fixed() };
+        let body = builder
+            .pose(Pose::from_parts(
+                to_solver_vector(validated.position),
+                solver_rotation_from_euler(validated.rotation),
+            ))
+            .linear_damping(damping_coefficient(validated.linear_damping))
+            .angular_damping(damping_coefficient(validated.angular_damping))
+            .can_sleep(false)
+            .build();
+
+        let collider = ColliderBuilder::new(shape)
+            .friction(validated.friction)
+            .friction_combine_rule(CoefficientCombineRule::Multiply)
+            .restitution(validated.restitution)
+            .restitution_combine_rule(CoefficientCombineRule::Multiply)
+            .active_hooks(hooks);
+        let collider = if dynamic { collider.mass(validated.mass) } else { collider.density(0.0) };
+
+        let raw = self.solver.bodies.insert(body);
+        let collider = self.solver.colliders.insert_with_parent(collider.build(), raw, &mut self.solver.bodies);
+        if let Some(body) = self.solver.bodies.get_mut(raw) {
+            // Mass is queried (and used by vehicles) before the first step, so resolve it immediately.
+            body.recompute_mass_properties_from_colliders(&self.solver.colliders);
+        }
+        self.bodies.insert(raw, BodyRecord { collider, dynamic, vehicle: None });
+        BodyHandle { world: self.world_id, raw }
+    }
+}
+
+/// Body options that passed validation, independent of the collider shape.
+struct ValidatedBody {
+    mass: f32,
+    friction: f32,
+    restitution: f32,
+    position: Vec3,
+    rotation: Vec3,
+    linear_damping: f32,
+    angular_damping: f32,
+}
+
+impl ValidatedBody {
+    /// Validate in the TypeScript engine's order: mass, friction, restitution, position, rotation, then damping.
+    fn new(options: &BodyOptions) -> Result<Self, PhysicsError> {
+        Ok(Self {
+            mass: finite_number(options.mass, "mass", 0.0, f64::INFINITY)?,
+            friction: finite_number(options.friction, "friction", 0.0, f64::INFINITY)?,
+            restitution: finite_number(options.restitution, "restitution", 0.0, 1.0)?,
+            position: finite_vector(options.position, "position")?,
+            rotation: finite_vector(options.rotation, "rotation")?,
+            linear_damping: finite_number(options.linear_damping, "linearDamping", 0.0, 1.0)?,
+            angular_damping: finite_number(options.angular_damping, "angularDamping", 0.0, 1.0)?,
+        })
     }
 }
 

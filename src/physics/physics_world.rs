@@ -4,17 +4,20 @@
 //! The physics world owner: fixed-step advancement with bounded catch-up, body and vehicle bookkeeping, and raycasts.
 
 use std::fmt;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use glam::Vec3;
 use indexmap::IndexMap;
 use rapier3d::control::DynamicRayCastVehicleController;
 use rapier3d::dynamics::RigidBodyHandle;
-use rapier3d::geometry::{ColliderHandle, Ray};
+use rapier3d::geometry::{ColliderHandle, NarrowPhase, Ray};
+use rapier3d::parry::query::{DefaultQueryDispatcher, QueryDispatcher};
 use rapier3d::pipeline::QueryFilter;
 
 use super::convert::{finite_number, finite_vector, from_solver_vector, to_solver_vector};
-use super::{BodyHandle, PhysicsError, RaycastHit, WheelOptions};
+use super::sdf::{SdfCollisionCounters, SdfQueryDispatcher};
+use super::{BodyHandle, PhysicsError, RaycastHit, SdfCollisionStatistics, WheelOptions};
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Constants
@@ -122,6 +125,9 @@ pub struct PhysicsWorld {
     // mutation batch sequence.
     pub(super) resident_shapes: IndexMap<String, BodyHandle>,
     pub(super) last_mutation_sequence: Option<u64>,
+
+    // SDF contact-search diagnostics for the latest fixed step, shared with the solver's narrow-phase dispatcher.
+    sdf_counters: Arc<SdfCollisionCounters>,
 }
 
 impl fmt::Debug for PhysicsWorld {
@@ -160,6 +166,11 @@ impl PhysicsWorld {
         solver.gravity = to_solver_vector(gravity);
         solver.integration_parameters.dt = fixed_step;
 
+        // SDF pairs are handled first; every other pair falls through to the solver's default dispatcher unchanged.
+        let sdf_counters = Arc::new(SdfCollisionCounters::default());
+        let dispatcher = SdfQueryDispatcher::new(Arc::clone(&sdf_counters)).chain(DefaultQueryDispatcher);
+        solver.narrow_phase = NarrowPhase::with_query_dispatcher(dispatcher);
+
         Ok(Self {
             world_id: NEXT_WORLD_ID.fetch_add(1, Ordering::Relaxed),
             fixed_step,
@@ -172,6 +183,7 @@ impl PhysicsWorld {
             forced_bodies: Vec::new(),
             resident_shapes: IndexMap::new(),
             last_mutation_sequence: None,
+            sdf_counters,
         })
     }
 
@@ -227,6 +239,12 @@ impl PhysicsWorld {
     /// World gravity in meters per second squared.
     pub fn gravity(&self) -> Vec3 {
         from_solver_vector(self.solver.gravity)
+    }
+
+    /// Copied SDF contact-search counts from the most recent fixed step; all zero before the first step or without
+    /// SDF bodies.
+    pub fn sdf_collision_statistics(&self) -> SdfCollisionStatistics {
+        self.sdf_counters.snapshot()
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -312,6 +330,7 @@ impl PhysicsWorld {
             record.controller.update_vehicle(dt, queries);
         }
 
+        self.sdf_counters.reset();
         self.solver.step();
 
         for handle in self.forced_bodies.drain(..) {

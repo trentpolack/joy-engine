@@ -3,6 +3,10 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-16-2026
+### SDF Collisions
+- Added signed distance field colliders to `physics` as a prototype: `SdfShape` (analytical primitives, or any triangle mesh baked into a voxel distance grid that tolerates open or overlapping procedural meshes) and `PhysicsWorld::create_sdf_body`. Contacts follow Giles and Andrews' caching and importance-sampling method (Pacific Graphics 2026) through a chained narrow-phase dispatcher, so worlds without SDF bodies simulate exactly as before, and SDF simulations stay deterministic natively and in WebAssembly. See [SDF colliders](docs/rust-simulation.md#sdf-colliders).
+- Added the SDF COLLISIONS example: FORM props piling up in an SDF bin beside the same props as bounding boxes, with live costs and a `--bench`/`?bench=1` benchmark. Web builds' `THIRD-PARTY-NOTICES.txt` now also carries the reference implementation's MIT license.
+
 ### Rust Runtime Default
 - Retired the deprecated engine, editor, lab, and example runtime implementation and its renderer dependencies. Rust is the shared native/browser implementation; canonical npm scripts wrap Cargo and browser builds.
 - Replaced current runtime and contribution documentation with Rust guidance and generated rustdoc, retaining useful Node tooling, asset schemas, capture orchestration, and recorded compatibility fixtures.

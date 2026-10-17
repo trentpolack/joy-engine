@@ -1,0 +1,25 @@
+# CHAIR: a seat, four legs, and a back rest. Its legs and back hook into neighbors, the classic case for
+# convex decomposition and the paper's "pile of chairs". Axis-aligned boxes only, so the baked collider is
+# identical on every platform.
+project meta(name="Chair", info="SDF COLLISIONS / PROP")
+
+param seat = 0.7 meta(min=0.4, max=1.2, step=0.05)
+param leg = 0.5 meta(min=0.2, max=1, step=0.05)
+param back = 0.6 meta(min=0.2, max=1, step=0.05)
+param thickness = 0.08 meta(min=0.04, max=0.2, step=0.01)
+
+# White vertices, so the material's base color shows as authored.
+color(1, 1, 1)
+let unit = meshBox(1, 1, 1)
+let finish = materialPbr(rgba(0.86, 0.5, 0.26, 1), 0, 0.62)
+let inset = seat/2 - thickness/2
+
+instance(unit, vector(0, 0, 0), vector(0, 0, 0), vector(seat, thickness, seat), finish)
+repeat 2 as column {
+  repeat 2 as row {
+    let x = (column*2 - 1)*inset
+    let z = (row*2 - 1)*inset
+    instance(unit, vector(x, -(leg + thickness)/2, z), vector(0, 0, 0), vector(thickness, leg, thickness), finish)
+  }
+}
+instance(unit, vector(0, (back + thickness)/2, -inset), vector(0, 0, 0), vector(seat, back, thickness), finish)

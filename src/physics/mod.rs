@@ -16,6 +16,9 @@
 //!
 //! [`destruction`] holds solver-independent destructible chunk structures, and [`PhysicsBackend`] is the
 //! shape-residency contract they synchronize through; `PhysicsWorld` implements it as the CPU backend.
+//!
+//! [`SdfShape`] colliders describe solids by signed distance (analytical primitives or meshes baked into voxel grids)
+//! and collide through optimization-based contact search; see [`PhysicsWorld::create_sdf_body`].
 
 mod backend_contract;
 mod convert;
@@ -23,6 +26,7 @@ pub mod destruction;
 mod physics_body;
 mod physics_vehicle;
 mod physics_world;
+mod sdf;
 
 pub use backend_contract::{
     PhysicsBackend, PhysicsCollisionShape, PhysicsMutationBatch, PhysicsQueryHit, PhysicsResidency,
@@ -37,6 +41,7 @@ pub use physics_vehicle::{
     VEHICLE_DEFAULTS, VehicleInput, VehicleOptions, VehicleTuning, WHEEL_DEFAULTS, WheelOptions,
 };
 pub use physics_world::{PhysicsWorld, PhysicsWorldOptions};
+pub use sdf::{SDF_BAKE_DEFAULTS, SdfBakeOptions, SdfCollisionStatistics, SdfPrimitive, SdfShape};
 
 use glam::Vec3;
 
@@ -132,4 +137,7 @@ pub enum PhysicsError {
     /// A batch added a shape whose center was not finite or whose half extents were not finite and positive.
     #[error("Physics shape {0} needs a finite center and positive half extents.")]
     InvalidShape(String),
+    /// An SDF primitive or mesh was rejected; the message names the problem.
+    #[error("Invalid SDF shape: {0}.")]
+    InvalidSdfShape(&'static str),
 }

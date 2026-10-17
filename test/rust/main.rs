@@ -14,6 +14,7 @@ mod environment_system;
 mod example_form_building;
 mod example_form_destruction;
 mod example_scene_effects;
+mod example_sdf_collisions;
 mod form_evaluate_cli;
 mod form_evaluator;
 mod form_evaluator_parity;
