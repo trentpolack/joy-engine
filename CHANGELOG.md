@@ -2,6 +2,10 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-17-2026
+### Repository Audits
+- Added a standalone repository audit, shared read-only checks, and an independent fixture suite. Reports identify maintenance issues and review candidates without requiring a hosting repository.
+
 ## 10-16-2026
 ### SDF Collisions
 - Added signed distance field colliders to `physics` as a prototype: `SdfShape` (analytical primitives, or any triangle mesh baked into a voxel distance grid that tolerates open or overlapping procedural meshes) and `PhysicsWorld::create_sdf_body`. Contacts follow Giles and Andrews' caching and importance-sampling method (Pacific Graphics 2026) through a chained narrow-phase dispatcher, so worlds without SDF bodies simulate exactly as before, and SDF simulations stay deterministic natively and in WebAssembly. See [SDF colliders](docs/rust-simulation.md#sdf-colliders).

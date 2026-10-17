@@ -41,7 +41,9 @@
     "fetch-joy-engine-patch": "node scripts/patching/fetch-joy-engine-patch.mjs",
     "apply-joy-engine-patch": "node scripts/patching/apply-joy-engine-patch.mjs",
     "docs:api": "cargo doc --workspace --no-deps",
-    "build:web": "node scripts/rust/build-web.mjs"
+    "build:web": "node scripts/rust/build-web.mjs",
+    "audit:repo": "python3 -B scripts/audit/audit.py",
+    "test:audit": "python3 -B test/audit/test_audit.py"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

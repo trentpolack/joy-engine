@@ -12,6 +12,7 @@ Joy Engine is a Rust crate shared by native games, WebAssembly games, and author
 - [Live tuning](tuning.md) and the [authoring kit](rust-authoring.md).
 - [Joy Editor](../editor/README.md) and [engine examples](../examples/README.md).
 - [Patch delivery](patch-delivery.md).
+- [Repository audit](repository-audit.md): repeatable maintenance checks and independent audit tests.
 
 ## Ownership
 Games own rules, tuning, assets, cameras, and effect composition. The engine owns reusable mechanisms and never imports a game or tool. Resources have explicit Rust owners; renderers borrow presentation state and never advance simulation or consume gameplay randomness. Separate document state from running simulation and from editor-only preview settings.

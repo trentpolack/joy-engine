@@ -1,0 +1,2 @@
+# Optional offline schema validation and schema fixture tests.
+jsonschema>=4.18,<5
