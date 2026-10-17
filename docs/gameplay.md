@@ -22,6 +22,8 @@ Unknown authored components remain data; only registered runtime behavior runs. 
 ## Physics and Destruction
 Rapier provides rigid bodies and configurable raycast vehicles through engine-owned types. Vehicle tires are suspension rays rather than solid rolling colliders. Keep barriers thick enough and speeds appropriate for the discrete solver. See [simulation and physics](rust-simulation.md) for determinism, ownership, and vehicle limits.
 
+Bodies are boxes, spheres, or planes by default. `SdfShape` colliders give non-convex procedural geometry (FORM meshes baked to distance grids, or analytical shapes) its true silhouette in collision; see [SDF colliders](rust-simulation.md#sdf-colliders).
+
 `ChunkStructure` batches damage and support evaluation into a single committed revision; the renderer and physics backend synchronize from that revision. Project-specific collapse, damage, and debris rules stay in the game.
 
 ## Authoring

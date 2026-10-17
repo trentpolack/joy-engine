@@ -1,0 +1,20 @@
+{
+  "name": "@joy-engine/example-sdf-collisions",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "author": "Trent Polack",
+  "license": "MIT",
+  "scripts": {
+    "dev": "cargo run --package joy-engine --example sdf-collisions",
+    "build": "node ../../scripts/rust/build-web.mjs --example sdf-collisions --release --title \"SDF COLLISIONS · Joy Engine\" --out dist",
+    "preview": "node ../../scripts/preview-web.mjs",
+    "check": "cargo check --package joy-engine --example sdf-collisions",
+    "test": "cargo test --package joy-engine example_sdf_collisions",
+    "bench": "cargo run --release --package joy-engine --example sdf-collisions -- --bench",
+    "capture": "node ../../scripts/capture-web.mjs"
+  },
+  "dependencies": {
+    "joy-engine": "file:../.."
+  }
+}

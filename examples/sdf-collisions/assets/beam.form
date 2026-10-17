@@ -1,0 +1,18 @@
+# I-BEAM: two flanges joined by a web. Flanges nest into each other's channels when beams stack.
+project meta(name="I-beam", info="SDF COLLISIONS / PROP")
+
+param length = 1.1 meta(min=0.4, max=2, step=0.05)
+param flange = 0.42 meta(min=0.2, max=0.8, step=0.02)
+param depth = 0.42 meta(min=0.2, max=0.8, step=0.02)
+param plate = 0.07 meta(min=0.03, max=0.15, step=0.01)
+
+# White vertices, so the material's base color shows as authored.
+color(1, 1, 1)
+let unit = meshBox(1, 1, 1)
+let finish = materialPbr(rgba(0.5, 0.64, 0.9, 1), 0.15, 0.45)
+
+repeat 2 as side {
+  let y = (side*2 - 1)*(depth/2 - plate/2)
+  instance(unit, vector(0, y, 0), vector(0, 0, 0), vector(length, plate, flange), finish)
+}
+instance(unit, vector(0, 0, 0), vector(0, 0, 0), vector(length, depth - plate*2, plate), finish)
