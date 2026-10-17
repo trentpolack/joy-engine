@@ -19,7 +19,7 @@
     "editor/tools/*"
   ],
   "exports": {
-    "./development/patches": "./scripts/patches/index.mjs",
+    "./development/patches": "./scripts/patching/index.mjs",
     "./schemas/*": "./schemas/*",
     "./tsconfig.base.json": "./tsconfig.base.json",
     "./package.json": "./package.json"
@@ -38,8 +38,8 @@
     "check": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts test editor/tooling editor/test editor/tools/form-lab/test",
     "test": "cargo test --workspace && npm run test:tooling",
     "test:tooling": "node --test test/*.test.mjs editor/test/*.test.mjs",
-    "fetch-joy-engine-patch": "node scripts/patches/fetch-joy-engine-patch.mjs",
-    "apply-joy-engine-patch": "node scripts/patches/apply-joy-engine-patch.mjs",
+    "fetch-joy-engine-patch": "node scripts/patching/fetch-joy-engine-patch.mjs",
+    "apply-joy-engine-patch": "node scripts/patching/apply-joy-engine-patch.mjs",
     "docs:api": "cargo doc --workspace --no-deps",
     "build:web": "node scripts/rust/build-web.mjs"
   },

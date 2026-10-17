@@ -33,6 +33,11 @@ import {parseArgs} from 'node:util';
 const scriptRoot = dirname(fileURLToPath(import.meta.url));
 const engineRoot = resolve(scriptRoot, '../..');
 const WASM_TARGET = 'wasm32-unknown-unknown';
+// Licenses of adapted third-party code compiled into the engine, relative to the engine root.
+const THIRD_PARTY_LICENSES = [
+  'src/rendering/scene_effects/LICENSE-luma.gl',
+  'src/physics/sdf/LICENSE-sdf-dcd-demo'
+];
 
 const {values: options} = parseArgs({
   options: {
@@ -92,8 +97,17 @@ const page = template
   .replaceAll('{{module}}', `./${moduleName}.js`);
 writeFileSync(resolve(outputDirectory, 'index.html'), page);
 copyFileSync(resolve(engineRoot, 'LICENSE'), resolve(outputDirectory, 'LICENSE'));
-copyFileSync(resolve(engineRoot, 'src/rendering/scene_effects/LICENSE-luma.gl'), resolve(outputDirectory, 'THIRD-PARTY-NOTICES.txt'));
+writeFileSync(resolve(outputDirectory, 'THIRD-PARTY-NOTICES.txt'), thirdPartyNotices());
 console.log(`Web build ready: ${relative(process.cwd(), outputDirectory) || '.'} (${basename(wasmFile)}, ${profile}).`);
+
+/**
+ * Every license the engine's compiled code must carry: luma.gl's shader passes and the SDF collision reference
+ * implementation, separated by a rule.
+ */
+function thirdPartyNotices() {
+  const notices = THIRD_PARTY_LICENSES.map(path => readFileSync(resolve(engineRoot, path), 'utf8').trimEnd());
+  return `${notices.join('\n\n----------------------------------------\n\n')}\n`;
+}
 
 /** Read the wasm-bindgen version the lockfile resolved; the CLI must match it exactly. */
 function requiredBindgenVersion(lockfile) {
