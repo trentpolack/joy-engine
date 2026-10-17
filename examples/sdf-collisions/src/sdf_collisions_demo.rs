@@ -11,30 +11,30 @@ use joy_engine::prelude::*;
 use joy_engine::rendering::ShiftedCamera;
 use joy_engine::runtime::{
     Stopwatch,
-    launch_parameter
+    launch_parameter,
 };
 
 use super::benchmark::{
     BenchmarkReport,
-    run_benchmark
+    run_benchmark,
 };
 use super::config::sdf_collisions_config::{
     ARENA,
     BENCHMARK,
     PRESENTATION,
     SPAWN,
-    VIEW
+    VIEW,
 };
 use super::hud::{
     self,
     HudCommand,
     HudView,
-    sidebar_width
+    sidebar_width,
 };
 use super::pile_arena::{
     ArenaSnapshot,
     ColliderMode,
-    PileArena
+    PileArena,
 };
 use super::prop_library::PropLibrary;
 

@@ -1,3 +1,10 @@
 # Matches `joy-apps` so engine, games, and tools share one Rust layout.
 max_width = 120
 use_small_heuristics = "Max"
+
+# I like spreading multiple imports across multiple lines, but I don't like spreading a single import across multiple lines.
+reorder_imports = true
+imports_layout = "Vertical"
+
+# Unstable options that are useful for this project (`imports_layout` mostly).
+unstable_features = true

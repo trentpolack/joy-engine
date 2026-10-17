@@ -1,0 +1,37 @@
+{
+  "files.associations": {
+    "*.formlab": "json",
+    "*.joyconfig": "json",
+    "*.joyfx": "json",
+    "*.joylevel": "json",
+    "*.joyobject": "json",
+    "*.joyproject": "json"
+  },
+  "json.schemas": [
+    {"fileMatch": ["*.joyproject"], "url": "./schemas/joyproject.schema.json"},
+    {"fileMatch": ["*.joylevel"], "url": "./schemas/joylevel.schema.json"},
+    {"fileMatch": ["*.joyfx"], "url": "./schemas/joyfx.schema.json"},
+    {"fileMatch": ["*.formlab"], "url": "./schemas/formlab.schema.json"},
+    {"fileMatch": ["*.joyobject"], "url": "./schemas/joyobject.schema.json"},
+    {"fileMatch": ["*.joyconfig"], "url": "./schemas/joyconfig.schema.json"}
+  ],
+  "rust-analyzer.linkedProjects": [
+    "./Cargo.toml"
+  ],
+  "rust-analyzer.vfs.extraIncludes": [
+    "${workspaceFolder}/examples/form-building",
+    "${workspaceFolder}/examples/form-destruction",
+    "${workspaceFolder}/examples/form-viewer",
+    "${workspaceFolder}/examples/scene-effects",
+    "${workspaceFolder}/examples/sdf-collisions",
+    "${workspaceFolder}/examples/terrain"
+  ],
+  "rust-analyzer.rustfmt.overrideCommand": [
+    "rustup",
+    "run",
+    "nightly",
+    "rustfmt",
+    "--edition",
+    "2024"
+  ]
+}
