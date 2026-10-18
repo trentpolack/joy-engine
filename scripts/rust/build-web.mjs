@@ -35,8 +35,8 @@ const engineRoot = resolve(scriptRoot, '../..');
 const WASM_TARGET = 'wasm32-unknown-unknown';
 // Licenses of adapted third-party code compiled into the engine, relative to the engine root.
 const THIRD_PARTY_LICENSES = [
-  'src/rendering/scene_effects/LICENSE-luma.gl',
-  'src/physics/sdf/LICENSE-sdf-dcd-demo'
+  'crates/joy-renderer/src/scene_effects/LICENSE-luma.gl',
+  'crates/joy-physics/src/sdf/LICENSE-sdf-dcd-demo'
 ];
 
 const {values: options} = parseArgs({

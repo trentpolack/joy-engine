@@ -1,0 +1,36 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Joy Engine development tools: the shared development dock (CONFIG and JOY-EDITOR menus), the runtime statistics
+# overlay, config panels and live tuning, the post-processing editor, and scene-effect preview controls.
+#
+#   cargo test -p joy-devtools
+
+[package]
+name = "joy-devtools"
+description = "Joy Engine development tools: the development dock, statistics overlay, config panels, live tuning, and effect editors."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+joy-core.workspace = true
+joy-input.workspace = true
+joy-renderer.workspace = true
+joy-ui.workspace = true
+egui.workspace = true
+indexmap.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+log.workspace = true
+
+# Profile capture timing; profiles save to disk only natively.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+web-time.workspace = true
+
+[lints]
+workspace = true

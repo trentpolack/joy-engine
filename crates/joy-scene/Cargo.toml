@@ -1,0 +1,43 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Joy Engine scene presentation: levels, per-entity particle effects, and FORM meshes turned into renderer scenes. The
+# bridge that keeps `joy-renderer` independent of gameplay, FORM, and particle documents.
+#
+#   cargo test -p joy-scene
+
+[package]
+name = "joy-scene"
+description = "Joy Engine scene presentation: levels, FORM meshes, and particle effects drawn through the renderer."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+# Integration tests are one binary listed below.
+autotests = false
+
+[[test]]
+name = "joy-scene"
+path = "test/rust/main.rs"
+
+[dependencies]
+joy-core.workspace = true
+joy-environment.workspace = true
+joy-form.workspace = true
+joy-fx.workspace = true
+joy-gameplay.workspace = true
+joy-renderer.workspace = true
+indexmap.workspace = true
+libm.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+# Unit tests build transforms and vectors directly.
+glam.workspace = true
+
+[lints]
+workspace = true

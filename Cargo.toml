@@ -1,10 +1,12 @@
 # Copyright (c) 2026 Trent Polack. All Rights Reserved.
 # Licensed under the MIT License.
 
-# Joy Engine: one crate whose modules live in `src/`, with enforced dependency layers
-# (`architecture/layers.json`, enforced by `npm run check`).
+# Joy Engine: the `joy-engine` facade package (`src/lib.rs`, the API games and tools use) and the workspace of engine
+# crates in `crates/`. Each crate owns one system; `architecture/layers.json` records which crates may depend on which,
+# and `npm run check` enforces it.
 #
-#   cargo test                          # unit, parity, and headless GPU tests
+#   cargo test                          # every engine crate: unit, parity, and headless GPU tests
+#   cargo test -p joy-gameplay          # one crate (simulation and content crates build without wgpu or winit)
 #   cargo run --example form-viewer     # FORM assets through the engine renderer
 #   cargo run --example terrain         # resident continuous-LOD terrain (Dragon Pit)
 #   npm run build:web -- --example form-viewer
@@ -15,12 +17,12 @@
 [package]
 name = "joy-engine"
 description = "A game engine built in Rust for making cross-platform games; the engine is intended for prototyping, procedural generation, and other things that seem fun."
-version = "1.0.0"
-edition = "2024"
-rust-version = "1.95"
-license = "MIT"
-authors = ["Trent Polack"]
-repository = "https://github.com/trentpolack/joy-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
 publish = false
 
 # Example and integration-test targets are listed explicitly.
@@ -56,6 +58,105 @@ name = "engine"
 path = "test/rust/main.rs"
 
 [dependencies]
+# Engine crates. The facade re-exports them under their historical module names (`joy_engine::physics`).
+joy-app.workspace = true
+joy-audio.workspace = true
+joy-authoring.workspace = true
+joy-core.workspace = true
+joy-dcc-gltf.workspace = true
+joy-devtools.workspace = true
+joy-environment.workspace = true
+joy-form.workspace = true
+joy-fx.workspace = true
+joy-gameplay.workspace = true
+joy-input.workspace = true
+joy-physics.workspace = true
+joy-project.workspace = true
+joy-renderer.workspace = true
+joy-scene.workspace = true
+joy-storage.workspace = true
+joy-ui.workspace = true
+
+# Math, data, and logging, re-exported for games and tools.
+glam.workspace = true
+serde_json.workspace = true
+log.workspace = true
+
+# UI (platform layer), re-exported for HUDs and tools.
+egui.workspace = true
+
+# Re-exported for `web_main!`, which declares a game's browser entry point.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+
+# Scene-effect render tests read back GPU frames and compare PNG references.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+pollster.workspace = true
+image.workspace = true
+
+[lints]
+workspace = true
+
+# This package is its own workspace root, including when it is checked out inside a hosting repository. Engine crates
+# live in `crates/`; the editor and labs are member packages. `cargo test` at the root tests the facade and every
+# engine crate, but not the tools.
+[workspace]
+members = ["crates/*", "editor", "editor/tools/form-lab", "editor/tools/particle-lab"]
+default-members = [
+  ".",
+  "crates/joy-app",
+  "crates/joy-audio",
+  "crates/joy-authoring",
+  "crates/joy-core",
+  "crates/joy-dcc-gltf",
+  "crates/joy-devtools",
+  "crates/joy-environment",
+  "crates/joy-form",
+  "crates/joy-fx",
+  "crates/joy-gameplay",
+  "crates/joy-input",
+  "crates/joy-physics",
+  "crates/joy-project",
+  "crates/joy-renderer",
+  "crates/joy-scene",
+  "crates/joy-storage",
+  "crates/joy-test-support",
+  "crates/joy-ui",
+]
+
+# Shared by the facade, every engine crate, and the tools (which keep their own versions and descriptions).
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+authors = ["Trent Polack"]
+repository = "https://github.com/trentpolack/joy-engine"
+
+# One version and feature set per dependency, so crates cannot drift apart (wgpu and egui must match across the
+# renderer, the shell, and the tools). Versions match joy-apps.
+[workspace.dependencies]
+# Engine crates.
+joy-app = { path = "crates/joy-app" }
+joy-audio = { path = "crates/joy-audio" }
+joy-authoring = { path = "crates/joy-authoring" }
+joy-core = { path = "crates/joy-core" }
+joy-dcc-gltf = { path = "crates/joy-dcc-gltf" }
+joy-devtools = { path = "crates/joy-devtools" }
+joy-environment = { path = "crates/joy-environment" }
+joy-engine = { path = "." }
+joy-form = { path = "crates/joy-form" }
+joy-fx = { path = "crates/joy-fx" }
+joy-gameplay = { path = "crates/joy-gameplay" }
+joy-input = { path = "crates/joy-input" }
+joy-physics = { path = "crates/joy-physics" }
+joy-project = { path = "crates/joy-project" }
+joy-renderer = { path = "crates/joy-renderer" }
+joy-scene = { path = "crates/joy-scene" }
+joy-storage = { path = "crates/joy-storage" }
+joy-test-support = { path = "crates/joy-test-support" }
+joy-ui = { path = "crates/joy-ui" }
+
 # Math and data.
 glam = { version = "0.34.1", features = ["bytemuck", "serde"] }
 bytemuck = { version = "1.25.2", features = ["derive"] }
@@ -103,7 +204,7 @@ winit = "0.30.13"
 egui = "0.36.2"
 egui-wgpu = { version = "0.36.2", default-features = false }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Native only: members list these under `cfg(not(target_arch = "wasm32"))`.
 # egui-winit's pinned release does not build for WebAssembly; browsers use `browser::egui_input` instead.
 egui-winit = { version = "0.36.2", default-features = false, features = [
   "clipboard",
@@ -123,12 +224,11 @@ rfd = { version = "0.17.2", default-features = false, features = [
   "xdg-portal",
 ] }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-
 # Native shader tests translate WGSL to WebGL GLSL even on Metal-only hosts.
 naga = { version = "30.0.1", features = ["glsl-out"] }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+
+# Browser builds (WebAssembly only).
 wasm-bindgen = "0.2.106"
 wasm-bindgen-futures = "0.4.56"
 js-sys = "0.3.83"
@@ -171,19 +271,13 @@ web-sys = { version = "0.3.83", features = [
 console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
 
-[lints.rust]
+[workspace.lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
 
-[lints.clippy]
+[workspace.lints.clippy]
 # Explicit parenthesized arithmetic is part of the house style; keep clippy from fighting it.
 precedence = "allow"
-
-# This crate is its own workspace root, including when it is checked out inside a hosting repository. Tools are member
-# packages; `cargo test` at the root still tests only the engine.
-[workspace]
-members = ["editor", "editor/tools/form-lab", "editor/tools/particle-lab"]
-default-members = ["."]
 
 [profile.dev]
 # Line tables keep backtraces useful without multi-gigabyte debug info.

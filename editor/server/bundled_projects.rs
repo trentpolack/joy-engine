@@ -34,7 +34,7 @@ const ASSETS: [(&str, &str); 6] = [
     ("assets/objects/lantern-post.joyobject", include_str!("../assets/examples/assets/objects/lantern-post.joyobject")),
     ("assets/form/cottage.formlab", include_str!("../../assets/form/structures/cottage.formlab")),
     ("assets/form/satellite-garden.form", include_str!("../../assets/examples/satellite-garden.form")),
-    ("assets/effects/lantern.joyfx", include_str!("../../test/fixtures/joyfx/lantern.joyfx")),
+    ("assets/effects/lantern.joyfx", include_str!("../../crates/joy-renderer/test/fixtures/joyfx/lantern.joyfx")),
     ("assets/effects/orbiting-lights.joyfx", include_str!("../tools/particle-lab/assets/joyfx/orbiting-lights.joyfx")),
 ];
 

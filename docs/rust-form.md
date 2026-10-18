@@ -1,5 +1,5 @@
 # Rust FORM
-The FORM procedural language in Joy Engine's Rust crate (`joy_engine::form`, `src/form/*.rs`). It parses `.form` scripts and returns plain geometry records, preserving the established language and asset contracts. It is renderer-free (the content layer may not use rendering): no GPU, window, worker, timer, or host handle is involved, and it builds identically for native and `wasm32-unknown-unknown` targets. Joy Engine's renderer consumes its output.
+The FORM procedural language, the `joy-form` crate (`crates/joy-form/`, re-exported as `joy_engine::form`). It parses `.form` scripts and returns plain geometry records, preserving the established language and asset contracts. It is renderer-free (the content layer may not use rendering): no GPU, window, worker, timer, or host handle is involved, and it builds identically for native and `wasm32-unknown-unknown` targets. Joy Engine's renderer consumes its output.
 
 ## API
 ```rust
@@ -32,7 +32,7 @@ Source capacity is 200,000 UTF-16 code units and 40,000 tokens, with nesting lim
 Quoted text must contain valid Unicode scalar values; unpaired surrogate escapes are rejected. Diagnostics count UTF-16 columns for editor compatibility. Procedural transforms reject nonfinite computed normals at their source location while preserving legitimate zero-normal sentinels. Floating-point JSON may write an integral value as `5.0`; its numerical value remains unchanged. Recorded-reference comparisons use explicit tolerances for transcendental rounding.
 
 ## Validation
-The tests (`src/form/` unit tests and the `form_*` modules in `test/rust/`) cover parse and evaluation isolation, ownership, parameter clamping, precedence and numerical rounding, resources and transforms, scoped user data, diagnostics and operation limits, procedural topology and attribute rules, wrangles, retained instances, shapes and scatter, material and texture validation, typed materials, primitive parity with recorded reference values, and the evaluator's request framing.
+The tests (`joy-form` unit tests and the `form_*` modules in `crates/joy-form/test/rust/`, run with `cargo test -p joy-form`) cover parse and evaluation isolation, ownership, parameter clamping, precedence and numerical rounding, resources and transforms, scoped user data, diagnostics and operation limits, procedural topology and attribute rules, wrangles, retained instances, shapes and scatter, material and texture validation, typed materials, primitive parity with recorded reference values, and the evaluator's request framing.
 
 ```sh
 cargo +nightly fmt --check
@@ -41,7 +41,7 @@ cargo test form
 cargo build --target wasm32-unknown-unknown --lib
 ```
 
-FORM LAB preserves a frozen 69-case reference corpus covering shipped examples, recipes, structures, semantics, and rejections. The retained Node harness drives the Rust `joy-form-evaluate` JSON-lines CLI and compares geometry, numeric tolerances, and diagnostic locations against those fixtures; it does not require a second compiler implementation.
+FORM LAB preserves a frozen 69-case reference corpus covering shipped examples, recipes, structures, semantics, and rejections. The retained Node harness drives the Rust `joy-form-evaluate` JSON-lines CLI (built with `cargo build -p joy-form --bin joy-form-evaluate`, without the renderer or window stack) and compares geometry, numeric tolerances, and diagnostic locations against those fixtures; it does not require a second compiler implementation.
 
 ```bash
 npm run test:parity --workspace @joy-games/form-lab

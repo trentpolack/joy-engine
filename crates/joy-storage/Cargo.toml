@@ -1,0 +1,29 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Joy Engine storage: persistent text saves (localStorage in browsers, per-user files natively), guarded save slots,
+# and player-facing file exports (browser downloads, or files in the working directory natively).
+#
+#   cargo test -p joy-storage
+
+[package]
+name = "joy-storage"
+description = "Joy Engine storage: persistent saves, guarded save slots, and player-facing file exports."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+thiserror.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+js-sys.workspace = true
+web-sys.workspace = true
+
+[lints]
+workspace = true

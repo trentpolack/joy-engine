@@ -2,17 +2,17 @@
 Joy Engine runs games and tools from one Rust codebase on Windows, macOS, Linux, and browser WebAssembly. Graphics use wgpu, windows and canvases use winit, physics uses rapier, and HUDs and authoring UI use egui. The published web builds use the same simulation and content code as native applications.
 
 ## Layout
-`Cargo.toml` defines the engine package and its editor/lab workspace. `src/lib.rs` exports the game-facing API, `prelude`, and `web_main!`. Games and tools depend only on the engine rather than backend crates.
+`Cargo.toml` defines the engine workspace: the system crates in `crates/`, the `joy-engine` facade package, and the editor and labs. Shared package fields, dependency versions, and lints live in its `[workspace.*]` tables. `src/lib.rs` re-exports the system crates under their module names and exports the game-facing API, `prelude`, and `web_main!`. Games and tools depend only on `joy-engine`, never on the system crates or backend crates.
 
-| Layer | Modules | Responsibility |
+| Layer | Crates and modules | Responsibility |
 | --- | --- | --- |
-| Foundation | `core` | Math, transforms, colors, shapes, seeded randomness, and display profiles. |
-| Simulation | `environment`, `physics`, `gameplay` | Environment clocks, rigid bodies, vehicles, destruction, entities, controllers, and authored documents. |
-| Content | `form`, `dcc`, `project`, `scripting` | Procedural geometry, GLB imports, project manifests, and script language catalogs. |
-| Rendering | `rendering`, `particles` | Meshes, terrain, materials, lighting, shadows, effects, particles, and captures. |
-| Platform | `runtime`, `development`, `browser` | Window/canvas shell, input, audio, storage, development dock, and authoring widgets. |
+| Foundation | `joy-core` (`core`, `scripting`) | Math, transforms, colors, shapes, seeded randomness, display profiles, and script language catalogs. |
+| Simulation | `joy-environment` (`environment`), `joy-physics` (`physics`), `joy-gameplay` (`gameplay`) | Environment clocks, rigid bodies, vehicles, destruction, entities, controllers, and authored documents. |
+| Content | `joy-form` (`form`), `joy-fx` (`particles`), `joy-dcc-gltf` (`dcc`), `joy-project` (`project`) | Procedural geometry, particle documents and simulation, glTF and GLB imports, and project manifests. |
+| Rendering | `joy-renderer` (`rendering`, `particles` drawing), `joy-scene` (`rendering`) | Meshes, terrain, materials, lighting, sky settings, shadows, effects, particle drawing, and captures; level, asset, FORM, and environment presentation. |
+| Platform | `joy-app`, `joy-input`, `joy-audio`, `joy-storage`, `joy-ui` (`runtime`), `joy-devtools`, `joy-authoring` (`development`) | Window/canvas shell and frame phases, input, audio, storage, egui UI and theme, the development dock, and authoring widgets, each with its browser backend. |
 
-The [dependency checker](architecture/dependency-layers.md) validates these boundaries. `test/rust/` contains engine integration tests; examples use `examples/<name>/main.rs` and project-local modules. Rust API documentation comes from `cargo doc --no-deps`.
+The [dependency checker](architecture/dependency-layers.md) validates these boundaries. Each system crate has its own integration tests (`crates/<crate>/test/rust/`, run with `cargo test -p <crate>`); `test/rust/` holds the facade's cross-crate integration tests; examples use `examples/<name>/main.rs` and project-local modules. Rust API documentation comes from `cargo doc --no-deps`.
 
 ## One Renderer
 FORM returns renderer-free geometry. `compile_form_mesh`, `form_mesh_asset`, and `FormAssetLibrary` turn it into assets drawn by the same renderer as games, level previews, and tools. Meshes share immutable `MeshAsset` handles and use retained `MeshInstance`s in `RenderScene`; scene nodes group mesh and terrain transforms and visibility. GPU copies are released when their asset handles are no longer used.

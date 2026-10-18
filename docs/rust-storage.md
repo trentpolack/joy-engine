@@ -1,5 +1,5 @@
 # Rust Storage
-`runtime::Storage` (platform layer, `src/runtime/storage.rs` with browser glue in `src/browser/storage.rs`) keeps small text values such as game saves across sessions. LUNA, FRAMEBREAK, and other games use it for local progress.
+`runtime::Storage` (platform layer, the `joy-storage` crate, with browser glue in `crates/joy-storage/src/web.rs`) keeps small text values such as game saves across sessions. LUNA, FRAMEBREAK, and other games use it for local progress.
 
 ## API
 ```rust
@@ -35,4 +35,4 @@ slot.replace(&serialize(&new_campaign))?;          // the player explicitly star
 After a failed read (`SaveGuard::ReadFailed`) or a `reject` (`SaveGuard::Rejected`), ordinary writes return `SaveWrite::Guarded` and leave the stored value untouched until the game calls `replace` in response to an explicit player choice. Unchanged text is not rewritten. LUNA and FRAMEBREAK keep their progress this way; VECTORS TO VICTORY applies the same rule through its own store, and its New Campaign command is the explicit replacement.
 
 ## Validation
-Unit tests in `src/runtime/storage.rs` cover round trips, replacement without leftover temporary files, removal, key validation, size limits, and unavailable stores; `src/runtime/save_slot.rs` covers guarded slots after unreadable and rejected saves, explicit replacement, and unchanged writes. Browser behavior is exercised by the LUNA web build's save and reload.
+Unit tests in `crates/joy-storage/src/storage.rs` cover round trips, replacement without leftover temporary files, removal, key validation, size limits, and unavailable stores; `crates/joy-storage/src/save_slot.rs` covers guarded slots after unreadable and rejected saves, explicit replacement, and unchanged writes. Browser behavior is exercised by the LUNA web build's save and reload.

@@ -257,7 +257,7 @@ impl Game for TerrainLab {
         }
         if self.path == DrawPath::Scene {
             let environment = self.environment.step(f64::from(seconds))?;
-            self.lighting = Some(EnvironmentLighting::from(&environment));
+            self.lighting = Some(environment_lighting(&environment, &SkyOptions::default()));
         }
         Ok(())
     }

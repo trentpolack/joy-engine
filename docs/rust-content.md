@@ -1,5 +1,5 @@
 # Content Formats
-The content layer covers `dcc`, `project`, and `scripting`, alongside [FORM](rust-form.md). These modules return plain data, perform no host I/O, and compile for native and WebAssembly targets. Callers own reading bytes and creating rendering resources.
+The content layer covers `dcc` (the `joy-dcc-gltf` crate) and `project` (the `joy-project` crate), alongside [FORM](rust-form.md); `scripting` language information lives in `joy-core` so FORM, particles, and editors share it. These modules return plain data, perform no host I/O, and compile for native and WebAssembly targets. Callers own reading bytes and creating rendering resources.
 
 ## GLB Meshes
 `dcc::parse_glb_mesh(bytes, mesh_name)` returns `core::IndexedMesh3D`: a name, flat `f64` positions/normals, and `u32` indices. Supported inputs include GLB JSON/BIN chunks, embedded base64 buffers, buffer/accessor offsets, interleaved strides, sparse substitution, and accessors without buffer views.

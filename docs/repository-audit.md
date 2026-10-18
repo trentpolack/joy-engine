@@ -21,7 +21,7 @@ The tool checks tracked generated outputs, assets without literal filename refer
 
 Mechanical failures are `issue` findings. Small tests, similar test bodies, possible unused assets, and historical dependencies are `review` findings: inspect their consumers and protected behavior before removing anything. The audit never deletes files or executes repository builds, tests, package scripts, or Git hooks. It reads current tracked working-tree files; ignored and untracked files are excluded. Import caches are disabled, and only the selected report output is written. Running again replaces those report files.
 
-Test value, configuration semantics, dynamic references, and parity between JSON schemas and Rust loaders still need human review. `architecture/layers.json` is checked for missing roots, unmapped source modules, and unknown layer dependencies; the report includes its reference count, but does not decide whether the architecture itself remains appropriate. Node test counts represent source declarations, not expanded runtime cases.
+Test value, configuration semantics, dynamic references, and parity between JSON schemas and Rust loaders still need human review. `architecture/layers.json` is checked for missing roots and crates, unmapped source modules and engine crates, and unknown layer dependencies; the report includes its reference count, but does not decide whether the architecture itself remains appropriate. Node test counts represent source declarations, not expanded runtime cases.
 
 ## Options and Exit Codes
 - `--root PATH`: checkout to scan; defaults to the engine containing this script, regardless of the current directory.

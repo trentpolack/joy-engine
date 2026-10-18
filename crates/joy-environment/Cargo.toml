@@ -1,0 +1,34 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Joy Engine environment simulation: solar time, sun and moon, skylight, and wind. Headless; time is in seconds.
+#
+#   cargo test -p joy-environment
+
+[package]
+name = "joy-environment"
+description = "Joy Engine environment simulation: solar time, sun and moon, skylight, and wind."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+# Integration tests are one binary listed below.
+autotests = false
+
+[[test]]
+name = "joy-environment"
+path = "test/rust/main.rs"
+
+[dependencies]
+joy-core.workspace = true
+glam.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+log.workspace = true
+
+[lints]
+workspace = true

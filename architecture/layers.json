@@ -1,39 +1,42 @@
 {
   "layers": {
     "foundation": {
-      "roots": [
-        "core"
+      "crates": [
+        "joy-core"
       ],
+      "roots": [],
       "mayImport": []
     },
     "simulation": {
-      "roots": [
-        "environment",
-        "gameplay",
-        "physics"
+      "crates": [
+        "joy-environment",
+        "joy-gameplay",
+        "joy-physics"
       ],
+      "roots": [],
       "mayImport": [
         "foundation"
       ]
     },
     "content": {
-      "roots": [
-        "dcc",
-        "form",
-        "project",
-        "scripting"
+      "crates": [
+        "joy-dcc-gltf",
+        "joy-form",
+        "joy-fx",
+        "joy-project"
       ],
+      "roots": [],
       "mayImport": [
         "foundation",
         "simulation"
       ]
     },
     "rendering": {
-      "roots": [
-        "particles",
-        "rendering",
-        "post-processing"
+      "crates": [
+        "joy-renderer",
+        "joy-scene"
       ],
+      "roots": [],
       "mayImport": [
         "foundation",
         "simulation",
@@ -41,8 +44,16 @@
       ]
     },
     "platform": {
+      "crates": [
+        "joy-app",
+        "joy-audio",
+        "joy-authoring",
+        "joy-devtools",
+        "joy-input",
+        "joy-storage",
+        "joy-ui"
+      ],
       "roots": [
-        "browser",
         "development",
         "runtime"
       ],
@@ -54,6 +65,9 @@
       ]
     }
   },
+  "testSupportCrates": [
+    "joy-test-support"
+  ],
   "consumerRoots": [
     "editor",
     "examples"

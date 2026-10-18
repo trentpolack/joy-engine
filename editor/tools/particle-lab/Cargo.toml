@@ -13,10 +13,11 @@
 name = "particle-lab"
 description = "PARTICLE LAB: live authoring for deterministic Joy Engine particle effects."
 version = "0.2.8"
-edition = "2024"
-rust-version = "1.95"
-license = "MIT"
-authors = ["Trent Polack"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
 publish = false
 # Integration tests are listed explicitly.
 autotests = false
@@ -41,11 +42,7 @@ default = ["web-entry"]
 web-entry = []
 
 [dependencies]
-joy-engine = { path = "../../.." }
+joy-engine.workspace = true
 
-[lints.rust]
-unsafe_code = "forbid"
-missing_docs = "warn"
-
-[lints.clippy]
-precedence = "allow"
+[lints]
+workspace = true

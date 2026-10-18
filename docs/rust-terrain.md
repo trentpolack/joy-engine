@@ -2,16 +2,18 @@
 `rendering::terrain` implements resident continuous-LOD terrain. Version-1 assets draw as lit, shadowed `RenderScene` instances or through `TerrainRenderer`. CPU selection and sampling retain recorded reference behavior. See [the terrain example](../examples/terrain/README.md) for assets, conversion, units, and orientation.
 
 ## Module Map
+Paths are relative to `crates/`.
+
 | Rust | Contents |
 | --- | --- |
-| `rendering/terrain/terrain_asset.rs` | `TerrainAsset`, `TerrainManifest`, `TerrainPatch`, `decode_terrain`, `parse_terrain`, `load_terrain`, `sample_terrain`, `sample_height_triangle`, `TerrainError`. |
-| `rendering/terrain/terrain_grid.rs` | `create_terrain_grid`, `TerrainGrid`, `TerrainIndexRange`. |
-| `rendering/terrain/terrain_selection.rs` | `select_terrain`, `reconcile_terrain_edges`, `sample_morphed_height`, `validate_terrain_view`, `TerrainView`, `TerrainSelection`. |
-| `rendering/terrain/terrain_timing.rs` | `TerrainTiming`, `TerrainTimingStatus`. |
-| `rendering/terrain/terrain_renderer.rs` | `TerrainRenderer`, `TerrainFrame`, `TerrainStats`, `TerrainDiagnostic`, `TerrainTriangleCount`, and the resident geometry every terrain pass draws. |
-| `rendering/terrain/terrain_scene_pass.rs` | The renderer's per-instance adapters (crate-internal). |
-| `rendering/scene/terrain_instance.rs` | `TerrainInstance`, `DEFAULT_TERRAIN_TOLERANCE`; `RenderScene` gained `TerrainInstanceId` and terrain storage. |
-| `rendering/shaders/terrain-*.wgsl` | `terrain-geometry.wgsl` (shared morph), `terrain.wgsl` (standalone), `terrain-select.wgsl` (compute), `terrain-scene.wgsl`, `terrain-caster.wgsl`, `terrain-surface.wgsl`, `terrain-motion.wgsl`. wgpu translates these programs for each backend. |
+| `joy-renderer/src/terrain/terrain_asset.rs` | `TerrainAsset`, `TerrainManifest`, `TerrainPatch`, `decode_terrain`, `parse_terrain`, `load_terrain`, `sample_terrain`, `sample_height_triangle`, `TerrainError`. |
+| `joy-renderer/src/terrain/terrain_grid.rs` | `create_terrain_grid`, `TerrainGrid`, `TerrainIndexRange`. |
+| `joy-renderer/src/terrain/terrain_selection.rs` | `select_terrain`, `reconcile_terrain_edges`, `sample_morphed_height`, `validate_terrain_view`, `TerrainView`, `TerrainSelection`. |
+| `joy-renderer/src/terrain/terrain_timing.rs` | `TerrainTiming`, `TerrainTimingStatus`. |
+| `joy-renderer/src/terrain/terrain_renderer.rs` | `TerrainRenderer`, `TerrainFrame`, `TerrainStats`, `TerrainDiagnostic`, `TerrainTriangleCount`, and the resident geometry every terrain pass draws. |
+| `joy-renderer/src/terrain/terrain_scene_pass.rs` | The renderer's per-instance adapters (crate-internal). |
+| `joy-renderer/src/scene/terrain_instance.rs` | `TerrainInstance`, `DEFAULT_TERRAIN_TOLERANCE`; `RenderScene` gained `TerrainInstanceId` and terrain storage. |
+| `joy-renderer/src/shaders/terrain-*.wgsl` | `terrain-geometry.wgsl` (shared morph), `terrain.wgsl` (standalone), `terrain-select.wgsl` (compute), `terrain-scene.wgsl`, `terrain-caster.wgsl`, `terrain-surface.wgsl`, `terrain-motion.wgsl`. wgpu translates these programs for each backend. |
 
 ## Scene Terrain
 Add a terrain instance beside meshes; the renderer creates its GPU resources on first draw and releases them when the instance is removed or hidden:
@@ -44,7 +46,7 @@ The renderer changes are additive and isolated: one `SceneTerrain` field built w
 `examples/terrain/main.rs` runs Dragon Pit: `cargo run --example terrain`, or `node scripts/rust/build-web.mjs --example terrain` for browsers (`?backend=webgl` or `?backend=webgpu`). It provides camera controls (left-drag orbit, scroll zoom, right-button flight with WASD and Q/E, modifier-scroll pan, G and O presets, camera tour), the HUD statistics, and the CONFIG settings (screen error, LOD colors and grid, stable detail region) in the engine's development dock. CONFIG also switches the draw path between the standalone pass and the scene renderer, which shows the integration with lighting, cascaded shadows, and the sky. The heightfield and its MIT source notice are embedded in the binary; CONFIG shows the notice.
 
 ## Tests
-`test/rust/terrain.rs` compares camera selections, collision samples, descriptors, and morphing against `test/fixtures/terrain-reference.json`. GPU selection tests compare read-back patch records and indirect commands to CPU selection. `test/rust/rendering_terrain.rs` covers standalone diagnostics, lit scene terrain with shadows, motion/surface attachments, native OpenGL when available, and invalid settings.
+`crates/joy-renderer/test/rust/terrain.rs` compares camera selections, collision samples, descriptors, and morphing against `crates/joy-renderer/test/fixtures/terrain-reference.json`. GPU selection tests compare read-back patch records and indirect commands to CPU selection. `crates/joy-renderer/test/rust/rendering_terrain.rs` covers standalone diagnostics, lit scene terrain with shadows, motion/surface attachments, native OpenGL when available, and invalid settings.
 
 ## Ownership and Loading
 Terrain resources release with their Rust owner. Assets are cheaply cloned shared handles. Native `load_terrain` reads a manifest and height file; browsers embed or fetch both and call `parse_terrain`. Instance settings are validated during frame preparation. The shell owns backing resolution; asset sampling remains independent of it.

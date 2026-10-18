@@ -13,10 +13,11 @@
 name = "joy-editor"
 description = "Joy Editor: the Joy Engine authoring workspace for levels, reusable objects, FORM meshes, and particle effects."
 version = "0.1.0"
-edition = "2024"
-rust-version = "1.95"
-license = "MIT"
-authors = ["Trent Polack"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
 publish = false
 # Integration tests are listed explicitly.
 autotests = false
@@ -37,15 +38,10 @@ name = "joy-editor"
 path = "test/rust/main.rs"
 
 [dependencies]
-joy-engine = { path = ".." }
+joy-engine.workspace = true
 # Hosted as tabs through `joy_engine::development::AuthoringTool`, without their own browser entry points.
 form-lab = { path = "tools/form-lab", default-features = false }
 particle-lab = { path = "tools/particle-lab", default-features = false }
 
-[lints.rust]
-unsafe_code = "forbid"
-missing_docs = "warn"
-
-[lints.clippy]
-# Explicit parenthesized arithmetic is part of the house style; keep clippy from fighting it.
-precedence = "allow"
+[lints]
+workspace = true

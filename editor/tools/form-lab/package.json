@@ -19,7 +19,7 @@
     "check": "cargo check --package form-lab --all-targets",
     "test": "cargo test --package form-lab",
     "capture": "node ../../../scripts/capture-web.mjs",
-    "test:parity": "cargo build --package joy-engine --bin joy-form-evaluate && node test/form-parity.mjs"
+    "test:parity": "cargo build --package joy-form --bin joy-form-evaluate && node test/form-parity.mjs"
   },
   "dependencies": {
     "joy-engine": "file:../../.."

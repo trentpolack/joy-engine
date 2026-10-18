@@ -27,4 +27,4 @@ Add examples under `examples/<feature>/` with a private npm package, a README, f
 
 Capture commands accept an optional `--preview-directory <absolute-path>` supplied by the hosting workspace. After a successful production capture (`--built`), they copy the representative image there using the metadata's screenshot filename. Without that option, captures only produce local evidence. The engine does not import hosting-workspace scripts or depend on its directory layout for runtime behavior.
 
-Promote stable mechanisms into `src/` when at least two consumers need them. Engine runtime modules must never import example code.
+Promote stable mechanisms into the engine crate that owns them when at least two consumers need them. Engine runtime modules must never import example code.

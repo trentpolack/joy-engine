@@ -1,5 +1,5 @@
 # Joy Engine Documentation
-Joy Engine is a Rust crate shared by native games, WebAssembly games, and authoring tools. The public API is [src/lib.rs](../src/lib.rs). Generate the API reference with `npm run docs:api` or browse it with `cargo doc --no-deps --open` from the engine root.
+Joy Engine is a Rust workspace shared by native games, WebAssembly games, and authoring tools: system crates in `crates/` behind the `joy-engine` facade. The public API is [src/lib.rs](../src/lib.rs). Generate the API reference with `npm run docs:api` or browse it with `cargo doc --no-deps --open` from the engine root.
 
 ## Guides
 - [Runtime and browser builds](rust.md): setup, frame phases, renderer, and platform behavior.

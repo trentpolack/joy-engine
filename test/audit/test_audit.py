@@ -52,22 +52,26 @@ class AuditCliTests(unittest.TestCase):
         self.write(self.engine, 'projects/demo/dist-rust/demo.js', 'old generated output')
         self.write(self.engine, 'README.md', '[Private](https://github.com/example/private-host/blob/main/docs/guide.md)\n[Missing](absent.md)\n')
         self.write(self.engine, 'scripts/patches/fetch.mjs', 'throw new Error("audit must not execute me");')
-        self.write(self.engine, 'architecture/layers.json', {'layers': {'foundation': {'roots': ['core', 'retired'], 'mayImport': []}}})
+        self.write(self.engine, 'architecture/layers.json', {'layers': {'foundation': {'roots': ['core', 'retired'], 'crates': ['joy-core', 'joy-retired'], 'mayImport': []}}})
         self.write(self.engine, 'src/core/mod.rs', 'pub const VALUE: u32 = 1;')
+        self.write(self.engine, 'crates/joy-core/Cargo.toml', '[package]\nname = "joy-core"\n')
+        self.write(self.engine, 'crates/joy-unlisted/Cargo.toml', '[package]\nname = "joy-unlisted"\n')
         self.stage()
         snapshots = {p: p.read_bytes() for p in self.engine.rglob('*') if p.is_file()}
         result, report = self.run_audit('--skip-schema-validation', '--fail-on-issues')
         self.assertEqual(result.returncode, 1)
         rules = {f['rule'] for f in report['findings']}
-        self.assertTrue({'missing_script_target', 'private_documentation_link', 'broken_doc_link', 'stale_layer_root', 'tracked_generated_output'} <= rules)
+        self.assertTrue({'missing_script_target', 'private_documentation_link', 'broken_doc_link', 'stale_layer_root', 'stale_layer_crate',
+                         'unmapped_engine_crate', 'tracked_generated_output'} <= rules)
         self.assertEqual([r['name'] for r in report['repositories']], ['joy-engine'])
         for path, content in snapshots.items():
             self.assertEqual(path.read_bytes(), content, str(path))
         self.write(self.engine, 'package.json', {'scripts': {'fetch': 'node scripts/patches/fetch.mjs'}})
         self.write(self.engine, 'README.md', 'Public documentation.\n')
-        self.write(self.engine, 'architecture/layers.json', {'layers': {'foundation': {'roots': ['core'], 'mayImport': []}}})
+        self.write(self.engine, 'architecture/layers.json', {'layers': {'foundation': {'roots': ['core'], 'crates': ['joy-core', 'joy-unlisted'], 'mayImport': []}}})
         _, second = self.run_audit('--skip-schema-validation')
-        self.assertFalse({'missing_script_target', 'private_documentation_link', 'broken_doc_link', 'stale_layer_root'} & {f['rule'] for f in second['findings']})
+        self.assertFalse({'missing_script_target', 'private_documentation_link', 'broken_doc_link', 'stale_layer_root', 'stale_layer_crate',
+                          'unmapped_engine_crate'} & {f['rule'] for f in second['findings']})
         self.assertEqual(second['schema_validation']['status'], 'skipped')
 
     @unittest.skipUnless(importlib.util.find_spec('jsonschema'), 'Optional jsonschema dependency is not installed')

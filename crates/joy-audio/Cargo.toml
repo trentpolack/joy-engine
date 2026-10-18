@@ -1,0 +1,33 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Joy Engine audio: sound banks with bounded overlapping voices, decoded once from WAV or PCM. Native builds mix through
+# cpal; browsers play through Web Audio after the first user gesture.
+#
+#   cargo test -p joy-audio
+
+[package]
+name = "joy-audio"
+description = "Joy Engine audio: sound banks with bounded voices on native outputs and browser Web Audio."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+thiserror.workspace = true
+hound.workspace = true
+log.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+cpal.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+web-sys.workspace = true
+
+[lints]
+workspace = true

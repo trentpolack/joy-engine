@@ -142,7 +142,7 @@ impl Game for FormViewer {
 
     fn simulation(&mut self, frame: &mut Frame<'_>) -> GameResult {
         let environment = self.environment.step(f64::from(frame.time.elapsed_seconds))?;
-        self.lighting = Some(EnvironmentLighting::from(&environment));
+        self.lighting = Some(environment_lighting(&environment, &SkyOptions::default()));
         if self.dirty {
             self.rebuild();
         }

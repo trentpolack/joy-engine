@@ -13,11 +13,11 @@
 name = "form-lab"
 description = "FORM LAB: script procedural geometry with a live Joy Engine preview, natively and in browsers."
 version = "0.7.3"
-edition = "2024"
-rust-version = "1.95"
-license = "MIT"
-authors = ["Trent Polack"]
-repository = "https://github.com/trentpolack/joy-engine"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
 publish = false
 # Integration tests are one binary listed below.
 autotests = false
@@ -43,12 +43,7 @@ web-entry = []
 
 [dependencies]
 # Tools depend on the engine alone, like games.
-joy-engine = { path = "../../.." }
+joy-engine.workspace = true
 
-[lints.rust]
-unsafe_code = "forbid"
-missing_docs = "warn"
-
-[lints.clippy]
-# Explicit parenthesized arithmetic is part of the house style.
-precedence = "allow"
+[lints]
+workspace = true

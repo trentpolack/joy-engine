@@ -1,5 +1,5 @@
 # Authored Shaders
-Engine GPU programs are standalone WGSL files under `src/rendering/shaders/` and `src/rendering/scene_effects/shaders/`. Rust loads them with `include_str!`; wgpu translates them for WebGPU, WebGL 2, Vulkan, Metal, and DirectX 12.
+Engine GPU programs are standalone WGSL files under `crates/joy-renderer/src/shaders/` and `crates/joy-renderer/src/scene_effects/shaders/`. Rust loads them with `include_str!`; wgpu translates them for WebGPU, WebGL 2, Vulkan, Metal, and DirectX 12.
 
 Materials own their shader bindings, vertex layouts, depth/blend state, and texture contracts. The renderer owns frame targets, pass order, and resource lifetime. Keep reusable scene, lighting, particle, terrain, and display programs in the engine.
 

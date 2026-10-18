@@ -1,5 +1,5 @@
 # Rust Authoring Kit
-The authoring kit is the shared egui toolkit that FORM LAB, PARTICLE LAB, and Joy Editor build their UI from. It lives in the engine's `development` module (platform layer) beside the [`AuthoringTool`](../src/development/authoring_tool.rs) hosting contract, so tools depend only on `joy-engine`. Its egui widgets use explicit ownership: controls borrow authored values and return what happened, and tools own their documents.
+The authoring kit is the shared egui toolkit that FORM LAB, PARTICLE LAB, and Joy Editor build their UI from. It is the `joy-authoring` crate (platform layer), reached through the engine's `development` module, and includes the [`AuthoringTool`](../crates/joy-authoring/src/authoring_tool.rs) hosting contract, so tools depend only on `joy-engine`. Its egui widgets use explicit ownership: controls borrow authored values and return what happened, and tools own their documents.
 
 Keep tool UI in modules separate from document and model logic; the kit follows the same split (`lab_values.rs` holds the UI-free rules behind `lab_controls.rs`), so a later UI technology change touches only UI modules.
 

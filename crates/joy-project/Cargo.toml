@@ -1,0 +1,35 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Reads and validates Joy Engine project manifests (`project.joyproject`).
+#
+#   cargo test -p joy-project
+
+[package]
+name = "joy-project"
+description = "Joy Engine project manifests (project.joyproject)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+# Integration tests are one binary listed below.
+autotests = false
+
+[[test]]
+name = "joy-project"
+path = "test/rust/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+joy-test-support.workspace = true
+
+[lints]
+workspace = true

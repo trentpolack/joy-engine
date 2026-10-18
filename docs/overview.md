@@ -1,8 +1,8 @@
 # Engine Architecture
-Joy Engine is one Rust crate. The [runtime guide](rust.md) describes its frame phases and platform setup; [dependency layers](architecture/dependency-layers.md) defines allowed imports.
+Joy Engine is a workspace of system crates behind the `joy-engine` facade crate. The [runtime guide](rust.md) describes its frame phases and platform setup; [dependency layers](architecture/dependency-layers.md) defines allowed imports.
 
 ## Rendering Responsibilities
-`rendering/renderer.rs` orchestrates targets, frame preparation, pass order, and resource lifetime. Material passes own their shader interface, vertex layout, textures, blend/depth state, and preparation. Lighting, environment, shadows, scene effects, and display processing remain shared renderer stages. A new material should participate in those stages rather than create a separate renderer.
+`joy-renderer`'s `renderer.rs` orchestrates targets, frame preparation, pass order, and resource lifetime. Material passes own their shader interface, vertex layout, textures, blend/depth state, and preparation. Lighting, environment, shadows, scene effects, and display processing remain shared renderer stages. A new material should participate in those stages rather than create a separate renderer.
 
 `RenderScene` retains mesh and terrain instances and optional parent nodes. `MeshAsset` handles share immutable geometry; the renderer retains uploaded resources. Conservative instance culling preserves offscreen shadow casters. Terrain keeps its heightfield and indexed grid resident, selects continuous LOD on the GPU when supported, and uses CPU selection on GL backends. Transparent geometry sorts back to front and retains the usual intersecting-surface limitations.
 

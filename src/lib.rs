@@ -4,16 +4,19 @@
 //! Joy Engine: build games and tools once and run them natively (Windows, macOS, Linux) and in browsers (WebGPU or
 //! WebGL 2) from the same Rust code.
 //!
-//! Modules live under `src/` and follow the dependency layers in `architecture/layers.json`; a
-//! module may use only its own layer and the layers below it, which `npm run check` enforces:
+//! This crate is the facade games and tools depend on. Every engine system has its own crate (in `crates/`), re-exported
+//! here under its module name, so `joy_engine::physics` is the `joy-physics` crate; [`rendering`], [`particles`],
+//! [`runtime`], and [`development`] gather several crates into one module. The crates follow the dependency layers in
+//! `architecture/layers.json`: a crate may use only its own layer and the layers below it, which `npm run check`
+//! enforces.
 //!
-//! | Layer | Modules | Owns |
+//! | Layer | Modules (crates) | Owns |
 //! | --- | --- | --- |
-//! | foundation | [`core`] | Math, transforms, colors, seeded random, primitive shapes, display-processing profiles |
-//! | simulation | [`environment`], [`physics`], [`gameplay`] | Solar time and wind, rigid bodies and vehicles, entities, controllers, levels |
-//! | content | [`dcc`], [`form`], [`project`], [`scripting`] | GLB mesh import, the FORM procedural modeling language (renderer-free geometry), project manifests, and scripting language information |
-//! | rendering | [`rendering`], [`particles`] | The wgpu renderer every game, tool, and preview draws with; `.joyfx` particle effects |
-//! | platform | [`runtime`], [`development`], `browser` | The game shell, frame phases, input and gamepads, audio, egui UI, dev tools, browser glue |
+//! | foundation | [`core`] (`joy-core`), [`scripting`] (`joy-core`) | Math, transforms, colors, seeded random, primitive shapes, display-processing profiles, script language information |
+//! | simulation | [`environment`] (`joy-environment`), [`physics`] (`joy-physics`), [`gameplay`] (`joy-gameplay`) | Solar time and wind, rigid bodies and vehicles, entities, controllers, levels |
+//! | content | [`dcc`] (`joy-dcc-gltf`), [`form`] (`joy-form`), [`particles`] (`joy-fx`), [`project`] (`joy-project`) | GLB and glTF mesh import, the FORM procedural modeling language (renderer-free geometry), `.joyfx` particle documents, scripts, and simulation, project manifests |
+//! | rendering | [`rendering`] (`joy-renderer`, `joy-scene`) | The wgpu renderer every game, tool, and preview draws with, including particle drawing, and the scene presentation of levels, FORM meshes, and effects |
+//! | platform | [`runtime`] (`joy-app`, `joy-input`, `joy-audio`, `joy-storage`, `joy-ui`), [`development`] (`joy-devtools`, `joy-authoring`) | The game shell, frame phases, input and gamepads, audio, storage, egui UI and theme, dev tools, the authoring kit, browser glue |
 //!
 //! Conventions shared by every module:
 //! - World space is Y-up and right-handed, measured in meters; vehicles drive along local +Z.
@@ -60,26 +63,47 @@
 //! entry point, and `scripts/rust/build-web.mjs` produces the deployable page.
 
 // Foundation.
-pub mod core;
+#[doc(inline)]
+pub use joy_core as core;
+#[doc(inline)]
+pub use joy_core::scripting;
 
 // Simulation.
-pub mod environment;
-pub mod gameplay;
-pub mod physics;
+#[doc(inline)]
+pub use joy_environment as environment;
+#[doc(inline)]
+pub use joy_gameplay as gameplay;
+#[doc(inline)]
+pub use joy_physics as physics;
 
 // Content.
-pub mod dcc;
-pub mod form;
-pub mod project;
-pub mod scripting;
+#[doc(inline)]
+pub use joy_dcc_gltf as dcc;
+#[doc(inline)]
+pub use joy_form as form;
+#[doc(inline)]
+pub use joy_project as project;
 
 // Rendering.
-pub mod particles;
-pub mod rendering;
+/// The renderer every game, tool, and preview draws with (`joy-renderer`), plus scene presentation for levels, FORM
+/// meshes, and per-entity particle effects (`joy-scene`), in one place for games and tools.
+pub mod rendering {
+    #[doc(inline)]
+    pub use joy_renderer::*;
+    #[doc(inline)]
+    pub use joy_scene::*;
+}
+
+/// Particle effects (`.joyfx`): documents, scripts, and deterministic simulation from `joy-fx`, plus the renderer's
+/// particle drawing (lights, camera-facing triangles, and textures), in one place for games and tools.
+pub mod particles {
+    #[doc(inline)]
+    pub use joy_fx::*;
+    #[doc(inline)]
+    pub use joy_renderer::particles::*;
+}
 
 // Platform.
-#[cfg(target_arch = "wasm32")]
-mod browser;
 pub mod development;
 pub mod runtime;
 
@@ -192,9 +216,11 @@ pub mod prelude {
         Shading,
         ShadowOptions,
         ShadowQuality,
+        SkyOptions,
         TextureAsset,
         TransparentDraw,
         compile_form_mesh,
+        environment_lighting,
         primitive_box,
         primitive_sphere,
     };
