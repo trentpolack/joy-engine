@@ -39,11 +39,19 @@ impl Default for Transform {
 
 impl Transform {
     /// No translation, no rotation, and unit scale.
-    pub const IDENTITY: Self = Self { position: Vec3::ZERO, rotation: Vec3::ZERO, scale: Vec3::ONE };
+    pub const IDENTITY: Self = Self {
+        position: Vec3::ZERO,
+        rotation: Vec3::ZERO,
+        scale: Vec3::ONE
+    };
 
     /// Create a transform from its three components.
     pub fn new(position: Vec3, rotation: Vec3, scale: Vec3) -> Self {
-        Self { position, rotation, scale }
+        Self {
+            position,
+            rotation,
+            scale
+        }
     }
 
     /// Rotation as a quaternion using the engine's Euler convention.
@@ -66,7 +74,11 @@ impl Transform {
     /// `offset` is in local units and is scaled by this transform; `dimensions` is the child's full local size and is
     /// also scaled, so attached details follow the parent's pitch, roll, and scale.
     pub fn attach(&self, offset: Vec3, dimensions: Vec3) -> Self {
-        Self { position: self.transform_point(offset), rotation: self.rotation, scale: dimensions * self.scale }
+        Self {
+            position: self.transform_point(offset),
+            rotation: self.rotation,
+            scale: dimensions * self.scale
+        }
     }
 }
 
@@ -81,19 +93,19 @@ pub fn quat_from_euler(rotation: Vec3) -> Quat {
 /// At gimbal lock the equivalent canonical rotation fixes X to zero, matching the TypeScript physics adapter.
 pub fn euler_from_quat(rotation: Quat) -> Vec3 {
     let (x, y, z, w) = (rotation.x, rotation.y, rotation.z, rotation.w);
-    let matrix11 = 1.0 - (2.0 * ((y * y) + (z * z)));
-    let matrix21 = 2.0 * ((x * y) + (z * w));
-    let matrix31 = 2.0 * ((x * z) - (y * w));
+    let matrix11 = 1.0 - (((y*y) + (z* z))*2.0);
+    let matrix21 = 2.0 * ((x*y) + (z* w));
+    let matrix31 = 2.0 * ((x*z) - (y*w));
     let cosine_y = matrix11.hypot(matrix21);
     let rotation_y = (-matrix31).atan2(cosine_y);
 
     if cosine_y > GIMBAL_LOCK_EPSILON {
-        let rotation_x = (2.0 * ((y * z) + (x * w))).atan2(1.0 - (2.0 * ((x * x) + (y * y))));
+        let rotation_x = (((y*z) + (x*w))*2.0).atan2(1.0 - (((x * x) + (y * y))*2.0));
         let rotation_z = matrix21.atan2(matrix11);
         return Vec3::new(rotation_x, rotation_y, rotation_z);
     }
 
-    let rotation_z = (2.0 * ((z * w) - (x * y))).atan2(1.0 - (2.0 * ((x * x) + (z * z))));
+    let rotation_z = (((z*w) - (x*y))*2.0).atan2(1.0 - (((x*x) + (z*z))*2.0));
     Vec3::new(0.0, rotation_y, rotation_z)
 }
 
