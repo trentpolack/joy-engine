@@ -174,6 +174,8 @@ impl EmitterInspector {
                             edits.control(&NumberField::new("light-range", &mut light.range).range(0.01, 10000.0).step(1.0).width(column).show(ui, drafts));
                         });
                     });
+                    // Off by default: every shadowed light renders six depth faces, so reserve it for a few lights.
+                    edits.structural |= ui.checkbox(&mut light.casts_shadow, "Cast Shadows").changed();
                 }
 
                 // Bursts.

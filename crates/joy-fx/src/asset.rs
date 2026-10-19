@@ -62,6 +62,9 @@ const MAXIMUM_TEXTURE_TEXT: usize = 4 * 1024 * 1024;
 /// Largest magnitude of a parameter bound or value.
 const MAXIMUM_PARAMETER_MAGNITUDE: f64 = 1e6;
 
+/// Serialized name of an emitter light's shadow flag.
+pub const PARTICLE_LIGHT_CASTS_SHADOW: &str = "castsShadow";
+
 /// Upper bounds of color parameter channels: linear RGB may exceed one for HDR tints, and alpha is opacity.
 const COLOR_PARAMETER_LIMITS: [f64; 4] =
     [MAXIMUM_PARAMETER_MAGNITUDE, MAXIMUM_PARAMETER_MAGNITUDE, MAXIMUM_PARAMETER_MAGNITUDE, 1.0];
@@ -259,6 +262,10 @@ pub struct ParticleLight {
     pub intensity: f64,
     /// Initial `lightRange` in world units, 0.01–10000.
     pub range: f64,
+    /// Whether the emitted lights cast soft shadows (serialized as `castsShadow`, written only when set). Off by
+    /// default: particle lights are numerous and short-lived, and six shadow faces per light are costly, but an effect
+    /// such as a lantern or a muzzle flash can opt in like any other point light.
+    pub casts_shadow: bool,
 }
 
 /// One normalized emitter.
@@ -321,6 +328,9 @@ impl ParticleEmitterAsset {
             let mut entry = Map::new();
             entry.insert("intensity".to_owned(), json_number(light.intensity));
             entry.insert("range".to_owned(), json_number(light.range));
+            if light.casts_shadow {
+                entry.insert(PARTICLE_LIGHT_CASTS_SHADOW.to_owned(), Value::Bool(true));
+            }
             record.insert("light".to_owned(), Value::Object(entry));
         }
         if let Some(texture) = &self.texture {
@@ -680,9 +690,15 @@ fn read_emitter(value: &Value, index: usize) -> Result<ParticleEmitterAsset, Par
         None => None,
         Some(value) => {
             let light = record(Some(value), &format!("{id}.light"))?;
+            let casts_shadow = match light.get(PARTICLE_LIGHT_CASTS_SHADOW) {
+                None => false,
+                Some(Value::Bool(casts_shadow)) => *casts_shadow,
+                Some(_) => return Err(invalid(format!("{id}.light.{PARTICLE_LIGHT_CASTS_SHADOW} must be a boolean."))),
+            };
             Some(ParticleLight {
                 intensity: number(light.get("intensity"), &format!("{id}.light.intensity"), 0.0, 1000.0, false)?,
                 range: number(light.get("range"), &format!("{id}.light.range"), 0.01, 10000.0, false)?,
+                casts_shadow,
             })
         }
     };

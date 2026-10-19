@@ -14,17 +14,17 @@
 //! resolution meet without cracks or skirts. A target radius pins the finest detail around a protected point.
 //! WebGPU-class backends select on the GPU with compute and indirect draws; WebGL 2 selects on the CPU.
 //!
-//! Two paths draw terrain: `RenderScene` terrain instances (lit, casting and receiving directional shadows, and
-//! drawing into scene-effect attachments), and the standalone [`TerrainRenderer`], which draws a debug-shaded surface
-//! straight into a presentation target. Gameplay and collision use [`sample_terrain`], which always samples the finest
-//! authored surface, never camera-selected topology.
+//! Terrain always draws as part of a scene: add a [`TerrainAsset`] to a `RenderScene` as a terrain instance, and the
+//! renderer selects its LODs, draws it into the depth pre-pass and the lit scene pass (first among opaque geometry, as
+//! the largest occluder), into every shadow view it touches, and into the scene-effect attachments. There is no separate
+//! terrain draw path. Gameplay and collision use [`sample_terrain`], which always samples the finest authored surface,
+//! never camera-selected topology.
 
 mod terrain_asset;
+mod terrain_geometry;
 mod terrain_grid;
-mod terrain_renderer;
 pub(crate) mod terrain_scene_pass;
 mod terrain_selection;
-mod terrain_timing;
 
 pub use terrain_asset::{
     TerrainAsset,
@@ -37,17 +37,15 @@ pub use terrain_asset::{
     sample_height_triangle,
     sample_terrain,
 };
+pub use terrain_geometry::{
+    TerrainDiagnostic,
+    TerrainStats,
+    TerrainTriangleCount,
+};
 pub use terrain_grid::{
     TerrainGrid,
     TerrainIndexRange,
     create_terrain_grid,
-};
-pub use terrain_renderer::{
-    TerrainDiagnostic,
-    TerrainFrame,
-    TerrainRenderer,
-    TerrainStats,
-    TerrainTriangleCount,
 };
 pub use terrain_selection::{
     TerrainSelection,
@@ -57,19 +55,13 @@ pub use terrain_selection::{
     select_terrain,
     validate_terrain_view,
 };
-pub use terrain_timing::{
-    TerrainTiming,
-    TerrainTimingStatus,
-};
 
 // WGSL sources. Terrain shaders are the shared geometry file followed by their own entry points.
 const TERRAIN_GEOMETRY_SOURCE: &str = include_str!("../shaders/terrain-geometry.wgsl");
-const TERRAIN_SOURCE: &str = include_str!("../shaders/terrain.wgsl");
 const TERRAIN_SELECT_SOURCE: &str = include_str!("../shaders/terrain-select.wgsl");
 const TERRAIN_SCENE_SOURCE: &str = include_str!("../shaders/terrain-scene.wgsl");
 const TERRAIN_CASTER_SOURCE: &str = include_str!("../shaders/terrain-caster.wgsl");
-const TERRAIN_SURFACE_SOURCE: &str = include_str!("../shaders/terrain-surface.wgsl");
-const TERRAIN_MOTION_SOURCE: &str = include_str!("../shaders/terrain-motion.wgsl");
+const TERRAIN_DEPTH_SOURCE: &str = include_str!("../shaders/terrain-depth.wgsl");
 
 /// The shared geometry source with its bindings moved to `group`.
 ///

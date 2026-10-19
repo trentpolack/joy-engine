@@ -27,7 +27,7 @@ use joy_engine::rendering::scene_effects::{
 use joy_engine::rendering::{
     BackendPreference,
     CAPTURE_FORMAT,
-    CelestialLight,
+    DirectionalLight,
     EnvironmentLighting,
     FrameInputs,
     GpuContext,
@@ -39,9 +39,11 @@ use joy_engine::rendering::{
     OrbitCamera,
     PointLight,
     PostProcessSettings,
+    PresentationTime,
     RenderScene,
     Renderer,
     RendererOptions,
+    Skylight,
 };
 
 const WIDTH: u32 = 256;
@@ -88,7 +90,7 @@ fn cube(color: [f32; 3]) -> MeshAsset {
 }
 
 fn noon() -> EnvironmentLighting {
-    let sun = CelestialLight {
+    let sun = DirectionalLight {
         direction: Vec3::new(0.35, 0.85, 0.4).normalize(),
         color: LinearColor::rgb(1.0, 0.96, 0.86),
         intensity: 5.0,
@@ -99,10 +101,9 @@ fn noon() -> EnvironmentLighting {
         elapsed_seconds: 0.0,
         time_of_day: 0.5,
         sun,
-        moon: CelestialLight { direction: -sun.direction, intensity: 0.0, ..sun },
+        moon: DirectionalLight { direction: -sun.direction, intensity: 0.0, ..sun },
         primary: sun,
-        skylight_color: LinearColor::rgb(0.2, 0.42, 0.8),
-        skylight_intensity: 0.45,
+        skylight: Skylight::uniform(LinearColor::rgb(0.2, 0.42, 0.8), 0.45),
         wind_velocity: Vec3::ZERO,
         scattering: [1.0, 0.6, 1.0, 1.0],
         fog_and_clouds: [0.002, 0.0, 0.0, 0.45],
@@ -155,12 +156,8 @@ fn render(gpu: &GpuContext, effects: Option<SceneEffectsOptions>, frames: u32, n
             instance.transform.position.x = step * 6.0;
         }
         let camera = OrbitCamera { distance: 14.0, pitch: 0.55, yaw: 2.29 + step * 0.2, ..OrbitCamera::default() };
-        let inputs = FrameInputs {
-            environment: Some(&environment),
-            lights: &lights,
-            time_seconds: step,
-            ..FrameInputs::default()
-        };
+        let inputs = FrameInputs { environment: Some(&environment), lights: &lights, ..FrameInputs::default() };
+        renderer.set_presentation_time(PresentationTime::fixed_rate(frame, 1.0 / 60.0));
         renderer.render(&scene, &camera, &inputs, target.view()).expect("frame renders");
         pixels = target.read_rgba(gpu).expect("readback");
     }

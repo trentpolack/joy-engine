@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-// Shared scene contract for every surface material: frame uniforms, mesh and instance inputs, shadow sampling, and the
-// engine's two lighting models. Each material shader is this file followed by its own entry points.
+// Shared scene contract for every surface material: frame uniforms, mesh and instance inputs, shadow sampling, the
+// engine's two lighting models, and the scene-effect attachments opaque materials write beside their color. Each
+// material shader is this file followed by its own entry points.
 
 const PI: f32 = 3.14159265359;
 const MAX_POINT_LIGHTS: u32 = 32u;
@@ -17,7 +18,7 @@ struct PointLight {
 struct Frame {
   viewProjection: mat4x4f,
   view: mat4x4f,
-  // XYZ eye position in world units; W is scene time in seconds.
+  // XYZ eye position in world units; W is presentation time in seconds.
   eye: vec4f,
   // X point light count, Y ambient irradiance, ZW unused.
   lighting: vec4f,
@@ -25,8 +26,15 @@ struct Frame {
   primaryDirection: vec4f,
   // RGB primary light color.
   primaryColor: vec4f,
-  // RGB skylight color; A intensity.
+  // RGB sky color overhead; A skylight intensity.
   skylight: vec4f,
+  // RGB light the ground reflects up into the skylight's lower hemisphere; A unused.
+  groundSkylight: vec4f,
+  // Unjittered view-projection, and the previous frame's, for motion vectors.
+  stableViewProjection: mat4x4f,
+  previousViewProjection: mat4x4f,
+  // XY change in temporal-antialiasing jitter since the previous frame, in UV units; ZW unused.
+  motion: vec4f,
   lights: array<PointLight, 32>,
 };
 
@@ -80,8 +88,13 @@ struct Instance {
   @location(8) model3: vec4f,
   // RGB tint and opacity.
   @location(9) tint: vec4f,
-  // X receives shadows (0 or 1); remaining components are reserved.
+  // X receives shadows (0 or 1), Y scene roughness for scene effects; remaining components are reserved.
   @location(10) flags: vec4f,
+  // The previous frame's model matrix columns, for motion vectors (equal to the current matrix without history).
+  @location(11) previous0: vec4f,
+  @location(12) previous1: vec4f,
+  @location(13) previous2: vec4f,
+  @location(14) previous3: vec4f,
 };
 
 /**
@@ -89,6 +102,13 @@ struct Instance {
  */
 fn instanceModel(instance: Instance) -> mat4x4f {
   return mat4x4f(instance.model0, instance.model1, instance.model2, instance.model3);
+}
+
+/**
+ * The instance's model matrix in the previous frame.
+ */
+fn instancePreviousModel(instance: Instance) -> mat4x4f {
+  return mat4x4f(instance.previous0, instance.previous1, instance.previous2, instance.previous3);
 }
 
 /**
@@ -379,12 +399,21 @@ fn pointShadow(slot: i32, worldPosition: vec3f, normal: vec3f) -> f32 {
 }
 
 /**
- * The engine's standard flat lighting: ambient plus colored skylight, a double-sided primary light, and point lights.
- * Matches the TypeScript scene path; diffuse terms use |n.l| without a 1/pi factor so existing scenes keep their
- * authored brightness.
+ * Skylight irradiance on a surface: the sky overhead blended toward the ground's reflected light as the normal tilts
+ * down, the exact irradiance of two uniform hemispheres (`Skylight::irradiance` in joy-core).
+ */
+fn skylightIrradiance(normal: vec3f) -> vec3f {
+  let skyWeight = clamp(0.5 + (0.5*normal.y), 0.0, 1.0);
+  return mix(frame.groundSkylight.rgb, frame.skylight.rgb, skyWeight)*frame.skylight.a;
+}
+
+/**
+ * The engine's standard flat lighting: ambient plus the sky-and-ground skylight, a double-sided primary light, and
+ * point lights. Matches the TypeScript scene path; diffuse terms use |n.l| without a 1/pi factor so existing scenes
+ * keep their authored brightness.
  */
 fn standardLighting(worldPosition: vec3f, color: vec3f, normal: vec3f, receivesShadow: f32) -> vec3f {
-  var irradiance = vec3f(frame.lighting.y) + (frame.skylight.rgb*frame.skylight.a);
+  var irradiance = vec3f(frame.lighting.y) + skylightIrradiance(normal);
 
   var sunVisibility = 1.0;
   if(receivesShadow > 0.5) {
@@ -430,4 +459,56 @@ fn pbrDirect(base: vec3f, metallic: f32, roughness: f32, n: vec3f, v: vec3f, l: 
   let diffuse = (vec3f(1.0) - fresnel)*(1.0 - metallic)*base/PI;
 
   return (diffuse + (distribution*visibility*fresnel))*nl;
+}
+
+// Scene-effect attachments. With effects that need them, opaque materials write view-space normals with roughness and
+// both motion vectors beside their color in the one scene pass, instead of rasterizing opaque geometry again.
+
+struct SceneTargets {
+  @location(0) color: vec4f,
+  // View-space normal encoded as `n*0.5 + 0.5`, oriented toward the eye; A scene roughness.
+  @location(1) normalRoughness: vec4f,
+  // Screen-space motion in UV units without jitter (antialiasing and motion blur) and with it (lighting effects).
+  @location(2) motion: vec4f,
+  @location(3) jitteredMotion: vec4f,
+};
+
+/**
+ * Clip positions for motion vectors: this frame's unjittered camera and the previous frame's camera and transform.
+ */
+fn motionClips(world: vec4f, previousWorld: vec4f) -> mat2x4f {
+  return mat2x4f(frame.stableViewProjection*world, frame.previousViewProjection*previousWorld);
+}
+
+/**
+ * Every scene target for one opaque fragment. `surface` is `cross(dpdx(worldPosition), dpdy(worldPosition))`, taken by
+ * the caller in uniform control flow; the normal is the geometric plane, so every material encodes the same surface.
+ */
+fn sceneTargets(color: vec4f, worldPosition: vec3f, surface: vec3f, roughness: f32, clips: mat2x4f) -> SceneTargets {
+  let worldNormal = surface/max(length(surface), 0.000001);
+  let transformed = (frame.view*vec4f(worldNormal, 0.0)).xyz;
+  var viewNormal = transformed/max(length(transformed), 0.000001);
+  let viewPosition = (frame.view*vec4f(worldPosition, 1.0)).xyz;
+
+  // Lighting is double-sided. Orient the visible side toward the eye while keeping signed components: ambient
+  // occlusion and reflection rays depend on the complete direction.
+  if(dot(viewNormal, -viewPosition) < 0.0) {
+    viewNormal = -viewNormal;
+  }
+
+  // History behind the eye is not a valid correspondence and must never produce NaNs. Framebuffer UVs run downward
+  // while clip-space Y runs upward.
+  let current = clips[0];
+  let previous = clips[1];
+  var velocity = vec2f(0.0);
+  if((current.w > 0.000001) && (previous.w > 0.000001)) {
+    velocity = ((current.xy/current.w) - (previous.xy/previous.w))*vec2f(0.5, -0.5);
+  }
+
+  var targets: SceneTargets;
+  targets.color = color;
+  targets.normalRoughness = vec4f((viewNormal*0.5) + 0.5, clamp(roughness, 0.0, 1.0));
+  targets.motion = vec4f(velocity, 0.0, 1.0);
+  targets.jitteredMotion = vec4f(velocity + frame.motion.xy, 0.0, 1.0);
+  return targets;
 }

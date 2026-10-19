@@ -170,12 +170,10 @@ impl GpuContext {
         } else {
             adapter.limits()
         };
-        // Timestamp queries are optional profiling (terrain pass timing); request them only where offered.
-        let required_features = adapter.features() & wgpu::Features::TIMESTAMP_QUERY;
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("joy-engine"),
-                required_features,
+                required_features: wgpu::Features::empty(),
                 required_limits,
                 ..Default::default()
             })

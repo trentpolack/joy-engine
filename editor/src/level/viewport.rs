@@ -435,7 +435,7 @@ impl LevelViewport {
     // -----------------------------------------------------------------------------------------------------------------
 
     /// Draw the presentation, grid, and particles into the frame target.
-    pub fn render(&mut self, target: &mut RenderTarget<'_>, time_seconds: f32) -> Result<(), String> {
+    pub fn render(&mut self, target: &mut RenderTarget<'_>) -> Result<(), String> {
         self.effects.apply(target.renderer());
         let basis = self.camera.basis();
         let post_process = self.effects.with_bloom_choice(self.post_process.resolve(basis.eye));
@@ -471,7 +471,6 @@ impl LevelViewport {
             lights: &lights,
             ambient: Some(VIEWPORT_AMBIENT),
             clear_color: CLEAR_COLOR,
-            time_seconds,
             transparent_triangles: &grid,
             transparent_draws: &draws,
             ..Default::default()

@@ -6,6 +6,26 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, P
 ### Engine Organization
 - Moved unit tests from `tests/unit/` to sit beside the module they test as `<file>.test.rs` (`mesh.rs` and `mesh.test.rs`), declared with a same-folder `#[path]`, so tests sort and move with their module and `tests/` holds only integration tests, fixtures, and tooling tests. See the [Rust coding standards](docs/rust-coding-standards.md#tests).
 
+### Rendering
+- Fixed display output: the resolve pass now encodes sRGB after tone mapping (grading, antialiasing, and film grain work on the encoded values), so colors decoded on input display as authored, through sRGB and non-sRGB presentation formats alike.
+- Breaking: removed `FrameInputs::time_seconds` and `TriangleFrame::time_seconds`. The shell sets one presentation clock with `Renderer::set_presentation_time` (`PresentationTime`, with `fixed_rate` for tests and offline captures), which temporal antialiasing, exposure adaptation, film grain, and volumetric noise all read.
+- Transparency now draws after the lighting scene effects and before temporal antialiasing, motion blur, exposure, and post-processing, and every transparent element (blended meshes, transient triangles, and `transparent_draws` such as particles) sorts back to front in one queue, so a particle behind glass draws behind it. Breaking: removed `sort_transparent_triangles`.
+- Opaque geometry rasterizes once per view: a depth pre-pass (terrain first, then batches front to back; `RendererOptions::depth_prepass`) fills depth, the scene pass writes the scene-effect normal, roughness, and motion attachments beside its color instead of in two extra passes, and the sky draws last on the far plane.
+- Each shadow view draws only the casters inside its cascade or point-light face, and a point light renders shadow faces only when a caster reaches it.
+- Material maps and sprite and particle textures get GPU-generated mip chains, sampled trilinearly with anisotropic filtering.
+
+### Lights
+- Frames may supply any number of point lights: the renderer skips invalid lights and lights that cannot reach the view, then draws the 32 that light it most (`RendererDiagnostics::point_lights` and `point_lights_omitted`), instead of failing the frame above 32.
+- Breaking: `DirectionalLight`, `PointLight`, and `Skylight` are shared `joy-core` records. `CelestialLight` became `DirectionalLight` (`FrameInputs::directional_light` supplies a key light such as FORM LAB's studio light), the environment's sun and moon are `AtmosphereLight`s (a `DirectionalLight` plus its `CelestialBody`), and `EnvironmentLighting::skylight` replaces `skylight_color` and `skylight_intensity` with a sky color and a ground-bounce color.
+- Particle lights are `PointLight`s ranked with level lights, and emitters can opt into shadows with `light.castsShadow` (PARTICLE LAB's "Cast Shadows").
+
+### Terrain
+- Breaking: terrain draws only as `RenderScene` terrain instances. Removed `TerrainRenderer`, `TerrainFrame`, `RenderTarget::draw_terrain`, and terrain GPU timing; `Renderer::terrain_stats` reports an instance's statistics, and the terrain example draws through the scene renderer.
+
+### Physics and Simulation
+- Breaking: vehicles are physics bodies. `PhysicsWorld::create_vehicle` returns a `BodyHandle` (`VehicleHandle` was removed), vehicle queries take the chassis body, and `joy-gameplay`'s world no longer keeps a separate vehicle map (`LevelRuntime::vehicle` folded into `body`).
+- Fixed-step physics keeps each body's previous pose: `PhysicsWorld::interpolation`, `interpolated_body_transform`, and `interpolated_wheel_transforms` blend presentation between steps, and `World::presented_entities` hands those transforms to `LevelScene`.
+
 ## 10-18-2026
 ### Engine Organization
 - Breaking: renamed the shell contract from `Game` to `App` (`app.rs`, with `AppResult`, `AppError`, and `ShellError::App`), since games, tools, and examples all implement it, and moved `FixedStepLoop` from `joy-app` into `joy-core` (still in the prelude).

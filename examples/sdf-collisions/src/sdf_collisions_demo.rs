@@ -238,7 +238,6 @@ impl App for SdfCollisionsDemo {
             lights: &lights,
             ambient: Some(PRESENTATION.ambient),
             clear_color: PRESENTATION.clear_color,
-            time_seconds: frame.time.time_seconds as f32,
             ..FrameInputs::default()
         };
         let camera = self.view_camera(frame.viewport.logical_size);

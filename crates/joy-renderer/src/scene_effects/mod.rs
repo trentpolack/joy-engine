@@ -16,12 +16,9 @@ mod passes;
 mod pipelines;
 mod volume_lights;
 
-pub(crate) use attachments::{
-    MotionPass,
-    MotionUniforms,
-    SurfacePass,
-};
+pub(crate) use attachments::SceneAttachments;
 pub(crate) use effects::{
+    EffectStage,
     EffectsFrame,
     SceneEffectsRuntime,
     capabilities,

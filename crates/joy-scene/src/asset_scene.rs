@@ -29,6 +29,7 @@ use crate::components::{
     RenderSource,
 };
 use indexmap::IndexMap;
+use joy_core::math::Vec3;
 use joy_fx::{
     CompiledParticleEffect,
     ParticleAssetError,
@@ -452,10 +453,11 @@ impl AssetScene {
             // Each effect's own top lights are enough to find the global top lights.
             let selection = collect_particle_lights(&instance.effect, MAX_POINT_LIGHTS);
             total += selection.lights.len() + selection.omitted;
-            for mut light in selection.lights {
-                let [x, y, z] = to_world(entity, [light.x, light.y, light.z]);
-                (light.x, light.y, light.z) = (x, y, z);
-                lights.push(light);
+            for mut selected in selection.lights {
+                let local = selected.light.position.to_array().map(f64::from);
+                let [x, y, z] = to_world(entity, local);
+                selected.light.position = Vec3::new(x as f32, y as f32, z as f32);
+                lights.push(selected);
             }
         }
         rank_particle_lights(&mut lights);
@@ -464,11 +466,13 @@ impl AssetScene {
         ParticleLightSelection { lights, omitted }
     }
 
-    /// Level `light` components followed by the strongest particle lights, at most 32 in total.
+    /// Every level `light` component followed by the strongest particle lights (at most [`MAX_POINT_LIGHTS`] of them).
+    ///
+    /// Pass the whole list as `FrameInputs::lights`: the renderer keeps the lights that contribute most to the view, so
+    /// a bright particle near the camera can outrank a distant level light.
     pub fn lights(&self) -> Vec<PointLight> {
-        let mut lights: Vec<PointLight> = self.level.lights().iter().take(MAX_POINT_LIGHTS).copied().collect();
-        let remaining = MAX_POINT_LIGHTS - lights.len();
-        lights.extend(self.particle_lights(remaining).point_lights());
+        let mut lights = self.level.lights().to_vec();
+        lights.extend(self.particle_lights(MAX_POINT_LIGHTS).point_lights());
         lights
     }
 

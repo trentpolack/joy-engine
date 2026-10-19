@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Instantiates an authored level: entities, rigid bodies for `physics` components, and raycast vehicles for `vehicle`
-//! components.
+//! Instantiates an authored level: entities, and a rigid body for each `physics` component, which is a raycast vehicle
+//! chassis when the entity also has a `vehicle` component.
 //!
 //! - `physics` components use local collider dimensions; the entity scale is applied once at spawn. Box half extents
 //!   scale per axis; spheres require uniform scale and scale their radius. The body starts at the entity's position and
@@ -10,8 +10,8 @@
 //! - `vehicle` components follow the [`VehicleOptions`] contract in chassis-local meters; they require a `physics`
 //!   component and uniform scale, which scales wheel position, radius, suspension rest length, and maximum suspension
 //!   travel. Force tuning stays in authored units.
-//! - Every failure rolls back: a failed spawn removes the entity and any solver objects it created, and a failed level
-//!   setup removes every entity created so far.
+//! - Every failure rolls back: a failed spawn removes the entity (physics validates a body and its vehicle together, so
+//!   no partial body is left behind), and a failed level setup removes every entity created so far.
 //! - Spawn dynamic entities through [`LevelRuntime::spawn`] so they receive the same physics setup as authored ones.
 //!   Entities spawned by behaviors through `SimulationContext::request_spawn` bypass physics setup, as do entities
 //!   spawned directly on `EntityWorld`.
@@ -44,7 +44,6 @@ use joy_physics::{
     PhysicsWorld,
     PhysicsWorldOptions,
     VEHICLE_DEFAULTS,
-    VehicleHandle,
     VehicleOptions,
     WHEEL_DEFAULTS,
     WheelOptions,
@@ -56,7 +55,7 @@ const MAX_ENTITY_STEP_SECONDS: f32 = 0.1;
 /// Caller name used in delta-time errors.
 const RUNTIME_DELTA: &str = "Runtime delta";
 
-/// Owns a copied level, its entity world, its physics world, and every entity's solver handles.
+/// Owns a copied level, its entity world, its physics world, and every entity's body handle.
 #[derive(Debug)]
 pub struct LevelRuntime {
     // The validated, copied level this runtime was built from; never mutated.
@@ -98,26 +97,19 @@ impl LevelRuntime {
         Ok(runtime)
     }
 
-    /// Spawn an entity and attach every solver object its components describe.
+    /// Spawn an entity and create the body its components describe.
     ///
-    /// If physics setup fails, the entity and any partially created body or vehicle are removed before the error is
-    /// returned, so the world is unchanged.
+    /// If physics setup fails, the entity is removed before the error is returned, so the world is unchanged.
     pub fn spawn(&mut self, definition: &EntityDefinition) -> Result<EntityId, GameplayError> {
         let id = self.world.spawn(definition)?;
         if let Err(source) = self.attach_physics(&id) {
-            if let Some(vehicle) = self.world.vehicles.shift_remove(&id) {
-                self.world.physics.remove_vehicle(vehicle);
-            }
-            if let Some(body) = self.world.bodies.shift_remove(&id) {
-                self.world.physics.remove_body(body);
-            }
             self.world.remove(&id);
             return Err(GameplayError::PhysicsComponent { entity: id, source });
         }
         Ok(id)
     }
 
-    /// Remove an entity and its solver objects. Returns whether it was live.
+    /// Remove an entity and its body. Returns whether it was live.
     pub fn remove(&mut self, id: &EntityId) -> bool {
         self.world.remove(id)
     }
@@ -152,25 +144,19 @@ impl LevelRuntime {
         }
         for id in stale {
             world.bodies.shift_remove(&id);
-            world.vehicles.shift_remove(&id);
         }
         Ok(())
     }
 
     /// The live body owned by an entity, if both are live.
+    ///
+    /// For a vehicle entity this is the chassis: vehicle operations (`physics().wheel_transforms(body)` for rendering,
+    /// `vehicle_speed`, `set_vehicle_input`) take it directly.
     pub fn body(&self, id: &EntityId) -> Option<BodyHandle> {
         if !self.world.entities.contains(id) {
             return None;
         }
         self.world.bodies.get(id).copied().filter(|body| self.world.physics.contains_body(*body))
-    }
-
-    /// The live vehicle owned by an entity, if the entity, its body, and the vehicle are all live.
-    ///
-    /// Wheel poses for rendering come from `physics().wheel_transforms(vehicle)`.
-    pub fn vehicle(&self, id: &EntityId) -> Option<VehicleHandle> {
-        self.body(id)?;
-        self.world.vehicles.get(id).copied().filter(|vehicle| self.world.physics.contains_vehicle(*vehicle))
     }
 
     /// The copied level this runtime was built from.
@@ -208,7 +194,8 @@ impl LevelRuntime {
         &mut self.world.physics
     }
 
-    /// Create the body and vehicle an entity's components describe, recording their handles.
+    /// Create the body an entity's components describe (a vehicle chassis when it has a `vehicle` component), recording
+    /// its handle.
     fn attach_physics(&mut self, id: &EntityId) -> Result<(), PhysicsComponentError> {
         let Some(entity) = self.world.entities.get(id) else {
             return Ok(());
@@ -224,18 +211,18 @@ impl LevelRuntime {
         };
 
         let options = body_options(&collider, transform.position, transform.rotation, transform.scale)?;
-        let body = self.world.physics.create_body(options)?;
-        self.world.bodies.insert(id.clone(), body);
-
-        if let Some(config) = vehicle_config {
-            let scale = transform.scale;
-            if scale.x != scale.y || scale.y != scale.z {
-                return Err(PhysicsComponentError::NonUniformVehicleScale);
+        let body = match vehicle_config {
+            None => self.world.physics.create_body(options)?,
+            Some(config) => {
+                let scale = transform.scale;
+                if scale.x != scale.y || scale.y != scale.z {
+                    return Err(PhysicsComponentError::NonUniformVehicleScale);
+                }
+                let vehicle = vehicle_options(&config, scale.x)?;
+                self.world.physics.create_vehicle(options, vehicle)?
             }
-            let options = vehicle_options(&config, scale.x)?;
-            let vehicle = self.world.physics.create_vehicle(body, options)?;
-            self.world.vehicles.insert(id.clone(), vehicle);
-        }
+        };
+        self.world.bodies.insert(id.clone(), body);
         Ok(())
     }
 }

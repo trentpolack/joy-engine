@@ -11,8 +11,8 @@
 //! - [`Color`] is sRGB-encoded and [`LinearColor`] is linear light; both carry straight alpha.
 //!
 //! [`math`] owns the engine's vector, matrix, and quaternion types and the [`math::deterministic`] functions seeded
-//! simulations use; [`transform`], [`random`], and [`fixed_step`] build on it. [`color`], [`mesh_data`], [`material`],
-//! [`config_values`], and [`primitive`] define shared engine records, [`mod@format`] writes numbers for text and JSON,
+//! simulations use; [`transform`], [`random`], and [`fixed_step`] build on it. [`color`], [`light`], [`mesh_data`],
+//! [`material`], [`config_values`], and [`primitive`] define shared engine records, [`mod@format`] writes numbers for text and JSON,
 //! and [`base64`] handles the `data:` URL encoding authored documents embed. [`scripting`] describes the engine's script
 //! languages (FORM and JOYFX) for editors and language tools.
 
@@ -21,6 +21,7 @@ pub mod color;
 pub mod config_values;
 pub mod fixed_step;
 pub mod format;
+pub mod light;
 pub mod material;
 pub mod math;
 pub mod mesh_data;
@@ -51,6 +52,12 @@ pub use fixed_step::FixedStepLoop;
 pub use format::{
     format_number,
     json_number,
+};
+pub use light::{
+    DirectionalLight,
+    PointLight,
+    SUN_ANGULAR_RADIUS,
+    Skylight,
 };
 pub use material::{
     MaterialAlphaMode,

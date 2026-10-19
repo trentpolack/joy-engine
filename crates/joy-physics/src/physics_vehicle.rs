@@ -3,6 +3,10 @@
 
 //! Raycast vehicles: data-defined wheel arrays with ray suspension, drive, steering, and brakes.
 //!
+//! A vehicle is a kind of physics body rather than a separate object: [`PhysicsWorld::create_vehicle`] creates a
+//! dynamic chassis body that carries the wheel controller, every vehicle operation takes that body's [`BodyHandle`],
+//! and removing the body removes the vehicle with it.
+//!
 //! Vehicles use rapier's `DynamicRayCastVehicleController`, which, like cannon-es's `RaycastVehicle`, is a port of
 //! Bullet's `btRaycastVehicle`. Chassis axes are up = +Y, forward = +Z; every wheel casts along chassis -Y and spins
 //! around the chassis -X axle. Positive throttle drives local +Z,
@@ -23,7 +27,11 @@ use rapier3d::control::{
     DynamicRayCastVehicleController,
     WheelTuning,
 };
-use rapier3d::math::Rotation;
+use rapier3d::math::{
+    Pose,
+    Rotation,
+};
+use rapier3d::pipeline::ActiveHooks;
 
 use super::convert::{
     euler_from_solver_rotation,
@@ -32,13 +40,17 @@ use super::convert::{
     from_solver_vector,
     to_solver_vector,
 };
+use super::physics_body::{
+    ValidatedBody,
+    create_shape,
+};
 use super::physics_world::VehicleRecord;
 use super::{
     BodyHandle,
+    BodyOptions,
     PhysicsError,
     PhysicsTransform,
     PhysicsWorld,
-    VehicleHandle,
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -187,18 +199,21 @@ pub struct VehicleInput {
 // ---------------------------------------------------------------------------------------------------------------------
 
 impl PhysicsWorld {
-    /// Attach a raycast vehicle to an owned dynamic chassis. The vehicle borrows its chassis.
+    /// Create a dynamic chassis body that carries a raycast vehicle, and return the body's handle.
     ///
-    /// Fails if the chassis is static, unknown, foreign, or already carries a vehicle, or if any option is invalid;
-    /// every wheel is validated before the world changes.
+    /// A vehicle is a kind of body: every body operation (pose, velocity, impulses, removal) applies to the chassis, and
+    /// the vehicle operations below take the same handle. `chassis` is validated exactly like
+    /// [`create_body`](Self::create_body) and must be dynamic (mass greater than zero). Every wheel is validated before
+    /// the world changes, so any failure leaves the world unchanged.
     pub fn create_vehicle(
         &mut self,
-        chassis: BodyHandle,
+        chassis: BodyOptions,
         options: VehicleOptions,
-    ) -> Result<VehicleHandle, PhysicsError> {
-        let raw = self.resolve_body(chassis).ok_or(PhysicsError::InvalidChassis)?;
-        let record = self.bodies.get(&raw).ok_or(PhysicsError::InvalidChassis)?;
-        if !record.dynamic || record.vehicle.is_some() {
+    ) -> Result<BodyHandle, PhysicsError> {
+        // Body validation first (the TypeScript order: the chassis exists before the vehicle is configured).
+        let validated = ValidatedBody::new(&chassis)?;
+        let shape = create_shape(&chassis)?;
+        if validated.mass <= 0.0 {
             return Err(PhysicsError::InvalidChassis);
         }
 
@@ -212,7 +227,9 @@ impl PhysicsWorld {
         let wheels =
             options.wheels.iter().map(|wheel| validate_wheel(wheel, friction_slip)).collect::<Result<Vec<_>, _>>()?;
 
-        let mut controller = DynamicRayCastVehicleController::new(raw);
+        // Everything is valid; insert the chassis and bind the controller to it.
+        let handle = self.insert_body(validated, shape, ActiveHooks::empty());
+        let mut controller = DynamicRayCastVehicleController::new(handle.raw);
         controller.index_up_axis = UP_AXIS_INDEX;
         controller.index_forward_axis = FORWARD_AXIS_INDEX;
         for wheel in &wheels {
@@ -235,25 +252,27 @@ impl PhysicsWorld {
             );
         }
 
-        let id = self.next_vehicle_id;
-        self.next_vehicle_id += 1;
-        self.vehicles
-            .insert(id, VehicleRecord { controller, chassis: raw, wheels, engine_force, max_steer, brake_force });
-        if let Some(record) = self.bodies.get_mut(&raw) {
-            record.vehicle = Some(id);
+        if let Some(record) = self.bodies.get_mut(&handle.raw) {
+            record.vehicle = Some(VehicleRecord { controller, wheels, engine_force, max_steer, brake_force });
         }
-        Ok(VehicleHandle { world: self.world_id, id })
+        Ok(handle)
     }
 
-    /// Replace driver intent for every wheel and keep the chassis awake.
+    /// Whether `body` names a live body owned by this world that carries a vehicle.
+    pub fn is_vehicle(&self, body: BodyHandle) -> bool {
+        self.resolve_vehicle(body).is_some()
+    }
+
+    /// Replace driver intent for every wheel of a vehicle body and keep the chassis awake.
     ///
-    /// Non-finite values fail without changing the vehicle. Driven wheels receive `throttle * engine_force`, steering
-    /// wheels `steer * max_steer`, and braking wheels a brake impulse bound of `brake * brake_force`.
-    pub fn set_vehicle_input(&mut self, handle: VehicleHandle, input: VehicleInput) -> Result<(), PhysicsError> {
+    /// Non-finite values fail without changing the vehicle, as does a body that is unknown or carries no vehicle.
+    /// Driven wheels receive `throttle * engine_force`, steering wheels `steer * max_steer`, and braking wheels a brake
+    /// impulse bound of `brake * brake_force`.
+    pub fn set_vehicle_input(&mut self, body: BodyHandle, input: VehicleInput) -> Result<(), PhysicsError> {
         let throttle = finite_number(input.throttle, "throttle", f64::NEG_INFINITY, f64::INFINITY)?.clamp(-1.0, 1.0);
         let steer = finite_number(input.steer, "steer", f64::NEG_INFINITY, f64::INFINITY)?.clamp(-1.0, 1.0);
         let brake = finite_number(input.brake, "brake", f64::NEG_INFINITY, f64::INFINITY)?.clamp(0.0, 1.0);
-        let record = self.resolve_vehicle_mut(handle).ok_or(PhysicsError::UnknownVehicle)?;
+        let record = self.resolve_vehicle_mut(body)?;
 
         let (engine_force, max_steer, brake_force) = (record.engine_force, record.max_steer, record.brake_force);
         for (wheel, options) in record.controller.wheels_mut().iter_mut().zip(&record.wheels) {
@@ -264,16 +283,15 @@ impl PhysicsWorld {
             wheel.brake = if options.brake { brake * brake_force } else { 0.0 };
         }
 
-        let chassis = record.chassis;
-        if let Some(body) = self.solver.bodies.get_mut(chassis) {
-            body.wake_up(true);
+        if let Some(chassis) = self.solver.bodies.get_mut(body.raw) {
+            chassis.wake_up(true);
         }
         Ok(())
     }
 
-    /// The vehicle's current drive limits, or `None` for an unknown handle.
-    pub fn vehicle_tuning(&self, handle: VehicleHandle) -> Option<VehicleTuning> {
-        self.resolve_vehicle(handle).map(|record| VehicleTuning {
+    /// The vehicle's current drive limits, or `None` for an unknown body or one without a vehicle.
+    pub fn vehicle_tuning(&self, body: BodyHandle) -> Option<VehicleTuning> {
+        self.resolve_vehicle(body).map(|record| VehicleTuning {
             engine_force: record.engine_force,
             max_steer: record.max_steer,
             brake_force: record.brake_force,
@@ -281,115 +299,97 @@ impl PhysicsWorld {
     }
 
     /// Replace the vehicle's drive limits; they apply from the next [`set_vehicle_input`](Self::set_vehicle_input).
-    /// Out-of-range values fail without changing the vehicle.
-    pub fn set_vehicle_tuning(&mut self, handle: VehicleHandle, tuning: VehicleTuning) -> Result<(), PhysicsError> {
+    /// Out-of-range values, unknown bodies, and bodies without a vehicle fail without changing anything.
+    pub fn set_vehicle_tuning(&mut self, body: BodyHandle, tuning: VehicleTuning) -> Result<(), PhysicsError> {
         let engine_force = finite_number(tuning.engine_force, "engineForce", 0.0, f64::INFINITY)?;
         let max_steer = finite_number(tuning.max_steer, "maxSteer", 0.0, MAX_STEER_LIMIT)?;
         let brake_force = finite_number(tuning.brake_force, "brakeForce", 0.0, f64::INFINITY)?;
-        let record = self.resolve_vehicle_mut(handle).ok_or(PhysicsError::UnknownVehicle)?;
+        let record = self.resolve_vehicle_mut(body)?;
         record.engine_force = engine_force;
         record.max_steer = max_steer;
         record.brake_force = brake_force;
         Ok(())
     }
 
-    /// Copied wheel poses in world meters and XYZ Euler radians, in wheel order; empty for an unknown handle.
+    /// Copied wheel poses in world meters and XYZ Euler radians, in wheel order; empty for an unknown body or one
+    /// without a vehicle.
     ///
     /// Each pose is the suspension hard point pushed down by the current suspension length, oriented by the chassis,
     /// the wheel's steering angle around chassis up, and its spin around the axle (positive spin rolls forward).
-    pub fn wheel_transforms(&self, handle: VehicleHandle) -> Vec<PhysicsTransform> {
-        let Some(record) = self.resolve_vehicle(handle) else {
+    pub fn wheel_transforms(&self, body: BodyHandle) -> Vec<PhysicsTransform> {
+        let Some(record) = self.resolve_vehicle(body) else {
             return Vec::new();
         };
-        let Some(chassis) = self.solver.bodies.get(record.chassis) else {
+        let Some(chassis) = self.solver.bodies.get(body.raw) else {
             return Vec::new();
         };
-        let pose = *chassis.position();
-        record
-            .controller
-            .wheels()
-            .iter()
-            .map(|wheel| {
-                let hard_point = pose.transform_point(wheel.chassis_connection_point_cs);
-                let direction = pose.rotation * wheel.direction_cs;
-                let position = hard_point + (direction * wheel.raycast_info().suspension_length);
-
-                // Cannon composes chassis * steer(up) * spin(axle). Rapier accumulates spin with the opposite sign
-                // for this axle, so it is negated to keep wheels visibly rolling forward like the TypeScript engine.
-                let up = -wheel.direction_cs.normalize_or_zero();
-                let axle = wheel.axle_cs.normalize_or_zero();
-                let steer = Rotation::from_axis_angle(up, wheel.steering);
-                let spin = Rotation::from_axis_angle(axle, -wheel.rotation);
-                let orientation = (pose.rotation * steer * spin).normalize();
-                PhysicsTransform {
-                    position: from_solver_vector(position),
-                    rotation: euler_from_solver_rotation(orientation),
-                }
-            })
-            .collect()
+        wheel_poses(record, *chassis.position())
     }
 
-    /// Unsigned chassis speed in meters per second, or zero for an unknown handle.
-    pub fn vehicle_speed(&self, handle: VehicleHandle) -> f32 {
-        self.resolve_vehicle(handle)
-            .and_then(|record| self.solver.bodies.get(record.chassis))
-            .map_or(0.0, |body| body.linvel().length())
+    /// Wheel poses for presentation, in wheel order: each wheel's current suspension, steering, and spin placed on the
+    /// chassis's [interpolated pose](Self::interpolated_body_transform), so wheels stay attached to a chassis drawn
+    /// between fixed steps. Empty for an unknown body or one without a vehicle.
+    pub fn interpolated_wheel_transforms(&self, body: BodyHandle) -> Vec<PhysicsTransform> {
+        let (Some(record), Some(pose)) = (self.resolve_vehicle(body), self.interpolated_pose(body)) else {
+            return Vec::new();
+        };
+        wheel_poses(record, pose)
     }
 
-    /// Wheels whose suspension ray touched ground during the most recent fixed step; zero for an unknown handle.
-    pub fn grounded_wheel_count(&self, handle: VehicleHandle) -> usize {
-        self.resolve_vehicle(handle).map_or(0, |record| {
+    /// Unsigned chassis speed in meters per second, or zero for an unknown body or one without a vehicle.
+    pub fn vehicle_speed(&self, body: BodyHandle) -> f32 {
+        if self.resolve_vehicle(body).is_none() {
+            return 0.0;
+        }
+        self.solver.bodies.get(body.raw).map_or(0.0, |chassis| chassis.linvel().length())
+    }
+
+    /// Wheels whose suspension ray touched ground during the most recent fixed step; zero for an unknown body or one
+    /// without a vehicle.
+    pub fn grounded_wheel_count(&self, body: BodyHandle) -> usize {
+        self.resolve_vehicle(body).map_or(0, |record| {
             record.controller.wheels().iter().filter(|wheel| wheel.raycast_info().is_in_contact).count()
         })
     }
 
-    /// Detach and remove a vehicle while keeping its chassis body. Returns whether a live vehicle was removed.
-    pub fn remove_vehicle(&mut self, handle: VehicleHandle) -> bool {
-        if handle.world != self.world_id {
-            return false;
-        }
-        let Some(record) = self.vehicles.shift_remove(&handle.id) else {
-            return false;
-        };
-        if let Some(body) = self.bodies.get_mut(&record.chassis) {
-            body.vehicle = None;
-        }
-        true
+    /// Resolve a body handle to the vehicle it carries.
+    fn resolve_vehicle(&self, body: BodyHandle) -> Option<&VehicleRecord> {
+        let raw = self.resolve_body(body)?;
+        self.bodies.get(&raw)?.vehicle.as_ref()
     }
 
-    /// Whether `handle` names a live vehicle owned by this world.
-    pub fn contains_vehicle(&self, handle: VehicleHandle) -> bool {
-        self.resolve_vehicle(handle).is_some()
+    /// Resolve a body handle to the vehicle it carries for mutation, naming why it cannot.
+    fn resolve_vehicle_mut(&mut self, body: BodyHandle) -> Result<&mut VehicleRecord, PhysicsError> {
+        let raw = self.resolve_body(body).ok_or(PhysicsError::UnknownBody)?;
+        let record = self.bodies.get_mut(&raw).ok_or(PhysicsError::UnknownBody)?;
+        record.vehicle.as_mut().ok_or(PhysicsError::NotAVehicle)
     }
+}
 
-    /// The vehicle attached to a body, if any.
-    pub fn body_vehicle(&self, handle: BodyHandle) -> Option<VehicleHandle> {
-        let raw = self.resolve_body(handle)?;
-        let id = self.bodies.get(&raw)?.vehicle?;
-        Some(VehicleHandle { world: self.world_id, id })
-    }
+/// World poses of a vehicle's wheels for a chassis at `pose`.
+fn wheel_poses(record: &VehicleRecord, pose: Pose) -> Vec<PhysicsTransform> {
+    record
+        .controller
+        .wheels()
+        .iter()
+        .map(|wheel| {
+            let hard_point = pose.transform_point(wheel.chassis_connection_point_cs);
+            let direction = pose.rotation * wheel.direction_cs;
+            let position = hard_point + (direction * wheel.raycast_info().suspension_length);
 
-    /// The chassis body a vehicle borrows, or `None` for an unknown handle.
-    pub fn vehicle_chassis(&self, handle: VehicleHandle) -> Option<BodyHandle> {
-        let record = self.resolve_vehicle(handle)?;
-        Some(BodyHandle { world: self.world_id, raw: record.chassis })
-    }
-
-    /// Resolve a public vehicle handle owned by this world.
-    fn resolve_vehicle(&self, handle: VehicleHandle) -> Option<&VehicleRecord> {
-        if handle.world != self.world_id {
-            return None;
-        }
-        self.vehicles.get(&handle.id)
-    }
-
-    /// Resolve a public vehicle handle owned by this world for mutation.
-    fn resolve_vehicle_mut(&mut self, handle: VehicleHandle) -> Option<&mut VehicleRecord> {
-        if handle.world != self.world_id {
-            return None;
-        }
-        self.vehicles.get_mut(&handle.id)
-    }
+            // Cannon composes chassis * steer(up) * spin(axle). Rapier accumulates spin with the opposite sign for this
+            // axle, so it is negated to keep wheels visibly rolling forward like the TypeScript engine.
+            let up = -wheel.direction_cs.normalize_or_zero();
+            let axle = wheel.axle_cs.normalize_or_zero();
+            let steer = Rotation::from_axis_angle(up, wheel.steering);
+            let spin = Rotation::from_axis_angle(axle, -wheel.rotation);
+            let orientation = (pose.rotation * steer * spin).normalize();
+            PhysicsTransform {
+                position: from_solver_vector(position),
+                rotation: euler_from_solver_rotation(orientation),
+            }
+        })
+        .collect()
 }
 
 /// Validate one wheel and resolve its friction slip.

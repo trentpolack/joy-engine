@@ -12,7 +12,7 @@ The headless gameplay layer separates authored data, runtime ownership, and pres
 | `LevelScene` / `AssetScene` | Present meshes, lights, and effects in the rendering layer. |
 | `PhysicsWorld` | Fixed-step rigid bodies, ray queries, and raycast vehicles. |
 
-Unknown authored components remain data; only registered runtime behavior runs. Resource acquisition and rollback follow component/entity lifecycle hooks. Spawn/removal requests from hooks apply at update boundaries. Possession changes clear old intent, and removing an entity releases its bodies and vehicles.
+Unknown authored components remain data; only registered runtime behavior runs. Resource acquisition and rollback follow component/entity lifecycle hooks. Spawn/removal requests from hooks apply at update boundaries. Possession changes clear old intent, and removing an entity releases its body (a vehicle is a kind of body, so its chassis and wheels go with it).
 
 ## Authored Data
 `.joylevel` and `.joyobject` are versioned JSON documents. Entity IDs are stable and unique; component records retain project-specific data. Coordinates are Y up and +Z forward, distances are meters where the level contract specifies them, and rotations are XYZ Euler radians. Runtime transforms are copies and never write back into the authoring document.

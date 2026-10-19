@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Deterministic world environment: a solar clock, celestial lights, skylight, and a gusting wind field.
+//! Deterministic world environment: a solar clock, celestial lights, a sky-and-ground skylight, and a gusting wind field.
 //!
 //! This is a port of the TypeScript `EnvironmentSystem`. Options, defaults, validation ranges, and the frame math are
 //! identical; every quantity is computed in `f64` in the same order as the TypeScript source and only then stored as
@@ -15,7 +15,9 @@ use std::f64::consts::PI;
 use joy_core::math::Vec3;
 use joy_core::math::deterministic;
 use joy_core::{
+    DirectionalLight,
     LinearColor,
+    Skylight,
     smoothstep,
 };
 use serde::{
@@ -74,6 +76,10 @@ const SKYLIGHT_NIGHT_INTENSITY: f64 = 0.03;
 
 /// Additional skylight intensity at full daylight.
 const SKYLIGHT_DAY_INTENSITY: f64 = 0.42;
+
+/// Fraction of the light reaching the ground that it reflects back up into the skylight's lower hemisphere; grass,
+/// soil, and rock average about 0.2.
+const GROUND_ALBEDO: f64 = 0.2;
 
 /// Day of year of the March equinox used by the declination approximation.
 const EQUINOX_DAY_OF_YEAR: f64 = 81.0;
@@ -209,30 +215,17 @@ pub enum CelestialBody {
     Moon,
 }
 
-/// One celestial directional light.
+/// A celestial body's light: a [`DirectionalLight`] plus the body it comes from.
+///
+/// The directional light carries everything the renderer lights and shadows with (direction toward the body, color,
+/// intensity, source size, and shadow casting); the body tells the sky which disc to draw. Environment lights always
+/// cast shadows, and their angular radius is the body's apparent disc radius.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AtmosphereLight {
     /// Which body this light represents.
     pub kind: CelestialBody,
-    /// Unit vector from the world toward the body, in Y-up world space.
-    pub direction: Vec3,
-    /// Linear light color (may exceed one near the horizon); alpha is unused.
-    pub color: LinearColor,
-    /// Linear intensity multiplier.
-    pub intensity: f32,
-    /// Apparent disc radius in radians.
-    pub angular_radius: f32,
-    /// Whether the light casts shadows when it is the primary light; always true for environment lights.
-    pub casts_shadow: bool,
-}
-
-/// Ambient sky contribution.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Skylight {
-    /// Linear sky color; alpha is unused.
-    pub color: LinearColor,
-    /// Linear intensity multiplier.
-    pub intensity: f32,
+    /// The light the body casts. Its color may exceed one near the horizon.
+    pub light: DirectionalLight,
 }
 
 /// Wind state for one frame.
@@ -259,7 +252,7 @@ pub struct EnvironmentFrame {
     pub moon: AtmosphereLight,
     /// The light that should cast shadows: the sun once daylight reaches 5%, otherwise the moon.
     pub primary_light: AtmosphereLight,
-    /// Ambient sky contribution.
+    /// Ambient light: the sky overhead, and below the horizon the sky and sun light the ground reflects back up.
     pub skylight: Skylight,
     /// Wind field.
     pub wind: WindFrame,
@@ -373,6 +366,8 @@ impl EnvironmentSystem {
             mix_color(NIGHT_SKY_COLOR, DAY_SKY_COLOR, daylight),
             scale_color(TWILIGHT_GLOW_COLOR, twilight * TWILIGHT_GLOW_SCALE),
         );
+        let sky_intensity = SKYLIGHT_NIGHT_INTENSITY + (daylight * SKYLIGHT_DAY_INTENSITY);
+        let ground_color = ground_bounce_color(sky_color, sky_intensity, &[&sun.light, &moon.light]);
 
         EnvironmentFrame {
             elapsed_seconds: self.elapsed_seconds,
@@ -382,7 +377,8 @@ impl EnvironmentSystem {
             primary_light,
             skylight: Skylight {
                 color: to_linear_color(sky_color),
-                intensity: (SKYLIGHT_NIGHT_INTENSITY + (daylight * SKYLIGHT_DAY_INTENSITY)) as f32,
+                ground_color: to_linear_color(ground_color),
+                intensity: sky_intensity as f32,
             },
             wind: calculate_wind(self.elapsed_seconds, &self.options.wind),
         }
@@ -433,12 +429,31 @@ fn create_light(
 ) -> AtmosphereLight {
     AtmosphereLight {
         kind,
-        direction: to_vec3(direction),
-        color: to_linear_color(color),
-        intensity: intensity as f32,
-        angular_radius: angular_radius as f32,
-        casts_shadow: true,
+        light: DirectionalLight {
+            direction: to_vec3(direction),
+            color: to_linear_color(color),
+            intensity: intensity as f32,
+            angular_radius: angular_radius as f32,
+            casts_shadow: true,
+        },
     }
+}
+
+/// The skylight's lower-hemisphere color: the light a flat, diffuse ground reflects back up, before the skylight's
+/// intensity.
+///
+/// The ground receives the sky dome (irradiance `π × sky radiance`) and every celestial light above the horizon
+/// (`radiance × elevation`), and reflects `GROUND_ALBEDO` of it evenly; dividing by `π` turns that back into radiance.
+/// Under a high sun the bounce is about as bright as the sky itself and warmer, and at night it falls well below it.
+fn ground_bounce_color(sky_color: [f64; 3], sky_intensity: f64, lights: &[&DirectionalLight]) -> [f64; 3] {
+    let mut bounce = scale_color(sky_color, sky_intensity);
+    for light in lights {
+        let elevation = f64::from(light.direction.y).max(0.0);
+        let strength = (f64::from(light.intensity) * elevation) / PI;
+        let [red, green, blue] = light.color.rgb_array().map(f64::from);
+        bounce = add_color(bounce, [red * strength, green * strength, blue * strength]);
+    }
+    scale_color(bounce, GROUND_ALBEDO / sky_intensity.max(MIN_POSITIVE_VALUE))
 }
 
 /// Linear interpolation between two colors.

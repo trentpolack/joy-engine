@@ -7,7 +7,7 @@
 //! An [`Entity`] is split into its [`EntityState`] (plain data), an optional boxed [`EntityBehavior`] for project
 //! logic, and its attached [`EntityComponent`]s. The world takes behaviors
 //! and components out while they run, so hooks receive `&mut EntityState` and a [`SimulationContext`] without aliasing
-//! the world that owns them. Hooks refer to other entities, bodies, and vehicles by id or handle, never by reference.
+//! the world that owns them. Hooks refer to other entities and bodies by id or handle, never by reference.
 
 use std::borrow::Borrow;
 use std::fmt;
@@ -29,7 +29,6 @@ use super::error::GameplayError;
 use joy_physics::{
     BodyHandle,
     PhysicsWorld,
-    VehicleHandle,
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -262,37 +261,27 @@ pub(crate) enum EntityCommand {
 
 /// Borrowed simulation services available to behaviors and systems.
 ///
-/// Gives mutable access to the physics world and read access to the entity-to-body and entity-to-vehicle maps owned by
-/// the composition root (`World` or `LevelRuntime`). Bodies and vehicles listed for an entity are owned by that entity:
-/// removing the entity removes them from physics. Structural changes (spawning and removing entities) are requested
+/// Gives mutable access to the physics world and read access to the entity-to-body map owned by the composition root
+/// (`World` or `LevelRuntime`). A body listed for an entity (vehicle chassis included) is owned by that entity: removing
+/// the entity removes it from physics. Structural changes (spawning and removing entities) are requested
 /// here and applied by the world: immediately after the requesting behavior or system returns during an update, or at
 /// the start of the next update when requested from a spawn or destroy hook.
 pub struct SimulationContext<'a> {
     /// The physics world.
     pub physics: &'a mut PhysicsWorld,
     bodies: &'a IndexMap<EntityId, BodyHandle>,
-    vehicles: &'a IndexMap<EntityId, VehicleHandle>,
     commands: Vec<EntityCommand>,
 }
 
 impl<'a> SimulationContext<'a> {
     /// Borrow simulation services for one call.
-    pub fn new(
-        physics: &'a mut PhysicsWorld,
-        bodies: &'a IndexMap<EntityId, BodyHandle>,
-        vehicles: &'a IndexMap<EntityId, VehicleHandle>,
-    ) -> Self {
-        Self { physics, bodies, vehicles, commands: Vec::new() }
+    pub fn new(physics: &'a mut PhysicsWorld, bodies: &'a IndexMap<EntityId, BodyHandle>) -> Self {
+        Self { physics, bodies, commands: Vec::new() }
     }
 
-    /// The live body owned by an entity, if any.
+    /// The live body owned by an entity, if any. Vehicle operations take a vehicle entity's body.
     pub fn body(&self, id: &EntityId) -> Option<BodyHandle> {
         self.bodies.get(id).copied().filter(|handle| self.physics.contains_body(*handle))
-    }
-
-    /// The live vehicle owned by an entity, if any.
-    pub fn vehicle(&self, id: &EntityId) -> Option<VehicleHandle> {
-        self.vehicles.get(id).copied().filter(|handle| self.physics.contains_vehicle(*handle))
     }
 
     /// Request that a copy of `definition` be spawned. It is not updated in the frame that requested it.
@@ -316,7 +305,6 @@ impl fmt::Debug for SimulationContext<'_> {
         formatter
             .debug_struct("SimulationContext")
             .field("bodies", &self.bodies.len())
-            .field("vehicles", &self.vehicles.len())
             .field("pending_commands", &self.commands.len())
             .finish()
     }

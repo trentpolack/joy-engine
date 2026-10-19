@@ -124,7 +124,6 @@ fn custom_shader_draws_opaque_depth_then_blended_transparency() {
         transparent: &transparent,
         uniforms: bytemuck::cast_slice(&uniforms),
         clear_color: LinearColor::new(0.0, 0.0, 0.0, 1.0),
-        time_seconds: 0.0,
     };
     renderer.render(target.view(), &frame).unwrap();
     let pixels = target.read_rgba(&gpu).unwrap();

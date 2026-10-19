@@ -8,8 +8,8 @@
 //!
 //! Games and authoring previews share these rendering contracts:
 //! - Lit (flat, double-sided vertex-color lighting), PBR (metallic-roughness), and Unlit material passes.
-//! - The environment's primary light with cascaded soft shadows, ambient skylight, and up to 32 point lights with
-//!   optional soft shadows, on WebGL 2 as well as WebGPU.
+//! - A directional key light with cascaded soft shadows, a sky-and-ground skylight, and any number of point lights (the
+//!   32 that matter most to each view draw, with optional soft shadows), on WebGL 2 as well as WebGPU.
 //! - The procedural atmosphere sky driven by an environment frame and [`SkyOptions`].
 //! - HDR scene targets, bloom, blurs, AgX/ACES/linear tone mapping, grading, vignette, antialiasing, and film grain.
 //!
@@ -20,10 +20,11 @@
 //! simulation's `EnvironmentFrame` and the renderer's [`SkyOptions`], so games, tools, and previews present the same
 //! content the same way. Textured transparent draws ([`TransparentDraw`], [`TextureAsset`]) carry particle sprites from
 //! [`particles`] into the scene pass. Resident continuous-LOD terrain ([`terrain`]) draws through [`TerrainInstance`]s
-//! in the same scene, or standalone through [`TerrainRenderer`].
+//! in the same scene.
 
 mod camera;
 mod capture;
+mod culling;
 mod display;
 mod editor_grid;
 mod environment;
@@ -34,6 +35,7 @@ mod gpu;
 mod materials;
 mod mesh;
 pub mod particles;
+mod point_lights;
 pub mod post_process;
 mod postprocessor;
 mod renderer;
@@ -43,6 +45,8 @@ mod shadows;
 mod sky;
 pub mod terrain;
 mod texture;
+mod texture_mips;
+mod transparency;
 mod triangle_renderer;
 
 pub use camera::{
@@ -86,16 +90,14 @@ pub use environment::{
 };
 pub use error::RenderError;
 pub use frame::{
-    CelestialLight,
     ColorVertex,
     DEFAULT_AMBIENT_WITHOUT_ENVIRONMENT,
     EnvironmentLighting,
     FrameInputs,
     MAX_POINT_LIGHTS,
-    PointLight,
+    PresentationTime,
     TexturedVertex,
     TransparentDraw,
-    sort_transparent_triangles,
 };
 pub use geometry::{
     add_circle,
@@ -113,6 +115,12 @@ pub use gpu::{
     GpuBackend,
     GpuCapabilities,
     GpuContext,
+};
+/// The shared light records, re-exported so rendering code names them beside the frame inputs that carry them.
+pub use joy_core::{
+    DirectionalLight,
+    PointLight,
+    Skylight,
 };
 pub use mesh::{
     AlphaMode,
@@ -167,8 +175,7 @@ pub use terrain::{
     TerrainAsset,
     TerrainDiagnostic,
     TerrainError,
-    TerrainFrame,
-    TerrainRenderer,
+    TerrainStats,
     TerrainView,
 };
 pub use texture::{

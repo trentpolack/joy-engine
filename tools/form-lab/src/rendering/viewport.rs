@@ -22,12 +22,11 @@ use joy_engine::math::{
 };
 use joy_engine::rendering::{
     Camera,
-    CelestialLight,
     ColorVertex,
+    DirectionalLight,
     EditorGrid,
     EditorGridView,
     EnvironmentData,
-    EnvironmentLighting,
     EnvironmentMap,
     EnvironmentPixels,
     FormTextureCache,
@@ -44,7 +43,6 @@ use joy_engine::rendering::{
     ShadowOptions,
     TransparentDraw,
     form_mesh_asset_with_textures,
-    sort_transparent_triangles,
 };
 use joy_engine::runtime::RenderTarget;
 
@@ -333,7 +331,7 @@ impl Viewport {
     }
 
     /// Draw the frame: the preview through the engine renderer, or just the background while it is hidden.
-    pub fn render(&mut self, target: &mut RenderTarget<'_>, time_seconds: f32) -> Result<(), String> {
+    pub fn render(&mut self, target: &mut RenderTarget<'_>) -> Result<(), String> {
         let renderer = target.renderer();
         let viewport = renderer.logical_size();
         self.viewport = viewport;
@@ -359,8 +357,8 @@ impl Viewport {
             Some(data) => point_batch(data, self.mode == ViewMode::Points, &marker_camera, self.point_size, height),
             None => Vec::new(),
         };
+        // The renderer sorts the markers back to front with the grid and the rest of the frame's transparency.
         markers.extend(self.inspection.markers(&marker_camera, radius, height));
-        let markers = sort_transparent_triangles(&markers, basis.backward);
 
         let grid: &[ColorVertex] = if self.show_grid {
             let view = EditorGridView {
@@ -383,21 +381,19 @@ impl Viewport {
         };
 
         let lighting = self.lighting;
-        let light = CelestialLight {
+        let key_light = DirectionalLight {
             direction: Vec3::from_array(lighting.direction()),
             color: LinearColor::rgb(lighting.color_r as f32, lighting.color_g as f32, lighting.color_b as f32),
             intensity: lighting.intensity as f32,
             angular_radius: LIGHT_ANGULAR_RADIUS,
             casts_shadow: lighting.casts_shadow,
         };
-        let environment = studio_lighting(light);
         let draws = [TransparentDraw::Colored(&markers)];
         let shaded = self.mode == ViewMode::Shaded && self.data.is_some();
         let inputs = FrameInputs {
-            environment: Some(&environment),
+            directional_light: Some(key_light),
             ambient: Some(EDITOR_AMBIENT),
             clear_color: EDITOR_BACKGROUND,
-            time_seconds,
             transparent_triangles: grid,
             transparent_draws: if markers.is_empty() { &[] } else { &draws },
             image_lighting: self.environment.as_ref().filter(|_| shaded).map(|map| ImageLighting {
@@ -420,22 +416,4 @@ fn positions(data: &GeometryData) -> Vec<Vec3> {
         .iter()
         .map(|point| Vec3::new(point[0] as f32, point[1] as f32, point[2] as f32))
         .collect()
-}
-
-/// The environment record for the studio: its light as the primary (and sun), no moon, skylight, sky, or fog.
-fn studio_lighting(light: CelestialLight) -> EnvironmentLighting {
-    EnvironmentLighting {
-        elapsed_seconds: 0.0,
-        time_of_day: 0.5,
-        sun: light,
-        moon: CelestialLight { intensity: 0.0, casts_shadow: false, ..light },
-        primary: light,
-        skylight_color: LinearColor::BLACK,
-        skylight_intensity: 0.0,
-        wind_velocity: Vec3::ZERO,
-        scattering: [1.0, 1.0, 1.0, 1.0],
-        fog_and_clouds: [0.0; 4],
-        cloud_shape_and_shafts: [0.0; 4],
-        shaft_exposure_and_occlusion: [0.0; 3],
-    }
 }

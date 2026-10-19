@@ -35,7 +35,7 @@ struct KartBehavior;
 
 impl EntityBehavior for KartBehavior {
     fn update(&mut self, entity: &mut EntityState, context: &mut SimulationContext<'_>, _elapsed_seconds: f32) {
-        let Some(vehicle) = context.vehicle(entity.id()) else {
+        let Some(vehicle) = context.body(entity.id()) else {
             return;
         };
         let intent = &entity.control_intent;
@@ -108,7 +108,8 @@ fn runtime_builds_scaled_bodies_and_vehicles_and_syncs_transforms() {
     assert!((runtime.physics().body_mass(crate_body).unwrap() - 12.0).abs() < 1e-4);
 
     // Wheels start at the authored chassis-local positions.
-    let vehicle = runtime.vehicle(&kart).unwrap();
+    let vehicle = runtime.body(&kart).unwrap();
+    assert!(runtime.physics().is_vehicle(vehicle) && !runtime.physics().is_vehicle(crate_body));
     let wheels = runtime.physics().wheel_transforms(vehicle);
     assert_eq!(wheels.len(), 4);
     assert!((wheels[0].position - Vec3::new(-0.7, 0.65, -3.2)).abs().max_element() < 1e-5, "{:?}", wheels[0]);
@@ -141,7 +142,7 @@ fn controller_intent_drives_the_kart_through_its_behavior() {
     }
     let end = runtime.entities().get(&kart).unwrap().state.transform.position;
     assert!(end.z - start.z > 2.0, "positive throttle drives the kart along +Z: {start} -> {end}");
-    assert!(runtime.physics().vehicle_speed(runtime.vehicle(&kart).unwrap()) > 1.0);
+    assert!(runtime.physics().vehicle_speed(runtime.body(&kart).unwrap()) > 1.0);
 
     // Releasing possession clears intent, so the behavior forwards a zero throttle.
     controller.possess(runtime.entities_mut(), None).unwrap();
@@ -159,7 +160,7 @@ fn uniform_vehicle_scaling_scales_wheel_geometry_and_nonuniform_scaling_rolls_ba
     level.entities.push(kart.clone());
 
     let mut runtime = LevelRuntime::new(&level, registry()).unwrap();
-    let wheel = runtime.physics().wheel_transforms(runtime.vehicle(&EntityId::from("kart")).unwrap())[0];
+    let wheel = runtime.physics().wheel_transforms(runtime.body(&EntityId::from("kart")).unwrap())[0];
     assert_eq!(wheel.position.x, 1.0);
     assert_eq!(wheel.position.z, 2.0);
 
@@ -231,24 +232,21 @@ fn dynamic_replacement_receives_fresh_handles_and_stale_handles_drop() {
     for inspect_before_step in [false, true] {
         let mut runtime = LevelRuntime::new(&level, registry()).unwrap();
         let body = runtime.body(&id).unwrap();
-        let vehicle = runtime.vehicle(&id).unwrap();
         assert!(runtime.remove(&id));
         assert!(!runtime.physics().contains_body(body), "removing an entity removes the body it owns");
-        assert!(!runtime.physics().contains_vehicle(vehicle));
+        assert!(!runtime.physics().is_vehicle(body));
+        assert_eq!(runtime.physics().vehicle_count(), 0);
 
         let mut replacement = kart.clone();
         replacement.transform.position = Vec3::new(3.0, 9.0, 2.0);
         runtime.spawn(&replacement).unwrap();
         if inspect_before_step {
-            assert_ne!(runtime.vehicle(&id), Some(vehicle));
             assert_ne!(runtime.body(&id), Some(body));
         }
         runtime.step(0.0).unwrap();
         assert_eq!(runtime.entities().get(&id).unwrap().state.transform.position, Vec3::new(3.0, 9.0, 2.0));
         assert_ne!(runtime.body(&id), Some(body));
-        assert_ne!(runtime.vehicle(&id), Some(vehicle));
         assert_eq!(runtime.world().bodies.len(), 1);
-        assert_eq!(runtime.world().vehicles.len(), 1);
         assert_eq!(runtime.physics().body_count(), 1);
         assert_eq!(runtime.physics().vehicle_count(), 1);
     }

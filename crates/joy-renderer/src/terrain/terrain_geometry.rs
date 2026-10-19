@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Resident indexed terrain: GPU resources shared by every terrain pass, and the standalone [`TerrainRenderer`].
+//! Resident indexed terrain geometry: the GPU resources every scene terrain pass draws.
 //!
 //! All patches reuse one sample-space grid and the heights stay in a resident texture, so moving the camera changes
 //! only patch records and index ranges, never vertex buffers. WebGPU-class backends select LODs with two ordered compute
@@ -18,7 +18,7 @@ use web_time::Instant;
 use wgpu::util::DeviceExt;
 
 use crate::GpuContext;
-use crate::materials::DEPTH_FORMAT;
+use crate::terrain::TERRAIN_SELECT_SOURCE;
 use crate::terrain::terrain_asset::{
     TerrainAsset,
     TerrainError,
@@ -33,16 +33,6 @@ use crate::terrain::terrain_selection::{
     select_terrain,
     validate_terrain_view,
 };
-use crate::terrain::terrain_timing::{
-    TerrainTiming,
-    TerrainTimingStatus,
-};
-use crate::terrain::{
-    TERRAIN_SELECT_SOURCE,
-    TERRAIN_SOURCE,
-    terrain_geometry_source,
-};
-use joy_core::Color;
 
 /// Bytes of the per-terrain scene block (`TerrainScene`: a matrix and four vectors).
 const SCENE_BUFFER_BYTES: u64 = 128;
@@ -102,7 +92,7 @@ impl TerrainTriangleCount {
     }
 }
 
-/// Copied per-frame statistics. Memory totals count numeric payloads, not driver overhead.
+/// Copied per-frame statistics of one scene terrain. Memory totals count numeric payloads, not driver overhead.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerrainStats {
     /// Resident leaf patches.
@@ -113,12 +103,6 @@ pub struct TerrainStats {
     pub max_triangles: usize,
     /// Wall-clock selection and upload time of the latest prepare, in milliseconds.
     pub cpu_milliseconds: f64,
-    /// Wall-clock time recording the latest standalone pass, in milliseconds.
-    pub record_milliseconds: f64,
-    /// Latest completed GPU render-pass sample in milliseconds; it may lag the current frame.
-    pub gpu_milliseconds: Option<f64>,
-    /// Status of the GPU timing sample.
-    pub gpu_timing: TerrainTimingStatus,
     /// Resident CPU bytes: samples and the shared grid.
     pub resident_cpu_bytes: u64,
     /// Owned GPU buffer and texture bytes.
@@ -127,21 +111,6 @@ pub struct TerrainStats {
     pub frame_upload_bytes: u64,
     /// Whether `triangles` is an upper bound or a selected count.
     pub triangle_count_kind: TerrainTriangleCount,
-}
-
-/// Inputs for one standalone terrain pass.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TerrainFrame {
-    /// World-to-clip matrix with zero-to-one depth.
-    pub view_projection: Mat4,
-    /// Selection camera and protected target, in world units and CSS pixels.
-    pub view: TerrainView,
-    /// Shading mode.
-    pub diagnostic: TerrainDiagnostic,
-    /// Background color, written to the display target as given (sRGB-encoded, not tone mapped).
-    pub clear_color: Color,
-    /// Monotonic frame time in milliseconds; paces GPU timing samples.
-    pub now_milliseconds: f64,
 }
 
 /// `TerrainScene` in terrain-geometry.wgsl.
@@ -160,6 +129,8 @@ struct SceneUniforms {
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(crate) struct ModelUniforms {
     pub model: [[f32; 4]; 4],
+    /// The previous frame's transform, for motion vectors.
+    pub previous_model: [[f32; 4]; 4],
     pub flags: [f32; 4],
 }
 
@@ -267,7 +238,11 @@ impl TerrainGeometry {
         let indices = buffer("terrain grid indices", bytemuck::cast_slice(&grid.indices), wgpu::BufferUsages::INDEX);
         let scene_usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
         let scene = buffer("terrain scene", &[0; SCENE_BUFFER_BYTES as usize], scene_usage);
-        let identity = ModelUniforms { model: Mat4::IDENTITY.to_cols_array_2d(), flags: [1.0, 1.0, 0.0, 0.0] };
+        let identity = ModelUniforms {
+            model: Mat4::IDENTITY.to_cols_array_2d(),
+            previous_model: Mat4::IDENTITY.to_cols_array_2d(),
+            flags: [1.0, 1.0, 0.0, 0.0],
+        };
         let model = buffer("terrain model", bytemuck::bytes_of(&identity), scene_usage);
 
         // WebGPU-class backends write patch records from compute; WebGL 2 uploads them from the CPU.
@@ -337,9 +312,6 @@ impl TerrainGeometry {
             triangles: 0,
             max_triangles,
             cpu_milliseconds: 0.0,
-            record_milliseconds: 0.0,
-            gpu_milliseconds: None,
-            gpu_timing: TerrainTimingStatus::Unsupported,
             resident_cpu_bytes,
             resident_gpu_bytes,
             frame_upload_bytes: SCENE_BUFFER_BYTES,
@@ -378,21 +350,6 @@ impl TerrainGeometry {
         &self.stats
     }
 
-    /// Mutable statistics, for owners that add timing.
-    pub(crate) fn stats_mut(&mut self) -> &mut TerrainStats {
-        &mut self.stats
-    }
-
-    /// The latest CPU selection; empty on the GPU selection path.
-    pub(crate) fn selection(&self) -> &[TerrainSelection] {
-        &self.selection
-    }
-
-    /// Whether LODs are selected by compute shaders (no CPU selection or readback).
-    pub(crate) fn uses_gpu_selection(&self) -> bool {
-        self.gpu_selection.is_some()
-    }
-
     /// Upload the world transform and shading flags read by scene passes.
     pub(crate) fn write_model(&self, queue: &wgpu::Queue, model: &ModelUniforms) {
         queue.write_buffer(&self.model, 0, bytemuck::bytes_of(model));
@@ -400,8 +357,8 @@ impl TerrainGeometry {
 
     /// Update selection for one frame. Records compute into `encoder` on the GPU path; never reads GPU data.
     ///
-    /// `matrix` is the standalone view-projection; `view` uses the terrain's local space and CSS pixels. Fails before
-    /// any upload or dispatch for invalid inputs.
+    /// `matrix` is the selection camera's view-projection; `view` uses the terrain's local space and CSS pixels. Fails
+    /// before any upload or dispatch for invalid inputs.
     pub(crate) fn prepare(
         &mut self,
         queue: &wgpu::Queue,
@@ -504,200 +461,6 @@ impl TerrainGeometry {
             }
         }
         draws
-    }
-}
-
-/// Depth target for the standalone pass, matched to the output size.
-struct DepthTarget {
-    view: wgpu::TextureView,
-    _texture: wgpu::Texture,
-    size: (u32, u32),
-}
-
-/// Standalone terrain pass: draws a resident heightfield straight into a presentation target with its own depth.
-///
-/// This is the TypeScript `TerrainRenderer`. Scenes draw terrain through `RenderScene` terrain instances instead, which
-/// adds the engine's lighting, shadows, and scene effects. Owns all GPU resources it creates; the asset is shared.
-pub struct TerrainRenderer {
-    // Standalone pipeline, depth target, and timing; no field borrows another's resources, so drop order is free.
-    pipeline: wgpu::RenderPipeline,
-    depth: Option<DepthTarget>,
-    timing: TerrainTiming,
-    geometry: TerrainGeometry,
-    color_format: wgpu::TextureFormat,
-    gpu: GpuContext,
-}
-
-impl TerrainRenderer {
-    /// Create resident terrain resources and the standalone pipeline for `color_format` targets.
-    ///
-    /// Fails when the heightfield exceeds the device's texture limit.
-    pub fn new(
-        gpu: &GpuContext,
-        asset: &TerrainAsset,
-        color_format: wgpu::TextureFormat,
-    ) -> Result<Self, TerrainError> {
-        let device = gpu.device();
-        let layout = terrain_bind_group_layout(device);
-        let geometry = TerrainGeometry::new(gpu, asset, &layout)?;
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("terrain"),
-            bind_group_layouts: &[Some(&layout)],
-            immediate_size: 0,
-        });
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("terrain"),
-            source: wgpu::ShaderSource::Wgsl(format!("{}\n{TERRAIN_SOURCE}", terrain_geometry_source(0)).into()),
-        });
-        let buffers = [Some(grid_buffer_layout())];
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("terrain"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &module,
-                entry_point: Some("vertexMain"),
-                compilation_options: Default::default(),
-                buffers: &buffers,
-            },
-            primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::LessEqual),
-                stencil: Default::default(),
-                bias: Default::default(),
-            }),
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &module,
-                entry_point: Some("fragmentMain"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: color_format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            multiview_mask: None,
-            cache: None,
-        });
-        let timing = TerrainTiming::new(device, gpu.queue());
-        let mut renderer = Self { pipeline, depth: None, timing, geometry, color_format, gpu: gpu.clone() };
-        renderer.sync_timing_stats();
-        Ok(renderer)
-    }
-
-    /// The shared asset.
-    pub fn asset(&self) -> &TerrainAsset {
-        self.geometry.asset()
-    }
-
-    /// Statistics from the latest frame.
-    pub fn stats(&self) -> &TerrainStats {
-        self.geometry.stats()
-    }
-
-    /// The latest CPU selection, in patch order; empty when LODs are selected on the GPU.
-    pub fn selection(&self) -> &[TerrainSelection] {
-        self.geometry.selection()
-    }
-
-    /// Whether LODs are selected by compute shaders (WebGPU-class backends) rather than on the CPU (WebGL 2).
-    pub fn uses_gpu_selection(&self) -> bool {
-        self.geometry.uses_gpu_selection()
-    }
-
-    /// The optional GPU timing owner.
-    pub fn timing(&self) -> &TerrainTiming {
-        &self.timing
-    }
-
-    /// Format of the color targets this renderer draws into.
-    pub fn color_format(&self) -> wgpu::TextureFormat {
-        self.color_format
-    }
-
-    /// Update selection for the next draw; must precede the render pass. Records compute into `encoder` on WebGPU-class
-    /// backends and never reads GPU data. `view` is in world units and CSS pixels, so display density does not change
-    /// quality. Fails before any upload for invalid inputs.
-    pub fn prepare(
-        &mut self,
-        encoder: &mut wgpu::CommandEncoder,
-        view_projection: Mat4,
-        view: &TerrainView,
-        diagnostic: TerrainDiagnostic,
-    ) -> Result<(), TerrainError> {
-        self.timing.poll(self.gpu.device());
-        self.geometry.prepare(self.gpu.queue(), encoder, view_projection, view, diagnostic)?;
-        self.sync_timing_stats();
-        Ok(())
-    }
-
-    /// Draw into a borrowed pass with a `color_format` target and a `Depth24Plus` depth attachment; returns the draw
-    /// count. Does not clear, end, or submit the pass.
-    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) -> usize {
-        self.geometry.draw(pass, &self.pipeline, 0)
-    }
-
-    /// Prepare, then record one cleared pass into `output` (a `color_format` view of `size` physical pixels) with an
-    /// owned depth target and an optional timestamp sample. The caller submits `encoder`. Fails before recording for a
-    /// zero-sized target (reported as an invalid view) or invalid frame inputs.
-    pub fn encode(
-        &mut self,
-        encoder: &mut wgpu::CommandEncoder,
-        output: &wgpu::TextureView,
-        size: (u32, u32),
-        frame: &TerrainFrame,
-    ) -> Result<(), TerrainError> {
-        if size.0 == 0 || size.1 == 0 {
-            return Err(TerrainError::InvalidView);
-        }
-        self.prepare(encoder, frame.view_projection, &frame.view, frame.diagnostic)?;
-        let start = Instant::now();
-        if self.depth.as_ref().map(|depth| depth.size) != Some(size) {
-            self.depth = Some(create_depth_target(self.gpu.device(), size));
-        }
-        let depth = &self.depth.as_ref().expect("allocated above").view;
-        let clear = frame.clear_color;
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("terrain"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: output,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: f64::from(clear.red),
-                            g: f64::from(clear.green),
-                            b: f64::from(clear.blue),
-                            a: f64::from(clear.alpha),
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: depth,
-                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Discard }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: self.timing.begin(frame.now_milliseconds),
-                ..Default::default()
-            });
-            self.geometry.draw(&mut pass, &self.pipeline, 0);
-        }
-        self.timing.resolve(encoder);
-        self.geometry.stats_mut().record_milliseconds = start.elapsed().as_secs_f64() * 1000.0;
-        Ok(())
-    }
-
-    /// Copy the timing owner's latest result into the statistics.
-    fn sync_timing_stats(&mut self) {
-        let milliseconds = self.timing.milliseconds();
-        let status = self.timing.status().clone();
-        let stats = self.geometry.stats_mut();
-        stats.gpu_milliseconds = milliseconds;
-        stats.gpu_timing = status;
     }
 }
 
@@ -828,21 +591,6 @@ fn create_gpu_selection(
     (selection, bytes)
 }
 
-/// Allocate a `Depth24Plus` target of `size` physical pixels.
-fn create_depth_target(device: &wgpu::Device, size: (u32, u32)) -> DepthTarget {
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("terrain depth"),
-        size: wgpu::Extent3d { width: size.0, height: size.1, depth_or_array_layers: 1 },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: DEPTH_FORMAT,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    });
-    DepthTarget { view: texture.create_view(&wgpu::TextureViewDescriptor::default()), _texture: texture, size }
-}
-
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
@@ -887,7 +635,7 @@ mod tests {
         .expect("the example asset is valid");
         let layout = terrain_bind_group_layout(gpu.device());
         let mut geometry = TerrainGeometry::new(&gpu, &asset, &layout).expect("resident terrain");
-        if !geometry.uses_gpu_selection() {
+        if geometry.gpu_selection.is_none() {
             eprintln!("skipping compute parity: this adapter selects on the CPU");
             return;
         }

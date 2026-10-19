@@ -25,6 +25,7 @@ use joy_input::{
 use joy_renderer::{
     BackendPreference,
     GpuContext,
+    PresentationTime,
     RenderError,
     Renderer,
     RendererOptions,
@@ -489,7 +490,11 @@ impl<A: App> WindowedShell<A> {
         let mut encoder =
             gpu.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("joy-engine frame") });
 
-        // Render phase.
+        // Render phase, on the shell's presentation clock.
+        renderer.set_presentation_time(PresentationTime {
+            time_seconds: time.time_seconds,
+            elapsed_seconds: time.elapsed_seconds,
+        });
         let mut target = RenderTarget { renderer, encoder: &mut encoder, output: &view, drawn: false };
         app.render(&mut frame, &mut target)?;
         if !target.drawn {

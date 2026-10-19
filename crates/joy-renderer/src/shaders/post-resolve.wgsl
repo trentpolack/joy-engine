@@ -2,9 +2,13 @@
 // Licensed under the MIT License.
 
 // Display resolve: composes bloom (glow plus starburst streaks) and the vignette edge blur into the linear HDR scene,
-// applies exposure and the selected tone mapper, then the grade (saturation, brightness/contrast, vibrance) and vignette.
-// The operators and their order match the TypeScript engine's post-processing chain. When a blur follows bloom, the
-// bloom composite runs earlier (see `compositeMain` in post-bloom.wgsl) and the bloom strength here is zero.
+// applies exposure and the selected tone mapper, encodes the result as sRGB, then applies the grade (saturation,
+// brightness/contrast, vibrance) and vignette to the encoded display values. The operators and their order match the
+// TypeScript engine's post-processing chain. When a blur follows bloom, the bloom composite runs earlier (see
+// `compositeMain` in post-bloom.wgsl) and the bloom strength here is zero.
+//
+// The display target holds sRGB-encoded values: 8-bit encoded storage keeps dark gradients from banding, and the grade,
+// antialiasing, and grain work on the perceptual values a viewer sees (they were tuned on them).
 
 struct Resolve {
   // X exposure, Y tone mapper (0 none, 1 ACES, 2 AgX), Z AgX look (0 neutral, 1 punchy), W bloom strength (zero when
@@ -90,6 +94,17 @@ fn acesToneMap(color: vec3f, exposure: f32) -> vec3f {
 }
 
 /**
+ * Encode linear light with the exact IEC 61966-2-1 sRGB curve (`joy_core::linear_to_srgb`); values above one continue
+ * the curve and negative values mirror it, so the grade can still pull them back before the final clamp.
+ */
+fn encodeSrgb(linear: vec3f) -> vec3f {
+  let magnitude = abs(linear);
+  let curve = (1.055*pow(magnitude, vec3f(1.0/2.4))) - vec3f(0.055);
+  let segment = magnitude*12.92;
+  return sign(linear)*select(curve, segment, magnitude <= vec3f(0.0031308));
+}
+
+/**
  * Saturation toward the channel average; positive values expand, negative values desaturate.
  */
 fn adjustSaturation(color: vec3f, saturation: f32) -> vec3f {
@@ -155,6 +170,9 @@ fn adjustVibrance(color: vec3f, amount: f32) -> vec3f {
   } else {
     color = max(color*exposure, vec3f(0.0));
   }
+
+  // Encode for display; everything after this works on the values the viewer sees.
+  color = encodeSrgb(color);
 
   // Grade.
   color = adjustSaturation(color, resolve.grade.x);

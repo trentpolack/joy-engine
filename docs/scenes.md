@@ -9,7 +9,7 @@ Positions use Y-up world coordinates. Rotations are XYZ Euler radians applied X,
 `MeshCollection` synchronizes keyed simulation records into stable instances. Keep keys stable across removal/reordering, and prune absent records through the collection's update boundary. Removing presentation never destroys a simulation entity.
 
 ## Frame Inputs
-The renderer uses one camera and frame state for culling, shadows, lighting, scene attachments, and display processing. Lit, PBR, and Unlit materials remain separate. Transparent geometry uses depth testing without depth writes and sorts back to front. `FrameInputs` can also borrow transient colored triangles, ordered textured draws, environment state, lights, and image lighting.
+The renderer uses one camera and frame state for culling, shadows, lighting, scene attachments, and display processing. Lit, PBR, and Unlit materials remain separate. Transparent geometry uses depth testing without depth writes, and every transparent element of a frame (blended meshes, transient triangles, and colored or textured draws such as particles) sorts back to front in one queue. `FrameInputs` can also borrow environment state, a directional key light, any number of point lights (the renderer ranks them and draws the 32 that light the view most), and image lighting.
 
 `LevelScene` translates authored render and light records into presentation, and `PostProcessVolumes` resolves `postProcess` volumes at the view point (see [postprocessing](postprocessing.md)). `AssetScene` adds FORM assets and colored/textured JOYFX effects; its staged `prepare` and `commit` retain accepted presentation on failure. See [particles](rust-particles.md).
 

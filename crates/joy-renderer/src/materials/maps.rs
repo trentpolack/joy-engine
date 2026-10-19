@@ -3,10 +3,13 @@
 
 //! GPU copies of PBR material maps and their bind groups.
 //!
-//! Each [`MaterialTextures`] set gets one bind group (group 3 of the PBR pipelines, group 1 of the masked caster) the
-//! first time a frame draws it; images upload once and are shared between sets. Missing maps bind white (or a flat
-//! normal), so untextured PBR surfaces use one shared default group. Images upload unchanged as UNORM: the shader
-//! decodes color maps from sRGB and reads data maps linearly.
+//! Each [`MaterialTextures`] set gets one bind group (group 3 of the PBR pipelines, group 1 of the masked caster and
+//! masked depth pre-pass) the first time a frame draws it; images upload once per color space and are shared between
+//! sets. Missing maps bind white (or a flat normal), so untextured PBR surfaces use one shared default group.
+//!
+//! Color maps (base color and emission) upload as sRGB textures, so sampling decodes them and their mip chains average
+//! linear light; data maps (normal, metallic, roughness, and occlusion) upload as UNORM and read linearly. Every image
+//! gets a full mip chain and is sampled trilinearly with anisotropic filtering.
 
 use std::collections::HashMap;
 use std::sync::Weak;
@@ -14,8 +17,19 @@ use std::sync::Weak;
 use wgpu::util::DeviceExt;
 
 use crate::RenderError;
+use crate::gpu::GpuContext;
 use crate::mesh::MaterialTextures;
 use crate::texture::TextureAsset;
+use crate::texture_mips::{
+    MipmapGenerator,
+    mipmapped_sampler,
+};
+
+/// Format of color maps, decoded from sRGB when sampled.
+const COLOR_MAP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+
+/// Format of data maps, read as stored.
+const DATA_MAP_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// An uploaded image, released once every handle to its asset drops.
 struct UploadedTexture {
@@ -38,20 +52,14 @@ pub(crate) struct MaterialMaps {
     default_group: wgpu::BindGroup,
     white: (wgpu::Texture, wgpu::TextureView),
     flat_normal: (wgpu::Texture, wgpu::TextureView),
-    textures: HashMap<u64, UploadedTexture>,
+    // Uploaded images keyed by asset identity and color space (true for sRGB color maps).
+    textures: HashMap<(u64, bool), UploadedTexture>,
     groups: HashMap<u64, MaterialGroup>,
 }
 
 impl MaterialMaps {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, layout: &wgpu::BindGroupLayout) -> Self {
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("material maps"),
-            address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: wgpu::AddressMode::Repeat,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
+        let sampler = mipmapped_sampler(device, "material maps", wgpu::AddressMode::Repeat);
         let white = solid(device, queue, "material white", [255, 255, 255, 255]);
         let flat_normal = solid(device, queue, "material flat normal", [128, 128, 255, 255]);
         let views = [&white.1, &flat_normal.1, &white.1, &white.1, &white.1, &white.1];
@@ -72,38 +80,41 @@ impl MaterialMaps {
         material.and_then(|id| self.groups.get(&id)).map_or(&self.default_group, |entry| &entry.group)
     }
 
-    /// Upload a material's maps and build its bind group the first time it is drawn.
+    /// Upload a material's maps (with mip chains) and build its bind group the first time it is drawn.
     pub fn prepare(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        gpu: &GpuContext,
+        mipmaps: &mut MipmapGenerator,
         material: &MaterialTextures,
-        max_texture_dimension: u32,
     ) -> Result<(), RenderError> {
         if self.groups.contains_key(&material.id()) {
             return Ok(());
         }
         let maps = material.maps();
-        let sources = [&maps.base_color, &maps.normal, &maps.emissive, &maps.metallic, &maps.roughness, &maps.ao];
-        for texture in sources.iter().copied().flatten() {
-            self.upload(device, queue, texture, max_texture_dimension)?;
+        let color_maps = [&maps.base_color, &maps.emissive];
+        let data_maps = [&maps.normal, &maps.metallic, &maps.roughness, &maps.ao];
+        for texture in color_maps.iter().copied().flatten() {
+            self.upload(gpu, mipmaps, texture, true)?;
         }
-        let view = |texture: &Option<TextureAsset>, fallback: &'_ wgpu::TextureView| -> wgpu::TextureView {
+        for texture in data_maps.iter().copied().flatten() {
+            self.upload(gpu, mipmaps, texture, false)?;
+        }
+        let view = |texture: &Option<TextureAsset>, srgb: bool, fallback: &'_ wgpu::TextureView| -> wgpu::TextureView {
             texture
                 .as_ref()
-                .and_then(|texture| self.textures.get(&texture.id()))
+                .and_then(|texture| self.textures.get(&(texture.id(), srgb)))
                 .map_or(fallback, |uploaded| &uploaded.view)
                 .clone()
         };
         let views = [
-            view(&maps.base_color, &self.white.1),
-            view(&maps.normal, &self.flat_normal.1),
-            view(&maps.emissive, &self.white.1),
-            view(&maps.metallic, &self.white.1),
-            view(&maps.roughness, &self.white.1),
-            view(&maps.ao, &self.white.1),
+            view(&maps.base_color, true, &self.white.1),
+            view(&maps.normal, false, &self.flat_normal.1),
+            view(&maps.emissive, true, &self.white.1),
+            view(&maps.metallic, false, &self.white.1),
+            view(&maps.roughness, false, &self.white.1),
+            view(&maps.ao, false, &self.white.1),
         ];
-        let (group, flags) = group(device, &self.layout, &self.sampler, views.each_ref(), maps.normal.is_some());
+        let (group, flags) = group(gpu.device(), &self.layout, &self.sampler, views.each_ref(), maps.normal.is_some());
         self.groups.insert(material.id(), MaterialGroup { group, _flags: flags, material: material.downgrade() });
         Ok(())
     }
@@ -114,38 +125,28 @@ impl MaterialMaps {
         self.textures.retain(|_, entry| entry.asset.strong_count() > 0);
     }
 
+    /// Upload one image in its color space with a mip chain, once.
     fn upload(
         &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        gpu: &GpuContext,
+        mipmaps: &mut MipmapGenerator,
         asset: &TextureAsset,
-        max_texture_dimension: u32,
+        srgb: bool,
     ) -> Result<(), RenderError> {
-        if self.textures.contains_key(&asset.id()) {
+        let key = (asset.id(), srgb);
+        if self.textures.contains_key(&key) {
             return Ok(());
         }
+        let max_texture_dimension = gpu.capabilities().max_texture_dimension;
         if asset.width() > max_texture_dimension || asset.height() > max_texture_dimension {
             return Err(RenderError::InvalidTexture(format!(
                 "PBR texture dimensions must be 1–{max_texture_dimension} pixels per axis."
             )));
         }
-        let texture = device.create_texture_with_data(
-            queue,
-            &wgpu::TextureDescriptor {
-                label: Some("material map"),
-                size: wgpu::Extent3d { width: asset.width(), height: asset.height(), depth_or_array_layers: 1 },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            asset.pixels(),
-        );
+        let format = if srgb { COLOR_MAP_FORMAT } else { DATA_MAP_FORMAT };
+        let texture = mipmaps.upload(gpu, "material map", asset, format);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        self.textures.insert(asset.id(), UploadedTexture { view, _texture: texture, asset: asset.downgrade() });
+        self.textures.insert(key, UploadedTexture { view, _texture: texture, asset: asset.downgrade() });
         Ok(())
     }
 }

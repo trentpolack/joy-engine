@@ -1292,8 +1292,8 @@ impl App for FormLab {
         Ok(())
     }
 
-    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
-        if let Err(error) = self.viewport.render(target, frame.time.time_seconds as f32) {
+    fn render(&mut self, _frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
+        if let Err(error) = self.viewport.render(target) {
             self.gpu_error = Some(error);
         }
         Ok(())

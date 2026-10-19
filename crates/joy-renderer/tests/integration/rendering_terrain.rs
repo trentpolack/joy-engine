@@ -1,19 +1,15 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Resident terrain on a real device: the standalone pass in every diagnostic mode, scene terrain in the lit pass with
-//! directional shadows cast and received, scene-effect attachments, the WebGL-style CPU selection path on native
-//! OpenGL when available, and refusal of invalid instance settings.
+//! Resident terrain on a real device, always drawn as scene content: every diagnostic mode, the lit pass with
+//! directional and point-light shadows cast and received, scene-effect attachments, the WebGL-style CPU selection path
+//! on native OpenGL when available, and refusal of invalid instance settings.
 //!
 //! Needs a GPU adapter (llvmpipe or lavapipe is enough); without one each test prints a note and returns. Set
 //! `JOY_RENDER_CAPTURE_DIR` to keep PNG captures. Native only.
 #![cfg(not(target_arch = "wasm32"))]
 
-use joy_core::math::{
-    DVec3,
-    Vec3,
-    deterministic,
-};
+use joy_core::math::Vec3;
 use joy_core::{
     Color,
     LinearColor,
@@ -23,19 +19,14 @@ use joy_renderer::scene_effects::SceneEffectsOptions;
 use joy_renderer::terrain::{
     TerrainAsset,
     TerrainDiagnostic,
-    TerrainFrame,
-    TerrainRenderer,
-    TerrainTimingStatus,
     TerrainTriangleCount,
-    TerrainView,
     parse_terrain,
     sample_terrain,
 };
 use joy_renderer::{
     BackendPreference,
     CAPTURE_FORMAT,
-    Camera,
-    CelestialLight,
+    DirectionalLight,
     EnvironmentLighting,
     FrameInputs,
     GpuBackend,
@@ -46,10 +37,12 @@ use joy_renderer::{
     OffscreenTarget,
     OrbitCamera,
     PointLight,
+    PresentationTime,
     RenderError,
     RenderScene,
     Renderer,
     RendererOptions,
+    Skylight,
     TerrainInstance,
     TerrainInstanceId,
 };
@@ -91,25 +84,6 @@ fn overview(asset: &TerrainAsset) -> OrbitCamera {
     }
 }
 
-/// Standalone frame inputs for `camera` at the capture size (CSS pixels equal physical pixels here).
-fn terrain_frame(camera: &OrbitCamera, diagnostic: TerrainDiagnostic, now_milliseconds: f64) -> TerrainFrame {
-    let frame = camera.camera_frame(WIDTH as f32 / HEIGHT as f32);
-    TerrainFrame {
-        view_projection: frame.view_projection(),
-        view: TerrainView {
-            eye: frame.eye.as_dvec3(),
-            projection_scale: f64::from(HEIGHT)
-                / (2.0 * deterministic::tan(f64::from(camera.vertical_fov_radians) / 2.0)),
-            tolerance: 2.0,
-            target: camera.target.as_dvec3(),
-            target_radius: 90.0,
-        },
-        diagnostic,
-        clear_color: BACKGROUND,
-        now_milliseconds,
-    }
-}
-
 fn save(name: &str, pixels: &[u8]) {
     if let Ok(directory) = std::env::var("JOY_RENDER_CAPTURE_DIR") {
         std::fs::create_dir_all(&directory).expect("capture directory");
@@ -118,14 +92,14 @@ fn save(name: &str, pixels: &[u8]) {
     }
 }
 
-/// Fraction of pixels that differ from the background color.
-fn coverage(pixels: &[u8]) -> f32 {
-    let background = BACKGROUND.to_array().map(|channel| (channel * 255.0).round() as i32);
+/// Fraction of pixels that differ from the same view rendered without terrain.
+fn coverage(pixels: &[u8], background: &[u8]) -> f32 {
     let covered = pixels
         .as_chunks::<4>()
         .0
         .iter()
-        .filter(|pixel| (0..3).any(|channel| (i32::from(pixel[channel]) - background[channel]).abs() > 3))
+        .zip(background.as_chunks::<4>().0)
+        .filter(|(pixel, empty)| (0..3).any(|channel| pixel[channel].abs_diff(empty[channel]) > 3))
         .count();
     covered as f32 / (WIDTH * HEIGHT) as f32
 }
@@ -136,64 +110,57 @@ fn difference(left: &[u8], right: &[u8]) -> f32 {
     total as f32 / left.len() as f32
 }
 
-/// Render the standalone pass for `frames` frames and return the last frame's pixels.
-fn render_standalone(
-    gpu: &GpuContext,
-    renderer: &mut TerrainRenderer,
-    camera: &OrbitCamera,
-    diagnostic: TerrainDiagnostic,
-    frames: u32,
-) -> Vec<u8> {
+/// Render one frame of `scene` from `camera` without an environment and return its pixels.
+fn render_view(gpu: &GpuContext, renderer: &mut Renderer, scene: &RenderScene, camera: &OrbitCamera) -> Vec<u8> {
     let target = OffscreenTarget::new(gpu, WIDTH, HEIGHT).expect("capture target");
-    for index in 0..frames {
-        let mut encoder = gpu.device().create_command_encoder(&Default::default());
-        let frame = terrain_frame(camera, diagnostic, f64::from(index) * 600.0);
-        renderer.encode(&mut encoder, target.view(), (WIDTH, HEIGHT), &frame).expect("terrain frame");
-        gpu.queue().submit([encoder.finish()]);
-    }
+    let inputs = FrameInputs { clear_color: BACKGROUND.to_linear(), ..FrameInputs::default() };
+    renderer.render(scene, camera, &inputs, target.view()).expect("terrain frame");
     target.read_rgba(gpu).expect("readback")
 }
 
+/// The full-size landscape in every diagnostic mode, from the example's overview and from near the ground.
 #[test]
-fn standalone_terrain_renders_every_diagnostic_mode() {
+fn scene_terrain_renders_every_diagnostic_mode() {
     let Some(gpu) = gpu(BackendPreference::Auto) else {
         return;
     };
     let asset = dragon_pit();
-    let mut renderer = TerrainRenderer::new(&gpu, &asset, CAPTURE_FORMAT).expect("terrain renderer");
+    let mut scene = RenderScene::new();
+    let terrain = scene.create_terrain(asset.clone());
+    let mut renderer = scene_renderer(&gpu, None);
     let camera = overview(&asset);
-    let material = render_standalone(&gpu, &mut renderer, &camera, TerrainDiagnostic::Material, 4);
-    let lod = render_standalone(&gpu, &mut renderer, &camera, TerrainDiagnostic::LodColors, 1);
-    let grid = render_standalone(&gpu, &mut renderer, &camera, TerrainDiagnostic::GridOverlay, 1);
     let ground = OrbitCamera { distance: 100.0, pitch: 0.04, ..camera };
-    let near = render_standalone(&gpu, &mut renderer, &ground, TerrainDiagnostic::Material, 1);
-    save("terrain-standalone-overview", &material);
-    save("terrain-standalone-lod", &lod);
-    save("terrain-standalone-grid", &grid);
-    save("terrain-standalone-near-ground", &near);
+    let mut render = |scene: &mut RenderScene, camera: &OrbitCamera, diagnostic: TerrainDiagnostic| {
+        scene.terrain_mut(terrain).unwrap().diagnostic = diagnostic;
+        render_view(&gpu, &mut renderer, scene, camera)
+    };
+    let material = render(&mut scene, &camera, TerrainDiagnostic::Material);
+    let lod = render(&mut scene, &camera, TerrainDiagnostic::LodColors);
+    let grid = render(&mut scene, &camera, TerrainDiagnostic::GridOverlay);
+    let near = render(&mut scene, &ground, TerrainDiagnostic::Material);
+    let stats = renderer.terrain_stats(terrain).expect("the terrain was drawn").clone();
+    save("terrain-overview", &material);
+    save("terrain-lod", &lod);
+    save("terrain-grid", &grid);
+    save("terrain-near-ground", &near);
 
+    let empty = RenderScene::new();
+    let background = render_view(&gpu, &mut renderer, &empty, &camera);
+    assert!(renderer.terrain_stats(terrain).is_none(), "terrain outside the scene is released");
     for (name, pixels) in [("material", &material), ("lod", &lod), ("grid", &grid), ("near", &near)] {
-        assert!(coverage(pixels) > 0.35, "{name}: terrain covers the view ({})", coverage(pixels));
+        let covered = coverage(pixels, &background);
+        assert!(covered > 0.35, "{name}: terrain covers the view ({covered})");
     }
     assert!(difference(&material, &lod) > 5.0, "LOD colors replace the material");
     assert!(difference(&lod, &grid) > 0.5, "the grid overlays the LOD colors");
 
-    let stats = renderer.stats();
     assert_eq!(stats.patches, 256);
     assert_eq!(stats.max_triangles, 256 * 64 * 64 * 2);
     assert!(stats.resident_gpu_bytes > (1025 * 1025 * 4) as u64);
     assert_eq!(stats.resident_cpu_bytes, (1025 * 1025 * 2 + 65 * 65 * 8 + renderer_indices_bytes()) as u64);
-    if renderer.uses_gpu_selection() {
-        assert_eq!(stats.triangle_count_kind, TerrainTriangleCount::UpperBound);
-        assert_eq!(stats.triangles, stats.max_triangles);
-        assert!(renderer.selection().is_empty());
-    } else {
-        assert_eq!(stats.triangle_count_kind, TerrainTriangleCount::Selected);
-        assert!(stats.triangles < stats.max_triangles);
-    }
-    assert!(!matches!(stats.gpu_timing, TerrainTimingStatus::Failed(_)), "timing: {}", stats.gpu_timing);
-    if stats.gpu_timing == TerrainTimingStatus::Complete {
-        assert!(stats.gpu_milliseconds.is_some_and(|milliseconds| milliseconds >= 0.0));
+    match stats.triangle_count_kind {
+        TerrainTriangleCount::UpperBound => assert_eq!(stats.triangles, stats.max_triangles),
+        TerrainTriangleCount::Selected => assert!(stats.triangles < stats.max_triangles),
     }
 }
 
@@ -203,7 +170,7 @@ fn renderer_indices_bytes() -> usize {
 }
 
 fn low_sun() -> EnvironmentLighting {
-    let sun = CelestialLight {
+    let sun = DirectionalLight {
         direction: Vec3::new(0.75, 0.35, 0.45).normalize(),
         color: LinearColor::rgb(1.0, 0.94, 0.82),
         intensity: 4.5,
@@ -214,10 +181,9 @@ fn low_sun() -> EnvironmentLighting {
         elapsed_seconds: 0.0,
         time_of_day: 0.35,
         sun,
-        moon: CelestialLight { direction: -sun.direction, intensity: 0.0, ..sun },
+        moon: DirectionalLight { direction: -sun.direction, intensity: 0.0, ..sun },
         primary: sun,
-        skylight_color: LinearColor::rgb(0.2, 0.36, 0.62),
-        skylight_intensity: 0.35,
+        skylight: Skylight::uniform(LinearColor::rgb(0.2, 0.36, 0.62), 0.35),
         wind_velocity: Vec3::ZERO,
         scattering: [1.0, 0.6, 1.0, 1.0],
         fog_and_clouds: [0.002, 0.0, 0.0, 0.45],
@@ -289,7 +255,8 @@ fn render_scene(
     let environment = low_sun();
     for frame in 0..frames {
         let step = frame as f32 / 60.0;
-        let inputs = FrameInputs { environment: Some(&environment), time_seconds: step, ..FrameInputs::default() };
+        let inputs = FrameInputs { environment: Some(&environment), ..FrameInputs::default() };
+        renderer.set_presentation_time(PresentationTime::fixed_rate(frame, 1.0 / 60.0));
         renderer.render(scene, &scene_camera(focus, 0.9 + step * 0.2), &inputs, target.view())?;
     }
     Ok(target.read_rgba(gpu).expect("readback"))
@@ -398,7 +365,8 @@ fn scene_terrain_draws_into_effect_attachments() {
     for frame in 0..4 {
         let step = frame as f32 / 60.0;
         scene.terrain_mut(terrain).unwrap().transform.position.x = step * 3.0;
-        let inputs = FrameInputs { environment: Some(&environment), time_seconds: step, ..FrameInputs::default() };
+        let inputs = FrameInputs { environment: Some(&environment), ..FrameInputs::default() };
+        effects.set_presentation_time(PresentationTime::fixed_rate(frame, 1.0 / 60.0));
         effects.render(&scene, &scene_camera(focus, 0.9 + step * 0.2), &inputs, target.view()).expect("frame renders");
     }
     let processed = target.read_rgba(&gpu).expect("readback");
@@ -432,18 +400,11 @@ fn invalid_terrain_settings_are_refused() {
     render_scene(&gpu, &mut renderer, &scene, focus, 1).expect("a collapsed transform pins the finest geometry");
     scene.terrain_mut(terrain).unwrap().transform.scale = Vec3::splat(SCENE_SCALE);
     render_scene(&gpu, &mut renderer, &scene, focus, 1).expect("valid settings render again");
-
-    let mut standalone = TerrainRenderer::new(&gpu, &asset, CAPTURE_FORMAT).expect("terrain renderer");
-    let mut frame = terrain_frame(&overview(&asset), TerrainDiagnostic::Material, 0.0);
-    frame.view.eye = DVec3::new(0.0, f64::NAN, 0.0);
-    let target = OffscreenTarget::new(&gpu, WIDTH, HEIGHT).expect("capture target");
-    let mut encoder = gpu.device().create_command_encoder(&Default::default());
-    assert!(standalone.encode(&mut encoder, target.view(), (WIDTH, HEIGHT), &frame).is_err());
 }
 
-/// WebGL 2 selects LODs on the CPU; native OpenGL takes the same path, so run both draw paths there when available.
+/// WebGL 2 selects LODs on the CPU; native OpenGL takes the same path, so render the scene there when available.
 #[test]
-fn opengl_selects_on_the_cpu_and_renders_both_paths() {
+fn opengl_selects_on_the_cpu_in_the_scene() {
     let Some(gpu) = gpu(BackendPreference::WebGl) else {
         return;
     };
@@ -452,20 +413,19 @@ fn opengl_selects_on_the_cpu_and_renders_both_paths() {
         return;
     }
     let asset = dragon_pit();
-    let mut renderer = TerrainRenderer::new(&gpu, &asset, CAPTURE_FORMAT).expect("terrain renderer");
-    assert!(!renderer.uses_gpu_selection());
-    let pixels = render_standalone(&gpu, &mut renderer, &overview(&asset), TerrainDiagnostic::LodColors, 2);
-    save("terrain-gl-standalone-lod", &pixels);
-    assert!(coverage(&pixels) > 0.35);
-    assert_eq!(renderer.selection().len(), 256);
-    assert_eq!(renderer.stats().triangle_count_kind, TerrainTriangleCount::Selected);
-    assert!(renderer.stats().triangles < renderer.stats().max_triangles);
-    assert_eq!(renderer.stats().frame_upload_bytes, 128 + 256 * 256);
-
-    let (scene, _, focus) = scene(&asset);
-    let mut scene_renderer = scene_renderer(&gpu, None);
-    let lit = render_scene(&gpu, &mut scene_renderer, &scene, focus, 2).expect("frame renders");
+    let (mut scene, terrain, focus) = scene(&asset);
+    let mut renderer = scene_renderer(&gpu, None);
+    let lit = render_scene(&gpu, &mut renderer, &scene, focus, 2).expect("frame renders");
     save("terrain-gl-scene-lit", &lit);
-    assert!(scene_renderer.diagnostics().shadows_active);
+    assert!(renderer.diagnostics().shadows_active);
     assert!(lit.as_chunks::<4>().0.iter().filter(|pixel| pixel[1] > 40).count() > (WIDTH * HEIGHT / 3) as usize);
+
+    scene.terrain_mut(terrain).unwrap().diagnostic = TerrainDiagnostic::LodColors;
+    let lod = render_scene(&gpu, &mut renderer, &scene, focus, 1).expect("frame renders");
+    save("terrain-gl-scene-lod", &lod);
+    assert!(difference(&lit, &lod) > 2.0);
+    let stats = renderer.terrain_stats(terrain).expect("the terrain was drawn");
+    assert_eq!(stats.triangle_count_kind, TerrainTriangleCount::Selected);
+    assert!(stats.triangles < stats.max_triangles);
+    assert_eq!(stats.frame_upload_bytes, 128 + 256 * 256);
 }

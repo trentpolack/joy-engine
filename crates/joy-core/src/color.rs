@@ -161,15 +161,6 @@ impl Color {
         LinearColor::new(decode(self.red), decode(self.green), decode(self.blue), self.alpha)
     }
 
-    /// The channels unchanged, relabelled as linear.
-    ///
-    /// This is not a conversion. The renderer does not yet encode its output as sRGB, so palettes tuned on screen in
-    /// encoded values reach it unconverted to keep their current look; call sites use this to make that explicit.
-    /// Replace it with [`Color::to_linear`] once the display pass encodes sRGB.
-    pub const fn reinterpret_as_linear(self) -> LinearColor {
-        LinearColor::new(self.red, self.green, self.blue, self.alpha)
-    }
-
     /// 8-bit channels, clamped to `[0, 1]` and rounded.
     pub fn to_rgba8(self) -> [u8; 4] {
         [self.red, self.green, self.blue, self.alpha].map(quantize)

@@ -10,6 +10,7 @@
 
 use std::collections::HashMap;
 
+use joy_core::color::srgb_to_linear;
 use joy_core::math::{
     Vec2,
     Vec3,
@@ -27,7 +28,7 @@ use joy_renderer::{
     BackendPreference,
     CAPTURE_FORMAT,
     Camera,
-    CelestialLight,
+    DirectionalLight,
     EnvironmentData,
     EnvironmentLighting,
     EnvironmentMapOptions,
@@ -44,6 +45,7 @@ use joy_renderer::{
     Renderer,
     RendererOptions,
     Shading,
+    Skylight,
     TextureAsset,
     project_to_viewport,
 };
@@ -159,8 +161,11 @@ fn pixel_at(pixels: &[u8], camera: &OrbitCamera, world: Vec3) -> [u8; 3] {
     [pixels[offset], pixels[offset + 1], pixels[offset + 2]]
 }
 
+/// Luminance of a display pixel in linear light, on the display's 0-255 scale: the presentation pass encodes sRGB, so
+/// brightness ratios are compared after decoding.
 fn luminance(color: [u8; 3]) -> f32 {
-    (0.2126 * f32::from(color[0])) + (0.7152 * f32::from(color[1])) + (0.0722 * f32::from(color[2]))
+    let linear = color.map(|channel| (srgb_to_linear(f64::from(channel) / 255.0) * 255.0) as f32);
+    (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2])
 }
 
 fn top_down() -> OrbitCamera {
@@ -190,6 +195,47 @@ fn base_color_maps_sample_by_uv() {
     // Dropping the scene releases the material; a later frame without it still renders.
     drop(scene);
     render(&gpu, &mut renderer, &RenderScene::new(), &camera, &inputs, "material-released");
+}
+
+/// A texture drawn far smaller than its size samples its generated mips: a one-texel checkerboard seen from afar is an
+/// even gray instead of shimmering black and white texels.
+#[test]
+fn minified_textures_average_through_their_mips() {
+    let Some(gpu) = gpu() else {
+        return;
+    };
+    let size = 128_u32;
+    let checker: Vec<u8> = (0..size * size)
+        .flat_map(|index| {
+            let value = if ((index % size) + (index / size)).is_multiple_of(2) { 255 } else { 0 };
+            [value, value, value, 255]
+        })
+        .collect();
+    let texture = TextureAsset::from_rgba8(size, size, checker).unwrap();
+    let textures = HashMap::from([("checker.png", texture)]);
+    let maps = PbrMaterialTextures { base_color: Some("checker.png".into()), ..Default::default() };
+    let mut scene = RenderScene::new();
+    scene.insert(MeshInstance::new(asset(&quad(0.0, material(maps)), &textures)).with_shading(Shading::Pbr));
+
+    // From forty units away the two-unit quad spans about a dozen pixels, so each pixel covers roughly ten texels.
+    let camera = OrbitCamera { distance: 40.0, ..top_down() };
+    let mut renderer = Renderer::new(&gpu, CAPTURE_FORMAT, RendererOptions::default());
+    let inputs = FrameInputs { ambient: Some(1.0), ..FrameInputs::default() };
+    let pixels = render(&gpu, &mut renderer, &scene, &camera, &inputs, "material-minified-checker");
+    let center = pixel_at(&pixels, &camera, Vec3::ZERO);
+    let mut block = Vec::new();
+    for dy in -2_i32..=2 {
+        for dx in -2_i32..=2 {
+            let x = ((WIDTH / 2) as i32 + dx) as u32;
+            let y = ((HEIGHT / 2) as i32 + dy) as u32;
+            let offset = ((y * WIDTH + x) * 4) as usize;
+            block.push(luminance([pixels[offset], pixels[offset + 1], pixels[offset + 2]]));
+        }
+    }
+    let (darkest, brightest) =
+        block.iter().fold((f32::MAX, f32::MIN), |(low, high), value| (low.min(*value), high.max(*value)));
+    assert!(luminance(center) > 10.0, "the checker averages to gray, not black: {center:?}");
+    assert!(brightest - darkest < 6.0, "no texel shimmer across the quad: {darkest} to {brightest}");
 }
 
 #[test]
@@ -326,7 +372,7 @@ fn masked_materials_cast_shadows_with_holes() {
         )),
     );
     scene.insert(MeshInstance::new(asset(&quad(1.0, cutout), &textures)).with_shading(Shading::Pbr));
-    let sun = CelestialLight {
+    let sun = DirectionalLight {
         // The light is high toward -Z, so the cutout's shadow falls 0.75 units toward +Z, beyond what it occludes.
         direction: Vec3::new(0.0, 0.8, -0.6),
         color: LinearColor::rgb(1.0, 1.0, 1.0),
@@ -338,10 +384,9 @@ fn masked_materials_cast_shadows_with_holes() {
         elapsed_seconds: 0.0,
         time_of_day: 0.5,
         sun,
-        moon: CelestialLight { intensity: 0.0, ..sun },
+        moon: DirectionalLight { intensity: 0.0, ..sun },
         primary: sun,
-        skylight_color: LinearColor::rgb(0.0, 0.0, 0.0),
-        skylight_intensity: 0.0,
+        skylight: Skylight::default(),
         wind_velocity: Vec3::ZERO,
         scattering: [1.0, 0.6, 1.0, 1.0],
         fog_and_clouds: [0.0; 4],
@@ -375,7 +420,7 @@ fn sky_and_shadow_settings_change_between_frames() {
             .with_transform(Transform::new(Vec3::ZERO, Vec3::ZERO, Vec3::splat(4.0))),
     );
     scene.insert(MeshInstance::new(asset(&quad(1.0, material(PbrMaterialTextures::default())), &HashMap::new())));
-    let sun = CelestialLight {
+    let sun = DirectionalLight {
         direction: Vec3::new(0.0, 0.8, -0.6),
         color: LinearColor::rgb(1.0, 1.0, 1.0),
         intensity: 4.0,
@@ -386,10 +431,9 @@ fn sky_and_shadow_settings_change_between_frames() {
         elapsed_seconds: 0.0,
         time_of_day: 0.5,
         sun,
-        moon: CelestialLight { intensity: 0.0, ..sun },
+        moon: DirectionalLight { intensity: 0.0, ..sun },
         primary: sun,
-        skylight_color: LinearColor::rgb(0.0, 0.0, 0.0),
-        skylight_intensity: 0.0,
+        skylight: Skylight::default(),
         wind_velocity: Vec3::ZERO,
         scattering: [1.0, 0.6, 1.0, 1.0],
         fog_and_clouds: [0.0; 4],

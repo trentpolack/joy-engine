@@ -216,7 +216,7 @@ fn textured_effects_draw_and_particle_lights_follow_entities() {
 
     let selection = assets.particle_lights(32);
     assert!(!selection.lights.is_empty());
-    assert!(selection.lights.iter().all(|light| light.x > 8.0), "lights follow the entity position");
+    assert!(selection.lights.iter().all(|selected| selected.light.position.x > 8.0), "lights follow the entity");
     let lights = assets.lights();
     assert_eq!(lights[0].range, 4.0, "light components come first");
     assert_eq!(lights.len(), 1 + selection.lights.len().min(31));

@@ -1,14 +1,13 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The textured transparent material and the plan for [`FrameInputs::transparent_draws`](crate::FrameInputs).
+//! The textured transparent material for [`FrameInputs::transparent_draws`](crate::FrameInputs).
 //!
-//! One blended pipeline samples a sprite texture and
-//! multiplies it by vertex color, depth-tested (`LessEqual`) against opaque geometry without writing depth. Colored
-//! runs reuse the unlit blend pipeline through the renderer's transient buffer; textured runs use this pass's own
-//! vertex buffer. Textures upload on first use and release once their [`TextureAsset`] is dropped everywhere.
+//! One blended pipeline samples a sprite texture and multiplies it by vertex color, depth-tested (`LessEqual`) against
+//! opaque geometry without writing depth. Textured triangles use this pass's own vertex buffer, written in the
+//! transparent queue's drawing order. Textures upload with mip chains (decoded from sRGB) on first use and release once
+//! their [`TextureAsset`] is dropped everywhere.
 
-use joy_core::LinearColor;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Weak;
@@ -19,11 +18,11 @@ use crate::frame::{
     TransparentDraw,
 };
 use crate::gpu::GpuContext;
-use crate::mesh::{
-    MeshVertex,
-    VertexMaterial,
-};
 use crate::texture::TextureAsset;
+use crate::texture_mips::{
+    MipmapGenerator,
+    mipmapped_sampler,
+};
 
 use super::{
     DEPTH_FORMAT,
@@ -42,13 +41,8 @@ const TEXTURED_ATTRIBUTES: [wgpu::VertexAttribute; 3] =
 /// Initial textured vertex capacity; grows geometrically.
 const INITIAL_TEXTURED_CAPACITY: usize = 1024;
 
-/// One transparent run in submission order, resolved to buffer ranges.
-pub(crate) enum PlannedDraw {
-    /// Vertices in the renderer's transient buffer, drawn with the unlit blend pipeline.
-    Colored(Range<u32>),
-    /// Vertices in this pass's buffer, sampling an uploaded texture.
-    Textured { texture: u64, vertices: Range<u32> },
-}
+/// Sprite texture format; sampling decodes sRGB to linear.
+const SPRITE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 /// GPU copy of one texture, released when the asset is dropped everywhere.
 struct GpuTexture {
@@ -128,14 +122,7 @@ impl TexturedPass {
             multiview_mask: None,
             cache: None,
         });
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("textured sprite"),
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
+        let sampler = mipmapped_sampler(device, "textured sprite", wgpu::AddressMode::ClampToEdge);
         let vertex_buffer = textured_vertex_buffer(device, INITIAL_TEXTURED_CAPACITY);
         Self {
             pipeline,
@@ -147,17 +134,15 @@ impl TexturedPass {
         }
     }
 
-    /// Validate and resolve `draws` before any pass opens.
+    /// Upload every texture `draws` references (with mip chains) the first time it appears, before any pass opens.
     ///
-    /// Colored vertices are appended to `transient` (the renderer's transient stream, after its current contents);
-    /// textured vertices and newly referenced textures are uploaded here. Fails without uploading when a texture
-    /// exceeds the device's largest 2D texture.
-    pub fn prepare(
+    /// Fails without uploading when a texture exceeds the device's largest 2D texture.
+    pub fn upload_textures(
         &mut self,
         gpu: &GpuContext,
+        mipmaps: &mut MipmapGenerator,
         draws: &[TransparentDraw<'_>],
-        transient: &mut Vec<MeshVertex>,
-    ) -> Result<Vec<PlannedDraw>, RenderError> {
+    ) -> Result<(), RenderError> {
         let limit = gpu.capabilities().max_texture_dimension;
         for draw in draws {
             if let TransparentDraw::Textured { texture, .. } = draw
@@ -170,41 +155,12 @@ impl TexturedPass {
                 )));
             }
         }
-
-        let mut plan = Vec::with_capacity(draws.len());
-        let mut textured: Vec<TexturedVertex> = Vec::new();
         for draw in draws {
-            match draw {
-                TransparentDraw::Colored(vertices) => {
-                    let complete = &vertices[..(vertices.len() / 3) * 3];
-                    if complete.is_empty() {
-                        continue;
-                    }
-                    let start = transient.len() as u32;
-                    transient.extend(complete.iter().map(|vertex| {
-                        MeshVertex::new(
-                            vertex.position,
-                            [0.0; 3],
-                            LinearColor::from(vertex.color),
-                            VertexMaterial::default(),
-                        )
-                    }));
-                    plan.push(PlannedDraw::Colored(start..transient.len() as u32));
-                }
-                TransparentDraw::Textured { texture, vertices } => {
-                    let complete = &vertices[..(vertices.len() / 3) * 3];
-                    if complete.is_empty() {
-                        continue;
-                    }
-                    self.upload_texture(gpu, texture);
-                    let start = textured.len() as u32;
-                    textured.extend_from_slice(complete);
-                    plan.push(PlannedDraw::Textured { texture: texture.id(), vertices: start..textured.len() as u32 });
-                }
+            if let TransparentDraw::Textured { texture, .. } = draw {
+                self.upload_texture(gpu, mipmaps, texture);
             }
         }
-        self.write_vertices(gpu, &textured);
-        Ok(plan)
+        Ok(())
     }
 
     /// Record one textured run into the open scene pass; returns whether the texture was available.
@@ -224,38 +180,13 @@ impl TexturedPass {
         self.textures.retain(|_, texture| texture.asset.strong_count() > 0);
     }
 
-    /// Upload a texture the first time it is drawn.
-    fn upload_texture(&mut self, gpu: &GpuContext, asset: &TextureAsset) {
+    /// Upload a texture with its mip chain the first time it is drawn.
+    fn upload_texture(&mut self, gpu: &GpuContext, mipmaps: &mut MipmapGenerator, asset: &TextureAsset) {
         if self.textures.contains_key(&asset.id()) {
             return;
         }
         let device = gpu.device();
-        let size = wgpu::Extent3d { width: asset.width(), height: asset.height(), depth_or_array_layers: 1 };
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("sprite texture"),
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
-        });
-        gpu.queue().write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            asset.pixels(),
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(asset.width() * 4),
-                rows_per_image: Some(asset.height()),
-            },
-            size,
-        );
+        let texture = mipmaps.upload(gpu, "sprite texture", asset, SPRITE_FORMAT);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("sprite texture"),
@@ -269,8 +200,8 @@ impl TexturedPass {
             .insert(asset.id(), GpuTexture { bind_group, _view: view, _texture: texture, asset: asset.downgrade() });
     }
 
-    /// Upload this frame's textured vertices, growing the buffer geometrically.
-    fn write_vertices(&mut self, gpu: &GpuContext, vertices: &[TexturedVertex]) {
+    /// Upload this frame's textured vertices, in drawing order, growing the buffer geometrically.
+    pub fn write_vertices(&mut self, gpu: &GpuContext, vertices: &[TexturedVertex]) {
         if vertices.is_empty() {
             return;
         }

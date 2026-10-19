@@ -6,7 +6,7 @@
 //! Data flow: a `.joylevel` document parses into [`LevelData`] (validated [`EntityDefinition`] records), linked
 //! `.joyobject` templates resolve through [`resolve_level_objects`], and [`LevelRuntime`] instantiates the level into a
 //! [`World`]: an [`EntityWorld`] of live entities plus a [`PhysicsWorld`](joy_physics::PhysicsWorld) holding the
-//! bodies and vehicles their `physics` and `vehicle` components describe. Joy Editor edits levels through
+//! bodies their `physics` components describe (raycast vehicle chassis when a `vehicle` component is present too). Joy Editor edits levels through
 //! [`LevelDocument`] (atomic transactions with undo and redo) and validates component records against the
 //! [`ComponentSchemaCatalog`].
 //!
@@ -133,6 +133,7 @@ pub use player_controller::{
     PlayerController,
 };
 pub use world::{
+    PresentedEntity,
     World,
     WorldStep,
 };

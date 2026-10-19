@@ -482,7 +482,6 @@ impl App for FormDestructionDemo {
             lights: if material { &material_lights } else { &debug_lights },
             ambient: Some(if material { PRESENTATION.ambient } else { INTEGRITY.ambient }),
             clear_color: PRESENTATION.clear_color,
-            time_seconds: frame.time.time_seconds as f32,
             ..FrameInputs::default()
         };
         let stopwatch = Stopwatch::start();

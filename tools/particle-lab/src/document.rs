@@ -13,6 +13,7 @@
 use joy_engine::particles::{
     DEFAULT_PARTICLE_TEXTURE,
     PARTICLE_EFFECT_VERSION,
+    PARTICLE_LIGHT_CASTS_SHADOW,
     ParticleBurst,
     ParticleChild,
     ParticleEffectAsset,
@@ -420,9 +421,9 @@ pub fn default_texture(source: &str) -> ParticleTexture {
     ParticleTexture { source: source.into(), columns: 1, rows: 1, frames: 1, fps: 12.0, looping: true }
 }
 
-/// Turn particle light emission on (intensity 2, range 220) or off.
+/// Turn particle light emission on (intensity 2, range 220, no shadows) or off.
 pub fn set_light_enabled(emitter: &mut ParticleEmitterAsset, enabled: bool) {
-    emitter.light = enabled.then_some(ParticleLight { intensity: 2.0, range: 220.0 });
+    emitter.light = enabled.then_some(ParticleLight { intensity: 2.0, range: 220.0, casts_shadow: false });
 }
 
 /// Which child link an edit changes.
@@ -579,6 +580,7 @@ fn lenient_emitter(record: &Map<String, Value>, index: usize) -> ParticleEmitter
     let light = record.get("light").and_then(Value::as_object).map(|light| ParticleLight {
         intensity: light.get("intensity").and_then(Value::as_f64).unwrap_or(2.0),
         range: light.get("range").and_then(Value::as_f64).unwrap_or(220.0),
+        casts_shadow: light.get(PARTICLE_LIGHT_CASTS_SHADOW).and_then(Value::as_bool).unwrap_or(false),
     });
     let trail = record.get("trail").and_then(Value::as_object).and_then(|trail| {
         Some(ParticleTrail {

@@ -13,10 +13,11 @@ use joy_core::Transform;
 use joy_core::math::Vec3;
 use joy_renderer::{
     BackendPreference,
-    CelestialLight,
+    DirectionalLight,
     EnvironmentLighting,
     FrameInputs,
     GpuContext,
+    MAX_POINT_LIGHTS,
     MeshAsset,
     MeshChannels,
     MeshInstance,
@@ -27,6 +28,7 @@ use joy_renderer::{
     Renderer,
     RendererOptions,
     SceneNode,
+    Skylight,
 };
 
 const WIDTH: u32 = 320;
@@ -76,14 +78,14 @@ fn unit_cube(color: [f32; 3]) -> MeshAsset {
 
 /// A clear noon sky with the sun high in the south-west.
 fn noon() -> EnvironmentLighting {
-    let sun = CelestialLight {
+    let sun = DirectionalLight {
         direction: Vec3::new(0.35, 0.85, 0.4).normalize(),
         color: LinearColor::rgb(1.0, 0.96, 0.86),
         intensity: 5.0,
         angular_radius: 0.00465,
         casts_shadow: true,
     };
-    let moon = CelestialLight {
+    let moon = DirectionalLight {
         direction: -sun.direction,
         color: LinearColor::rgb(0.24, 0.32, 0.55),
         intensity: 0.0,
@@ -96,8 +98,7 @@ fn noon() -> EnvironmentLighting {
         sun,
         moon,
         primary: sun,
-        skylight_color: LinearColor::rgb(0.2, 0.42, 0.8),
-        skylight_intensity: 0.45,
+        skylight: Skylight::uniform(LinearColor::rgb(0.2, 0.42, 0.8), 0.45),
         wind_velocity: Vec3::new(4.0, 0.0, 0.0),
         scattering: [1.0, 0.6, 1.0, 1.0],
         fog_and_clouds: [0.002, 0.0, 0.0, 0.45],
@@ -184,6 +185,47 @@ fn sunlit_scene_renders_sky_ground_and_shadow() {
     );
 }
 
+/// Each shadow view draws only the casters inside its volume, so a caster far beyond the shadow distance costs no
+/// shadow work.
+#[test]
+fn shadow_views_draw_only_the_casters_inside_them() {
+    let Some(gpu) = gpu() else {
+        return;
+    };
+    let mut scene = RenderScene::new();
+    scene.insert(MeshInstance::new(unit_cube([0.31, 0.38, 0.39])).with_transform(Transform::new(
+        Vec3::new(0.0, -0.25, 0.0),
+        Vec3::ZERO,
+        Vec3::new(30.0, 0.5, 30.0),
+    )));
+    scene.insert(MeshInstance::new(unit_cube([0.95, 0.36, 0.12])).with_transform(Transform::new(
+        Vec3::new(0.0, 1.0, 0.0),
+        Vec3::ZERO,
+        Vec3::splat(2.0),
+    )));
+    scene.insert(MeshInstance::new(unit_cube([0.95, 0.36, 0.12])).with_transform(Transform::new(
+        Vec3::new(2000.0, 1.0, 0.0),
+        Vec3::ZERO,
+        Vec3::splat(2.0),
+    )));
+    let camera = OrbitCamera { distance: 14.0, pitch: 0.55, ..OrbitCamera::default() };
+    let environment = noon();
+    let inputs = FrameInputs { environment: Some(&environment), ..FrameInputs::default() };
+
+    let target = OffscreenTarget::new(&gpu, WIDTH, HEIGHT).expect("capture target");
+    let mut renderer = Renderer::new(&gpu, joy_renderer::CAPTURE_FORMAT, RendererOptions::default());
+    renderer.resize(WIDTH, HEIGHT, 1.0);
+    renderer.render(&scene, &camera, &inputs, target.view()).expect("frame renders");
+    let diagnostics = renderer.diagnostics();
+    assert!(diagnostics.shadows_active && diagnostics.shadow_views > 0);
+    assert!(
+        diagnostics.shadow_casters <= 2 * diagnostics.shadow_views,
+        "the distant crate casts into no cascade: {} caster draws over {} views",
+        diagnostics.shadow_casters,
+        diagnostics.shadow_views
+    );
+}
+
 #[test]
 fn point_lights_illuminate_without_an_environment() {
     let Some(gpu) = gpu() else {
@@ -214,6 +256,57 @@ fn point_lights_illuminate_without_an_environment() {
     let on = pixel(&lit_pixels, center.0, center.1);
     assert!(luminance(off) < 5.0, "unlit slab should be black: {off:?}");
     assert!(luminance(on) > 40.0 && on[0] > on[2], "warm light should brighten the slab: {on:?}");
+}
+
+/// A level may supply more point lights than a frame draws: the renderer keeps the strongest that reach the view and
+/// reports the rest, instead of failing the frame.
+#[test]
+fn frames_with_more_point_lights_than_the_cap_draw_the_strongest() {
+    let Some(gpu) = gpu() else {
+        return;
+    };
+    let mut scene = RenderScene::new();
+    scene.insert(MeshInstance::new(unit_cube([1.0, 1.0, 1.0])).with_transform(Transform::new(
+        Vec3::ZERO,
+        Vec3::ZERO,
+        Vec3::new(10.0, 0.2, 10.0),
+    )));
+    let camera = OrbitCamera { distance: 8.0, pitch: 0.9, ..OrbitCamera::default() };
+
+    // The warm light over the slab, forty dim lights in a ring around it, and one invalid light.
+    let warm = PointLight {
+        position: Vec3::new(0.0, 1.5, 0.0),
+        color: LinearColor::rgb(3.0, 2.0, 1.0),
+        range: 6.0,
+        casts_shadow: false,
+    };
+    let mut lights: Vec<PointLight> = (0..40)
+        .map(|index| {
+            let angle = index as f32 * std::f32::consts::TAU / 40.0;
+            PointLight {
+                position: Vec3::new(angle.cos() * 2.5, 0.5, angle.sin() * 2.5),
+                color: LinearColor::rgb(0.02, 0.02, 0.05),
+                range: 1.0,
+                casts_shadow: false,
+            }
+        })
+        .collect();
+    lights.push(warm);
+    lights.push(PointLight { range: f32::NAN, ..warm });
+
+    let target = OffscreenTarget::new(&gpu, WIDTH, HEIGHT).expect("capture target");
+    let mut renderer = Renderer::new(&gpu, joy_renderer::CAPTURE_FORMAT, RendererOptions::default());
+    renderer.resize(WIDTH, HEIGHT, 1.0);
+    let inputs = FrameInputs { ambient: Some(0.0), lights: &lights, ..FrameInputs::default() };
+    renderer.render(&scene, &camera, &inputs, target.view()).expect("extra lights never fail a frame");
+    let diagnostics = renderer.diagnostics();
+    assert_eq!(diagnostics.point_lights, MAX_POINT_LIGHTS);
+    assert_eq!(diagnostics.point_lights_omitted, lights.len() - MAX_POINT_LIGHTS);
+
+    // The warm light ranks first, so the slab lights as it does with that light alone.
+    let pixels = target.read_rgba(&gpu).expect("readback");
+    let center = pixel(&pixels, WIDTH / 2, HEIGHT / 2);
+    assert!(luminance(center) > 40.0 && center[0] > center[2], "the strongest light is kept: {center:?}");
 }
 
 #[test]

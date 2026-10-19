@@ -3,14 +3,16 @@
 
 //! Scene-to-display pipeline: HDR scene targets, bloom, blurs, the display resolve, and the final presentation pass.
 //!
-//! The pass order is bloom, optional full-image blur and vignette edge blur, exposure and
-//! tone mapping, grade, vignette, antialiasing, then film grain. Bloom is the fragment path of luma.gl's
-//! `createBloomShaderPassPipeline` with Joy Engine's authored options (MIT License, Copyright (c) vis.gl
-//! contributors; see `post-bloom.wgsl` and `scene_effects/LICENSE-luma.gl`): a two-to-five level pyramid of
-//! thresholded tent extraction and separable Gaussians, bicubic reconstruction blended by scatter, optional horizontal
-//! starburst streaks, and an additive composite. Targets are rebuilt only when the drawing size or the effect graph
-//! (bloom levels, streaks, blur passes) changes; radii,
-//! thresholds, and intensities are plain uniforms.
+//! The pass order is bloom, optional full-image blur and vignette edge blur, exposure and tone mapping, sRGB encoding,
+//! grade, vignette, antialiasing, then film grain. Presentation targets receive sRGB-encoded display values whatever
+//! their format: non-sRGB views store them directly and sRGB views encode on write.
+//!
+//! Bloom is the fragment path of luma.gl's `createBloomShaderPassPipeline` with Joy Engine's authored options (MIT
+//! License, Copyright (c) vis.gl contributors; see `post-bloom.wgsl` and `scene_effects/LICENSE-luma.gl`): a
+//! two-to-five level pyramid of thresholded tent extraction and separable Gaussians, bicubic reconstruction blended by
+//! scatter, optional horizontal starburst streaks, and an additive composite. Targets are rebuilt only when the drawing
+//! size or the effect graph (bloom levels, streaks, blur passes) changes; radii, thresholds, and intensities are plain
+//! uniforms.
 
 use crate::post_process::{
     AgxLook,
@@ -99,6 +101,7 @@ struct ResolveUniforms {
 struct PresentationUniforms {
     frame: [f32; 4],
     grain: [f32; 4],
+    output: [f32; 4],
 }
 
 /// A texture with its default view and dimensions.
@@ -246,8 +249,9 @@ pub(crate) struct PostProcessor {
     linear_sampler: wgpu::Sampler,
     black: Target,
 
-    // Configuration.
+    // Configuration. The presentation pass writes sRGB-encoded values; an sRGB output view encodes them itself.
     scene_format: wgpu::TextureFormat,
+    output_encodes_srgb: bool,
     config: PostProcessSettings,
 
     // Size-dependent resources; `None` until the first resize.
@@ -335,6 +339,7 @@ impl PostProcessor {
             linear_sampler,
             black,
             scene_format,
+            output_encodes_srgb: output_format.is_srgb(),
             config,
             graph: None,
         }
@@ -596,6 +601,7 @@ impl PostProcessor {
                 config.film_grain,
             ],
             grain: [config.film_grain_size, config.film_grain_speed, decorrelated, time_seconds],
+            output: [if self.output_encodes_srgb { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0],
         };
         queue.write_buffer(&graph.presentation.uniforms, 0, bytemuck::bytes_of(&presentation));
     }

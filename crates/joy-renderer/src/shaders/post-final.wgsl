@@ -2,13 +2,16 @@
 // Licensed under the MIT License.
 
 // Final display pass: edge antialiasing blended by strength, then animated luminance-aware film grain. Reads the
-// resolved display image and writes the presentation target.
+// resolved, sRGB-encoded display image and writes the presentation target. Non-sRGB targets receive the encoded values
+// as they are; an sRGB target view encodes on write, so the pass decodes first and the stored bytes are identical.
 
 struct Presentation {
   // XY reciprocal target size, Z antialias strength, W grain intensity.
   frame: vec4f,
   // X grain cell size in pixels, Y grain speed in cycles per second, Z decorrelated variant (0 or 1), W time seconds.
   grain: vec4f,
+  // X is 1 when the presentation target view encodes sRGB itself; YZW unused.
+  output: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> presentation: Presentation;
@@ -89,6 +92,15 @@ fn rand(value: vec2f) -> f32 {
 }
 
 /**
+ * Decode sRGB-encoded display values with the exact IEC 61966-2-1 curve (`joy_core::srgb_to_linear`).
+ */
+fn decodeSrgb(encoded: vec3f) -> vec3f {
+  let curve = pow((encoded + vec3f(0.055))/1.055, vec3f(2.4));
+  let segment = encoded/12.92;
+  return select(curve, segment, encoded <= vec3f(0.04045));
+}
+
+/**
  * Antialias, then add midtone-weighted animated grain in quantized pixel cells.
  */
 @fragment fn fragmentMain(input: FinalOutput) -> @location(0) vec4f {
@@ -112,5 +124,8 @@ fn rand(value: vec2f) -> f32 {
     color = clamp(color + vec3f(grain), vec3f(0.0), vec3f(1.0));
   }
 
+  if(presentation.output.x > 0.5) {
+    color = decodeSrgb(color);
+  }
   return vec4f(color, 1.0);
 }

@@ -144,6 +144,6 @@ fn preset_records_round_trip_and_run_in_the_engine_runtimes() {
     let level = parse_level(&serialize_level(&level)).unwrap();
     assert!(level.entities.iter().all(|entity| catalog.validate_entity(entity).is_empty()));
     let runtime = LevelRuntime::new(&level, EntityRegistry::new()).unwrap();
-    assert!(runtime.vehicle(&EntityId::from("kart")).is_some());
+    assert!(runtime.body(&EntityId::from("kart")).is_some_and(|body| runtime.physics().is_vehicle(body)));
     assert!(level.entities[0].components.contains_key(component_type::VEHICLE));
 }

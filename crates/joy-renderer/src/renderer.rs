@@ -3,26 +3,40 @@
 
 //! The frame orchestrator: owns pipelines, shared targets, GPU mesh uploads, and pass order.
 //!
-//! One frame proceeds as: validate inputs, build camera matrices, cull and batch instances, upload instance and frame
-//! data, render the shadow views (directional cascades and point-light faces), render the scene (sky, opaque batches, transient opaque triangles, sorted
-//! transparency, then the caller's pre-sorted transparent draws such as particle batches) into the HDR target, and run
-//! post-processing into the caller's presentation view. Materials define shading; the renderer defines frame-wide
-//! invariants and submission order.
+//! One frame proceeds as:
+//! 1. Validate inputs, build the camera, prepare terrain, choose the point lights that matter most to the view, and cull
+//!    instances against the camera.
+//! 2. Lay out every draw before any pass opens: opaque batches grouped by pipeline and asset and ordered front to back,
+//!    one back-to-front transparent queue (blended meshes, transient triangles, and caller runs such as particles sorted
+//!    together), and each shadow view's casters culled against that cascade or point-light face.
+//! 3. Render the shadow views, then the depth pre-pass (terrain first, as the largest occluder, then opaque batches front
+//!    to back), then the scene pass into the HDR target. Opaque surfaces test depth less-or-equal against the pre-pass,
+//!    so each visible pixel is shaded once, and the sky fills the uncovered pixels on the far plane last. With scene
+//!    effects, opaque materials also write normals, roughness, and motion into attachments in that same pass.
+//! 4. Draw transparency after the lighting effects that read opaque surfaces (ambient occlusion, reflections, global
+//!    illumination, fog, and outlines) and before the composite effects (temporal antialiasing, motion blur, and
+//!    exposure) and post-processing, so every post effect sees transparent surfaces. Without lighting effects,
+//!    transparency draws at the end of the scene pass.
+//! 5. Post-process into the caller's presentation view.
 //!
-//! With scene effects enabled on WebGPU-class backends, the scene pass splits: opaque geometry, then
-//! the attachments the effects need (normals and roughness, motion vectors, clustered lights), then the effect chains
-//! over the opaque HDR color, then transparency against the same depth. Temporal antialiasing jitters the raster
-//! projection by a Halton sequence; history resets on camera cuts, time jumps, and projection changes.
+//! Materials define shading; the renderer defines frame-wide invariants and submission order. Temporal antialiasing
+//! jitters the raster projection by a Halton sequence; history resets on camera cuts, presentation-clock jumps, and
+//! projection changes.
 
-use joy_core::LinearColor;
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Weak;
 
-use crate::post_process::PostProcessSettings;
 use joy_core::math::{
     Mat4,
     Vec2,
     Vec3,
+};
+use joy_core::{
+    DirectionalLight,
+    LinearColor,
+    PointLight,
+    Skylight,
 };
 use wgpu::util::DeviceExt;
 
@@ -34,6 +48,12 @@ use crate::camera::{
     intersect_ray_plane,
     project_to_viewport,
     screen_ray,
+};
+use crate::culling::{
+    bounds_outside_view,
+    outside_frustum,
+    sphere_touches_bounds,
+    world_bounds,
 };
 use crate::environment::{
     EnvironmentMap,
@@ -49,7 +69,7 @@ use crate::frame::{
     ColorVertex,
     FrameInputs,
     MAX_POINT_LIGHTS,
-    sort_transparent_triangles,
+    PresentationTime,
 };
 use crate::gpu::GpuContext;
 use crate::materials::{
@@ -59,8 +79,8 @@ use crate::materials::{
     GpuPointLight,
     InstanceRaw,
     MaterialMaps,
-    PlannedDraw,
     ScenePipelines,
+    SceneTargets,
     TexturedPass,
 };
 use crate::mesh::{
@@ -71,23 +91,25 @@ use crate::mesh::{
     Submesh,
     VertexMaterial,
 };
+use crate::point_lights::select_point_lights;
+use crate::post_process::PostProcessSettings;
 use crate::postprocessor::PostProcessor;
 use crate::scene::{
     MeshInstance,
     MeshInstanceId,
     RenderScene,
     Shading,
+    TerrainInstanceId,
 };
 use crate::scene_effects::{
+    EffectStage,
     EffectsFrame,
-    MotionPass,
-    MotionUniforms,
+    SceneAttachments,
     SceneEffectsCapabilities,
     SceneEffectsError,
     SceneEffectsOptions,
     SceneEffectsRuntime,
     SceneVolumeStats,
-    SurfacePass,
     VolumeCamera,
     VolumeLights,
     capabilities,
@@ -96,7 +118,6 @@ use crate::shadows::{
     CASCADE_BLEND_FRACTION,
     CASCADE_TEXEL_BIAS,
     FAR_FADE_FRACTION,
-    POINT_FACES,
     POINT_SOURCE_RADIUS,
     PointShadowRaw,
     ShadowMaps,
@@ -107,7 +128,14 @@ use crate::shadows::{
     point_near_plane,
     practical_cascade_splits,
 };
+use crate::terrain::TerrainStats;
 use crate::terrain::terrain_scene_pass::SceneTerrain;
+use crate::texture_mips::MipmapGenerator;
+use crate::transparency::{
+    TransparentQueue,
+    TransparentStep,
+    build_transparent_queue,
+};
 
 /// Initial instance buffer capacity; grows geometrically.
 const INITIAL_INSTANCE_CAPACITY: usize = 256;
@@ -115,16 +143,26 @@ const INITIAL_INSTANCE_CAPACITY: usize = 256;
 /// Initial transient vertex capacity; grows geometrically.
 const INITIAL_TRANSIENT_CAPACITY: usize = 1024;
 
+/// Temporal-antialiasing jitter samples before the Halton sequence repeats.
+const JITTER_SAMPLE_COUNT: u32 = 8;
+
+/// A presentation-clock gap longer than this, in seconds, restarts temporal history.
+const HISTORY_TIME_JUMP_SECONDS: f64 = 0.25;
+
 /// Renderer construction settings. The renderer copies them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RendererOptions {
-    /// Directional shadows from the environment's primary light and point-light shadows; `None` disables shadow work.
+    /// Directional shadows from the frame's key light and point-light shadows; `None` disables shadow work.
     pub shadows: Option<ShadowOptions>,
     /// Draw the procedural sky when an environment is supplied.
     pub atmosphere: bool,
+    /// Fill scene depth in a depth-only pass before shading, so each visible pixel is shaded once however the opaque
+    /// surfaces overlap. The pass costs one more vertex transform per opaque vertex; turn it off only for scenes with
+    /// almost no overdraw.
+    pub depth_prepass: bool,
     /// Post-processing settings; replace later with [`Renderer::set_post_process`].
     pub post_process: PostProcessSettings,
-    /// Opaque-scene effects (ambient occlusion, reflections, antialiasing, ...); replace later with
+    /// Scene effects (ambient occlusion, reflections, antialiasing, ...); replace later with
     /// [`Renderer::set_scene_effects`]. Ignored on backends without scene effects (WebGL 2).
     pub scene_effects: Option<SceneEffectsOptions>,
 }
@@ -134,6 +172,7 @@ impl Default for RendererOptions {
         Self {
             shadows: Some(ShadowOptions::default()),
             atmosphere: true,
+            depth_prepass: true,
             post_process: PostProcessSettings::DEFAULT,
             scene_effects: None,
         }
@@ -149,15 +188,15 @@ pub struct RendererDiagnostics {
     pub adapter: String,
     /// Whether the scene target preserves HDR highlights.
     pub hdr: bool,
-    /// Instances drawn by the camera.
+    /// Instances (meshes and terrain) drawn by the camera.
     pub visible: usize,
     /// Instances skipped by frustum culling.
     pub culled: usize,
-    /// Draw calls recorded for the scene and shadow passes.
+    /// Draw calls recorded for the shadow, depth pre-pass, scene, and transparency passes.
     pub draw_calls: usize,
-    /// Triangles submitted to the scene pass.
+    /// Triangles submitted to the scene and transparency passes.
     pub triangles: usize,
-    /// Instances rendered into the shadow maps.
+    /// Caster instances drawn across every shadow view, after culling each view's casters to that view.
     pub shadow_casters: usize,
     /// Whether directional shadow cascades were rendered this frame.
     pub shadows_active: bool,
@@ -165,9 +204,13 @@ pub struct RendererDiagnostics {
     pub shadow_views: usize,
     /// Point lights that cast shadows this frame.
     pub shadow_point_lights: usize,
+    /// Point lights drawn this frame (at most [`MAX_POINT_LIGHTS`]).
+    pub point_lights: usize,
+    /// Supplied point lights left out this frame: invalid, unable to reach the view, or beyond the cap.
+    pub point_lights_omitted: usize,
 }
 
-/// Which surface pipeline draws an opaque batch; ordering is draw order.
+/// Which surface pipeline draws an opaque batch; scene-pass order after the depth pre-pass.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum OpaquePipeline {
     Lit,
@@ -182,13 +225,144 @@ enum BlendPipeline {
     Pbr,
 }
 
-/// One opaque instance waiting to be batched.
+/// One camera-visible opaque instance waiting to be batched.
 struct OpaqueItem {
     pipeline: OpaquePipeline,
     asset: MeshAsset,
     raw: InstanceRaw,
-    /// Scene identity for motion vectors; shadow casters leave it unset.
-    id: Option<MeshInstanceId>,
+    /// View depth of the nearest point of the instance's bounding sphere.
+    depth: f32,
+}
+
+/// One camera-visible blended submesh waiting to be sorted with the frame's other transparency.
+struct BlendItem {
+    /// View depth of the instance's bounds center.
+    depth: f32,
+    pipeline: BlendPipeline,
+    asset: MeshAsset,
+    indices: Range<u32>,
+    material: Option<u64>,
+    raw: InstanceRaw,
+}
+
+/// One opaque shadow-casting instance, visible to the camera or not.
+struct CasterItem {
+    asset: MeshAsset,
+    raw: InstanceRaw,
+    world: Bounds,
+}
+
+/// The frame's scene contents after camera culling, before anything is uploaded.
+#[derive(Default)]
+struct SceneItems {
+    opaque: Vec<OpaqueItem>,
+    blends: Vec<BlendItem>,
+    casters: Vec<CasterItem>,
+    /// This frame's model matrix of each camera-visible instance, kept as motion history when effects run.
+    models: Vec<(MeshInstanceId, Mat4)>,
+    visible: usize,
+    culled: usize,
+}
+
+/// A recorded batch: one asset submesh drawn for a contiguous instance range.
+/// Shadow-caster batches share this record; the caster passes ignore `pipeline`.
+struct Batch {
+    pipeline: OpaquePipeline,
+    asset_id: u64,
+    indices: Range<u32>,
+    instances: Range<u32>,
+    /// Material maps for the PBR pass and masked depth and caster passes; `None` binds the white default.
+    material: Option<u64>,
+    /// Whether depth-only passes must alpha-test this range.
+    masked: bool,
+}
+
+/// Distances along the camera's forward axis, for ordering opaque batches front to back and transparency back to front.
+#[derive(Clone, Copy, Debug)]
+struct ViewDepth {
+    eye: Vec3,
+    forward: Vec3,
+}
+
+/// The frame's cameras.
+struct FrameCameras {
+    /// The camera as supplied: culling, light selection, shadows, terrain LOD, and motion vectors use it.
+    stable: CameraFrame,
+    /// The camera geometry is rasterized with, jittered for temporal antialiasing.
+    raster: CameraFrame,
+    /// This frame's raster jitter in UV units.
+    jitter: [f32; 2],
+    /// The previous frame's stable view-projection; this frame's without history.
+    previous_view_projection: Mat4,
+    /// Change in jitter since the previous frame, in UV units.
+    jitter_delta: [f32; 2],
+}
+
+/// The lights a frame draws.
+struct FrameLighting {
+    /// The directional light that lights and shadows surfaces, when valid.
+    key: Option<DirectionalLight>,
+    skylight: Skylight,
+    /// Uniform ambient irradiance.
+    ambient: f32,
+    /// The selected point lights, strongest first.
+    points: Vec<PointLight>,
+}
+
+/// Everything the depth, scene, and transparency passes draw, laid out in the GPU buffers.
+struct FrameDraws<'a> {
+    /// Opaque batches, front to back by their nearest instance.
+    opaque: &'a [Batch],
+    /// Transient opaque vertices at the start of the transient stream.
+    transient_opaque: u32,
+    /// The back-to-front transparent queue.
+    transparent: &'a TransparentQueue,
+    /// Blended submeshes, indexed by the queue's mesh order.
+    blends: &'a [BlendItem],
+    /// Instance offset of the first blended mesh in queue order.
+    blend_start: u32,
+    draw_sky: bool,
+    /// Image-based lighting for PBR surfaces (the black default without it).
+    image_lighting: &'a wgpu::BindGroup,
+}
+
+/// Where one shadow view renders.
+#[derive(Clone, Copy, Debug)]
+enum ShadowTarget {
+    Cascade(usize),
+    PointFace { slot: usize, face: usize },
+}
+
+/// One shadow view and the casters that reach it.
+struct ShadowView {
+    matrix: Mat4,
+    target: ShadowTarget,
+    batches: Vec<Batch>,
+    /// Whether the transient opaque triangles reach this view.
+    transient: bool,
+}
+
+/// Shadow views and receiver data prepared for one frame.
+#[derive(Default)]
+struct ShadowPlan {
+    /// Views in pass order: cascades, then six faces per shadowed point light.
+    views: Vec<ShadowView>,
+    cascades: usize,
+    point_lights: usize,
+    /// Per selected point light, its shadow slot plus one, or zero (`PointLight.color.a` in scene-common.wgsl).
+    slots: [f32; MAX_POINT_LIGHTS],
+    /// Caster instances drawn across all views.
+    caster_instances: usize,
+}
+
+/// Everything that can cast into a shadow view this frame.
+struct ShadowCasters<'a> {
+    /// Opaque shadow-casting instances, grouped by asset.
+    meshes: &'a [CasterItem],
+    /// World bounds of the transient opaque triangles, if any.
+    transient: Option<Bounds>,
+    /// World bounds of each shadow-casting terrain instance.
+    terrain: &'a [Bounds],
 }
 
 /// The last submitted camera, for history resets and reprojection.
@@ -199,14 +373,15 @@ struct PreviousCamera {
     view_projection: Mat4,
     raster_view_projection: Mat4,
     jitter: [f32; 2],
-    time: f32,
+    /// Presentation seconds when it was drawn.
+    time_seconds: f64,
 }
 
 /// Scene effects and the frame-to-frame state they need.
 struct EffectsState {
     runtime: SceneEffectsRuntime,
-    surfaces: Option<SurfacePass>,
-    motion: Option<MotionPass>,
+    /// The normal, roughness, and motion targets the scene pass writes, when the effects read them.
+    attachments: Option<SceneAttachments>,
     volume: Option<VolumeLights>,
     previous_models: HashMap<MeshInstanceId, Mat4>,
     previous_camera: Option<PreviousCamera>,
@@ -218,53 +393,20 @@ impl EffectsState {
         self.previous_models.clear();
         self.previous_camera = None;
     }
-}
 
-/// Temporal-antialiasing jitter samples before the Halton sequence repeats.
-const JITTER_SAMPLE_COUNT: u32 = 8;
-
-/// One blended instance range waiting to be sorted.
-struct BlendItem {
-    distance: f32,
-    pipeline: BlendPipeline,
-    asset: MeshAsset,
-    indices: std::ops::Range<u32>,
-    material: Option<u64>,
-    raw: InstanceRaw,
-}
-
-/// A recorded batch: one asset submesh drawn for a contiguous instance range.
-/// Shadow-caster batches share this record; the caster pass ignores `pipeline`.
-struct Batch {
-    pipeline: OpaquePipeline,
-    asset_id: u64,
-    indices: std::ops::Range<u32>,
-    instances: std::ops::Range<u32>,
-    /// Material maps for the PBR pass and masked casters; `None` binds the white default.
-    material: Option<u64>,
-    /// Whether shadow casters must alpha-test this range.
-    masked: bool,
-}
-
-/// Transparent work recorded after opaque geometry (and after effects, when they run).
-struct TransparentWork<'a> {
-    blend_items: &'a [BlendItem],
-    blend_start: u32,
-    transient: std::ops::Range<u32>,
-    plan: &'a [PlannedDraw],
-}
-
-/// Frame values the effect attachments and chains read.
-struct EffectsContext<'a> {
-    inputs: &'a FrameInputs<'a>,
-    camera: &'a CameraFrame,
-    raster: &'a CameraFrame,
-    opaque_batches: &'a [Batch],
-    transient_opaque_count: u32,
-    instance_count: usize,
-    models: &'a [(MeshInstanceId, Mat4)],
-    jitter: [f32; 2],
-    size: (u32, u32),
+    /// Allocate the scene-pass attachments the effects read for a `size` frame (or release them), and return the
+    /// targets the scene pass writes.
+    fn prepare_attachments(&mut self, device: &wgpu::Device, size: (u32, u32)) -> SceneTargets {
+        let requirements = self.runtime.options().requirements();
+        if !(requirements.normal_texture || requirements.velocity_texture || requirements.taa_velocity_texture) {
+            self.attachments = None;
+            return SceneTargets::Color;
+        }
+        if self.attachments.as_ref().is_none_or(|attachments| attachments.size() != size) {
+            self.attachments = Some(SceneAttachments::new(device, size));
+        }
+        SceneTargets::ColorAndAttachments
+    }
 }
 
 /// GPU copy of one asset, released when the asset is dropped everywhere.
@@ -272,16 +414,6 @@ struct GpuMesh {
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     asset: Weak<dyn std::any::Any + Send + Sync>,
-}
-
-/// Shadow views and receiver data prepared for one frame.
-struct ShadowPlan {
-    /// Light view-projections in pass order: cascades, then six faces per shadowed point light.
-    views: Vec<Mat4>,
-    cascades: usize,
-    point_lights: usize,
-    /// Per point light, its shadow slot plus one, or zero (`PointLight.color.a` in scene-common.wgsl).
-    slots: [f32; MAX_POINT_LIGHTS],
 }
 
 /// The engine's renderer. Borrows scenes and cameras per frame; owns all GPU resources it creates.
@@ -294,7 +426,9 @@ pub struct Renderer {
     atmosphere_buffer: wgpu::Buffer,
     atmosphere_bind_group: wgpu::BindGroup,
     shadows: ShadowMaps,
-    // PBR material maps and image-based lighting (the default group is black with zero intensity).
+    // PBR material maps (with generated mips) and image-based lighting (the default group is black with zero
+    // intensity).
+    mipmaps: MipmapGenerator,
     material_maps: MaterialMaps,
     image_lighting_buffer: wgpu::Buffer,
     default_image_lighting: wgpu::BindGroup,
@@ -314,10 +448,11 @@ pub struct Renderer {
     // Uploaded mesh copies keyed by asset identity.
     meshes: HashMap<u64, GpuMesh>,
 
-    // Configuration and drawing size.
+    // Configuration, drawing size, and the shell's presentation clock.
     options: RendererOptions,
     physical_size: (u32, u32),
     scale_factor: f32,
+    presentation_time: PresentationTime,
     diagnostics: RendererDiagnostics,
 
     // The shared device; resources above keep it alive internally, so field order is not load-bearing here.
@@ -328,8 +463,9 @@ pub struct Renderer {
 impl Renderer {
     /// Create a renderer that presents into views of `output_format`.
     ///
-    /// The final pass writes display-referred values without sRGB encoding, matching the TypeScript engine's canvas
-    /// path; pass a non-sRGB format (or a non-sRGB view format of an sRGB surface) to reproduce its look.
+    /// Lighting and blending happen in linear light and the presentation pass delivers sRGB-encoded display values in
+    /// either kind of format: a non-sRGB view stores them as written, and an sRGB view receives decoded values that its
+    /// hardware encoding turns back into the same bytes.
     pub fn new(gpu: &GpuContext, output_format: wgpu::TextureFormat, options: RendererOptions) -> Self {
         let device = gpu.device();
         let capabilities = gpu.capabilities();
@@ -357,6 +493,7 @@ impl Renderer {
             capabilities.max_texture_dimension,
         );
 
+        let mipmaps = MipmapGenerator::new(device);
         let material_maps = MaterialMaps::new(device, gpu.queue(), &pipelines.material_layout);
         let image_lighting_buffer = uniform_buffer(device, "image lighting", 16);
         let default_image_textures =
@@ -392,6 +529,7 @@ impl Renderer {
             atmosphere_buffer,
             atmosphere_bind_group,
             shadows,
+            mipmaps,
             material_maps,
             image_lighting_buffer,
             default_image_lighting,
@@ -408,6 +546,7 @@ impl Renderer {
             options: options.clone(),
             physical_size: (0, 0),
             scale_factor: 1.0,
+            presentation_time: PresentationTime::default(),
             diagnostics,
             gpu: gpu.clone(),
             output_format,
@@ -441,8 +580,7 @@ impl Renderer {
         self.effects = match options {
             Some(options) if options.any_enabled() && self.effects_supported() => Some(EffectsState {
                 runtime: SceneEffectsRuntime::new(self.gpu.device(), options, self.gpu.capabilities().scene_format),
-                surfaces: None,
-                motion: None,
+                attachments: None,
                 volume: None,
                 previous_models: HashMap::new(),
                 previous_camera: None,
@@ -486,6 +624,12 @@ impl Renderer {
         self.effects.as_ref().and_then(|effects| effects.volume.as_ref()).map(VolumeLights::stats)
     }
 
+    /// Selection and draw statistics of a scene terrain instance from the most recent frame; `None` when that frame did
+    /// not prepare it (it was hidden, or outside the view without casting shadows).
+    pub fn terrain_stats(&self, id: TerrainInstanceId) -> Option<&TerrainStats> {
+        self.terrain.stats(id)
+    }
+
     /// Restart temporal effect history, for camera cuts, teleports, and other discontinuities the renderer cannot see.
     pub fn reset_history(&mut self) {
         if let Some(effects) = &mut self.effects {
@@ -500,6 +644,17 @@ impl Renderer {
     pub fn resize(&mut self, physical_width: u32, physical_height: u32, scale_factor: f32) {
         self.physical_size = (physical_width, physical_height);
         self.scale_factor = if scale_factor.is_finite() && scale_factor > 0.0 { scale_factor } else { 1.0 };
+    }
+
+    /// Set the presentation clock for the next frame. The shell calls this before every render phase; renderers
+    /// driven without a shell (tests and offline tools) advance it themselves, or temporal effects hold still.
+    pub fn set_presentation_time(&mut self, time: PresentationTime) {
+        self.presentation_time = time;
+    }
+
+    /// The presentation clock the next frame renders with.
+    pub fn presentation_time(&self) -> PresentationTime {
+        self.presentation_time
     }
 
     /// Drawing-buffer size in physical pixels.
@@ -532,9 +687,9 @@ impl Renderer {
         self.options.atmosphere
     }
 
-    /// Draw (or stop drawing) the procedural sky from the next frame. Tools that light a studio preview with an
-    /// environment's primary light over a plain background turn it off; hosts that share one renderer between tools
-    /// re-apply it when a tool becomes active.
+    /// Draw (or stop drawing) the procedural sky from the next frame. Tools that light a studio preview with their own
+    /// key light over a plain background turn it off; hosts that share one renderer between tools re-apply it when a
+    /// tool becomes active.
     pub fn set_atmosphere(&mut self, enabled: bool) {
         self.options.atmosphere = enabled;
     }
@@ -627,7 +782,8 @@ impl Renderer {
     /// Record one frame into `encoder` without submitting, so a host can append overlays (such as development UI).
     ///
     /// Uploads happen immediately through the queue. Fails without recording anything for a zero-sized drawing buffer,
-    /// invalid lights, or a transparent-draw texture larger than the device supports.
+    /// invalid ambient or image lighting, invalid terrain settings, or a texture larger than the device supports.
+    /// Invalid lights are skipped rather than failing the frame (see [`FrameInputs`]).
     pub fn encode(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
@@ -640,136 +796,173 @@ impl Renderer {
         if width == 0 || height == 0 {
             return Err(RenderError::InvalidFrame("the drawing buffer has no area; call resize first".into()));
         }
-        validate_lights(inputs)?;
+        validate_frame(inputs)?;
 
-        // Camera and culling. Effects may jitter the raster projection; culling and shadows use the stable camera.
+        // The effects leave `self` for the frame so their state and the renderer's passes can be borrowed together.
         let camera_frame = self.camera_frame(camera);
-        let view_projection = camera_frame.view_projection();
-        let logical_height = self.physical_size.1 as f32 / self.scale_factor;
+        let mut effects = self.effects.take();
+        let result = self.encode_frame(encoder, scene, inputs, output, camera_frame, effects.as_mut());
+        self.effects = effects;
+        result
+    }
+
+    /// Record one validated frame; see the module documentation for the pass order.
+    fn encode_frame(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        scene: &RenderScene,
+        inputs: &FrameInputs<'_>,
+        output: &wgpu::TextureView,
+        camera_frame: CameraFrame,
+        mut effects: Option<&mut EffectsState>,
+    ) -> Result<(), RenderError> {
+        let (width, height) = self.physical_size;
+
+        // Cameras. Effects may jitter the raster projection; everything that decides what to draw uses the stable one.
+        let cameras = match effects.as_deref_mut() {
+            Some(state) => self.prepare_effects_camera(state, &camera_frame),
+            None => FrameCameras {
+                stable: camera_frame,
+                raster: camera_frame,
+                jitter: [0.0; 2],
+                previous_view_projection: camera_frame.view_projection(),
+                jitter_delta: [0.0; 2],
+            },
+        };
+        let logical_height = height as f32 / self.scale_factor;
         let terrain =
             self.terrain.prepare(&self.gpu, &self.pipelines, encoder, scene, &camera_frame, logical_height)?;
-        let mut effects = self.effects.take();
-        let (raster_frame, jitter) = match effects.as_mut() {
-            Some(effects) => self.prepare_effects_camera(effects, &camera_frame, inputs.time_seconds),
-            None => (camera_frame, [0.0; 2]),
+
+        // Lights: the strongest point lights that can reach the view, and the key directional light when usable.
+        let selected = select_point_lights(inputs.lights, &camera_frame);
+        let lighting = FrameLighting {
+            key: inputs.key_light().filter(DirectionalLight::is_valid),
+            skylight: inputs.skylight(),
+            ambient: inputs.resolved_ambient(),
+            points: selected.lights,
         };
-        let mut visible = terrain.visible;
-        let mut culled = terrain.culled;
-        let mut opaque_items = Vec::new();
-        let mut blend_items = Vec::new();
-        let mut caster_items = Vec::new();
-        let mut caster_bounds: Option<Bounds> = terrain.caster_bounds;
 
-        for (id, instance) in scene.iter() {
-            let (model, shown) = scene.compose(instance.parent, instance.transform.matrix(), instance.visible);
-            if !shown || instance.opacity <= 0.0 {
-                continue;
-            }
-            let raw = instance_raw(instance, model);
-            let transparent = instance.is_transparent();
-
-            // Shadow casters include camera-culled opaque geometry so off-screen objects still cast into view.
-            if instance.casts_shadow && !transparent {
-                caster_items.push(OpaqueItem {
-                    pipeline: OpaquePipeline::Lit,
-                    asset: instance.asset.clone(),
-                    raw,
-                    id: None,
-                });
-                let world = world_bounds(instance.asset.bounds(), model);
-                caster_bounds = Some(caster_bounds.map_or(world, |bounds| union(bounds, world)));
-            }
-
-            if outside_frustum(instance.asset.bounds(), model, view_projection) {
-                culled += 1;
-                continue;
-            }
-            visible += 1;
-            self.queue_instance(
-                id,
-                instance,
-                model,
-                raw,
-                transparent,
-                camera_frame.eye,
-                &mut opaque_items,
-                &mut blend_items,
-            );
-        }
-
-        // Transient triangles: opaque first, then transparency sorted back to front.
-        let backward = (camera_frame.eye - camera_frame.focus).try_normalize().unwrap_or(Vec3::Z);
-        let mut transient = transient_vertices(
-            inputs.opaque_triangles,
-            &sort_transparent_triangles(inputs.transparent_triangles, backward),
+        // Scene contents, then one back-to-front queue of every transparent element. Transient opaque triangles lead
+        // the transient vertex stream; the queue appends its colored triangles after them.
+        let view_depth = ViewDepth::new(&camera_frame);
+        let previous_models = effects.as_deref().map(|state| &state.previous_models);
+        let mut items = gather_scene(scene, &camera_frame, view_depth, previous_models);
+        let mut transient = opaque_transient_vertices(inputs.opaque_triangles);
+        let transient_opaque = transient.len() as u32;
+        let blend_depths: Vec<f32> = items.blends.iter().map(|item| item.depth).collect();
+        let transparent = build_transparent_queue(
+            &blend_depths,
+            inputs.transparent_triangles,
+            inputs.transparent_draws,
+            view_depth.eye,
+            view_depth.forward,
+            &mut transient,
         );
-        let transient_opaque_count = (inputs.opaque_triangles.len() / 3 * 3) as u32;
-        let transient_transparent_end = transient.len() as u32;
 
-        // Caller-sorted transparent runs: colored vertices follow the transient stream, textured ones upload here.
-        let transparent_plan = match self.textured.prepare(&self.gpu, inputs.transparent_draws, &mut transient) {
-            Ok(plan) => plan,
-            Err(error) => {
-                self.effects = effects;
-                return Err(error);
-            }
-        };
+        // Every texture, mesh, and material the frame draws has a GPU copy before any pass opens.
+        self.textured.upload_textures(&self.gpu, &mut self.mipmaps, inputs.transparent_draws)?;
+        self.textured.write_vertices(&self.gpu, &transparent.textured_vertices);
+        self.upload_scene_assets(&items)?;
 
-        // Ensure every referenced asset and material has a GPU copy before passes open.
-        for item in opaque_items.iter().chain(&caster_items) {
-            self.upload_mesh(&item.asset);
-        }
-        for item in &blend_items {
-            self.upload_mesh(&item.asset);
-        }
-        let assets = opaque_items.iter().chain(&caster_items).map(|item| &item.asset);
-        let materials: Vec<MaterialTextures> = assets
-            .chain(blend_items.iter().map(|item| &item.asset))
-            .flat_map(|asset| asset.submeshes().iter().filter_map(|submesh| submesh.textures.clone()))
-            .collect();
-        let max_texture_dimension = self.gpu.capabilities().max_texture_dimension;
-        for material in &materials {
-            if let Err(error) =
-                self.material_maps.prepare(self.gpu.device(), self.gpu.queue(), material, max_texture_dimension)
-            {
-                self.effects = effects;
-                return Err(error);
-            }
-        }
-
-        // Instance buffer: identity, camera opaque batches, sorted blended ranges, then shadow casters.
-        opaque_items.sort_by_key(|item| (item.pipeline, item.asset.id()));
-        caster_items.sort_by_key(|item| item.asset.id());
-        blend_items.sort_by(|left, right| right.distance.total_cmp(&left.distance));
+        // Instances: identity (for transient triangles), opaque batches, blended meshes in queue order, then each shadow
+        // view's culled casters.
         let mut raws = vec![InstanceRaw::IDENTITY];
-        let opaque_batches = self.batch(&opaque_items, &mut raws);
+        let opaque = batch_opaque(&mut items.opaque, &mut raws);
         let blend_start = raws.len() as u32;
-        raws.extend(blend_items.iter().map(|item| item.raw));
-        let caster_batches = self.batch(&caster_items, &mut raws);
+        raws.extend(transparent.mesh_order.iter().map(|index| items.blends[*index].raw));
+        items.casters.sort_by_key(|item| item.asset.id());
+        let casters = ShadowCasters {
+            meshes: &items.casters,
+            transient: triangle_bounds(&inputs.opaque_triangles[..transient_opaque as usize]),
+            terrain: &terrain.caster_bounds,
+        };
+        let shadows = self.plan_shadows(&lighting, &camera_frame, &casters, &mut raws);
         self.write_instances(&raws);
         self.write_transient(&transient);
 
-        // Shadow views, frame uniforms, and sky uniforms. Transient opaque triangles cast like meshes.
-        if let Some(bounds) = triangle_bounds(inputs.opaque_triangles) {
-            caster_bounds = Some(caster_bounds.map_or(bounds, |casters| union(casters, bounds)));
-        }
-        let shadow_plan = self.plan_shadows(inputs, &camera_frame, caster_bounds);
-        self.write_frame_uniforms(inputs, &raster_frame, &shadow_plan.slots);
+        // Frame, sky, and image-lighting uniforms.
+        self.write_frame_uniforms(&lighting, &shadows.slots, &cameras);
         let image_parameters = inputs
             .image_lighting
             .map_or([0.0; 4], |lighting| [lighting.intensity, lighting.rotation, lighting.map.max_mip, 0.0]);
         self.gpu.queue().write_buffer(&self.image_lighting_buffer, 0, bytemuck::cast_slice(&image_parameters));
         let draw_sky = self.options.atmosphere && inputs.environment.is_some();
         if draw_sky {
-            self.write_atmosphere_uniforms(inputs, &raster_frame);
+            self.write_atmosphere_uniforms(inputs, &cameras.raster);
         }
 
-        // Shadow passes: one depth-only view per cascade and point-light face.
+        // Scene targets: with effects that read surfaces, opaque materials write the attachments beside their color.
+        // Transparency joins the scene pass unless lighting effects must run between opaque surfaces and transparency.
+        let device = self.gpu.device().clone();
+        let targets = match effects.as_deref_mut() {
+            Some(state) => state.prepare_attachments(&device, (width, height)),
+            None => SceneTargets::Color,
+        };
+        self.pipelines.ensure_opaque(&device, targets);
+        self.terrain.ensure_lit(&device, targets);
+        let lighting_effects = effects.as_deref().is_some_and(|state| state.runtime.has_lighting_effects());
+        let transparency_in_scene = targets == SceneTargets::Color && !lighting_effects;
+        self.post.prepare(&device, self.gpu.queue(), width, height, self.presentation_time.time_seconds as f32);
+
+        let draws = FrameDraws {
+            opaque: &opaque,
+            transient_opaque,
+            transparent: &transparent,
+            blends: &items.blends,
+            blend_start,
+            draw_sky,
+            image_lighting: inputs
+                .image_lighting
+                .map_or(&self.default_image_lighting, |lighting| &lighting.map.bind_group),
+        };
+        let mut draw_calls = self.encode_shadow_views(encoder, &shadows, transient_opaque);
+        if self.options.depth_prepass {
+            draw_calls += self.encode_depth_prepass(encoder, &draws);
+        }
+        let attachments = effects.as_deref().and_then(|state| state.attachments.as_ref());
+        let keep_depth = effects.is_some();
+        let (calls, mut triangles) =
+            self.encode_scene_pass(encoder, inputs, &draws, attachments, transparency_in_scene, keep_depth);
+        draw_calls += calls;
+
+        if let Some(state) = effects {
+            let (calls, drawn) =
+                self.encode_effects(encoder, state, &lighting, &cameras, &draws, !transparency_in_scene)?;
+            draw_calls += calls;
+            triangles += drawn;
+            state.previous_models = items.models.iter().copied().collect();
+        }
+
+        self.post.encode(encoder, output);
+        self.release_dropped_meshes();
+        self.textured.release_dropped();
+        self.material_maps.release_dropped();
+
+        self.diagnostics.visible = items.visible + terrain.visible;
+        self.diagnostics.culled = items.culled + terrain.culled;
+        self.diagnostics.draw_calls = draw_calls;
+        self.diagnostics.triangles = triangles;
+        self.diagnostics.shadow_casters = shadows.caster_instances;
+        self.diagnostics.shadows_active = shadows.cascades > 0;
+        self.diagnostics.shadow_views = shadows.views.len();
+        self.diagnostics.shadow_point_lights = shadows.point_lights;
+        self.diagnostics.point_lights = lighting.points.len();
+        self.diagnostics.point_lights_omitted = selected.omitted;
+        Ok(())
+    }
+
+    /// Render each shadow view's culled casters, transient triangles, and terrain; returns draw calls.
+    fn encode_shadow_views(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        plan: &ShadowPlan,
+        transient_opaque: u32,
+    ) -> usize {
         let mut draw_calls = 0;
-        for view in 0..shadow_plan.views.len() {
-            let target = match view.checked_sub(shadow_plan.cascades) {
-                None => self.shadows.cascade_layer(view),
-                Some(face) => self.shadows.point_layer(face / POINT_FACES, face % POINT_FACES),
+        for (index, view) in plan.views.iter().enumerate() {
+            let target = match view.target {
+                ShadowTarget::Cascade(cascade) => self.shadows.cascade_layer(cascade),
+                ShadowTarget::PointFace { slot, face } => self.shadows.point_layer(slot, face),
             };
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("shadow view"),
@@ -781,291 +974,220 @@ impl Renderer {
                 }),
                 ..Default::default()
             });
-            pass.set_bind_group(0, self.shadows.caster(), &[ShadowMaps::caster_offset(view)]);
+            pass.set_bind_group(0, self.shadows.caster(), &[ShadowMaps::caster_offset(index)]);
             pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            draw_calls += self.draw_casters(&mut pass, &caster_batches);
-            if transient_opaque_count > 0 {
+            draw_calls += self.draw_casters(&mut pass, &view.batches);
+            if view.transient && transient_opaque > 0 {
                 pass.set_pipeline(&self.pipelines.caster);
                 pass.set_vertex_buffer(0, self.transient_buffer.slice(..));
-                pass.draw(0..transient_opaque_count, 0..1);
+                pass.draw(0..transient_opaque, 0..1);
                 draw_calls += 1;
             }
-            draw_calls += self.terrain.draw_shadow(&mut pass);
+            draw_calls += self.terrain.draw_shadow(&mut pass, view.matrix);
         }
-
-        // Scene pass into the HDR target. With effects, depth survives the opaque pass and transparency draws later.
-        self.post.prepare(self.gpu.device(), self.gpu.queue(), width, height, inputs.time_seconds);
-        let receiver = self.shadows.receiver();
-        let image_lighting =
-            inputs.image_lighting.map_or(&self.default_image_lighting, |lighting| &lighting.map.bind_group);
-        let transparent = TransparentWork {
-            blend_items: &blend_items,
-            blend_start,
-            transient: transient_opaque_count..transient_transparent_end,
-            plan: &transparent_plan,
-        };
-        let mut triangles = 0;
-        {
-            let clear = inputs.clear_color;
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("scene"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: self.post.scene_view(),
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: f64::from(clear.red),
-                            g: f64::from(clear.green),
-                            b: f64::from(clear.blue),
-                            a: f64::from(clear.alpha),
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: self.post.depth_view(),
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: if effects.is_some() { wgpu::StoreOp::Store } else { wgpu::StoreOp::Discard },
-                    }),
-                    stencil_ops: None,
-                }),
-                ..Default::default()
-            });
-            let (calls, drawn) = self.draw_opaque(
-                &mut pass,
-                receiver,
-                image_lighting,
-                draw_sky,
-                &opaque_batches,
-                transient_opaque_count,
-            );
-            let (terrain_calls, terrain_triangles) = self.terrain.draw_lit(&mut pass);
-            draw_calls += calls + terrain_calls;
-            triangles += drawn + terrain_triangles;
-            if effects.is_none() {
-                let (calls, drawn) = self.draw_transparent(&mut pass, &transparent);
-                draw_calls += calls;
-                triangles += drawn;
-            }
-        }
-
-        if let Some(state) = effects.as_mut() {
-            let models: Vec<(MeshInstanceId, Mat4)> = opaque_items
-                .iter()
-                .filter_map(|item| item.id.map(|id| (id, Mat4::from_cols_array_2d(&item.raw.model))))
-                .collect();
-            let context = EffectsContext {
-                inputs,
-                camera: &camera_frame,
-                raster: &raster_frame,
-                opaque_batches: &opaque_batches,
-                transient_opaque_count,
-                instance_count: raws.len(),
-                models: &models,
-                jitter,
-                size: (width, height),
-            };
-            if let Err(error) = self.encode_effects(encoder, state, &context) {
-                state.reset_history();
-                self.effects = effects;
-                return Err(RenderError::InvalidFrame(error.to_string()));
-            }
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("scene transparency"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: self.post.scene_view(),
-                    resolve_target: None,
-                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: self.post.depth_view(),
-                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Discard }),
-                    stencil_ops: None,
-                }),
-                ..Default::default()
-            });
-            pass.set_bind_group(0, &self.frame_bind_group, &[]);
-            pass.set_bind_group(1, receiver, &[]);
-            pass.set_bind_group(2, image_lighting, &[]);
-            pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            let (calls, drawn) = self.draw_transparent(&mut pass, &transparent);
-            draw_calls += calls;
-            triangles += drawn;
-            drop(pass);
-
-            // Remember this frame for reprojection and cut detection.
-            state.previous_models = models.into_iter().collect();
-            state.previous_camera = Some(PreviousCamera {
-                eye: camera_frame.eye,
-                focus: camera_frame.focus,
-                projection: camera_frame.projection,
-                view_projection,
-                raster_view_projection: raster_frame.view_projection(),
-                jitter,
-                time: inputs.time_seconds,
-            });
-        }
-        self.effects = effects;
-
-        self.post.encode(encoder, output);
-        self.release_dropped_meshes();
-        self.textured.release_dropped();
-        self.material_maps.release_dropped();
-
-        self.diagnostics.visible = visible;
-        self.diagnostics.culled = culled;
-        self.diagnostics.draw_calls = draw_calls;
-        self.diagnostics.triangles = triangles;
-        self.diagnostics.shadow_casters = if shadow_plan.views.is_empty() { 0 } else { caster_items.len() };
-        self.diagnostics.shadows_active = shadow_plan.cascades > 0;
-        self.diagnostics.shadow_views = shadow_plan.views.len();
-        self.diagnostics.shadow_point_lights = shadow_plan.point_lights;
-        Ok(())
+        draw_calls
     }
 
-    /// Route one camera-visible instance into the opaque batches and/or the sorted blend queue.
-    #[allow(clippy::too_many_arguments)]
-    fn queue_instance(
-        &self,
-        id: MeshInstanceId,
-        instance: &MeshInstance,
-        model: Mat4,
-        raw: InstanceRaw,
-        transparent: bool,
-        eye: Vec3,
-        opaque_items: &mut Vec<OpaqueItem>,
-        blend_items: &mut Vec<BlendItem>,
-    ) {
-        let distance = world_bounds(instance.asset.bounds(), model).center().distance(eye);
-        if transparent {
-            // Transparent instances are unlit, matching the TypeScript scene path; PBR keeps its own blending.
-            let pipeline = if instance.shading == Shading::Pbr { BlendPipeline::Pbr } else { BlendPipeline::Unlit };
-            for submesh in instance.asset.submeshes() {
-                blend_items.push(BlendItem {
-                    distance,
-                    pipeline,
-                    asset: instance.asset.clone(),
-                    indices: submesh.indices.clone(),
-                    material: submesh.textures.as_ref().map(MaterialTextures::id),
-                    raw,
-                });
+    /// Fill scene depth: terrain first, then opaque batches front to back, then transient opaque triangles. Returns
+    /// draw calls.
+    fn encode_depth_prepass(&self, encoder: &mut wgpu::CommandEncoder, draws: &FrameDraws<'_>) -> usize {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("depth pre-pass"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: self.post.depth_view(),
+                depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
+                stencil_ops: None,
+            }),
+            ..Default::default()
+        });
+        pass.set_bind_group(0, &self.frame_bind_group, &[]);
+        let mut draw_calls = self.terrain.draw_depth(&mut pass);
+
+        // Masked ranges alpha-test their base color, so cut-out holes stay open for whatever lies behind them.
+        pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+        let mut masked = None;
+        for batch in draws.opaque {
+            if masked != Some(batch.masked) {
+                pass.set_pipeline(if batch.masked { &self.pipelines.masked_depth } else { &self.pipelines.depth });
+                masked = Some(batch.masked);
             }
-            return;
-        }
-
-        let pipeline = match instance.shading {
-            Shading::Lit => OpaquePipeline::Lit,
-            Shading::Pbr => OpaquePipeline::Pbr,
-            Shading::Unlit => OpaquePipeline::Unlit,
-        };
-        opaque_items.push(OpaqueItem { pipeline, asset: instance.asset.clone(), raw, id: Some(id) });
-
-        // PBR materials can blend part of an otherwise opaque asset.
-        if instance.shading == Shading::Pbr {
-            for submesh in instance.asset.submeshes().iter().filter(|submesh| submesh.blend) {
-                blend_items.push(BlendItem {
-                    distance,
-                    pipeline: BlendPipeline::Pbr,
-                    asset: instance.asset.clone(),
-                    indices: submesh.indices.clone(),
-                    material: submesh.textures.as_ref().map(MaterialTextures::id),
-                    raw,
-                });
+            if batch.masked {
+                pass.set_bind_group(1, self.material_maps.group(batch.material), &[]);
             }
-        }
-    }
-
-    /// Sky, opaque batches, and transient opaque triangles; returns draw calls and triangles.
-    fn draw_opaque(
-        &self,
-        pass: &mut wgpu::RenderPass<'_>,
-        receiver: &wgpu::BindGroup,
-        image_lighting: &wgpu::BindGroup,
-        draw_sky: bool,
-        batches: &[Batch],
-        transient_opaque_count: u32,
-    ) -> (usize, usize) {
-        let mut draw_calls = 0;
-        if draw_sky {
-            pass.set_pipeline(&self.pipelines.atmosphere);
-            pass.set_bind_group(0, &self.atmosphere_bind_group, &[]);
-            pass.draw(0..3, 0..1);
+            self.draw_batch(&mut pass, batch);
             draw_calls += 1;
         }
-        pass.set_bind_group(0, &self.frame_bind_group, &[]);
-        pass.set_bind_group(1, receiver, &[]);
-        pass.set_bind_group(2, image_lighting, &[]);
-        pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+        if draws.transient_opaque > 0 {
+            pass.set_pipeline(&self.pipelines.depth);
+            pass.set_vertex_buffer(0, self.transient_buffer.slice(..));
+            pass.draw(0..draws.transient_opaque, 0..1);
+            draw_calls += 1;
+        }
+        draw_calls
+    }
 
-        // Opaque batches, grouped by pipeline; PBR batches bind their material maps.
-        let mut triangles = 0;
+    /// The scene pass into the HDR target (and the effect attachments, when supplied): terrain, opaque batches,
+    /// transient opaque triangles, the sky, and transparency when `transparency` is set. Returns draw calls and
+    /// triangles. `keep_depth` stores depth for the effects and a later transparency pass.
+    fn encode_scene_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        inputs: &FrameInputs<'_>,
+        draws: &FrameDraws<'_>,
+        attachments: Option<&SceneAttachments>,
+        transparency: bool,
+        keep_depth: bool,
+    ) -> (usize, usize) {
+        let clear = inputs.clear_color;
+        let mut color_attachments = vec![Some(wgpu::RenderPassColorAttachment {
+            view: self.post.scene_view(),
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color {
+                    r: f64::from(clear.red),
+                    g: f64::from(clear.green),
+                    b: f64::from(clear.blue),
+                    a: f64::from(clear.alpha),
+                }),
+                store: wgpu::StoreOp::Store,
+            },
+            depth_slice: None,
+        })];
+        let targets = match attachments {
+            Some(attachments) => {
+                color_attachments.extend(attachments.color_attachments());
+                SceneTargets::ColorAndAttachments
+            }
+            None => SceneTargets::Color,
+        };
+
+        // After the pre-pass, depth already holds the nearest opaque surface and only it passes the less-or-equal test.
+        let depth_load = if self.options.depth_prepass { wgpu::LoadOp::Load } else { wgpu::LoadOp::Clear(1.0) };
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("scene"),
+            color_attachments: &color_attachments,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: self.post.depth_view(),
+                depth_ops: Some(wgpu::Operations {
+                    load: depth_load,
+                    store: if keep_depth { wgpu::StoreOp::Store } else { wgpu::StoreOp::Discard },
+                }),
+                stencil_ops: None,
+            }),
+            ..Default::default()
+        });
+        let pipelines = self.pipelines.opaque(targets);
+        pass.set_bind_group(0, &self.frame_bind_group, &[]);
+        pass.set_bind_group(1, self.shadows.receiver(), &[]);
+        pass.set_bind_group(2, draws.image_lighting, &[]);
+
+        // Terrain first, as the largest occluder.
+        let (mut draw_calls, mut triangles) = self.terrain.draw_lit(&mut pass, targets);
+
+        // Opaque batches; PBR batches bind their material maps.
+        pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
         let mut bound = None;
-        for batch in batches {
+        for batch in scene_order(draws.opaque, self.options.depth_prepass) {
             if bound != Some(batch.pipeline) {
-                pass.set_pipeline(self.opaque_pipeline(batch.pipeline));
+                pass.set_pipeline(match batch.pipeline {
+                    OpaquePipeline::Lit => &pipelines.lit,
+                    OpaquePipeline::Pbr => &pipelines.pbr,
+                    OpaquePipeline::Unlit => &pipelines.unlit,
+                });
                 bound = Some(batch.pipeline);
             }
             if batch.pipeline == OpaquePipeline::Pbr {
                 pass.set_bind_group(3, self.material_maps.group(batch.material), &[]);
             }
-            triangles += self.draw_batch(pass, batch);
+            triangles += self.draw_batch(&mut pass, batch);
             draw_calls += 1;
         }
 
         // Transient opaque triangles are lit like Lit meshes.
-        if transient_opaque_count > 0 {
-            pass.set_pipeline(&self.pipelines.lit);
+        if draws.transient_opaque > 0 {
+            pass.set_pipeline(&pipelines.lit);
             pass.set_vertex_buffer(0, self.transient_buffer.slice(..));
-            pass.draw(0..transient_opaque_count, 0..1);
+            pass.draw(0..draws.transient_opaque, 0..1);
             draw_calls += 1;
-            triangles += (transient_opaque_count / 3) as usize;
+            triangles += (draws.transient_opaque / 3) as usize;
+        }
+
+        // The sky last, on the far plane, so it shades only the pixels no surface covered.
+        if draws.draw_sky {
+            pass.set_pipeline(&pipelines.atmosphere);
+            pass.set_bind_group(0, &self.atmosphere_bind_group, &[]);
+            pass.draw(0..3, 0..1);
+            draw_calls += 1;
+        }
+
+        if transparency {
+            let (calls, drawn) = self.draw_transparent(&mut pass, draws);
+            draw_calls += calls;
+            triangles += drawn;
         }
         (draw_calls, triangles)
     }
 
-    /// Sorted blended ranges, sorted transient transparency, then caller-sorted transparent runs; returns draw calls and
-    /// triangles. Expects groups 0 and 1 and the instance buffer bound.
-    fn draw_transparent(&self, pass: &mut wgpu::RenderPass<'_>, work: &TransparentWork<'_>) -> (usize, usize) {
-        let (mut draw_calls, mut triangles) = (0, 0);
-        for (offset, item) in work.blend_items.iter().enumerate() {
-            let Some(mesh) = self.meshes.get(&item.asset.id()) else {
-                continue;
-            };
-            match item.pipeline {
-                BlendPipeline::Unlit => pass.set_pipeline(&self.pipelines.unlit_blend),
-                BlendPipeline::Pbr => {
-                    pass.set_pipeline(&self.pipelines.pbr_blend);
-                    pass.set_bind_group(3, self.material_maps.group(item.material), &[]);
-                }
-            }
-            pass.set_vertex_buffer(0, mesh.vertices.slice(..));
-            pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
-            let instance = work.blend_start + offset as u32;
-            pass.draw_indexed(item.indices.clone(), 0, instance..instance + 1);
-            draw_calls += 1;
-            triangles += item.indices.len() / 3;
+    /// Transparency in its own pass over the lit scene color and stored depth; returns draw calls and triangles.
+    fn encode_transparency_pass(&self, encoder: &mut wgpu::CommandEncoder, draws: &FrameDraws<'_>) -> (usize, usize) {
+        if draws.transparent.steps.is_empty() {
+            return (0, 0);
         }
-        if !work.transient.is_empty() {
-            pass.set_pipeline(&self.pipelines.unlit_blend);
-            pass.set_vertex_buffer(0, self.transient_buffer.slice(..));
-            pass.draw(work.transient.clone(), 0..1);
-            draw_calls += 1;
-            triangles += work.transient.len() / 3;
-        }
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("scene transparency"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: self.post.scene_view(),
+                resolve_target: None,
+                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                depth_slice: None,
+            })],
+            // Composite effects (temporal antialiasing) read depth after this pass.
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: self.post.depth_view(),
+                depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store }),
+                stencil_ops: None,
+            }),
+            ..Default::default()
+        });
+        self.draw_transparent(&mut pass, draws)
+    }
 
-        // Caller-sorted transparent runs, in the supplied order (groups 0 and 1 stay bound across pipelines).
-        for planned in work.plan {
-            match planned {
-                PlannedDraw::Colored(range) => {
+    /// Draw the transparent queue back to front; returns draw calls and triangles. Binds every group it uses.
+    fn draw_transparent(&self, pass: &mut wgpu::RenderPass<'_>, draws: &FrameDraws<'_>) -> (usize, usize) {
+        pass.set_bind_group(0, &self.frame_bind_group, &[]);
+        pass.set_bind_group(1, self.shadows.receiver(), &[]);
+        pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+        let (mut draw_calls, mut triangles) = (0, 0);
+        for step in &draws.transparent.steps {
+            match step {
+                TransparentStep::Mesh(position) => {
+                    let item = &draws.blends[draws.transparent.mesh_order[*position]];
+                    let Some(mesh) = self.meshes.get(&item.asset.id()) else {
+                        continue;
+                    };
+                    match item.pipeline {
+                        BlendPipeline::Unlit => pass.set_pipeline(&self.pipelines.unlit_blend),
+                        BlendPipeline::Pbr => {
+                            // Textured runs rebind group 2, so blended PBR binds image lighting each time.
+                            pass.set_pipeline(&self.pipelines.pbr_blend);
+                            pass.set_bind_group(2, draws.image_lighting, &[]);
+                            pass.set_bind_group(3, self.material_maps.group(item.material), &[]);
+                        }
+                    }
+                    pass.set_vertex_buffer(0, mesh.vertices.slice(..));
+                    pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
+                    let instance = draws.blend_start + *position as u32;
+                    pass.draw_indexed(item.indices.clone(), 0, instance..instance + 1);
+                    triangles += item.indices.len() / 3;
+                }
+                TransparentStep::Colored(vertices) => {
                     pass.set_pipeline(&self.pipelines.unlit_blend);
                     pass.set_vertex_buffer(0, self.transient_buffer.slice(..));
-                    pass.draw(range.clone(), 0..1);
-                    triangles += range.len() / 3;
+                    pass.draw(vertices.clone(), 0..1);
+                    triangles += vertices.len() / 3;
                 }
-                PlannedDraw::Textured { texture, vertices } => {
+                TransparentStep::Textured { texture, vertices } => {
                     if !self.textured.draw(pass, *texture, vertices.clone()) {
                         continue;
                     }
@@ -1078,17 +1200,16 @@ impl Renderer {
     }
 
     /// Detect history discontinuities and jitter the raster projection for temporal antialiasing.
-    fn prepare_effects_camera(
-        &self,
-        effects: &mut EffectsState,
-        camera: &CameraFrame,
-        time: f32,
-    ) -> (CameraFrame, [f32; 2]) {
+    ///
+    /// A presentation-clock gap longer than [`HISTORY_TIME_JUMP_SECONDS`] (a stall or a hidden window) restarts history,
+    /// as does a camera cut.
+    fn prepare_effects_camera(&self, effects: &mut EffectsState, camera: &CameraFrame) -> FrameCameras {
         if let Some(previous) = &effects.previous_camera {
             let distance = (camera.eye - camera.focus).length();
             let previous_forward = (previous.focus - previous.eye).normalize_or_zero();
             let forward = (camera.focus - camera.eye).normalize_or_zero();
-            let time_jump = time < previous.time || time - previous.time > 0.25;
+            let time = self.presentation_time.time_seconds;
+            let time_jump = time < previous.time_seconds || time - previous.time_seconds > HISTORY_TIME_JUMP_SECONDS;
             let cut = camera.eye.distance(previous.eye) > distance * 0.5
                 || previous_forward.dot(forward) < 0.5_f32.cos()
                 || camera.projection != previous.projection;
@@ -1096,177 +1217,142 @@ impl Renderer {
                 effects.reset_history();
             }
         }
-        if effects.runtime.options().taa.is_none() {
-            return (*camera, [0.0; 2]);
+        let jitter = if effects.runtime.options().taa.is_some() {
+            let (width, height) = self.physical_size;
+            scene_camera_jitter(effects.runtime.frame_index(), width, height)
+        } else {
+            [0.0; 2]
+        };
+        let previous = effects.previous_camera.as_ref();
+        let previous_jitter = previous.map_or([0.0; 2], |previous| previous.jitter);
+        FrameCameras {
+            stable: *camera,
+            raster: CameraFrame { projection: jitter_projection(camera.projection, jitter), ..*camera },
+            jitter,
+            previous_view_projection: previous.map_or(camera.view_projection(), |previous| previous.view_projection),
+            jitter_delta: [jitter[0] - previous_jitter[0], jitter[1] - previous_jitter[1]],
         }
-        let (width, height) = self.physical_size;
-        let jitter = scene_camera_jitter(effects.runtime.frame_index(), width, height);
-        (CameraFrame { projection: jitter_projection(camera.projection, jitter), ..*camera }, jitter)
     }
 
-    /// Render the attachments the effects need, then run the effect chains over the opaque scene color.
+    /// Run the lighting effects over the opaque scene, draw transparency when `transparency_pending`, then run the
+    /// composite effects over everything and remember this frame's camera. Returns the transparency pass's draw calls
+    /// and triangles.
     fn encode_effects(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         state: &mut EffectsState,
-        context: &EffectsContext<'_>,
-    ) -> Result<(), SceneEffectsError> {
+        lighting: &FrameLighting,
+        cameras: &FrameCameras,
+        draws: &FrameDraws<'_>,
+        transparency_pending: bool,
+    ) -> Result<(usize, usize), RenderError> {
         let device = self.gpu.device();
         let queue = self.gpu.queue();
-        let requirements = state.runtime.options().requirements();
-        let raster_view_projection = context.raster.view_projection();
-        let view_projection = context.camera.view_projection();
+        let size = self.physical_size;
+        let scene_format = self.gpu.capabilities().scene_format;
+        let camera = &cameras.stable;
+        let view_projection = camera.view_projection();
+        let raster_view_projection = cameras.raster.view_projection();
+        let history = state
+            .previous_camera
+            .as_ref()
+            .map(|previous| (previous.view_projection, previous.raster_view_projection, previous.jitter));
 
-        if requirements.normal_texture {
-            let surfaces = state.surfaces.get_or_insert_with(|| SurfacePass::new(device, &self.pipelines.frame_layout));
-            let mut pass = surfaces.begin(device, encoder, self.post.depth_view(), context.size);
-            pass.set_bind_group(0, &self.frame_bind_group, &[]);
-            pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            for batch in context.opaque_batches {
-                self.draw_batch(&mut pass, batch);
-            }
-            if context.transient_opaque_count > 0 {
-                pass.set_vertex_buffer(0, self.transient_buffer.slice(..));
-                pass.draw(0..context.transient_opaque_count, 0..1);
-            }
-            self.terrain.draw_surface(&mut pass);
-        } else {
-            state.surfaces = None;
-        }
-
-        let previous = state.previous_camera.as_ref();
-        let previous_jitter = previous.map_or([0.0; 2], |previous| previous.jitter);
-        let current_jitter = context.jitter;
-        if requirements.velocity_texture || requirements.taa_velocity_texture {
-            // Previous models line up with the instance buffer: identity, then camera-opaque instances in batch order.
-            let mut previous_models = Vec::with_capacity(context.instance_count);
-            previous_models.push(Mat4::IDENTITY);
-            for (id, model) in context.models {
-                previous_models.push(state.previous_models.get(id).copied().unwrap_or(*model));
-            }
-            previous_models.resize(context.instance_count.max(previous_models.len()), Mat4::IDENTITY);
-            let uniforms = MotionUniforms {
-                current_view_projection: view_projection.to_cols_array_2d(),
-                previous_view_projection: previous
-                    .map_or(view_projection, |previous| previous.view_projection)
-                    .to_cols_array_2d(),
-                raster_view_projection: raster_view_projection.to_cols_array_2d(),
-                velocity_jitter_delta: [
-                    current_jitter[0] - previous_jitter[0],
-                    current_jitter[1] - previous_jitter[1],
-                    0.0,
-                    0.0,
-                ],
-            };
-            let motion = state.motion.get_or_insert_with(|| MotionPass::new(device));
-            let mut pass = motion.begin(device, queue, encoder, &uniforms, &previous_models, context.size);
-            pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            for batch in context.opaque_batches {
-                self.draw_batch(&mut pass, batch);
-            }
-            if context.transient_opaque_count > 0 {
-                pass.set_vertex_buffer(0, self.transient_buffer.slice(..));
-                pass.draw(0..context.transient_opaque_count, 0..1);
-            }
-            self.terrain.draw_motion(queue, &mut pass, &uniforms);
-        } else {
-            state.motion = None;
-        }
-
-        let clusters = if requirements.clustered_lighting {
+        // Clustered volume lighting reads the frame's selected point lights.
+        let clusters = if state.runtime.options().requirements().clustered_lighting {
             let volume = state.volume.get_or_insert_with(|| VolumeLights::new(device));
-            let camera = VolumeCamera {
-                view: context.camera.view,
-                projection: context.raster.projection,
-                near: context.camera.near,
-                far: context.camera.far,
-                width: context.size.0,
-                height: context.size.1,
+            let volume_camera = VolumeCamera {
+                view: camera.view,
+                projection: cameras.raster.projection,
+                near: camera.near,
+                far: camera.far,
+                width: size.0,
+                height: size.1,
             };
-            Some(volume.update(device, queue, context.inputs.lights, &camera))
+            Some(volume.update(device, queue, &lighting.points, &volume_camera))
         } else {
             state.volume = None;
             None
         };
 
-        let inverse_raster = raster_view_projection.inverse();
-        let (direction, color) = match context.inputs.environment {
-            Some(environment) => {
-                let primary = environment.primary;
-                let direction = context.camera.view.transform_vector3(primary.direction);
-                (direction.to_array(), primary.color.scaled(primary.intensity).rgb_array())
+        let (direction, color) = match lighting.key {
+            Some(light) => {
+                let direction = camera.view.transform_vector3(light.direction.normalize());
+                (direction.to_array(), light.radiance().rgb_array())
             }
             None => ([0.0, 1.0, 0.0], [0.0; 3]),
         };
+        let attachments = state.attachments.as_ref();
         let frame = EffectsFrame {
             depth: self.post.depth_view(),
-            normal: state.surfaces.as_ref().and_then(SurfacePass::view),
-            velocity: state.motion.as_ref().and_then(MotionPass::jittered),
-            taa_velocity: state.motion.as_ref().and_then(MotionPass::unjittered),
-            projection: context.raster.projection,
-            inverse_projection: context.raster.projection.inverse(),
-            inverse_view: context.camera.view.inverse(),
+            normal: attachments.map(SceneAttachments::normal_roughness),
+            velocity: attachments.map(SceneAttachments::jittered_motion),
+            taa_velocity: attachments.map(SceneAttachments::motion),
+            projection: cameras.raster.projection,
+            inverse_projection: cameras.raster.projection.inverse(),
+            inverse_view: camera.view.inverse(),
             inverse_view_projection: view_projection.inverse(),
-            previous_view_projection: previous.map_or(view_projection, |previous| previous.view_projection),
-            inverse_raster_view_projection: inverse_raster,
-            previous_raster_view_projection: previous
-                .map_or(raster_view_projection, |previous| previous.raster_view_projection),
-            near: context.camera.near,
-            far: context.camera.far,
-            orthographic: context.camera.projection.w_axis.w != 0.0,
-            current_jitter,
-            previous_jitter: previous.map_or(current_jitter, |previous| previous.jitter),
+            previous_view_projection: history.map_or(view_projection, |history| history.0),
+            inverse_raster_view_projection: raster_view_projection.inverse(),
+            previous_raster_view_projection: history.map_or(raster_view_projection, |history| history.1),
+            near: camera.near,
+            far: camera.far,
+            orthographic: camera.projection.w_axis.w != 0.0,
+            current_jitter: cameras.jitter,
+            previous_jitter: history.map_or(cameras.jitter, |history| history.2),
             directional_direction_view: direction,
             directional_color: color,
             clusters,
-            time_seconds: context.inputs.time_seconds,
-            delta_time_seconds: previous.map_or(0.0, |previous| (context.inputs.time_seconds - previous.time).max(0.0)),
-            reset_history: previous.is_none(),
+            time_seconds: self.presentation_time.time_seconds as f32,
+            delta_time_seconds: if history.is_some() { self.presentation_time.elapsed_seconds } else { 0.0 },
+            reset_history: history.is_none(),
         };
-        state.runtime.encode(
-            device,
-            queue,
-            encoder,
-            self.post.scene_view(),
-            self.gpu.capabilities().scene_format,
-            context.size,
-            &frame,
-        )
+
+        let scene = self.post.scene_view();
+        let lit =
+            state.runtime.encode(device, queue, encoder, scene, scene_format, size, &frame, EffectStage::Lighting);
+        if let Err(error) = lit {
+            state.reset_history();
+            return Err(RenderError::InvalidFrame(error.to_string()));
+        }
+        let (draw_calls, triangles) =
+            if transparency_pending { self.encode_transparency_pass(encoder, draws) } else { (0, 0) };
+        let composited =
+            state.runtime.encode(device, queue, encoder, scene, scene_format, size, &frame, EffectStage::Composite);
+        if let Err(error) = composited {
+            state.reset_history();
+            return Err(RenderError::InvalidFrame(error.to_string()));
+        }
+
+        state.previous_camera = Some(PreviousCamera {
+            eye: camera.eye,
+            focus: camera.focus,
+            projection: camera.projection,
+            view_projection,
+            raster_view_projection,
+            jitter: cameras.jitter,
+            time_seconds: self.presentation_time.time_seconds,
+        });
+        Ok((draw_calls, triangles))
     }
 
-    /// Append sorted items to the instance list and group runs of the same pipeline and asset into batches.
-    /// Each batch draws the asset's opaque submesh (or all of it when the asset has no opaque range).
-    fn batch(&self, items: &[OpaqueItem], raws: &mut Vec<InstanceRaw>) -> Vec<Batch> {
-        let mut batches: Vec<Batch> = Vec::new();
-        // First batch of the current asset; an asset with several opaque submeshes records one batch per submesh.
-        let mut group_start = 0;
-        for item in items {
-            let instance = raws.len() as u32;
-            raws.push(item.raw);
-            let pipeline = item.pipeline;
-            if let Some(last) = batches.last()
-                && last.pipeline == pipeline
-                && last.asset_id == item.asset.id()
-            {
-                for batch in &mut batches[group_start..] {
-                    batch.instances.end = instance + 1;
-                }
-                continue;
-            }
-            group_start = batches.len();
-            let instances = instance..instance + 1;
-            for (indices, submesh) in opaque_ranges(item.asset.submeshes()) {
-                batches.push(Batch {
-                    pipeline,
-                    asset_id: item.asset.id(),
-                    indices,
-                    instances: instances.clone(),
-                    material: submesh.and_then(|submesh| submesh.textures.as_ref()).map(MaterialTextures::id),
-                    masked: submesh.is_some_and(|submesh| submesh.masked),
-                });
-            }
+    /// Upload every mesh and material map the frame's items draw, the first time each appears.
+    fn upload_scene_assets(&mut self, items: &SceneItems) -> Result<(), RenderError> {
+        let assets = items
+            .opaque
+            .iter()
+            .map(|item| &item.asset)
+            .chain(items.casters.iter().map(|item| &item.asset))
+            .chain(items.blends.iter().map(|item| &item.asset));
+        for asset in assets.clone() {
+            self.upload_mesh(asset);
         }
-        batches
+        let materials =
+            assets.flat_map(|asset| asset.submeshes().iter().filter_map(|submesh| submesh.textures.as_ref()));
+        for material in materials {
+            self.material_maps.prepare(&self.gpu, &mut self.mipmaps, material)?;
+        }
+        Ok(())
     }
 
     /// Draw caster batches with the depth-only or alpha-tested caster; returns the number of draw calls.
@@ -1294,14 +1380,6 @@ impl Renderer {
         pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
         pass.draw_indexed(batch.indices.clone(), 0, batch.instances.clone());
         (batch.indices.len() / 3) * batch.instances.len()
-    }
-
-    fn opaque_pipeline(&self, pipeline: OpaquePipeline) -> &wgpu::RenderPipeline {
-        match pipeline {
-            OpaquePipeline::Lit => &self.pipelines.lit,
-            OpaquePipeline::Pbr => &self.pipelines.pbr,
-            OpaquePipeline::Unlit => &self.pipelines.unlit,
-        }
     }
 
     /// Upload an asset the first time it is drawn.
@@ -1358,19 +1436,21 @@ impl Renderer {
         self.gpu.queue().write_buffer(&self.transient_buffer, 0, bytemuck::cast_slice(vertices));
     }
 
-    /// Choose this frame's shadow views and upload their matrices and the receiver uniforms.
+    /// Choose this frame's shadow views, cull each view's casters, and upload the view matrices and receiver uniforms.
     ///
-    /// The primary light casts cascades when it is lit and set to cast. Point lights set to cast get six faces each when
-    /// their reach touches a caster; a light whose reach holds no caster would see an empty map, so it is skipped.
+    /// The key light casts cascades when it is lit and set to cast. A selected point light set to cast gets six faces
+    /// when its range touches a caster; a light whose reach holds no caster would see empty maps, so it is skipped.
+    /// Every view draws only the casters whose bounds reach its volume, and caster instances are appended to `raws`.
     fn plan_shadows(
         &mut self,
-        inputs: &FrameInputs<'_>,
+        lighting: &FrameLighting,
         camera: &CameraFrame,
-        caster_bounds: Option<Bounds>,
+        casters: &ShadowCasters<'_>,
+        raws: &mut Vec<InstanceRaw>,
     ) -> ShadowPlan {
-        let mut plan = ShadowPlan { views: Vec::new(), cascades: 0, point_lights: 0, slots: [0.0; MAX_POINT_LIGHTS] };
+        let mut plan = ShadowPlan::default();
         let mut uniforms = ShadowUniforms::disabled();
-        let (Some(options), Some(casters)) = (self.options.shadows, caster_bounds) else {
+        let Some(options) = self.options.shadows.filter(|_| !casters.is_empty()) else {
             self.shadows.write_uniforms(self.gpu.queue(), &uniforms);
             return plan;
         };
@@ -1382,32 +1462,33 @@ impl Renderer {
             quality.filter_sample_count() as f32,
         ];
 
-        if let Some(environment) = inputs.environment {
-            let primary = environment.primary;
+        // Directional cascades. Each cascade's volume reaches toward the light by the shadow distance, so casters
+        // outside every cascade (including those beyond the shadow distance) are never drawn.
+        if let Some(light) = lighting.key {
             let distance = options.shadow_distance.min(camera.far).max(camera.near);
-            if primary.casts_shadow && primary.intensity > 0.0 && distance > camera.near {
+            if light.casts_shadow && light.is_lit() && distance > camera.near {
                 let count = quality.cascade_count();
                 let splits = practical_cascade_splits(camera.near, distance, count);
                 let map_size = options.directional_map_size(self.gpu.capabilities().max_texture_dimension);
-                let cascades = directional_cascades(camera, primary.direction, &splits, count, distance, map_size);
+                let cascades = directional_cascades(camera, light.direction, &splits, count, distance, map_size);
                 for (index, (matrix, texel)) in cascades.iter().enumerate() {
                     uniforms.cascades[index] = matrix.to_cols_array_2d();
                     uniforms.cascade_bias[index] = options.normal_bias.max(texel * CASCADE_TEXEL_BIAS);
+                    plan.add_view(*matrix, ShadowTarget::Cascade(index), casters, raws);
                 }
                 uniforms.counts[0] = 1.0;
                 uniforms.cascade_splits = splits;
                 uniforms.directional =
-                    [options.normal_bias, primary.angular_radius, CASCADE_BLEND_FRACTION, FAR_FADE_FRACTION];
+                    [options.normal_bias, light.angular_radius, CASCADE_BLEND_FRACTION, FAR_FADE_FRACTION];
                 uniforms.extents[0] = distance;
                 uniforms.extents[1] = 1.0;
                 plan.cascades = cascades.len();
-                plan.views.extend(cascades.iter().map(|(matrix, _)| *matrix));
             }
         }
 
-        for (index, light) in inputs.lights.iter().take(MAX_POINT_LIGHTS).enumerate() {
-            let nearest = light.position.clamp(casters.min, casters.max);
-            if !light.casts_shadow || nearest.distance(light.position) > light.range {
+        // Point-light faces, each with the casters inside that face's frustum.
+        for (index, light) in lighting.points.iter().enumerate() {
+            if !light.casts_shadow || !casters.touch_sphere(light.position, light.range) {
                 continue;
             }
             let slot = plan.point_lights;
@@ -1416,52 +1497,53 @@ impl Renderer {
                 parameters: [point_near_plane(light.range), POINT_SOURCE_RADIUS, options.normal_bias, 1.0],
             };
             plan.slots[index] = (slot + 1) as f32;
-            plan.views.extend(point_face_views(light.position, light.range));
+            for (face, matrix) in point_face_views(light.position, light.range).into_iter().enumerate() {
+                plan.add_view(matrix, ShadowTarget::PointFace { slot, face }, casters, raws);
+            }
             plan.point_lights += 1;
         }
         uniforms.extents[2] = plan.point_lights as f32;
 
         let device = self.gpu.device().clone();
+        let matrices: Vec<Mat4> = plan.views.iter().map(|view| view.matrix).collect();
         self.shadows.reserve_point_lights(&device, plan.point_lights);
-        self.shadows.write_casters(&device, self.gpu.queue(), &plan.views);
+        self.shadows.write_casters(&device, self.gpu.queue(), &matrices);
         self.shadows.write_uniforms(self.gpu.queue(), &uniforms);
         plan
     }
 
-    /// Pack camera, lighting, environment, and shadow data into the frame uniform block.
+    /// Pack the cameras, lights, skylight, and shadow slots into the frame uniform block.
     fn write_frame_uniforms(
         &self,
-        inputs: &FrameInputs<'_>,
-        camera: &CameraFrame,
+        lighting: &FrameLighting,
         shadow_slots: &[f32; MAX_POINT_LIGHTS],
+        cameras: &FrameCameras,
     ) {
         let mut lights = [GpuPointLight::default(); MAX_POINT_LIGHTS];
-        for ((slot, light), shadow) in
-            lights.iter_mut().zip(inputs.lights.iter().take(MAX_POINT_LIGHTS)).zip(shadow_slots)
-        {
+        for ((slot, light), shadow) in lights.iter_mut().zip(&lighting.points).zip(shadow_slots) {
             slot.position_range = light.position.extend(light.range).to_array();
             slot.color = light.color.with_alpha(*shadow).to_array();
         }
-        let (primary_direction, primary_color, skylight) = match inputs.environment {
-            Some(environment) => {
-                let primary = environment.primary;
-                (
-                    primary.direction.extend(primary.intensity).to_array(),
-                    primary.color.with_alpha(0.0).to_array(),
-                    environment.skylight_color.with_alpha(environment.skylight_intensity).to_array(),
-                )
+        let (primary_direction, primary_color) = match lighting.key {
+            Some(light) => {
+                (light.direction.normalize().extend(light.intensity).to_array(), light.color.with_alpha(0.0).to_array())
             }
-            None => ([0.0, 1.0, 0.0, 0.0], [0.0; 4], [0.0; 4]),
+            None => ([0.0, 1.0, 0.0, 0.0], [0.0; 4]),
         };
-        let light_count = inputs.lights.len().min(MAX_POINT_LIGHTS) as f32;
+        let skylight = lighting.skylight;
+        let raster = &cameras.raster;
         let uniforms = FrameUniforms {
-            view_projection: camera.view_projection().to_cols_array_2d(),
-            view: camera.view.to_cols_array_2d(),
-            eye: camera.eye.extend(inputs.time_seconds).to_array(),
-            lighting: [light_count, inputs.resolved_ambient(), 0.0, 0.0],
+            view_projection: raster.view_projection().to_cols_array_2d(),
+            view: raster.view.to_cols_array_2d(),
+            eye: raster.eye.extend(self.presentation_time.time_seconds as f32).to_array(),
+            lighting: [lighting.points.len() as f32, lighting.ambient, 0.0, 0.0],
             primary_direction,
             primary_color,
-            skylight,
+            skylight: skylight.color.with_alpha(skylight.intensity).to_array(),
+            ground_skylight: skylight.ground_color.with_alpha(0.0).to_array(),
+            stable_view_projection: cameras.stable.view_projection().to_cols_array_2d(),
+            previous_view_projection: cameras.previous_view_projection.to_cols_array_2d(),
+            motion: [cameras.jitter_delta[0], cameras.jitter_delta[1], 0.0, 0.0],
             lights,
         };
         self.gpu.queue().write_buffer(&self.frame_buffer, 0, bytemuck::bytes_of(&uniforms));
@@ -1483,7 +1565,195 @@ impl Renderer {
     }
 }
 
-/// Pack an instance's transform, tint, opacity, and shadow flag.
+impl ViewDepth {
+    fn new(camera: &CameraFrame) -> Self {
+        // The view matrix's third row is the camera's backward axis in world space.
+        let backward = camera.view.row(2).truncate();
+        Self { eye: camera.eye, forward: (-backward).try_normalize().unwrap_or(Vec3::NEG_Z) }
+    }
+
+    /// Distance of `point` in front of the camera.
+    fn of(self, point: Vec3) -> f32 {
+        (point - self.eye).dot(self.forward)
+    }
+
+    /// View depth of the nearest point of the sphere around `bounds`.
+    fn nearest(self, bounds: Bounds) -> f32 {
+        self.of(bounds.center()) - ((bounds.max - bounds.min).length() * 0.5)
+    }
+}
+
+impl ShadowPlan {
+    /// Add one view, culling the casters to it.
+    fn add_view(
+        &mut self,
+        matrix: Mat4,
+        target: ShadowTarget,
+        casters: &ShadowCasters<'_>,
+        raws: &mut Vec<InstanceRaw>,
+    ) {
+        let start = raws.len();
+        let batches = casters.batches_for(matrix, raws);
+        self.caster_instances += raws.len() - start;
+        let transient = casters.transient.is_some_and(|bounds| !bounds_outside_view(bounds, matrix));
+        self.views.push(ShadowView { matrix, target, batches, transient });
+    }
+}
+
+impl ShadowCasters<'_> {
+    fn is_empty(&self) -> bool {
+        self.meshes.is_empty() && self.transient.is_none() && self.terrain.is_empty()
+    }
+
+    /// Whether any caster's bounds touch the sphere at `center` with `radius`.
+    fn touch_sphere(&self, center: Vec3, radius: f32) -> bool {
+        let touches = |bounds: &Bounds| sphere_touches_bounds(center, radius, *bounds);
+        self.meshes.iter().any(|item| touches(&item.world))
+            || self.transient.as_ref().is_some_and(touches)
+            || self.terrain.iter().any(touches)
+    }
+
+    /// Batches of the mesh casters whose bounds reach `view_projection`, appending their instances to `raws`.
+    fn batches_for(&self, view_projection: Mat4, raws: &mut Vec<InstanceRaw>) -> Vec<Batch> {
+        let mut batches = Vec::new();
+        for group in self.meshes.chunk_by(|left, right| left.asset.id() == right.asset.id()) {
+            let start = raws.len() as u32;
+            let reaching = group.iter().filter(|item| !bounds_outside_view(item.world, view_projection));
+            raws.extend(reaching.map(|item| item.raw));
+            let end = raws.len() as u32;
+            if end > start {
+                push_asset_batches(&mut batches, OpaquePipeline::Lit, &group[0].asset, start..end);
+            }
+        }
+        batches
+    }
+}
+
+/// Cull the scene's instances against the camera and sort them into opaque, blended, and caster items.
+///
+/// Shadow casters include camera-culled geometry, so off-screen objects still cast into the view. With effect history,
+/// each instance carries its previous model matrix for motion vectors.
+fn gather_scene(
+    scene: &RenderScene,
+    camera: &CameraFrame,
+    view_depth: ViewDepth,
+    previous_models: Option<&HashMap<MeshInstanceId, Mat4>>,
+) -> SceneItems {
+    let view_projection = camera.view_projection();
+    let mut items = SceneItems::default();
+    for (id, instance) in scene.iter() {
+        let (model, shown) = scene.compose(instance.parent, instance.transform.matrix(), instance.visible);
+        if !shown || instance.opacity <= 0.0 {
+            continue;
+        }
+        let previous = previous_models.and_then(|models| models.get(&id)).copied().unwrap_or(model);
+        let raw = instance_raw(instance, model, previous);
+        let world = world_bounds(instance.asset.bounds(), model);
+        let transparent = instance.is_transparent();
+        if instance.casts_shadow && !transparent {
+            items.casters.push(CasterItem { asset: instance.asset.clone(), raw, world });
+        }
+
+        if outside_frustum(instance.asset.bounds(), model, view_projection) {
+            items.culled += 1;
+            continue;
+        }
+        items.visible += 1;
+        if previous_models.is_some() {
+            items.models.push((id, model));
+        }
+        queue_instance(instance, raw, world, view_depth, transparent, &mut items);
+    }
+    items
+}
+
+/// Route one camera-visible instance into the opaque items and/or the blended items.
+fn queue_instance(
+    instance: &MeshInstance,
+    raw: InstanceRaw,
+    world: Bounds,
+    view_depth: ViewDepth,
+    transparent: bool,
+    items: &mut SceneItems,
+) {
+    let center_depth = view_depth.of(world.center());
+    let blend = |pipeline: BlendPipeline, submesh: &Submesh| BlendItem {
+        depth: center_depth,
+        pipeline,
+        asset: instance.asset.clone(),
+        indices: submesh.indices.clone(),
+        material: submesh.textures.as_ref().map(MaterialTextures::id),
+        raw,
+    };
+    if transparent {
+        // Transparent instances are unlit, matching the TypeScript scene path; PBR keeps its own blending.
+        let pipeline = if instance.shading == Shading::Pbr { BlendPipeline::Pbr } else { BlendPipeline::Unlit };
+        items.blends.extend(instance.asset.submeshes().iter().map(|submesh| blend(pipeline, submesh)));
+        return;
+    }
+
+    let pipeline = match instance.shading {
+        Shading::Lit => OpaquePipeline::Lit,
+        Shading::Pbr => OpaquePipeline::Pbr,
+        Shading::Unlit => OpaquePipeline::Unlit,
+    };
+    items.opaque.push(OpaqueItem { pipeline, asset: instance.asset.clone(), raw, depth: view_depth.nearest(world) });
+
+    // PBR materials can blend part of an otherwise opaque asset.
+    if instance.shading == Shading::Pbr {
+        let blended = instance.asset.submeshes().iter().filter(|submesh| submesh.blend);
+        items.blends.extend(blended.map(|submesh| blend(BlendPipeline::Pbr, submesh)));
+    }
+}
+
+/// Group opaque items into instanced batches and append their instances to `raws`.
+///
+/// Items of one pipeline and asset share batches, nearest instance first, and batches are ordered by their nearest
+/// instance, so depth fills front to back and the surfaces behind fail the depth test before shading.
+fn batch_opaque(items: &mut [OpaqueItem], raws: &mut Vec<InstanceRaw>) -> Vec<Batch> {
+    items.sort_by(|left, right| {
+        (left.pipeline, left.asset.id())
+            .cmp(&(right.pipeline, right.asset.id()))
+            .then(left.depth.total_cmp(&right.depth))
+    });
+    let mut groups: Vec<&[OpaqueItem]> =
+        items.chunk_by(|left, right| left.pipeline == right.pipeline && left.asset.id() == right.asset.id()).collect();
+    groups.sort_by(|left, right| left[0].depth.total_cmp(&right[0].depth));
+
+    let mut batches = Vec::new();
+    for group in groups {
+        let start = raws.len() as u32;
+        raws.extend(group.iter().map(|item| item.raw));
+        push_asset_batches(&mut batches, group[0].pipeline, &group[0].asset, start..raws.len() as u32);
+    }
+    batches
+}
+
+/// Record one batch per opaque submesh range of `asset`, each drawing `instances`.
+fn push_asset_batches(batches: &mut Vec<Batch>, pipeline: OpaquePipeline, asset: &MeshAsset, instances: Range<u32>) {
+    for (indices, submesh) in opaque_ranges(asset.submeshes()) {
+        batches.push(Batch {
+            pipeline,
+            asset_id: asset.id(),
+            indices,
+            instances: instances.clone(),
+            material: submesh.and_then(|submesh| submesh.textures.as_ref()).map(MaterialTextures::id),
+            masked: submesh.is_some_and(|submesh| submesh.masked),
+        });
+    }
+}
+
+/// The scene pass's batch order. After the depth pre-pass only the nearest surface passes the depth test, so batches
+/// group by pipeline (nearest first within each) to save state changes; without it they keep their front-to-back
+/// order.
+fn scene_order(batches: &[Batch], depth_prepass: bool) -> Vec<&Batch> {
+    let mut order: Vec<&Batch> = batches.iter().collect();
+    if depth_prepass {
+        order.sort_by_key(|batch| batch.pipeline);
+    }
+    order
+}
+
 /// Sub-pixel jitter for one frame: a Halton (2, 3) sequence of eight samples, in UV units of the backing size.
 fn scene_camera_jitter(frame_index: u32, width: u32, height: u32) -> [f32; 2] {
     let sample = (frame_index % JITTER_SAMPLE_COUNT) + 1;
@@ -1513,18 +1783,19 @@ fn halton(mut index: u32, base: u32) -> f32 {
     result
 }
 
-fn instance_raw(instance: &MeshInstance, model: Mat4) -> InstanceRaw {
+/// Pack an instance's transform and its previous frame's, tint, opacity, shadow flag, and scene roughness.
+fn instance_raw(instance: &MeshInstance, model: Mat4, previous_model: Mat4) -> InstanceRaw {
     InstanceRaw {
         model: model.to_cols_array_2d(),
         tint: instance.tint.with_alpha(instance.opacity.clamp(0.0, 1.0)).to_array(),
         flags: [if instance.receives_shadow { 1.0 } else { 0.0 }, instance.scene_roughness.clamp(0.0, 1.0), 0.0, 0.0],
+        previous_model: previous_model.to_cols_array_2d(),
     }
 }
 
-/// The opaque index range of an asset, or all indices when it has none.
 /// Opaque index ranges with their submeshes. An asset with no opaque submesh (drawn opaque by request) draws its whole
 /// index range untextured.
-fn opaque_ranges(submeshes: &[Submesh]) -> Vec<(std::ops::Range<u32>, Option<&Submesh>)> {
+fn opaque_ranges(submeshes: &[Submesh]) -> Vec<(Range<u32>, Option<&Submesh>)> {
     let opaque: Vec<_> = submeshes
         .iter()
         .filter(|submesh| !submesh.blend)
@@ -1539,33 +1810,22 @@ fn opaque_ranges(submeshes: &[Submesh]) -> Vec<(std::ops::Range<u32>, Option<&Su
     vec![(whole, None)]
 }
 
-/// Convert transient triangles to mesh vertices; incomplete trailing vertices are dropped.
-fn transient_vertices(opaque: &[ColorVertex], transparent: &[ColorVertex]) -> Vec<MeshVertex> {
-    let complete = |vertices: &[ColorVertex]| vertices.len() / 3 * 3;
-    opaque[..complete(opaque)]
+/// Convert the complete opaque transient triangles to mesh vertices; incomplete trailing vertices are dropped.
+fn opaque_transient_vertices(triangles: &[ColorVertex]) -> Vec<MeshVertex> {
+    triangles
+        .as_chunks::<3>()
+        .0
         .iter()
-        .chain(&transparent[..complete(transparent)])
+        .flatten()
         .map(|vertex| {
             MeshVertex::new(vertex.position, [0.0; 3], LinearColor::from(vertex.color), VertexMaterial::default())
         })
         .collect()
 }
 
-/// Reject lights the shaders cannot attenuate safely, matching the TypeScript validation.
-fn validate_lights(inputs: &FrameInputs<'_>) -> Result<(), RenderError> {
-    if inputs.lights.len() > MAX_POINT_LIGHTS {
-        return Err(RenderError::InvalidFrame(format!("at most {MAX_POINT_LIGHTS} point lights are supported")));
-    }
-    for light in inputs.lights {
-        let finite = light.position.is_finite()
-            && light.color.rgb_array().iter().all(|value| value.is_finite())
-            && light.range.is_finite();
-        if !finite || light.range <= 0.0 || light.color.rgb_array().iter().any(|value| *value < 0.0) {
-            return Err(RenderError::InvalidFrame(
-                "point lights need finite values, nonnegative color, and positive range".into(),
-            ));
-        }
-    }
+/// Reject frame values the shaders cannot use safely. Lights are not checked here: invalid point and directional lights
+/// are skipped instead (see [`FrameInputs`]).
+fn validate_frame(inputs: &FrameInputs<'_>) -> Result<(), RenderError> {
     let ambient = inputs.resolved_ambient();
     if !ambient.is_finite() || ambient < 0.0 {
         return Err(RenderError::InvalidFrame("ambient irradiance must be finite and nonnegative".into()));
@@ -1578,32 +1838,6 @@ fn validate_lights(inputs: &FrameInputs<'_>) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Conservative clip-space test of transformed local bounds against the six frustum planes (zero-to-one depth).
-fn outside_frustum(bounds: Bounds, model: Mat4, view_projection: Mat4) -> bool {
-    let matrix = view_projection * model;
-    let mut outside = [true; 6];
-    for corner in bounds.corners() {
-        let clip = matrix * corner.extend(1.0);
-        let distances = [clip.x + clip.w, clip.w - clip.x, clip.y + clip.w, clip.w - clip.y, clip.z, clip.w - clip.z];
-        for (plane, distance) in distances.iter().enumerate() {
-            outside[plane] = outside[plane] && *distance < 0.0;
-        }
-    }
-    outside.iter().any(|plane| *plane)
-}
-
-/// Transform local bounds into conservative world bounds.
-fn world_bounds(bounds: Bounds, model: Mat4) -> Bounds {
-    bounds.corners().iter().fold(
-        Bounds { min: Vec3::splat(f32::INFINITY), max: Vec3::splat(f32::NEG_INFINITY) },
-        |result, corner| {
-            let point = model.transform_point3(*corner);
-            Bounds { min: result.min.min(point), max: result.max.max(point) }
-        },
-    )
-}
-
-/// Smallest bounds containing both inputs.
 /// World bounds of transient triangles, or `None` when there are none.
 fn triangle_bounds(vertices: &[ColorVertex]) -> Option<Bounds> {
     let mut points = vertices.iter().map(|vertex| Vec3::from(vertex.position));
@@ -1612,10 +1846,6 @@ fn triangle_bounds(vertices: &[ColorVertex]) -> Option<Bounds> {
         min: bounds.min.min(point),
         max: bounds.max.max(point),
     }))
-}
-
-fn union(left: Bounds, right: Bounds) -> Bounds {
-    Bounds { min: left.min.min(right.min), max: left.max.max(right.max) }
 }
 
 fn uniform_buffer(device: &wgpu::Device, label: &str, size: usize) -> wgpu::Buffer {
@@ -1648,7 +1878,3 @@ fn single_buffer_group(
         entries: &[wgpu::BindGroupEntry { binding: 0, resource: buffer.as_entire_binding() }],
     })
 }
-
-#[cfg(test)]
-#[path = "renderer.test.rs"]
-mod tests;

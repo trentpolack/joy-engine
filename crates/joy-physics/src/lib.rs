@@ -3,9 +3,10 @@
 
 //! Rigid bodies, raycast vehicles, and scene queries behind a backend-neutral API.
 //!
-//! [`PhysicsWorld`] owns a rapier3d solver and every body and vehicle created through it, and hands out copyable
-//! [`BodyHandle`] and [`VehicleHandle`] values. Handles carry the identity of the world that created them, so a handle
-//! from another world (or a removed body) is reported as unknown instead of aliasing an unrelated body.
+//! [`PhysicsWorld`] owns a rapier3d solver and every body created through it, and hands out copyable [`BodyHandle`]
+//! values. Handles carry the identity of the world that created them, so a handle from another world (or a removed
+//! body) is reported as unknown instead of aliasing an unrelated body. A raycast vehicle is a kind of body: its chassis
+//! is created with [`PhysicsWorld::create_vehicle`] and every vehicle operation takes the chassis body's handle.
 //!
 //! Coordinates are meters in Y-up world space; rotations are XYZ Euler radians applied X, then Y, then Z. Vehicles use
 //! up = +Y, forward = +Z, and right = +X in chassis space. Time is in seconds and the solver advances in fixed steps
@@ -86,13 +87,6 @@ pub struct BodyHandle {
     pub(crate) raw: rapier3d::dynamics::RigidBodyHandle,
 }
 
-/// Opaque handle to a raycast vehicle owned by one [`PhysicsWorld`]. The vehicle borrows its chassis body.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct VehicleHandle {
-    pub(crate) world: u64,
-    pub(crate) id: u64,
-}
-
 /// Copied world-space pose of a body or wheel. Mutating it never changes the simulation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PhysicsTransform {
@@ -140,11 +134,11 @@ pub enum PhysicsError {
     /// The body handle does not name a live body in this world.
     #[error("Physics body is not owned by this world or has been removed.")]
     UnknownBody,
-    /// The vehicle handle does not name a live vehicle in this world.
-    #[error("Physics vehicle is not owned by this world or has been removed.")]
-    UnknownVehicle,
-    /// The chassis was static, foreign, removed, or already carried a vehicle.
-    #[error("Vehicle chassis must be an unattached dynamic body owned by this world.")]
+    /// The body is live but was not created as a vehicle chassis.
+    #[error("Physics body is not a vehicle.")]
+    NotAVehicle,
+    /// A vehicle chassis was configured as a static body.
+    #[error("Vehicle chassis must be a dynamic body (mass greater than zero).")]
     InvalidChassis,
     /// A vehicle was configured without wheels.
     #[error("A vehicle requires at least one wheel.")]

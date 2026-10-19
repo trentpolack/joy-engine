@@ -424,7 +424,6 @@ impl ParticleViewport {
             lights: &lights,
             ambient: Some(PREVIEW_AMBIENT),
             clear_color: PREVIEW_BACKGROUNDS[self.background].2,
-            time_seconds: effect.map_or(0.0, |effect| effect.time() as f32),
             opaque_triangles: &opaque,
             transparent_draws: &draws,
             ..FrameInputs::default()

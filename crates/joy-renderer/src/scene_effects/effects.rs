@@ -83,6 +83,17 @@ pub struct SceneEffectsCapabilities {
 /// The reason reported for every effect on backends without scene effects, matching TypeScript.
 const BACKEND_REQUIRED: &str = "Requires the WebGPU backend.";
 
+/// Which effects one [`SceneEffectsRuntime::encode`] call runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum EffectStage {
+    /// Effects that read opaque surfaces and change their lighting (ambient occlusion, global illumination,
+    /// reflections, volumetric lighting and fog, depth-aware blur, and outlines). They run before transparency, whose
+    /// surfaces have no depth or normals of their own.
+    Lighting,
+    /// Temporal antialiasing, then motion blur and adaptive exposure, over the finished scene including transparency.
+    Composite,
+}
+
 /// Effect chains and their frame counter.
 pub(crate) struct SceneEffectsRuntime {
     options: SceneEffectsOptions,
@@ -114,6 +125,11 @@ impl SceneEffectsRuntime {
         &self.options
     }
 
+    /// Whether any effect runs in the [`EffectStage::Lighting`] stage, between opaque geometry and transparency.
+    pub(crate) fn has_lighting_effects(&self) -> bool {
+        self.lighting.is_some()
+    }
+
     /// Frames rendered since creation.
     pub(crate) fn frame_index(&self) -> u32 {
         self.frame_index
@@ -127,7 +143,12 @@ impl SceneEffectsRuntime {
         self.depth_convention = None;
     }
 
-    /// Run the chains over `source` and copy the result back into it. Fails without recording for invalid frames.
+    /// Run one stage's chains over `source` and copy the result back into it. Fails without recording for invalid
+    /// frames.
+    ///
+    /// A frame runs [`EffectStage::Lighting`] over the opaque scene, then the renderer draws transparency, then
+    /// [`EffectStage::Composite`] runs over everything. The lighting stage restarts history when the frame asks or the
+    /// depth convention changed; the composite stage finishes the frame.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn encode(
         &mut self,
@@ -138,13 +159,13 @@ impl SceneEffectsRuntime {
         source_format: wgpu::TextureFormat,
         size: (u32, u32),
         frame: &EffectsFrame<'_>,
+        stage: EffectStage,
     ) -> Result<(), SceneEffectsError> {
-        if self.lighting.is_none() && self.temporal.is_none() && self.finishing.is_none() {
-            return Ok(());
-        }
         let uniforms = self.frame_uniforms(frame)?;
         let convention = (frame.orthographic, frame.near.to_bits(), frame.far.to_bits());
-        if frame.reset_history || self.depth_convention.is_some_and(|previous| previous != convention) {
+        if stage == EffectStage::Lighting
+            && (frame.reset_history || self.depth_convention.is_some_and(|previous| previous != convention))
+        {
             self.reset_history();
         }
 
@@ -162,15 +183,21 @@ impl SceneEffectsRuntime {
         // Each chain reads the scene texture and its result is copied back, so the next chain (and transparency) sees
         // it as the scene: the TypeScript chains pass each result on as the next one's source the same way.
         let Self { lighting, temporal, finishing, resources, .. } = self;
-        for (chain, externals) in [(lighting, base), (temporal, later), (finishing, later)] {
+        let chains = match stage {
+            EffectStage::Lighting => [(lighting.as_mut(), base), (None, base)],
+            EffectStage::Composite => [(temporal.as_mut(), later), (finishing.as_mut(), later)],
+        };
+        for (chain, externals) in chains {
             let Some(chain) = chain else {
                 continue;
             };
             let output = chain.encode(device, queue, encoder, resources, source, size, &externals, &uniforms);
             resources.blit(device, encoder, output, source, source_format);
         }
-        self.depth_convention = Some(convention);
-        self.frame_index = self.frame_index.wrapping_add(1);
+        if stage == EffectStage::Composite {
+            self.depth_convention = Some(convention);
+            self.frame_index = self.frame_index.wrapping_add(1);
+        }
         Ok(())
     }
 

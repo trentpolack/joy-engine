@@ -55,6 +55,7 @@ pub use asset::{
     CompiledParticleEffect,
     MAXIMUM_EFFECT_PARTICLES,
     PARTICLE_EFFECT_VERSION,
+    PARTICLE_LIGHT_CASTS_SHADOW,
     ParticleAssetError,
     ParticleBurst,
     ParticleChild,

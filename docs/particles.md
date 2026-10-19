@@ -22,6 +22,8 @@ Particles use XYZ world space, seconds, velocity in units/second, acceleration i
 
 Every emitter has its own spawn/update programs. Root emitters use a finite continuous rate and scheduled bursts. A duration-zero root can burst at time zero. `root: false` marks a reusable child template. `enabled: false` suppresses both root and child spawning. References use emitter IDs; disabled templates remain valid references.
 
+Add `"light": {"intensity":2,"range":6}` to make an emitter's particles point lights; scripts vary them through `lightIntensity` and `lightRange`. Particle lights are ordinary point lights to the renderer: they rank with level lights for the view, and `"castsShadow": true` opts an emitter into soft point shadows (off by default, since particle lights are numerous and short-lived and each shadowed light renders six shadow faces).
+
 Add `"trail": {"emitter":"smoke","interval":0.05,"count":1}` or `"death": {"emitter":"secondary","count":3}` to spawn children at a parent's current world position. A child reference spawns that template's particle directly; it does not replay the referenced template's root burst/rate schedule. Child spawn scripts receive parent velocity inputs. Trails begin one interval after birth and stop at death; death children spawn once. Children start updating on the next tick. Scripts can vary lifetime or set it to zero to expire a particle.
 
 ## Numeric Scripting

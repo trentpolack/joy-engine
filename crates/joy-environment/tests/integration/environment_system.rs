@@ -33,6 +33,7 @@ fn assert_light(label: &str, light: &AtmosphereLight, expected: &Value) {
         CelestialBody::Moon => "moon",
     };
     assert_eq!(kind, expected["kind"], "{label} kind");
+    let light = &light.light;
     assert_triple(label, &format!("{kind}.direction"), light.direction.to_array(), &expected["direction"]);
     assert_triple(label, &format!("{kind}.color"), light.color.rgb_array(), &expected["color"]);
     assert_close(

@@ -4,31 +4,33 @@
 //! Scene terrain: the renderer's adapters for `RenderScene` terrain instances.
 //!
 //! Each live instance keeps one adapter with resident GPU resources; the asset stays shared. A frame prepares every
-//! adapter before any pass opens (selection runs once per frame in the terrain's local space), then records the same
-//! indexed, continuously morphed surface into the directional shadow map, the lit scene pass, and, when scene effects
-//! run, the normal/roughness and motion attachments. Adapters for instances that leave the scene are released.
+//! adapter before any pass opens (selection runs once per frame in the terrain's local space, for the camera), then
+//! records the same indexed, continuously morphed surface into the shadow views whose volume it reaches, the depth
+//! pre-pass, and the lit scene pass, which also writes the scene-effect attachments when effects need them. Adapters for
+//! instances that leave the scene are released.
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use bytemuck::{
-    Pod,
-    Zeroable,
-};
 use joy_core::math::{
     DMat4,
     DVec3,
     Mat4,
-    Vec3,
 };
 
 use crate::GpuContext;
 use crate::camera::CameraFrame;
+use crate::culling::{
+    bounds_outside_view,
+    outside_frustum,
+    world_bounds,
+};
 use crate::materials::{
     CasterBias,
     DEPTH_FORMAT,
     SHADOW_FORMAT,
     ScenePipelines,
+    SceneTargets,
     scene_common,
 };
 use crate::mesh::Bounds;
@@ -37,73 +39,59 @@ use crate::scene::{
     TerrainInstance,
     TerrainInstanceId,
 };
-use crate::scene_effects::MotionUniforms;
 use crate::terrain::terrain_asset::TerrainError;
-use crate::terrain::terrain_renderer::{
+use crate::terrain::terrain_geometry::{
     ModelUniforms,
     TerrainGeometry,
+    TerrainStats,
     grid_buffer_layout,
     terrain_bind_group_layout,
 };
 use crate::terrain::terrain_selection::TerrainView;
 use crate::terrain::{
     TERRAIN_CASTER_SOURCE,
-    TERRAIN_MOTION_SOURCE,
+    TERRAIN_DEPTH_SOURCE,
     TERRAIN_SCENE_SOURCE,
-    TERRAIN_SURFACE_SOURCE,
     terrain_geometry_source,
 };
 
-/// Scene effect attachment formats (normals and motion), matching `scene_effects::attachments`.
-const ATTACHMENT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// Terrain surfaces are fully rough for screen-space reflections, as in TypeScript.
 const TERRAIN_ROUGHNESS: f32 = 1.0;
-/// The terrain group in the lit pipeline, after the scene pass's frame, shadow, and image-lighting groups.
+/// The terrain group in the lit pipelines, after the scene pass's frame, shadow, and image-lighting groups.
 const LIT_GROUP: u32 = 3;
-/// The terrain group in the caster, surface, and motion pipelines, after their one pass group.
+/// The terrain group in the caster and depth pipelines, after their one pass group.
 const GROUP: u32 = 1;
 
-/// `TerrainMotionUniforms` in terrain-motion.wgsl. 336 bytes.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct TerrainMotionUniforms {
-    current_view_projection: [[f32; 4]; 4],
-    previous_view_projection: [[f32; 4]; 4],
-    raster_view_projection: [[f32; 4]; 4],
-    current_model: [[f32; 4]; 4],
-    previous_model: [[f32; 4]; 4],
-    jitter_delta: [f32; 4],
-}
-
-/// What the renderer needs from terrain preparation for culling statistics and shadow fitting.
-#[derive(Clone, Copy, Debug, Default)]
+/// What the renderer needs from terrain preparation for culling statistics and shadow planning.
+#[derive(Clone, Debug, Default)]
 pub(crate) struct PreparedTerrain {
     /// Terrain instances inside the camera frustum.
     pub visible: usize,
     /// Terrain instances outside the camera frustum.
     pub culled: usize,
-    /// World bounds of shadow-casting terrain, for the directional shadow volume.
-    pub caster_bounds: Option<Bounds>,
+    /// World bounds of each shadow-casting terrain prepared this frame.
+    pub caster_bounds: Vec<Bounds>,
 }
 
 /// Pipelines shared by every terrain adapter; compiled when the first terrain appears.
 struct TerrainPipelines {
     layout: wgpu::BindGroupLayout,
-    motion_layout: wgpu::BindGroupLayout,
     lit: wgpu::RenderPipeline,
     caster: wgpu::RenderPipeline,
-    surface: wgpu::RenderPipeline,
-    motion: wgpu::RenderPipeline,
+    depth: wgpu::RenderPipeline,
+    // The lit pipeline with scene-effect attachments; compiled when effects first need it.
+    lit_targets: Option<wgpu::RenderPipeline>,
+    lit_layout: wgpu::PipelineLayout,
+    lit_source: String,
+    scene_format: wgpu::TextureFormat,
 }
 
 /// One scene terrain instance's resident resources and transform history.
 struct TerrainScenePass {
-    // Bind group before the buffer it references.
-    motion_bind_group: wgpu::BindGroup,
-    motion_uniforms: wgpu::Buffer,
     geometry: TerrainGeometry,
     current_model: Mat4,
     previous_model: Option<Mat4>,
+    world_bounds: Bounds,
     visible: bool,
     casts_shadow: bool,
 }
@@ -140,7 +128,7 @@ impl SceneTerrain {
         self.frame.clear();
         let mut prepared = PreparedTerrain::default();
         // World transforms and visibility include every ancestor scene node.
-        let live: Vec<(TerrainInstanceId, &TerrainInstance, joy_core::math::Mat4)> = scene
+        let live: Vec<(TerrainInstanceId, &TerrainInstance, Mat4)> = scene
             .terrains()
             .filter_map(|(id, instance)| {
                 let (model, visible) = scene.compose(instance.parent, instance.transform.matrix(), instance.visible);
@@ -172,9 +160,9 @@ impl SceneTerrain {
             } else {
                 prepared.culled += 1;
             }
+            let world = world_bounds(bounds, model);
             if instance.casts_shadow {
-                let world = world_bounds(bounds, model);
-                prepared.caster_bounds = Some(prepared.caster_bounds.map_or(world, |total| union(total, world)));
+                prepared.caster_bounds.push(world);
             }
             if !visible && !instance.casts_shadow {
                 continue;
@@ -182,9 +170,7 @@ impl SceneTerrain {
 
             let pass = match self.passes.entry(id) {
                 Entry::Occupied(entry) => entry.into_mut(),
-                Entry::Vacant(entry) => {
-                    entry.insert(TerrainScenePass::new(gpu, &pipelines.layout, &pipelines.motion_layout, instance)?)
-                }
+                Entry::Vacant(entry) => entry.insert(TerrainScenePass::new(gpu, &pipelines.layout, instance)?),
             };
             let view = TerrainView {
                 eye: camera.eye.as_dvec3(),
@@ -194,6 +180,7 @@ impl SceneTerrain {
                 target_radius: f64::from(instance.target_radius),
             };
             pass.prepare(gpu.queue(), encoder, view_projection, model, &view, instance)?;
+            pass.world_bounds = world;
             pass.visible = visible;
             pass.casts_shadow = instance.casts_shadow;
             self.frame.push(id);
@@ -201,63 +188,64 @@ impl SceneTerrain {
         Ok(prepared)
     }
 
+    /// Compile the lit pipeline that writes `targets` before a pass that draws with it opens.
+    pub(crate) fn ensure_lit(&mut self, device: &wgpu::Device, targets: SceneTargets) {
+        if let Some(pipelines) = &mut self.pipelines
+            && targets == SceneTargets::ColorAndAttachments
+            && pipelines.lit_targets.is_none()
+        {
+            pipelines.lit_targets = Some(pipelines.lit_pipeline(device, targets));
+        }
+    }
+
     /// Draw camera-visible terrain into the lit scene pass; returns draw calls and triangles.
     ///
-    /// Expects the frame uniforms in group 0, the shadow receiver in group 1, and image lighting in group 2.
-    pub(crate) fn draw_lit(&self, pass: &mut wgpu::RenderPass<'_>) -> (usize, usize) {
+    /// Expects the frame uniforms in group 0, the shadow receiver in group 1, and image lighting in group 2, and
+    /// [`ensure_lit`](Self::ensure_lit) for `targets`.
+    pub(crate) fn draw_lit(&self, pass: &mut wgpu::RenderPass<'_>, targets: SceneTargets) -> (usize, usize) {
         let Some(pipelines) = &self.pipelines else {
             return (0, 0);
         };
+        let pipeline = match targets {
+            SceneTargets::Color => &pipelines.lit,
+            SceneTargets::ColorAndAttachments => pipelines.lit_targets.as_ref().expect("ensure_lit compiled it"),
+        };
         let (mut draws, mut triangles) = (0, 0);
         for terrain in self.frame_passes().filter(|terrain| terrain.visible) {
-            draws += terrain.geometry.draw(pass, &pipelines.lit, LIT_GROUP);
+            draws += terrain.geometry.draw(pass, pipeline, LIT_GROUP);
             triangles += terrain.geometry.stats().triangles;
         }
         (draws, triangles)
     }
 
-    /// Draw shadow-casting terrain into one shadow view (a directional cascade or point-light face); returns draws.
-    ///
-    /// Expects the renderer's caster uniforms in group 0 at this view's dynamic offset.
-    pub(crate) fn draw_shadow(&self, pass: &mut wgpu::RenderPass<'_>) -> usize {
+    /// Draw camera-visible terrain into the depth pre-pass; returns draw calls. Expects the frame uniforms in group 0.
+    pub(crate) fn draw_depth(&self, pass: &mut wgpu::RenderPass<'_>) -> usize {
         let Some(pipelines) = &self.pipelines else {
             return 0;
         };
-        let mut draws = 0;
-        for terrain in self.frame_passes().filter(|terrain| terrain.casts_shadow) {
-            draws += terrain.geometry.draw(pass, &pipelines.caster, GROUP);
-        }
-        draws
+        self.frame_passes()
+            .filter(|terrain| terrain.visible)
+            .map(|terrain| terrain.geometry.draw(pass, &pipelines.depth, GROUP))
+            .sum()
     }
 
-    /// Draw camera-visible terrain into the normal/roughness attachment. Expects the frame uniforms in group 0.
-    pub(crate) fn draw_surface(&self, pass: &mut wgpu::RenderPass<'_>) {
+    /// Draw the shadow-casting terrain whose bounds reach `view_projection` (a directional cascade or point-light face)
+    /// into that view; returns draw calls.
+    ///
+    /// Expects the renderer's caster uniforms in group 0 at this view's dynamic offset.
+    pub(crate) fn draw_shadow(&self, pass: &mut wgpu::RenderPass<'_>, view_projection: Mat4) -> usize {
         let Some(pipelines) = &self.pipelines else {
-            return;
+            return 0;
         };
-        for terrain in self.frame_passes().filter(|terrain| terrain.visible) {
-            terrain.geometry.draw(pass, &pipelines.surface, GROUP);
-        }
+        self.frame_passes()
+            .filter(|terrain| terrain.casts_shadow && !bounds_outside_view(terrain.world_bounds, view_projection))
+            .map(|terrain| terrain.geometry.draw(pass, &pipelines.caster, GROUP))
+            .sum()
     }
 
-    /// Draw camera-visible terrain into the motion attachments with this frame's camera matrices.
-    pub(crate) fn draw_motion(&self, queue: &wgpu::Queue, pass: &mut wgpu::RenderPass<'_>, camera: &MotionUniforms) {
-        let Some(pipelines) = &self.pipelines else {
-            return;
-        };
-        for terrain in self.frame_passes().filter(|terrain| terrain.visible) {
-            let uniforms = TerrainMotionUniforms {
-                current_view_projection: camera.current_view_projection,
-                previous_view_projection: camera.previous_view_projection,
-                raster_view_projection: camera.raster_view_projection,
-                current_model: terrain.current_model.to_cols_array_2d(),
-                previous_model: terrain.previous_model.unwrap_or(terrain.current_model).to_cols_array_2d(),
-                jitter_delta: camera.velocity_jitter_delta,
-            };
-            queue.write_buffer(&terrain.motion_uniforms, 0, bytemuck::bytes_of(&uniforms));
-            pass.set_bind_group(0, &terrain.motion_bind_group, &[]);
-            terrain.geometry.draw(pass, &pipelines.motion, GROUP);
-        }
+    /// Statistics of a terrain instance prepared this frame.
+    pub(crate) fn stats(&self, id: TerrainInstanceId) -> Option<&TerrainStats> {
+        self.frame.contains(&id).then(|| self.passes.get(&id)).flatten().map(|terrain| terrain.geometry.stats())
     }
 
     /// Adapters prepared this frame, in scene order.
@@ -267,37 +255,18 @@ impl SceneTerrain {
 }
 
 impl TerrainScenePass {
-    fn new(
-        gpu: &GpuContext,
-        layout: &wgpu::BindGroupLayout,
-        motion_layout: &wgpu::BindGroupLayout,
-        instance: &TerrainInstance,
-    ) -> Result<Self, TerrainError> {
-        let device = gpu.device();
-        let geometry = TerrainGeometry::new(gpu, &instance.asset, layout)?;
-        let motion_uniforms = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("terrain motion uniforms"),
-            size: std::mem::size_of::<TerrainMotionUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let motion_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("terrain motion"),
-            layout: motion_layout,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: motion_uniforms.as_entire_binding() }],
-        });
+    fn new(gpu: &GpuContext, layout: &wgpu::BindGroupLayout, instance: &TerrainInstance) -> Result<Self, TerrainError> {
         Ok(Self {
-            motion_bind_group,
-            motion_uniforms,
-            geometry,
+            geometry: TerrainGeometry::new(gpu, &instance.asset, layout)?,
             current_model: Mat4::IDENTITY,
             previous_model: None,
+            world_bounds: crate::culling::EMPTY_BOUNDS,
             visible: false,
             casts_shadow: false,
         })
     }
 
-    /// Select LODs once for the camera and light views, in the terrain's local space, and upload the transform.
+    /// Select LODs once for the camera, in the terrain's local space, and upload the transform and its history.
     fn prepare(
         &mut self,
         queue: &wgpu::Queue,
@@ -312,7 +281,11 @@ impl TerrainScenePass {
         self.previous_model = Some(if self.previous_model.is_some() { self.current_model } else { model });
         self.current_model = model;
         let flags = [if instance.receives_shadow { 1.0 } else { 0.0 }, TERRAIN_ROUGHNESS, 0.0, 0.0];
-        self.geometry.write_model(queue, &ModelUniforms { model: model.to_cols_array_2d(), flags });
+        let previous = self.previous_model.unwrap_or(model);
+        self.geometry.write_model(
+            queue,
+            &ModelUniforms { model: model.to_cols_array_2d(), previous_model: previous.to_cols_array_2d(), flags },
+        );
         Ok(())
     }
 }
@@ -320,10 +293,6 @@ impl TerrainScenePass {
 impl TerrainPipelines {
     fn new(device: &wgpu::Device, scene: &ScenePipelines, scene_format: wgpu::TextureFormat, bias: CasterBias) -> Self {
         let layout = terrain_bind_group_layout(device);
-        let motion_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("terrain motion"),
-            entries: &[crate::materials::uniform_entry(0)],
-        });
         let pipeline_layout = |label: &str, groups: &[Option<&wgpu::BindGroupLayout>]| {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some(label),
@@ -337,76 +306,86 @@ impl TerrainPipelines {
             &[Some(&scene.frame_layout), Some(&scene.shadow_layout), Some(&scene.image_lighting_layout), Some(&layout)],
         );
         let caster_layout = pipeline_layout("terrain caster", &[Some(&scene.caster_layout), Some(&layout)]);
-        let surface_layout = pipeline_layout("terrain surfaces", &[Some(&scene.frame_layout), Some(&layout)]);
-        let motion_pipeline_layout = pipeline_layout("terrain motion", &[Some(&motion_layout), Some(&layout)]);
+        let depth_layout = pipeline_layout("terrain depth", &[Some(&scene.frame_layout), Some(&layout)]);
         let (lit_geometry, geometry) = (terrain_geometry_source(LIT_GROUP), terrain_geometry_source(GROUP));
-
-        let depth = |format, write, compare, bias: wgpu::DepthBiasState| wgpu::DepthStencilState {
-            format,
-            depth_write_enabled: Some(write),
-            depth_compare: Some(compare),
-            stencil: Default::default(),
-            bias,
-        };
         let common = scene_common(device);
-        let lit = terrain_pipeline(
-            device,
-            "terrain lit",
-            &format!("{common}\n{lit_geometry}\n{TERRAIN_SCENE_SOURCE}"),
-            &lit_layout,
-            &[scene_format],
-            depth(DEPTH_FORMAT, true, wgpu::CompareFunction::LessEqual, Default::default()),
-        );
+
         let caster = terrain_pipeline(
             device,
             "terrain caster",
             &format!("{geometry}\n{TERRAIN_CASTER_SOURCE}"),
             &caster_layout,
+            None,
             &[],
-            depth(
+            depth_state(
                 SHADOW_FORMAT,
-                true,
-                wgpu::CompareFunction::LessEqual,
                 wgpu::DepthBiasState { constant: bias.constant, slope_scale: bias.slope_scale, clamp: 0.0 },
             ),
         );
-        let surface = terrain_pipeline(
+        let depth = terrain_pipeline(
             device,
-            "terrain surfaces",
-            &format!("{common}\n{geometry}\n{TERRAIN_SURFACE_SOURCE}"),
-            &surface_layout,
-            &[ATTACHMENT_FORMAT],
-            depth(DEPTH_FORMAT, false, wgpu::CompareFunction::Equal, Default::default()),
+            "terrain depth",
+            &format!("{common}\n{geometry}\n{TERRAIN_DEPTH_SOURCE}"),
+            &depth_layout,
+            None,
+            &[],
+            depth_state(DEPTH_FORMAT, Default::default()),
         );
-        let motion = terrain_pipeline(
-            device,
-            "terrain motion",
-            &format!("{geometry}\n{TERRAIN_MOTION_SOURCE}"),
-            &motion_pipeline_layout,
-            &[ATTACHMENT_FORMAT, ATTACHMENT_FORMAT],
-            depth(DEPTH_FORMAT, true, wgpu::CompareFunction::LessEqual, Default::default()),
-        );
-        Self { layout, motion_layout, lit, caster, surface, motion }
+        let lit_source = format!("{common}\n{lit_geometry}\n{TERRAIN_SCENE_SOURCE}");
+        let lit = lit_pipeline(device, &lit_source, &lit_layout, scene_format, SceneTargets::Color);
+        Self { layout, lit, caster, depth, lit_targets: None, lit_layout, lit_source, scene_format }
+    }
+
+    /// The lit terrain pipeline writing `targets`.
+    fn lit_pipeline(&self, device: &wgpu::Device, targets: SceneTargets) -> wgpu::RenderPipeline {
+        lit_pipeline(device, &self.lit_source, &self.lit_layout, self.scene_format, targets)
     }
 }
 
-/// Compile one terrain pipeline; an empty `targets` list builds a depth-only pipeline without a fragment stage.
+/// Compile the lit terrain pipeline for `targets`.
+fn lit_pipeline(
+    device: &wgpu::Device,
+    source: &str,
+    layout: &wgpu::PipelineLayout,
+    scene_format: wgpu::TextureFormat,
+    targets: SceneTargets,
+) -> wgpu::RenderPipeline {
+    terrain_pipeline(
+        device,
+        "terrain lit",
+        source,
+        layout,
+        Some(targets.fragment_entry()),
+        &targets.states(scene_format, true),
+        depth_state(DEPTH_FORMAT, Default::default()),
+    )
+}
+
+/// Less-or-equal depth with writes, like the scene's opaque pipelines.
+fn depth_state(format: wgpu::TextureFormat, bias: wgpu::DepthBiasState) -> wgpu::DepthStencilState {
+    wgpu::DepthStencilState {
+        format,
+        depth_write_enabled: Some(true),
+        depth_compare: Some(wgpu::CompareFunction::LessEqual),
+        stencil: Default::default(),
+        bias,
+    }
+}
+
+/// Compile one terrain pipeline; without a fragment entry it is depth-only.
 fn terrain_pipeline(
     device: &wgpu::Device,
     label: &str,
     source: &str,
     layout: &wgpu::PipelineLayout,
-    targets: &[wgpu::TextureFormat],
+    fragment_entry: Option<&str>,
+    targets: &[Option<wgpu::ColorTargetState>],
     depth: wgpu::DepthStencilState,
 ) -> wgpu::RenderPipeline {
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(label),
         source: wgpu::ShaderSource::Wgsl(source.into()),
     });
-    let targets: Vec<Option<wgpu::ColorTargetState>> = targets
-        .iter()
-        .map(|format| Some(wgpu::ColorTargetState { format: *format, blend: None, write_mask: wgpu::ColorWrites::ALL }))
-        .collect();
     let buffers = [Some(grid_buffer_layout())];
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(label),
@@ -420,11 +399,11 @@ fn terrain_pipeline(
         primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
         depth_stencil: Some(depth),
         multisample: wgpu::MultisampleState::default(),
-        fragment: (!targets.is_empty()).then(|| wgpu::FragmentState {
+        fragment: fragment_entry.map(|entry| wgpu::FragmentState {
             module: &module,
-            entry_point: Some("fragmentMain"),
+            entry_point: Some(entry),
             compilation_options: Default::default(),
-            targets: &targets,
+            targets,
         }),
         multiview_mask: None,
         cache: None,
@@ -507,36 +486,6 @@ fn stretch_bound(matrix: DMat4) -> f64 {
         sums = sums.max(columns[axis * 4].abs() + columns[(axis * 4) + 1].abs() + columns[(axis * 4) + 2].abs());
     }
     (rows * sums).sqrt()
-}
-
-/// Conservative clip-space test of transformed local bounds against the six frustum planes (zero-to-one depth).
-fn outside_frustum(bounds: Bounds, model: Mat4, view_projection: Mat4) -> bool {
-    let matrix = view_projection * model;
-    let mut outside = [true; 6];
-    for corner in bounds.corners() {
-        let clip = matrix * corner.extend(1.0);
-        let distances = [clip.x + clip.w, clip.w - clip.x, clip.y + clip.w, clip.w - clip.y, clip.z, clip.w - clip.z];
-        for (plane, distance) in distances.iter().enumerate() {
-            outside[plane] = outside[plane] && *distance < 0.0;
-        }
-    }
-    outside.iter().any(|plane| *plane)
-}
-
-/// Transform local bounds into conservative world bounds.
-fn world_bounds(bounds: Bounds, model: Mat4) -> Bounds {
-    bounds.corners().iter().fold(
-        Bounds { min: Vec3::splat(f32::INFINITY), max: Vec3::splat(f32::NEG_INFINITY) },
-        |result, corner| {
-            let point = model.transform_point3(*corner);
-            Bounds { min: result.min.min(point), max: result.max.max(point) }
-        },
-    )
-}
-
-/// Smallest bounds containing both inputs.
-fn union(left: Bounds, right: Bounds) -> Bounds {
-    Bounds { min: left.min.min(right.min), max: left.max.max(right.max) }
 }
 
 #[cfg(test)]

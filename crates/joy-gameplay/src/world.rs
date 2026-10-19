@@ -7,9 +7,13 @@ use indexmap::IndexMap;
 
 use super::entity::{
     EntityId,
+    EntityState,
     SimulationContext,
 };
-use super::entity_definition::EntityDefinition;
+use super::entity_definition::{
+    EntityDefinition,
+    EntityTransform,
+};
 use super::entity_registry::EntityRegistry;
 use super::entity_world::EntityWorld;
 use super::error::GameplayError;
@@ -17,7 +21,6 @@ use joy_physics::{
     BodyHandle,
     PhysicsWorld,
     PhysicsWorldOptions,
-    VehicleHandle,
 };
 
 /// Caller name used in delta-time errors.
@@ -32,11 +35,22 @@ pub struct WorldStep {
     pub physics_steps: u32,
 }
 
+/// An entity's state paired with the placement to draw it at this frame (see [`World::presented_entities`]).
+#[derive(Clone, Copy, Debug)]
+pub struct PresentedEntity<'a> {
+    /// The entity's simulation state.
+    pub state: &'a EntityState,
+    /// Where to draw it. Entities with a body blend between their last two fixed physics steps; others use their
+    /// current transform. Scale always comes from the entity.
+    pub transform: EntityTransform,
+}
+
 /// Owns entity simulation and physics without browser, input, or rendering facilities.
 ///
-/// `bodies` and `vehicles` map entities to the solver objects they own; behaviors read them through
-/// [`SimulationContext`], and removing an entity removes its listed body and vehicle. Fields are public so composition
-/// roots can borrow them independently; use [`World::split`] to obtain an entity world and context together.
+/// `bodies` maps entities to the physics bodies they own (a vehicle is a kind of body, so a kart's chassis is listed
+/// here too); behaviors read it through [`SimulationContext`], and removing an entity removes its listed body. Fields
+/// are public so composition roots can borrow them independently; use [`World::split`] to obtain an entity world and
+/// context together.
 ///
 /// Dropping the world removes every system (running `on_remove` in reverse order), then every entity (running
 /// `on_destroy` hooks and detaching components), and then releases physics, like the TypeScript `World.destroy`.
@@ -46,10 +60,8 @@ pub struct World {
     pub entities: EntityWorld,
     /// Physics owner.
     pub physics: PhysicsWorld,
-    /// Body owned by each entity.
+    /// Body owned by each entity, including vehicle chassis bodies.
     pub bodies: IndexMap<EntityId, BodyHandle>,
-    /// Vehicle owned by each entity.
-    pub vehicles: IndexMap<EntityId, VehicleHandle>,
 }
 
 impl World {
@@ -66,12 +78,12 @@ impl World {
     /// Create a world from an existing entity world (for example one built with
     /// [`EntityWorld::with_component_registry`]) and physics world, taking ownership of both.
     pub fn from_parts(entities: EntityWorld, physics: PhysicsWorld) -> Self {
-        Self { entities, physics, bodies: IndexMap::new(), vehicles: IndexMap::new() }
+        Self { entities, physics, bodies: IndexMap::new() }
     }
 
     /// Borrow the entity world and a simulation context built from the other fields.
     pub fn split(&mut self) -> (&mut EntityWorld, SimulationContext<'_>) {
-        (&mut self.entities, SimulationContext::new(&mut self.physics, &self.bodies, &self.vehicles))
+        (&mut self.entities, SimulationContext::new(&mut self.physics, &self.bodies))
     }
 
     /// Advance physics, then entities, by finite nonnegative simulation seconds.
@@ -90,28 +102,43 @@ impl World {
         Ok(WorldStep { elapsed_seconds, physics_steps })
     }
 
+    /// The placement to draw an entity at this frame, or `None` if it is not live.
+    ///
+    /// An entity with a body takes the body's [interpolated pose](PhysicsWorld::interpolated_body_transform), so
+    /// motion stays smooth when the display refreshes faster than (or out of step with) the fixed physics rate. Gameplay
+    /// keeps reading `EntityState::transform`, the simulation's state.
+    pub fn presentation_transform(&self, id: &EntityId) -> Option<EntityTransform> {
+        let entity = self.entities.get(id)?;
+        Some(self.blended_transform(&entity.state))
+    }
+
+    /// Every live entity with its presentation placement, in insertion order, for scene synchronization.
+    pub fn presented_entities(&self) -> impl Iterator<Item = PresentedEntity<'_>> {
+        self.entities
+            .iter()
+            .map(|entity| PresentedEntity { state: &entity.state, transform: self.blended_transform(&entity.state) })
+    }
+
     /// Spawn an entity (no physics setup; see `LevelRuntime` for component-driven bodies).
     pub fn spawn(&mut self, definition: &EntityDefinition) -> Result<EntityId, GameplayError> {
         let (entities, mut context) = self.split();
         entities.spawn(definition, &mut context)
     }
 
-    /// Remove an entity and the body and vehicle it owns. Returns whether it was live.
+    /// Remove an entity and the body it owns. Returns whether it was live.
     pub fn remove(&mut self, id: &EntityId) -> bool {
         let (entities, mut context) = self.split();
         let removed = entities.remove(id, &mut context);
         if removed {
             self.bodies.shift_remove(id);
-            self.vehicles.shift_remove(id);
         }
         removed
     }
 
-    /// Forget handles whose entity was removed or whose solver object no longer exists.
+    /// Forget handles whose entity was removed or whose body no longer exists.
     pub fn prune_handles(&mut self) {
-        let Self { entities, physics, bodies, vehicles } = self;
+        let Self { entities, physics, bodies } = self;
         bodies.retain(|id, body| entities.contains(id) && physics.contains_body(*body));
-        vehicles.retain(|id, vehicle| entities.contains(id) && physics.contains_vehicle(*vehicle));
     }
 
     /// Remove every entity in insertion order, running their hooks, and forget their handles.
@@ -119,7 +146,19 @@ impl World {
         let (entities, mut context) = self.split();
         entities.clear(&mut context);
         self.bodies.clear();
-        self.vehicles.clear();
+    }
+}
+
+impl World {
+    /// An entity's transform with its body's interpolated pose, when it owns a live body.
+    fn blended_transform(&self, state: &EntityState) -> EntityTransform {
+        let mut transform = state.transform;
+        let pose = self.bodies.get(state.id()).and_then(|body| self.physics.interpolated_body_transform(*body));
+        if let Some(pose) = pose {
+            transform.position = pose.position;
+            transform.rotation = pose.rotation;
+        }
+        transform
     }
 }
 

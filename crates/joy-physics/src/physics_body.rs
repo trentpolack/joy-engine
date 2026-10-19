@@ -137,14 +137,12 @@ impl PhysicsWorld {
         Ok(self.insert_body(validated, collider, ActiveHooks::FILTER_CONTACT_PAIRS))
     }
 
-    /// Remove a body and any vehicle using it as a chassis. Returns whether a live body was removed.
+    /// Remove a body, including the vehicle it carries when it is a vehicle chassis. Returns whether a live body was
+    /// removed.
     pub fn remove_body(&mut self, handle: BodyHandle) -> bool {
         let Some(raw) = self.resolve_body(handle) else {
             return false;
         };
-        if let Some(vehicle) = self.bodies.get(&raw).and_then(|record| record.vehicle) {
-            self.vehicles.shift_remove(&vehicle);
-        }
         self.bodies.shift_remove(&raw);
         self.forced_bodies.retain(|forced| *forced != raw);
         self.solver.remove_body(raw);
@@ -165,6 +163,19 @@ impl PhysicsWorld {
         })
     }
 
+    /// Copied world pose for presentation: the body's pose before the latest fixed step blended toward its current
+    /// pose by [`interpolation`](Self::interpolation), or `None` for an unknown handle.
+    ///
+    /// Positions blend linearly and rotations along the shortest arc. Use it for rendering and cameras only; gameplay
+    /// reads [`body_transform`](Self::body_transform), the solver's state.
+    pub fn interpolated_body_transform(&self, handle: BodyHandle) -> Option<PhysicsTransform> {
+        let pose = self.interpolated_pose(handle)?;
+        Some(PhysicsTransform {
+            position: from_solver_vector(pose.translation),
+            rotation: euler_from_solver_rotation(pose.rotation),
+        })
+    }
+
     /// Teleport a body in world space without changing its velocity, and wake it.
     ///
     /// Omitted components keep their current value. Non-finite input fails before any state changes.
@@ -182,7 +193,13 @@ impl PhysicsWorld {
         let current = *body.position();
         let translation = position.map(to_solver_vector).unwrap_or(current.translation);
         let orientation = rotation.map(solver_rotation_from_euler).unwrap_or(current.rotation);
-        body.set_position(Pose::from_parts(translation, orientation), true);
+        let pose = Pose::from_parts(translation, orientation);
+        body.set_position(pose, true);
+
+        // A teleport is a cut: presentation starts from the new pose instead of sweeping across the jump.
+        if let Some(record) = self.bodies.get_mut(&raw) {
+            record.previous_pose = pose;
+        }
         Ok(())
     }
 
@@ -252,15 +269,32 @@ impl PhysicsWorld {
 }
 
 impl PhysicsWorld {
+    /// The presentation pose of a live body: its previous fixed-step pose blended toward the current one.
+    pub(super) fn interpolated_pose(&self, handle: BodyHandle) -> Option<Pose> {
+        let raw = self.resolve_body(handle)?;
+        let record = self.bodies.get(&raw)?;
+        let current = *self.solver.bodies.get(raw)?.position();
+        let alpha = self.interpolation();
+        let previous = record.previous_pose;
+        Some(Pose::from_parts(
+            previous.translation.lerp(current.translation, alpha),
+            previous.rotation.slerp(current.rotation, alpha),
+        ))
+    }
+
     /// Insert a validated body with its single collider; static bodies (mass zero) are fixed, exactly like cannon-es.
-    fn insert_body(&mut self, validated: ValidatedBody, shape: SharedShape, hooks: ActiveHooks) -> BodyHandle {
+    pub(super) fn insert_body(
+        &mut self,
+        validated: ValidatedBody,
+        shape: SharedShape,
+        hooks: ActiveHooks,
+    ) -> BodyHandle {
         let dynamic = validated.mass > 0.0;
         let builder = if dynamic { RigidBodyBuilder::dynamic() } else { RigidBodyBuilder::fixed() };
+        let pose =
+            Pose::from_parts(to_solver_vector(validated.position), solver_rotation_from_euler(validated.rotation));
         let body = builder
-            .pose(Pose::from_parts(
-                to_solver_vector(validated.position),
-                solver_rotation_from_euler(validated.rotation),
-            ))
+            .pose(pose)
             .linear_damping(damping_coefficient(validated.linear_damping))
             .angular_damping(damping_coefficient(validated.angular_damping))
             .can_sleep(false)
@@ -280,14 +314,14 @@ impl PhysicsWorld {
             // Mass is queried (and used by vehicles) before the first step, so resolve it immediately.
             body.recompute_mass_properties_from_colliders(&self.solver.colliders);
         }
-        self.bodies.insert(raw, BodyRecord { collider, dynamic, vehicle: None });
+        self.bodies.insert(raw, BodyRecord { collider, dynamic, previous_pose: pose, vehicle: None });
         BodyHandle { world: self.world_id, raw }
     }
 }
 
 /// Body options that passed validation, independent of the collider shape.
-struct ValidatedBody {
-    mass: f32,
+pub(super) struct ValidatedBody {
+    pub(super) mass: f32,
     friction: f32,
     restitution: f32,
     position: Vec3,
@@ -298,7 +332,7 @@ struct ValidatedBody {
 
 impl ValidatedBody {
     /// Validate in the TypeScript engine's order: mass, friction, restitution, position, rotation, then damping.
-    fn new(options: &BodyOptions) -> Result<Self, PhysicsError> {
+    pub(super) fn new(options: &BodyOptions) -> Result<Self, PhysicsError> {
         Ok(Self {
             mass: finite_number(options.mass, "mass", 0.0, f64::INFINITY)?,
             friction: finite_number(options.friction, "friction", 0.0, f64::INFINITY)?,
@@ -312,7 +346,7 @@ impl ValidatedBody {
 }
 
 /// Validate collider dimensions and build the solver shape.
-fn create_shape(options: &BodyOptions) -> Result<SharedShape, PhysicsError> {
+pub(super) fn create_shape(options: &BodyOptions) -> Result<SharedShape, PhysicsError> {
     match options.shape {
         PrimitiveShape::Box => {
             let half_extents = finite_vector(options.half_extents, "halfExtents")?;

@@ -151,11 +151,10 @@ impl App for FormViewer {
         Ok(())
     }
 
-    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
+    fn render(&mut self, _frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
         let inputs = FrameInputs {
             environment: self.lighting.as_ref(),
             clear_color: LinearColor::new(0.09, 0.16, 0.2, 1.0),
-            time_seconds: frame.time.time_seconds as f32,
             ..Default::default()
         };
         Ok(target.draw(&self.scene, &self.camera, &inputs)?)

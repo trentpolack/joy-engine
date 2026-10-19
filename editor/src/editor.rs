@@ -152,12 +152,11 @@ impl App for JoyEditor {
                 StartContext { capabilities: &capabilities, renderer: target.renderer(), viewport: frame.viewport };
             self.workspace.prepare_tabs(&mut context);
         }
-        let time = frame.time.time_seconds as f32;
         let logical_size = target.renderer().logical_size();
         let result = match self.workspace.active_tab_mut().map(|tab| &mut tab.content) {
             Some(TabContent::Level(level)) => {
                 level.viewport.viewport_size = logical_size;
-                level.viewport.render(target, time).map_err(Into::into)
+                level.viewport.render(target).map_err(Into::into)
             }
             Some(TabContent::Tool(tool)) => tool.tool_mut().render(frame, target),
             _ => Ok(()),

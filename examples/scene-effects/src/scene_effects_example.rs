@@ -598,7 +598,6 @@ impl App for SceneEffectsExample {
             lights: &self.room.lights,
             ambient: Some(AMBIENT),
             clear_color: CLEAR_COLOR,
-            time_seconds: self.time_seconds as f32,
             ..FrameInputs::default()
         };
         let camera = self.view_camera(frame.viewport.logical_size);

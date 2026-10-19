@@ -21,6 +21,7 @@ use crate::postprocessor::PostProcessor;
 use crate::{
     ColorVertex,
     GpuContext,
+    PresentationTime,
     RenderError,
 };
 use joy_core::LinearColor;
@@ -63,8 +64,6 @@ pub struct TriangleFrame<'a> {
     pub uniforms: &'a [u8],
     /// Linear background color.
     pub clear_color: LinearColor,
-    /// Animation time in seconds (film grain).
-    pub time_seconds: f32,
 }
 
 /// Owns the pipelines, buffers, and post-processing for a game-supplied triangle shader.
@@ -83,9 +82,11 @@ pub struct TriangleRenderer {
     // Display processing into the presentation format.
     post: PostProcessor,
 
-    // Drawing-buffer size in physical pixels and the logical size games lay out in.
+    // Drawing-buffer size in physical pixels, the logical size games lay out in, and the shell's presentation clock
+    // (film grain).
     physical_size: (u32, u32),
     logical_size: Vec2,
+    presentation_time: PresentationTime,
 
     gpu: GpuContext,
 }
@@ -153,6 +154,7 @@ impl TriangleRenderer {
             post,
             physical_size: (0, 0),
             logical_size: Vec2::ZERO,
+            presentation_time: PresentationTime::default(),
             gpu: gpu.clone(),
         })
     }
@@ -180,6 +182,11 @@ impl TriangleRenderer {
         self.post.set_settings(settings);
     }
 
+    /// Set the presentation clock for the next frame; `RenderTarget::draw_triangles` copies the shell's clock here.
+    pub fn set_presentation_time(&mut self, time: PresentationTime) {
+        self.presentation_time = time;
+    }
+
     /// Record one frame into `encoder`, ending in `output`. Nothing is submitted.
     pub fn encode(
         &mut self,
@@ -200,7 +207,7 @@ impl TriangleRenderer {
         }
         let gpu = self.gpu.clone();
         let (device, queue) = (gpu.device(), gpu.queue());
-        self.post.prepare(device, queue, width, height, frame.time_seconds);
+        self.post.prepare(device, queue, width, height, self.presentation_time.time_seconds as f32);
         queue.write_buffer(&self.uniform_buffer, 0, frame.uniforms);
 
         // One allocation holds opaque then transparent vertices; incomplete trailing triangles are dropped.

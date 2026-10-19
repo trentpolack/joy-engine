@@ -8,7 +8,8 @@ use crate::{
     RenderError,
 };
 
-/// Presentation format of offscreen captures. Non-sRGB, matching the engine's canvas output path.
+/// Presentation format of offscreen captures. Non-sRGB, like presentation surfaces: captured bytes are the
+/// sRGB-encoded display values a window shows.
 pub const CAPTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// Row alignment required for texture-to-buffer copies.

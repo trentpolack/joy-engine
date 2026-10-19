@@ -19,14 +19,15 @@ struct AtmosphereOutput {
 };
 
 /**
- * Build a full-screen triangle without a vertex buffer. One oversized triangle avoids a diagonal seam.
+ * Build a full-screen triangle without a vertex buffer. One oversized triangle avoids a diagonal seam. It sits on the far
+ * plane: drawn after opaque geometry with a less-or-equal depth test, the sky shades only the pixels nothing covers.
  */
 @vertex fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> AtmosphereOutput {
   let position = vec2f(f32((vertexIndex << 1u) & 2u), f32(vertexIndex & 2u));
 
   var output: AtmosphereOutput;
   output.screenPosition = (position*2.0) - 1.0;
-  output.position = vec4f(output.screenPosition, 0.0, 1.0);
+  output.position = vec4f(output.screenPosition, 1.0, 1.0);
   return output;
 }
 

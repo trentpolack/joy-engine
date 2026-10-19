@@ -251,12 +251,18 @@ fn simulations_match_typescript_recordings() {
                 "{label} omitted lights"
             );
             assert_eq!(lights.lights.len(), expected_lights.len(), "{label} light count");
-            for (light, expected) in lights.lights.iter().zip(expected_lights) {
+            for (selected, expected) in lights.lights.iter().zip(expected_lights) {
                 let expected = numbers(expected);
-                let actual = [light.x, light.y, light.z, light.r, light.g, light.b, light.range];
+                let light = &selected.light;
+                let mut actual = light.position.to_array().to_vec();
+                actual.extend(light.color.rgb_array());
+                actual.push(light.range);
+                // Lights reach the renderer in single precision, like geometry.
                 for (actual, expected) in actual.iter().zip(&expected) {
-                    assert!(close(*actual, *expected, SIMULATION_TOLERANCE), "{label} light {actual} != {expected}");
+                    let actual = f64::from(*actual);
+                    assert!(close(actual, *expected, GEOMETRY_TOLERANCE), "{label} light {actual} != {expected}");
                 }
+                let light = selected;
                 assert_eq!(light.emitter_index as f64, expected[7], "{label} light emitter");
                 assert_eq!(light.particle_index as f64, expected[8], "{label} light particle");
             }

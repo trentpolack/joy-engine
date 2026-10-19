@@ -2,12 +2,12 @@
 // Licensed under the MIT License.
 
 // Height-only continuous LOD shared by every terrain pipeline: X/Z never move, and a patch's fractional LOD moves Y
-// onto the parent triangles. Each terrain shader is this file followed by its own entry points (the scene variants
-// also prepend scene-common.wgsl). Terrain bindings live in group 3 so the scene's frame and shadow groups keep their
-// indices.
+// onto the parent triangles. Each terrain shader is this file followed by its own entry points (the lit and depth
+// variants also prepend scene-common.wgsl). Terrain bindings live in group 3 so the scene's frame and shadow groups keep
+// their indices; pipelines with fewer groups move them down (`terrain_geometry_source`).
 
 struct TerrainScene {
-  // View-projection matrix for the standalone pass (scene passes use their own camera).
+  // View-projection matrix of the selection camera; passes project with their own camera.
   matrix: mat4x4f,
   // XYZ eye position in the terrain's local space; W is the CSS projection scale.
   eye: vec4f,
@@ -29,6 +29,8 @@ struct TerrainPatch {
 struct TerrainModel {
   // Local-to-world transform.
   model: mat4x4f,
+  // The previous frame's transform, for motion vectors (equal to `model` without history).
+  previousModel: mat4x4f,
   // X receives shadows (0 or 1), Y scene roughness, ZW unused.
   flags: vec4f,
 };
@@ -44,11 +46,14 @@ struct TerrainVertexInput {
 };
 
 struct TerrainVertexOutput {
-  // Invariant so the equal-depth surface pass reproduces the lit pass's depth exactly across pipelines.
+  // Invariant so the depth pre-pass reproduces the lit pass's depth exactly across pipelines.
   @builtin(position) @invariant position: vec4f,
   @location(0) worldPosition: vec3f,
   // XY cells at the current integer LOD, Z fractional LOD.
   @location(1) levelData: vec3f,
+  // Clip positions for motion vectors (scene passes with effect attachments).
+  @location(2) currentClip: vec4f,
+  @location(3) previousClip: vec4f,
 };
 
 /**
@@ -185,7 +190,7 @@ fn terrainSurface(input: TerrainVertexInput) -> TerrainVertexOutput {
 }
 
 /**
- * Slope and altitude coloring shared by the standalone and scene passes, with the LOD diagnostics.
+ * Slope and altitude coloring for the lit pass, with the LOD diagnostics.
  * `lines` is the derivative-scaled grid distance, computed by the caller in uniform control flow.
  */
 fn terrainAlbedo(worldHeight: f32, normalY: f32, levelData: vec3f, lines: vec2f) -> vec3f {

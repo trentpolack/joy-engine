@@ -174,6 +174,7 @@ pub mod prelude {
         IntentController,
         LevelData,
         LevelRuntime,
+        PresentedEntity,
         SimulationContext,
         parse_level,
     };

@@ -17,8 +17,6 @@ use joy_renderer::{
     RenderError,
     RenderScene,
     Renderer,
-    TerrainFrame,
-    TerrainRenderer,
     TriangleFrame,
     TriangleRenderer,
 };
@@ -111,7 +109,7 @@ impl RenderTarget<'_> {
 
     /// Draw a frame with a app-owned [`TriangleRenderer`] (create it in [`App::start`] from
     /// `context.renderer.gpu()` and `context.renderer.output_format()`). The triangle renderer is resized to this target
-    /// first. Use either this or [`draw`](Self::draw) once per frame.
+    /// and given the shell's presentation clock first. Use either this or [`draw`](Self::draw) once per frame.
     pub fn draw_triangles(
         &mut self,
         triangles: &mut TriangleRenderer,
@@ -123,17 +121,8 @@ impl RenderTarget<'_> {
             let scale = if logical.x > 0.0 { width as f32 / logical.x } else { 1.0 };
             triangles.resize(width, height, scale);
         }
+        triangles.set_presentation_time(self.renderer.presentation_time());
         triangles.encode(self.encoder, self.output, frame)?;
-        self.drawn = true;
-        Ok(())
-    }
-
-    /// Draw a frame with a app-owned standalone [`TerrainRenderer`] (create it in [`App::start`] from
-    /// `context.renderer.gpu()` with `context.renderer.output_format()`): selection, then one cleared pass straight into
-    /// the presentation target, without the scene's lighting or display processing. Use either this, [`draw`](Self::draw),
-    /// or [`draw_triangles`](Self::draw_triangles) once per frame.
-    pub fn draw_terrain(&mut self, terrain: &mut TerrainRenderer, frame: &TerrainFrame) -> Result<(), RenderError> {
-        terrain.encode(self.encoder, self.output, self.renderer.physical_size(), frame)?;
         self.drawn = true;
         Ok(())
     }

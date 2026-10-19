@@ -1,53 +1,31 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Per-frame renderer inputs: lights, environment lighting, timing, transient effect triangles, and pre-sorted
-//! transparent runs (colored or textured) such as particle batches.
+//! Per-frame renderer inputs: lights, environment lighting, transient effect triangles, and pre-sorted transparent runs
+//! (colored or textured) such as particle batches, plus the presentation clock the shell supplies.
 
 use bytemuck::{
     Pod,
     Zeroable,
 };
-use joy_core::LinearColor;
 use joy_core::math::Vec3;
+use joy_core::{
+    DirectionalLight,
+    LinearColor,
+    PointLight,
+    Skylight,
+};
 
 use crate::environment::ImageLighting;
 use crate::texture::TextureAsset;
 
-/// Maximum point lights per frame, matching the TypeScript engine.
+/// Point lights the renderer draws per frame, matching the TypeScript engine. Frames may supply more; the renderer keeps
+/// the ones that contribute most to the view (see [`FrameInputs::lights`]).
 pub const MAX_POINT_LIGHTS: usize = 32;
 
 /// Default ambient irradiance when no environment is supplied; with an environment the default is zero, since the
 /// environment's skylight provides ambient light.
 pub const DEFAULT_AMBIENT_WITHOUT_ENVIRONMENT: f32 = 0.3;
-
-/// A point light. Positions and range are world units; color is linear irradiance that reaches zero at `range`.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct PointLight {
-    /// World position.
-    pub position: Vec3,
-    /// Linear irradiance at the light (color multiplied by intensity); alpha is unused.
-    pub color: LinearColor,
-    /// Distance at which the light's contribution reaches zero; must be positive.
-    pub range: f32,
-    /// Whether the light casts soft shadows from six depth faces. The TypeScript default is `true`.
-    pub casts_shadow: bool,
-}
-
-/// One celestial light from the environment, in the renderer's terms.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct CelestialLight {
-    /// Unit direction toward the light, Y-up world space.
-    pub direction: Vec3,
-    /// Linear color before intensity; alpha is unused.
-    pub color: LinearColor,
-    /// Radiance multiplier.
-    pub intensity: f32,
-    /// Disc angular radius in radians.
-    pub angular_radius: f32,
-    /// Whether the light casts the directional shadow when it is the primary light.
-    pub casts_shadow: bool,
-}
 
 /// Everything the renderer reads from an environment frame: lighting for surfaces and the packed sky inputs.
 ///
@@ -58,16 +36,15 @@ pub struct EnvironmentLighting {
     pub elapsed_seconds: f32,
     /// Normalized local solar time in `[0, 1)`.
     pub time_of_day: f32,
-    /// The sun.
-    pub sun: CelestialLight,
-    /// The moon.
-    pub moon: CelestialLight,
-    /// The light that illuminates and shadows surfaces (the sun by day, the moon by night).
-    pub primary: CelestialLight,
-    /// Linear skylight color; alpha is unused.
-    pub skylight_color: LinearColor,
-    /// Skylight intensity.
-    pub skylight_intensity: f32,
+    /// The sun; the sky draws its disc and glow.
+    pub sun: DirectionalLight,
+    /// The moon; the sky draws its disc.
+    pub moon: DirectionalLight,
+    /// The light that illuminates and shadows surfaces (the sun by day, the moon by night), unless the frame supplies
+    /// its own [`FrameInputs::directional_light`].
+    pub primary: DirectionalLight,
+    /// Ambient light from the sky and the ground.
+    pub skylight: Skylight,
     /// Wind velocity in world units per second.
     pub wind_velocity: Vec3,
     /// Rayleigh, Mie, ozone (horizon warmth), and density scattering multipliers.
@@ -83,7 +60,7 @@ pub struct EnvironmentLighting {
 impl EnvironmentLighting {
     /// Pack into the sixteen-vec4 block shared with the TypeScript engine's environment uniforms.
     pub fn pack(&self) -> [[f32; 4]; 16] {
-        let light = |light: &CelestialLight| -> ([f32; 4], [f32; 4]) {
+        let light = |light: &DirectionalLight| -> ([f32; 4], [f32; 4]) {
             (
                 light.direction.extend(light.intensity).to_array(),
                 light.color.with_alpha(light.angular_radius).to_array(),
@@ -96,7 +73,7 @@ impl EnvironmentLighting {
         packed[1] = sun_color;
         packed[2] = moon_direction;
         packed[3] = moon_color;
-        packed[4] = self.skylight_color.with_alpha(self.skylight_intensity).to_array();
+        packed[4] = self.skylight.color.with_alpha(self.skylight.intensity).to_array();
         packed[5] = self.wind_velocity.extend(self.elapsed_seconds).to_array();
         packed[6] = self.scattering;
         packed[7] = self.fog_and_clouds;
@@ -131,15 +108,17 @@ pub struct TexturedVertex {
     pub uv: [f32; 2],
 }
 
-/// One pre-sorted transparent run in [`FrameInputs::transparent_draws`].
+/// One transparent run in [`FrameInputs::transparent_draws`].
 ///
-/// Runs draw in the order supplied, after the frame's other transparency, testing depth against opaque geometry without
-/// writing it, and blending straight alpha source-over. Incomplete trailing triangles are dropped.
+/// Each triangle sorts back to front with the frame's other transparency (equal depths keep the supplied order), tests
+/// depth against opaque geometry without writing it, and blends straight alpha source-over. Incomplete trailing
+/// triangles are dropped.
 #[derive(Clone, Copy, Debug)]
 pub enum TransparentDraw<'a> {
     /// Unlit vertex-color triangles.
     Colored(&'a [ColorVertex]),
-    /// Unlit triangles whose vertex color multiplies the texture (sampled as sRGB, linear filtering, clamped edges).
+    /// Unlit triangles whose vertex color multiplies the texture (decoded from sRGB, sampled trilinearly from generated
+    /// mipmaps with anisotropic filtering, clamped edges).
     Textured {
         /// The image to sample; uploaded on first use and released after its last handle drops.
         texture: &'a TextureAsset,
@@ -158,26 +137,60 @@ impl TransparentDraw<'_> {
     }
 }
 
-/// Borrowed inputs for one frame. Time is in seconds; geometry is world space.
+/// The presentation clock: real frame time from the shell that drives the renderer, independent of any app's pausable
+/// scene time.
+///
+/// Temporal effects (antialiasing history resets, exposure adaptation, film grain, and volumetric noise) read this clock
+/// so they behave the same in every game, tool, and example. The windowed and headless shells set it before each render
+/// phase ([`Renderer::set_presentation_time`](crate::Renderer::set_presentation_time)); scene animation stays on the
+/// app's own clock.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PresentationTime {
+    /// Seconds since the shell started presenting; never decreases.
+    pub time_seconds: f64,
+    /// Seconds since the previous presented frame: bounded by the shell, and zero for the first frame and after the
+    /// shell resets its clock (pauses and hidden windows).
+    pub elapsed_seconds: f32,
+}
+
+impl PresentationTime {
+    /// The clock of frame `frame_index` (zero-based) presented every `frame_seconds`, as the headless shell runs it;
+    /// for renderers driven without a shell, such as tests and offline captures.
+    pub fn fixed_rate(frame_index: u32, frame_seconds: f32) -> Self {
+        Self {
+            time_seconds: f64::from(frame_index) * f64::from(frame_seconds),
+            elapsed_seconds: if frame_index == 0 { 0.0 } else { frame_seconds },
+        }
+    }
+}
+
+/// Borrowed inputs for one frame. Geometry is world space; time comes from the renderer's presentation clock.
 #[derive(Clone, Copy, Debug)]
 pub struct FrameInputs<'a> {
-    /// Environment lighting and sky; `None` hides the sky and leaves only ambient and point lights.
+    /// Environment lighting and sky; `None` hides the sky and leaves the directional light, ambient, and point lights.
     pub environment: Option<&'a EnvironmentLighting>,
-    /// Point lights; at most [`MAX_POINT_LIGHTS`] are used.
+    /// The directional light that illuminates and shadows surfaces, such as a studio key light; `None` uses the
+    /// environment's primary light (or no directional light without an environment).
+    pub directional_light: Option<DirectionalLight>,
+    /// Point lights, in any number. Lights whose range cannot reach the camera's view are skipped, invalid lights
+    /// (non-finite values, a range that is not positive, or negative color) are skipped, and of the rest the
+    /// [`MAX_POINT_LIGHTS`] with the largest estimated contribution to the view are drawn. Skipped lights are counted
+    /// in `RendererDiagnostics::point_lights_omitted`.
     pub lights: &'a [PointLight],
     /// Ambient irradiance; `None` uses 0.3 without an environment and 0 with one.
     pub ambient: Option<f32>,
     /// Linear background color behind the sky and geometry.
     pub clear_color: LinearColor,
-    /// Scene time in seconds (grain animation and diagnostics).
-    pub time_seconds: f32,
     /// Opaque triangles (three vertices each), lit like `Shading::Lit` meshes.
     pub opaque_triangles: &'a [ColorVertex],
-    /// Transparent triangles (three vertices each), unlit and sorted back to front by centroid.
+    /// Transparent triangles (three vertices each), unlit. Every transparent element of a frame (these triangles,
+    /// blended scene meshes, and [`transparent_draws`](Self::transparent_draws)) is sorted back to front together, by
+    /// view depth: a triangle by its centroid and a mesh by the center of its bounds.
     pub transparent_triangles: &'a [ColorVertex],
-    /// Pre-sorted transparent runs drawn last, in the supplied order and without re-sorting (see [`TransparentDraw`]).
-    /// Particle effects supply these through `crate::particles::create_particle_effect_batches`, which interleaves
-    /// colored and textured particles back to front.
+    /// Transparent runs (see [`TransparentDraw`]), such as the particle batches from
+    /// `crate::particles::create_particle_effect_batches`. Their triangles sort back to front with the frame's other
+    /// transparency, so a particle behind a glass mesh draws before it; triangles at equal depth keep the supplied
+    /// order.
     pub transparent_draws: &'a [TransparentDraw<'a>],
     /// Image-based lighting for PBR surfaces; `None` leaves them lit by direct, ambient, and skylight only.
     pub image_lighting: Option<ImageLighting<'a>>,
@@ -187,10 +200,10 @@ impl Default for FrameInputs<'_> {
     fn default() -> Self {
         Self {
             environment: None,
+            directional_light: None,
             lights: &[],
             ambient: None,
             clear_color: LinearColor::BLACK,
-            time_seconds: 0.0,
             opaque_triangles: &[],
             transparent_triangles: &[],
             transparent_draws: &[],
@@ -204,25 +217,16 @@ impl FrameInputs<'_> {
     pub fn resolved_ambient(&self) -> f32 {
         self.ambient.unwrap_or(if self.environment.is_some() { 0.0 } else { DEFAULT_AMBIENT_WITHOUT_ENVIRONMENT })
     }
-}
 
-/// Sort transient triangles back to front for a camera looking along `-backward`.
-///
-/// Equal depths keep input order. Incomplete trailing vertices are dropped. Intersecting transparent surfaces remain an
-/// approximation, not order-independent transparency.
-pub fn sort_transparent_triangles(vertices: &[ColorVertex], backward: Vec3) -> Vec<ColorVertex> {
-    let mut triangles: Vec<(f32, usize)> = vertices
-        .as_chunks::<3>()
-        .0
-        .iter()
-        .enumerate()
-        .map(|(index, triangle)| {
-            let depth: f32 = triangle.iter().map(|vertex| Vec3::from_array(vertex.position).dot(backward)).sum();
-            (depth, index)
-        })
-        .collect();
-    triangles.sort_by(|left, right| left.0.total_cmp(&right.0));
-    triangles.into_iter().flat_map(|(_, index)| vertices[index * 3..(index * 3) + 3].iter().copied()).collect()
+    /// The directional light that lights and shadows this frame: the frame's own, else the environment's primary light.
+    pub fn key_light(&self) -> Option<DirectionalLight> {
+        self.directional_light.or_else(|| self.environment.map(|environment| environment.primary))
+    }
+
+    /// The frame's skylight: the environment's, or none.
+    pub fn skylight(&self) -> Skylight {
+        self.environment.map_or_else(Skylight::default, |environment| environment.skylight)
+    }
 }
 
 #[cfg(test)]

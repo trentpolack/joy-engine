@@ -17,6 +17,7 @@ use joy_gameplay::{
     EntityDefinition,
     EntityState,
     EntityTransform,
+    PresentedEntity,
     component_type,
 };
 
@@ -75,6 +76,22 @@ impl LevelEntity for EntityState {
 
     fn entity_component(&self, kind: &str) -> Option<&JsonRecord> {
         self.component(kind)
+    }
+}
+
+/// Runtime entities at their presentation placement (physics bodies blended between fixed steps); see
+/// `World::presented_entities`.
+impl LevelEntity for PresentedEntity<'_> {
+    fn entity_id(&self) -> &str {
+        self.state.id().as_str()
+    }
+
+    fn entity_transform(&self) -> &EntityTransform {
+        &self.transform
+    }
+
+    fn entity_component(&self, kind: &str) -> Option<&JsonRecord> {
+        self.state.component(kind)
     }
 }
 

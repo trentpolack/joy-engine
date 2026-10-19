@@ -17,6 +17,7 @@ use std::collections::HashMap;
 
 use example::config;
 use example::scene_effects_example::SceneEffectsExample;
+use joy_engine::core::color::srgb_to_linear;
 use joy_engine::core::{
     LinearColor,
     MaterialAlphaMode,
@@ -33,7 +34,7 @@ use joy_engine::rendering::{
     BackendPreference,
     CAPTURE_FORMAT,
     Camera,
-    CelestialLight,
+    DirectionalLight,
     EnvironmentLighting,
     FrameInputs,
     GpuContext,
@@ -46,6 +47,7 @@ use joy_engine::rendering::{
     Renderer,
     RendererOptions,
     Shading,
+    Skylight,
     TextureAsset,
     project_to_viewport,
 };
@@ -86,9 +88,10 @@ fn difference(left: &[u8], right: &[u8]) -> f32 {
     total as f32 / left.len() as f32
 }
 
-fn pixel(pixels: &[u8], width: u32, x: u32, y: u32) -> [u8; 3] {
+/// A display pixel decoded to linear light (the presentation pass encodes sRGB), so channel ratios compare light.
+fn linear_pixel(pixels: &[u8], width: u32, x: u32, y: u32) -> [f32; 3] {
     let offset = ((y * width + x) * 4) as usize;
-    [pixels[offset], pixels[offset + 1], pixels[offset + 2]]
+    std::array::from_fn(|channel| srgb_to_linear(f64::from(pixels[offset + channel]) / 255.0) as f32)
 }
 
 #[test]
@@ -113,10 +116,10 @@ fn the_room_renders_with_shadowed_point_lights_and_effect_presets() {
     assert!(lit > (WIDTH * HEIGHT / 3) as usize, "the room fills the view ({lit} lit pixels)");
 
     // The red wall is left of the green wall (the image centers beside the sidebar).
-    let left_wall = pixel(&baseline, WIDTH, 30, 200);
-    let right_wall = pixel(&baseline, WIDTH, 360, 230);
-    assert!(left_wall[0] > left_wall[1] * 2, "left wall is red: {left_wall:?}");
-    assert!(right_wall[1] > right_wall[0] * 2, "right wall is green: {right_wall:?}");
+    let left_wall = linear_pixel(&baseline, WIDTH, 30, 200);
+    let right_wall = linear_pixel(&baseline, WIDTH, 360, 230);
+    assert!(left_wall[0] > left_wall[1] * 2.0, "left wall is red: {left_wall:?}");
+    assert!(right_wall[1] > right_wall[0] * 2.0, "right wall is green: {right_wall:?}");
 
     // Combined turns on the lighting set and bloom; on this backend the effects visibly change the frame.
     lab.controls_mut().select_preset(EffectPreset::Combined);
@@ -152,9 +155,9 @@ fn replacing_the_scene_swaps_the_wall_colors() {
     frames(&mut shell, &mut lab, 1, "example-scene-effects-room");
     lab.replace_scene();
     let alternate = frames(&mut shell, &mut lab, 1, "example-scene-effects-alternate-room");
-    let left_wall = pixel(&alternate, WIDTH, 30, 200);
+    let left_wall = linear_pixel(&alternate, WIDTH, 30, 200);
     assert!(lab.snapshot().alternate_room);
-    assert!(left_wall[2] > left_wall[0] * 2, "the replacement's left wall is blue: {left_wall:?}");
+    assert!(left_wall[2] > left_wall[0] * 2.0, "the replacement's left wall is blue: {left_wall:?}");
 }
 
 /// The TypeScript `shadows-browser` capture: an off-camera blocker shadows the floor from five lights, one light can
@@ -290,7 +293,7 @@ fn capture_mask_shadow(
         far_clip: Some(100.0),
         ..OrbitCamera::default()
     };
-    let sun = CelestialLight {
+    let sun = DirectionalLight {
         direction: Vec3::Y,
         color: LinearColor::rgb(1.0, 1.0, 1.0),
         intensity: 4.0,
@@ -301,10 +304,9 @@ fn capture_mask_shadow(
         elapsed_seconds: 0.0,
         time_of_day: 0.5,
         sun,
-        moon: CelestialLight { intensity: 0.0, ..sun },
+        moon: DirectionalLight { intensity: 0.0, ..sun },
         primary: sun,
-        skylight_color: LinearColor::rgb(0.0, 0.0, 0.0),
-        skylight_intensity: 0.0,
+        skylight: Skylight::default(),
         wind_velocity: Vec3::ZERO,
         scattering: [1.0, 0.6, 1.0, 1.0],
         fog_and_clouds: [0.0; 4],

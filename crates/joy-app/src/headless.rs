@@ -17,6 +17,7 @@ use joy_renderer::{
     BackendPreference,
     GpuContext,
     OffscreenTarget,
+    PresentationTime,
     RenderError,
     Renderer,
     RendererOptions,
@@ -182,6 +183,11 @@ impl HeadlessShell {
         app.simulation(&mut frame)?;
         app.presentation(&mut frame)?;
 
+        // The fixed headless clock is also the presentation clock, so captures are repeatable.
+        self.renderer.set_presentation_time(PresentationTime {
+            time_seconds: time.time_seconds,
+            elapsed_seconds: time.elapsed_seconds,
+        });
         let mut encoder = self.gpu.device().create_command_encoder(&Default::default());
         let mut target = RenderTarget {
             renderer: &mut self.renderer,

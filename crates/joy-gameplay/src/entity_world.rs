@@ -153,7 +153,7 @@ impl EntityWorld {
     ///
     /// Ownership is detached first, then possession is released (clearing intent and calling `reset_control`), then
     /// `on_destroy` runs, then runtime components detach in reverse attachment order (each `on_detach`, then drop), and
-    /// finally any body and vehicle the context lists for the entity are removed from physics.
+    /// finally the body the context lists for the entity (with any vehicle it carries) is removed from physics.
     pub fn remove(&mut self, id: &EntityId, context: &mut SimulationContext<'_>) -> bool {
         let Some(mut entity) = self.entities.shift_remove(id) else {
             return false;
@@ -172,12 +172,9 @@ impl EntityWorld {
             component.on_detach(&mut entity.state, context);
         }
 
-        // Physics handles listed for the entity are entity-owned resources (TypeScript `entity.own`).
+        // The body listed for the entity (and the vehicle a chassis carries) is entity-owned (TypeScript `entity.own`).
         if let Some(body) = context.body(id) {
             context.physics.remove_body(body);
-        }
-        if let Some(vehicle) = context.vehicle(id) {
-            context.physics.remove_vehicle(vehicle);
         }
         self.pending.extend(context.take_commands());
         true

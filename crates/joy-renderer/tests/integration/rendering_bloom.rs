@@ -9,6 +9,10 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use joy_core::LinearColor;
+use joy_core::color::{
+    linear_to_srgb,
+    srgb_to_linear,
+};
 use joy_core::math::Vec2;
 use joy_core::math::deterministic;
 use joy_renderer::PostProcessSettings;
@@ -159,7 +163,6 @@ fn render(gpu: &GpuContext, scene: &Scene, config: &PostProcessSettings) -> Vec<
         transparent: &[],
         uniforms: bytemuck::cast_slice(&uniforms),
         clear_color: LinearColor::from(rgba(scene.background)),
-        time_seconds: 0.0,
     };
     renderer.render(target.view(), &frame).expect("frame renders");
     target.read_rgba(gpu).expect("readback")
@@ -399,9 +402,19 @@ fn reference_display(scene: &Image, config: &PostProcessSettings) -> Vec<[f32; 3
                 bloom = add(bloom, streaks.sample(u, v));
             }
             let color = add(scene.texels[(y * scene.width) + x], scale(bloom, config.bloom_strength));
-            std::array::from_fn(|channel| (color[channel] * config.exposure).clamp(0.0, 1.0))
+            std::array::from_fn(|channel| encode((color[channel] * config.exposure).clamp(0.0, 1.0)))
         })
         .collect()
+}
+
+/// The display encoding the presentation pass applies after tone mapping.
+fn encode(linear: f32) -> f32 {
+    linear_to_srgb(f64::from(linear)) as f32
+}
+
+/// Linear light of an eight-bit display value.
+fn decode(byte: u8) -> f64 {
+    srgb_to_linear(f64::from(byte) / 255.0)
 }
 
 /// luma.gl's `BLOOM_QUALITY_LEVELS`.
@@ -566,7 +579,8 @@ fn bloom_energy_and_spread_follow_quality_and_radius() {
         }
         (energy, (moment / energy).sqrt())
     };
-    let quantized = |value: f32| f64::from((value * 255.0).round()) / 255.0;
+    // Both sides are compared in linear light after the display's eight-bit quantization of encoded values.
+    let quantized = |value: f32| srgb_to_linear(f64::from((value * 255.0).round()) / 255.0);
 
     let mut spreads = Vec::new();
     for radius in [0.01, 0.03] {
@@ -590,11 +604,10 @@ fn bloom_energy_and_spread_follow_quality_and_radius() {
 
             // The engine matches the transcription once both are quantized to the display's eight bits.
             let (reference_energy, reference_spread) = measure((width, height), 1.0, &|index| {
-                quantized(reference[index][0]) - quantized(source.texels[index][0])
+                quantized(reference[index][0]) - quantized(encode(source.texels[index][0]))
             });
-            let (energy, spread) = measure((width, height), 1.0, &|index| {
-                f64::from(i32::from(pixels[index * 4]) - i32::from(unbloomed[index * 4])) / 255.0
-            });
+            let (energy, spread) =
+                measure((width, height), 1.0, &|index| decode(pixels[index * 4]) - decode(unbloomed[index * 4]));
             assert!(
                 (energy / reference_energy - 1.0).abs() < 0.02 && (spread / reference_spread - 1.0).abs() < 0.02,
                 "{quality:?} {radius}: engine energy {energy} spread {spread}, luma.gl {reference_energy} \

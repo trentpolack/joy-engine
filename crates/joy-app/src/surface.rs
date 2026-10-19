@@ -3,9 +3,9 @@
 
 //! Presentation surface configuration.
 //!
-//! The renderer writes display-referred values without sRGB encoding, so the surface is
-//! always rendered through a non-sRGB view. When a platform only offers sRGB swapchain formats, the surface keeps the
-//! sRGB format and exposes a non-sRGB view format of the same texture.
+//! The renderer's presentation pass encodes sRGB itself and egui paints gamma-space colors, so both write the encoded
+//! bytes a display expects through a non-sRGB view. When a platform only offers sRGB swapchain formats, the surface
+//! keeps the sRGB format and exposes a non-sRGB view format of the same texture.
 
 use joy_renderer::{
     GpuContext,

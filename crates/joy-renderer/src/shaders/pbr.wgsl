@@ -32,7 +32,8 @@ struct Material {
 @group(3) @binding(7) var materialSampler: sampler;
 
 struct PbrOutput {
-  @builtin(position) position: vec4f,
+  // Invariant so the depth pre-pass and every scene pipeline rasterize identical depth.
+  @builtin(position) @invariant position: vec4f,
   @location(0) worldPosition: vec3f,
   @location(1) worldNormal: vec3f,
   @location(2) color: vec4f,
@@ -40,11 +41,10 @@ struct PbrOutput {
   @location(4) emissive: vec3f,
   @location(5) receivesShadow: f32,
   @location(6) uv: vec2f,
+  @location(7) sceneRoughness: f32,
+  @location(8) currentClip: vec4f,
+  @location(9) previousClip: vec4f,
 };
-
-fn linearColor(color: vec3f) -> vec3f {
-  return select(color/12.92, pow((color + 0.055)/1.055, vec3f(2.4)), color >= vec3f(0.04045));
-}
 
 /**
  * Transform an instanced vertex and prepare world-space material inputs.
@@ -53,6 +53,7 @@ fn linearColor(color: vec3f) -> vec3f {
 @vertex fn vertexMain(vertex: MeshVertex, instance: Instance, @location(15) uv: vec2f) -> PbrOutput {
   let model = instanceModel(instance);
   let world = model*vec4f(vertex.position, 1.0);
+  let clips = motionClips(world, instancePreviousModel(instance)*vec4f(vertex.position, 1.0));
 
   var output: PbrOutput;
   output.position = frame.viewProjection*world;
@@ -63,14 +64,36 @@ fn linearColor(color: vec3f) -> vec3f {
   output.emissive = vertex.emissive.rgb;
   output.receivesShadow = instance.flags.x;
   output.uv = uv;
+  output.sceneRoughness = instance.flags.y;
+  output.currentClip = clips[0];
+  output.previousClip = clips[1];
   return output;
 }
 
 /**
- * Shade one fragment with the primary light, point lights, ambient skylight, image-based light, and emission.
- * Zero-length authored normals fall back to the faceted derivative normal, so flat FORM geometry still lights.
+ * Color only.
  */
 @fragment fn fragmentMain(input: PbrOutput, @builtin(front_facing) frontFacing: bool) -> @location(0) vec4f {
+  return pbrColor(input, frontFacing);
+}
+
+/**
+ * Opaque color plus the scene-effect attachments. The derivative is taken before shading, which may discard masked
+ * fragments.
+ */
+@fragment fn fragmentTargets(input: PbrOutput, @builtin(front_facing) frontFacing: bool) -> SceneTargets {
+  let surface = cross(dpdx(input.worldPosition), dpdy(input.worldPosition));
+  let color = pbrColor(input, frontFacing);
+  let clips = mat2x4f(input.currentClip, input.previousClip);
+  return sceneTargets(color, input.worldPosition, surface, input.sceneRoughness, clips);
+}
+
+/**
+ * Shade one fragment with the primary light, point lights, the sky-and-ground skylight, image-based light, and
+ * emission. Zero-length authored normals fall back to the faceted derivative normal, so flat FORM geometry still
+ * lights. Color and emissive maps are sRGB textures the sampler decodes; data maps are read linearly.
+ */
+fn pbrColor(input: PbrOutput, frontFacing: bool) -> vec4f {
   // Sample before alpha discard so derivative-based tangent frames remain valid.
   let sampledBase = textureSample(baseColorMap, materialSampler, input.uv);
   let sampledEmission = textureSample(emissiveMap, materialSampler, input.uv).rgb;
@@ -116,10 +139,10 @@ fn linearColor(color: vec3f) -> vec3f {
     alpha = 1.0;
   }
 
-  let base = input.color.rgb*linearColor(sampledBase.rgb);
+  let base = input.color.rgb*sampledBase.rgb;
   let metallic = clamp(input.surface.x*sampledMetallic, 0.0, 1.0);
   let roughness = clamp(input.surface.y*sampledRoughness, 0.045, 1.0);
-  let emission = input.emissive*linearColor(sampledEmission);
+  let emission = input.emissive*sampledEmission;
   let v = normalize(frame.eye.xyz - input.worldPosition);
 
   var visibility = 1.0;
@@ -143,7 +166,7 @@ fn linearColor(color: vec3f) -> vec3f {
     radiance+= pbrDirect(base, metallic, roughness, n, v, direction)*light.color.rgb*(reach*reach)*lightVisibility;
   }
 
-  let ambient = vec3f(frame.lighting.y) + (frame.skylight.rgb*frame.skylight.a);
+  let ambient = vec3f(frame.lighting.y) + skylightIrradiance(n);
   radiance+= (ambient*base*(1.0 - metallic)*occlusion) + emission;
 
   let intensity = imageLighting.parameters.x;
