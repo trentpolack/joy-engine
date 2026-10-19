@@ -125,7 +125,3 @@ fn write_response(output: &mut impl Write, response: &Value) -> io::Result<()> {
     writeln!(output, "{response}")?;
     output.flush()
 }
-
-#[cfg(test)]
-#[path = "main.test.rs"]
-mod tests;
