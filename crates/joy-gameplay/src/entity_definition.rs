@@ -13,8 +13,8 @@
 //! so documents round trip byte for byte. Transforms are stored as `f32`: authored values that need more than single
 //! precision are rounded to the nearest `f32` and written back in its shortest decimal form.
 
-use glam::Vec3;
 use indexmap::IndexMap;
+use joy_core::math::Vec3;
 use joy_core::{
     JsonRecord,
     Transform,
@@ -32,7 +32,7 @@ use serde_json::{
 };
 
 use super::asset_path::asset_path;
-use super::components::entity_type;
+use super::component_vocabulary::entity_type;
 use super::error::{
     AssetPathError,
     DefinitionError,
@@ -326,8 +326,8 @@ fn validate_override_keys(overrides: &JsonRecord) -> Result<(), DefinitionError>
     Ok(())
 }
 
-/// Read exactly three finite JSON numbers that remain finite as `f32`.
-pub(crate) fn read_vector(value: &Value) -> Option<Vec3> {
+/// Read exactly three finite JSON numbers that remain finite as `f32`, as component records store vectors and colors.
+pub fn read_vector(value: &Value) -> Option<Vec3> {
     let Value::Array(items) = value else {
         return None;
     };
@@ -345,17 +345,17 @@ pub(crate) fn read_vector(value: &Value) -> Option<Vec3> {
     Some(Vec3::from_array(components))
 }
 
-/// Write a vector as three JavaScript-style JSON numbers.
-pub(crate) fn vector_to_json(vector: Vec3) -> Value {
+/// Write a vector as three JSON numbers in the [`number_to_json`] spelling.
+pub fn vector_to_json(vector: Vec3) -> Value {
     Value::Array(vector.to_array().into_iter().map(number_to_json).collect())
 }
 
-/// Write an `f32` the way JavaScript's `JSON.stringify` writes the equivalent double.
+/// Write an `f32` as an authored document stores it.
 ///
 /// Integral values are written without a decimal point (and `-0` as `0`); other values use the shortest decimal that
-/// round trips the `f32`, so `0.1f32` is written as `0.1` rather than its exact binary expansion. Non-finite values are
-/// written as `null`, as JavaScript does.
-pub(crate) fn number_to_json(value: f32) -> Value {
+/// round trips the `f32`, so `0.1f32` is written as `0.1` rather than its exact binary expansion. Non-finite values,
+/// which JSON cannot represent, are written as `null`.
+pub fn number_to_json(value: f32) -> Value {
     if !value.is_finite() {
         return Value::Null;
     }
@@ -369,51 +369,5 @@ pub(crate) fn number_to_json(value: f32) -> Value {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn defaults_and_validation_match_copy_entity_definition() {
-        let definition = EntityDefinition::from_json(&json!({"id": "crate", "unknown": true})).unwrap();
-        assert_eq!(definition.name, "crate");
-        assert_eq!(definition.kind, entity_type::ENTITY);
-        assert_eq!(definition.transform, EntityTransform::IDENTITY);
-        assert_eq!(
-            definition.to_json().as_object().unwrap().keys().collect::<Vec<_>>(),
-            ["id", "name", "type", "tags", "transform", "components"]
-        );
-
-        let reject = |value: Value| EntityDefinition::from_json(&value).unwrap_err();
-        assert_eq!(reject(json!({"id": "  "})), DefinitionError::InvalidId);
-        assert_eq!(reject(json!({"id": "a", "name": null})), DefinitionError::InvalidNameOrType);
-        assert_eq!(reject(json!({"id": "a", "tags": [1]})), DefinitionError::InvalidTags);
-        assert_eq!(
-            reject(json!({"id": "a", "components": {"data": 3}})),
-            DefinitionError::InvalidComponent("data".into())
-        );
-        assert_eq!(
-            reject(json!({"id": "a", "transform": {"position": [0, 1]}})),
-            DefinitionError::InvalidVector("position")
-        );
-        assert_eq!(
-            reject(json!({"id": "a", "transform": {"scale": [0, 1e39, 0]}})),
-            DefinitionError::InvalidVector("scale")
-        );
-        assert_eq!(reject(json!({"id": "a", "overrides": {}})), DefinitionError::InvalidOverrides);
-        assert_eq!(
-            reject(json!({"id": "a", "template": "assets/a.joyobject", "overrides": {"name": "x"}})),
-            DefinitionError::UnsupportedOverride
-        );
-        assert!(matches!(reject(json!({"id": "a", "template": "../a.joyobject"})), DefinitionError::AssetPath(_)));
-    }
-
-    #[test]
-    fn numbers_serialize_like_javascript() {
-        assert_eq!(number_to_json(1.0).to_string(), "1");
-        assert_eq!(number_to_json(-0.0).to_string(), "0");
-        assert_eq!(number_to_json(0.1).to_string(), "0.1");
-        assert_eq!(number_to_json(-0.25).to_string(), "-0.25");
-        assert_eq!(number_to_json(f32::NAN), Value::Null);
-    }
-}
+#[path = "../tests/unit/entity_definition.rs"]
+mod tests;

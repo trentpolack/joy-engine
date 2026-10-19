@@ -11,4 +11,4 @@ Depth, normal, velocity, and color formats must meet the effect's capability req
 Screen-space techniques cannot see offscreen or occluded sources. Centroid transparency sorting does not resolve intersecting surfaces. Fog and volumetric approximations are rendering effects rather than gameplay simulation. Keep these limits visible when judging captures.
 
 ## Verification
-Run engine integration tests, the example's native/browser builds, and captures on the affected backends. Headless rendering tests in `test/rust/` protect configuration, ownership, motion, and shader contracts. Inspect temporal behavior interactively as well as still captures; CPU timing and frame cadence do not establish GPU execution time.
+Run engine integration tests, the example's native/browser builds, and captures on the affected backends. Headless rendering tests in `tests/integration/` protect configuration, ownership, motion, and shader contracts. Inspect temporal behavior interactively as well as still captures; CPU timing and frame cadence do not establish GPU execution time.

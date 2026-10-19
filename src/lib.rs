@@ -6,13 +6,14 @@
 //!
 //! This crate is the facade games and tools depend on. Every engine system has its own crate (in `crates/`), re-exported
 //! here under its module name, so `joy_engine::physics` is the `joy-physics` crate; [`rendering`], [`particles`],
-//! [`runtime`], and [`development`] gather several crates into one module. The crates follow the dependency layers in
-//! `architecture/layers.json`: a crate may use only its own layer and the layers below it, which `npm run check`
-//! enforces.
+//! [`runtime`], and [`development`] gather several crates into one module. [`math`] is the engine's vector, matrix,
+//! and quaternion vocabulary (`Vec3` for rendering, `DVec3` for seeded simulation) with its deterministic functions.
+//! The crates follow the dependency layers named in their `Cargo.toml`s: a crate may use only its own layer and the
+//! layers below it, which `npm run check` enforces.
 //!
 //! | Layer | Modules (crates) | Owns |
 //! | --- | --- | --- |
-//! | foundation | [`core`] (`joy-core`), [`scripting`] (`joy-core`) | Math, transforms, colors, seeded random, primitive shapes, display-processing profiles, script language information |
+//! | foundation | [`core`] (`joy-core`), [`scripting`] (`joy-core`) | Math, transforms, colors, seeded random, primitive shapes, script language information |
 //! | simulation | [`environment`] (`joy-environment`), [`physics`] (`joy-physics`), [`gameplay`] (`joy-gameplay`) | Solar time and wind, rigid bodies and vehicles, entities, controllers, levels |
 //! | content | [`dcc`] (`joy-dcc-gltf`), [`form`] (`joy-form`), [`particles`] (`joy-fx`), [`project`] (`joy-project`) | GLB and glTF mesh import, the FORM procedural modeling language (renderer-free geometry), `.joyfx` particle documents, scripts, and simulation, project manifests |
 //! | rendering | [`rendering`] (`joy-renderer`, `joy-scene`) | The wgpu renderer every game, tool, and preview draws with, including particle drawing, and the scene presentation of levels, FORM meshes, and effects |
@@ -28,34 +29,34 @@
 //!   causes a panic.
 //!
 //! Games and tools depend on this crate only, never on wgpu, winit, rapier, or egui directly (egui is re-exported for
-//! UI). A game implements [`Game`] and hands it to [`run`]:
+//! UI). A game, tool, or example implements [`App`] and hands it to [`run`]:
 //!
 //! ```no_run
 //! use joy_engine::prelude::*;
 //!
 //! struct Spinner { scene: RenderScene, camera: OrbitCamera, cube: Option<MeshInstanceId> }
 //!
-//! impl Game for Spinner {
-//!     fn start(&mut self, _context: &mut StartContext<'_>) -> GameResult {
+//! impl App for Spinner {
+//!     fn start(&mut self, _context: &mut StartContext<'_>) -> AppResult {
 //!         self.cube = Some(self.scene.create_mesh(primitive_box()));
 //!         Ok(())
 //!     }
 //!
-//!     fn simulation(&mut self, frame: &mut Frame<'_>) -> GameResult {
+//!     fn simulation(&mut self, frame: &mut Frame<'_>) -> AppResult {
 //!         if let Some(cube) = self.cube.and_then(|id| self.scene.get_mut(id)) {
 //!             cube.transform.rotation.y += frame.time.elapsed_seconds;
 //!         }
 //!         Ok(())
 //!     }
 //!
-//!     fn render(&mut self, _frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> GameResult {
+//!     fn render(&mut self, _frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
 //!         Ok(target.draw(&self.scene, &self.camera, &FrameInputs::default())?)
 //!     }
 //! }
 //!
 //! fn main() -> Result<(), ShellError> {
-//!     let game = Spinner { scene: RenderScene::new(), camera: OrbitCamera { distance: 4.0, ..Default::default() }, cube: None };
-//!     run(ShellOptions { title: "Spinner".into(), ..Default::default() }, game)
+//!     let app = Spinner { scene: RenderScene::new(), camera: OrbitCamera { distance: 4.0, ..Default::default() }, cube: None };
+//!     run(ShellOptions { title: "Spinner".into(), ..Default::default() }, app)
 //! }
 //! ```
 //!
@@ -65,6 +66,8 @@
 // Foundation.
 #[doc(inline)]
 pub use joy_core as core;
+#[doc(inline)]
+pub use joy_core::math;
 #[doc(inline)]
 pub use joy_core::scripting;
 
@@ -109,12 +112,12 @@ pub mod runtime;
 
 pub use development::DevTools;
 pub use runtime::{
+    App,
+    AppError,
+    AppResult,
     AudioBank,
     Frame,
     FrameTime,
-    Game,
-    GameError,
-    GameResult,
     InputBinding,
     InputManager,
     InputMap,
@@ -135,8 +138,6 @@ pub use runtime::{
 
 /// Immediate-mode UI for HUDs and tools.
 pub use egui;
-/// Vector math used throughout the engine's public types.
-pub use glam;
 /// Logging facade; the shell routes it to the terminal natively and to the browser console on the web.
 pub use log;
 /// JSON values for authored records and FORM parameters.
@@ -150,11 +151,10 @@ pub use wasm_bindgen;
 /// The names most games use.
 pub mod prelude {
     pub use crate::core::{
-        PostProcessingConfig,
-        PostProcessingProfile,
+        Color,
+        FixedStepLoop,
+        LinearColor,
         RandomSource,
-        Rgb,
-        Rgba,
         SeededRandom,
         Transform,
     };
@@ -176,6 +176,15 @@ pub mod prelude {
         LevelRuntime,
         SimulationContext,
         parse_level,
+    };
+    pub use crate::math::{
+        DVec2,
+        DVec3,
+        Mat4,
+        Quat,
+        Vec2,
+        Vec3,
+        Vec4,
     };
     pub use crate::particles::{
         CompiledParticleEffect,
@@ -211,6 +220,8 @@ pub mod prelude {
         MeshInstanceId,
         OrbitCamera,
         PointLight,
+        PostProcessSettings,
+        PostProcessVolumes,
         RenderScene,
         RendererOptions,
         Shading,
@@ -225,14 +236,13 @@ pub mod prelude {
         primitive_sphere,
     };
     pub use crate::runtime::{
+        App,
+        AppError,
+        AppResult,
         AudioBank,
         AudioBankOptions,
-        FixedStepLoop,
         Frame,
         FrameTime,
-        Game,
-        GameError,
-        GameResult,
         InputAxis,
         InputBinding,
         InputManager,
@@ -249,13 +259,6 @@ pub mod prelude {
         run,
     };
     pub use egui;
-    pub use glam::{
-        Mat4,
-        Quat,
-        Vec2,
-        Vec3,
-        Vec4,
-    };
 }
 
 /// Declare `$run` (a `fn()`) as the browser entry point when compiling for WebAssembly; expands to nothing natively.

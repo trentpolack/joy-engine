@@ -3,8 +3,6 @@
 
 //! Typed failures for authored documents and runtime gameplay.
 
-use joy_core::PostProcessingError;
-
 use super::entity::EntityId;
 use joy_physics::PhysicsError;
 
@@ -79,9 +77,11 @@ pub enum LevelError {
     /// An entity definition was invalid.
     #[error(transparent)]
     Definition(#[from] DefinitionError),
-    /// The post-processing profile was invalid.
-    #[error(transparent)]
-    PostProcessing(#[from] PostProcessingError),
+    /// The level still has a level-wide `postProcessing` profile, which post-process volumes replaced.
+    #[error(
+        "Level-wide postProcessing moved to entities: add an entity with a postProcess component (unbounded for the level's overall look)."
+    )]
+    LevelPostProcessingMoved,
 }
 
 /// A reusable object document failed to parse, validate, or resolve.
@@ -113,23 +113,6 @@ pub enum ObjectError {
         /// The reader's error message.
         message: String,
     },
-}
-
-/// An authored presentation component could not be interpreted.
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
-pub enum ComponentError {
-    /// A light scalar was present but not a finite number.
-    #[error("Scene light values must be finite numbers.")]
-    NonFiniteLightValue,
-    /// Light color or intensity was negative, or range was not positive.
-    #[error("Light color/intensity must be nonnegative and range must be positive.")]
-    InvalidLight,
-    /// Asset parameters were present but not an object.
-    #[error("Asset parameters must be a record.")]
-    InvalidParameters,
-    /// A mesh asset path was invalid.
-    #[error(transparent)]
-    AssetPath(#[from] AssetPathError),
 }
 
 /// A component schema could not be registered, or a preset was unknown. Messages match the TypeScript engine.

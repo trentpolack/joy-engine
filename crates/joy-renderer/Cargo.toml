@@ -17,17 +17,10 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 publish = false
-# Integration tests are one binary listed below.
-autotests = false
-
-[[test]]
-name = "joy-renderer"
-path = "test/rust/main.rs"
 
 [dependencies]
 joy-core.workspace = true
 joy-fx.workspace = true
-glam.workspace = true
 bytemuck.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -47,6 +40,10 @@ naga.workspace = true
 pollster.workspace = true
 # Headless GPU tests write PNG captures to `JOY_RENDER_CAPTURE_DIR`.
 image.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "rendering"
 
 [lints]
 workspace = true

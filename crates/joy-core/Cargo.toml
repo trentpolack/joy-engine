@@ -7,7 +7,7 @@
 
 [package]
 name = "joy-core"
-description = "Joy Engine foundation: math, transforms, colors, seeded randomness, primitive shapes, display-processing profiles, and script language descriptors."
+description = "Joy Engine foundation: math, transforms, colors, seeded randomness, primitive shapes, and script language descriptors."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,12 +15,6 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 publish = false
-# Integration tests are one binary listed below.
-autotests = false
-
-[[test]]
-name = "joy-core"
-path = "test/rust/main.rs"
 
 [dependencies]
 glam.workspace = true
@@ -32,6 +26,10 @@ libm.workspace = true
 
 [dev-dependencies]
 joy-test-support.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "foundation"
 
 [lints]
 workspace = true

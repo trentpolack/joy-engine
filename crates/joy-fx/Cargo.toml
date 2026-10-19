@@ -25,5 +25,9 @@ thiserror.workspace = true
 libm.workspace = true
 web-time.workspace = true
 
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "content"
+
 [lints]
 workspace = true

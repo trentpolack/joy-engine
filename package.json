@@ -16,7 +16,7 @@
   "workspaces": [
     "examples/*",
     "editor",
-    "editor/tools/*"
+    "tools/*"
   ],
   "exports": {
     "./development/patches": "./scripts/patching/index.mjs",
@@ -35,15 +35,15 @@
     "LICENSE"
   ],
   "scripts": {
-    "check": "cargo +nightly fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts test editor/tooling editor/test editor/tools/form-lab/test",
+    "check": "cargo +nightly fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts tests/tooling editor/tooling editor/tests/tooling tools/form-lab/tests/tooling",
     "test": "cargo test --workspace && npm run test:tooling",
-    "test:tooling": "node --test test/*.test.mjs editor/test/*.test.mjs",
+    "test:tooling": "node --test tests/tooling/*.test.mjs editor/tests/tooling/*.test.mjs",
     "fetch-joy-engine-patch": "node scripts/patching/fetch-joy-engine-patch.mjs",
     "apply-joy-engine-patch": "node scripts/patching/apply-joy-engine-patch.mjs",
     "docs:api": "cargo doc --workspace --no-deps",
     "build:web": "node scripts/rust/build-web.mjs",
     "audit:repo": "python3 -B scripts/audit/audit.py",
-    "test:audit": "python3 -B test/audit/test_audit.py"
+    "test:audit": "python3 -B tests/tooling/test_audit.py"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

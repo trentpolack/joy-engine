@@ -12,7 +12,7 @@ The [source EXR](https://github.com/trentpolack/worldcreator/blob/main/dragon_pi
 python3 -m venv /tmp/joy-terrain-python
 /tmp/joy-terrain-python/bin/pip install OpenEXR==3.5.1 numpy==2.5.3
 curl -L --fail https://media.githubusercontent.com/media/trentpolack/worldcreator/main/dragon_pit_01/HeightMap.exr -o /tmp/dragon-pit.exr
-/tmp/joy-terrain-python/bin/python scripts/assets/compile-terrain.py /tmp/dragon-pit.exr joy-engine/examples/terrain/site/public/dragon-pit --channel Y --size 1025 --tile-cells 64 --extent 2048 2048 --vertical-scale 1000 --source-url https://github.com/trentpolack/worldcreator/blob/main/dragon_pit_01/HeightMap.exr
+/tmp/joy-terrain-python/bin/python scripts/assets/compile-terrain.py /tmp/dragon-pit.exr joy-engine/examples/terrain/assets/dragon-pit --channel Y --size 1025 --tile-cells 64 --extent 2048 2048 --vertical-scale 1000 --source-url https://github.com/trentpolack/worldcreator/blob/main/dragon_pit_01/HeightMap.exr
 /tmp/joy-terrain-python/bin/python scripts/assets/test-terrain.py
 ```
 

@@ -4,7 +4,7 @@
 //! Display metrics shared by the shell, the egui layer, and development tools: the logical viewport and how many
 //! physical pixels each logical (CSS) pixel covers.
 
-use glam::Vec2;
+use joy_core::math::Vec2;
 use winit::window::Window;
 
 /// Viewport dimensions; logical (CSS) pixels drive layout and picking, never display density.

@@ -3,7 +3,7 @@
 
 //! The contract between authoring tools (FORM LAB, PARTICLE LAB) and Joy Editor.
 //!
-//! A tool is a [`Game`]: run standalone it gets its own window or page through [`run`](joy_app::run) and owns
+//! A tool is a [`App`]: run standalone it gets its own window or page through [`run`](joy_app::run) and owns
 //! its file workflow (open, save, export). Hosted in Joy Editor it becomes a tab: the editor owns project files and
 //! drives the active tab's frame phases, hands documents in with [`AuthoringTool::open_document`], asks for their
 //! contents with [`AuthoringTool::save_document`], and keeps the tool's UI inside the tab area given by
@@ -13,7 +13,7 @@
 //! shares the editor's one renderer.
 
 use joy_app::{
-    Game,
+    App,
     StartContext,
 };
 
@@ -42,7 +42,7 @@ pub enum ToolHosting {
 }
 
 /// Implemented by authoring tools so the same tool runs standalone and as a Joy Editor tab.
-pub trait AuthoringTool: Game {
+pub trait AuthoringTool: App {
     /// Display name, for example `FORM LAB`.
     fn tool_name(&self) -> &'static str;
 
@@ -68,6 +68,6 @@ pub trait AuthoringTool: Game {
     fn set_hosting(&mut self, hosting: ToolHosting);
 
     /// The tab became active: re-apply renderer settings the tool owns. Called before the first frame after
-    /// activation; [`Game::start`] has already run once.
+    /// activation; [`App::start`] has already run once.
     fn activated(&mut self, _context: &mut StartContext<'_>) {}
 }

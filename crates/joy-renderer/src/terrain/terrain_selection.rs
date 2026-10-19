@@ -8,8 +8,7 @@
 //! (`terrain-select.wgsl`) applies the same policy on WebGPU-class backends. Math runs in `f64` with V8's `Math.hypot`
 //! algorithm like the TypeScript engine, so CPU results match it bit for bit; GPU uploads convert to `f32`.
 
-use glam::DVec3;
-use joy_core::js_hypot;
+use joy_core::math::DVec3;
 
 use crate::terrain::terrain_asset::{
     TerrainAsset,
@@ -17,6 +16,7 @@ use crate::terrain::terrain_asset::{
     TerrainPatch,
     sample_height_triangle,
 };
+use joy_core::math::deterministic;
 
 /// Smallest camera distance used for the error budget, in world units.
 const MINIMUM_DISTANCE: f64 = 0.01;
@@ -124,7 +124,7 @@ pub fn sample_morphed_height(
     }
 
     let level = selection.detail.floor();
-    let fine_stride = level.exp2();
+    let fine_stride = deterministic::exp2(level);
     let coarse_stride = cells.min(fine_stride * 2.0);
     let fine = sample_morphed_surface(asset, patch, cells, x, z, fine_stride, selection);
     let coarse = sample_morphed_surface(asset, patch, cells, x, z, coarse_stride, selection);
@@ -148,14 +148,14 @@ fn calculate_patch_detail(asset: &TerrainAsset, patch: &TerrainPatch, view: &Ter
     // Pin finest detail where the horizontal footprint touches the target disk.
     let target_x = (minimum.x - view.target.x).max(0.0).max(view.target.x - maximum.x);
     let target_z = (minimum.z - view.target.z).max(0.0).max(view.target.z - maximum.z);
-    let target_distance = js_hypot(&[target_x, target_z]);
+    let target_distance = deterministic::hypot(target_x, target_z);
     if view.target_radius > 0.0 && target_distance < view.target_radius {
         return 0.0;
     }
 
     // Pixel tolerance becomes a world-height error budget at the nearest distance to the bounds.
     let offsets = (minimum - view.eye).max(DVec3::ZERO).max(view.eye - maximum);
-    let camera_distance = MINIMUM_DISTANCE.max(js_hypot(&offsets.to_array()));
+    let camera_distance = MINIMUM_DISTANCE.max(offsets.length());
     let budget = (camera_distance / view.projection_scale) * view.tolerance;
     let errors: Vec<f64> = patch
         .errors
@@ -165,7 +165,7 @@ fn calculate_patch_detail(asset: &TerrainAsset, patch: &TerrainPatch, view: &Ter
             let cell_error = if level == 0 {
                 0.0
             } else {
-                ((2.0_f64.powi(level as i32) * sample_spacing) * view.tolerance) / MAXIMUM_CELL_PIXELS
+                ((deterministic::powi(2.0_f64, level as i32) * sample_spacing) * view.tolerance) / MAXIMUM_CELL_PIXELS
             };
             error.max(cell_error)
         })
@@ -217,7 +217,7 @@ fn edge_detail(x: f64, z: f64, cells: f64, detail: f64, selection: &TerrainSelec
 /// Blend the two authored triangle lattices surrounding a fractional detail.
 fn sample_detail_height(asset: &TerrainAsset, patch: &TerrainPatch, cells: f64, x: f64, z: f64, detail: f64) -> f64 {
     let level = detail.floor();
-    let fine_stride = level.exp2();
+    let fine_stride = deterministic::exp2(level);
     let coarse_stride = cells.min(fine_stride * 2.0);
     let sample_x = f64::from(patch.x) + x;
     let sample_z = f64::from(patch.z) + z;
@@ -265,6 +265,6 @@ fn sample_stitched_vertex(
     stride: f64,
     selection: &TerrainSelection,
 ) -> f64 {
-    let detail = edge_detail(x, z, cells, stride.log2(), selection);
+    let detail = edge_detail(x, z, cells, deterministic::log2(stride), selection);
     sample_detail_height(asset, patch, cells, x, z, detail)
 }

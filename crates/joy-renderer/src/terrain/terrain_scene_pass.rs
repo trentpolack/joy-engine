@@ -15,7 +15,7 @@ use bytemuck::{
     Pod,
     Zeroable,
 };
-use glam::{
+use joy_core::math::{
     DMat4,
     DVec3,
     Mat4,
@@ -140,7 +140,7 @@ impl SceneTerrain {
         self.frame.clear();
         let mut prepared = PreparedTerrain::default();
         // World transforms and visibility include every ancestor scene node.
-        let live: Vec<(TerrainInstanceId, &TerrainInstance, glam::Mat4)> = scene
+        let live: Vec<(TerrainInstanceId, &TerrainInstance, joy_core::math::Mat4)> = scene
             .terrains()
             .filter_map(|(id, instance)| {
                 let (model, visible) = scene.compose(instance.parent, instance.transform.matrix(), instance.visible);
@@ -540,19 +540,5 @@ fn union(left: Bounds, right: Bounds) -> Bounds {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn local_views_keep_screen_error_invariant_under_uniform_scale() {
-        // The TypeScript adapter test: scale 2, translation (8, 4, -6), eye (10, 8, -4).
-        let model =
-            Mat4::from_cols_array(&[2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 8.0, 4.0, -6.0, 1.0]);
-        let inverse = invert_matrix(model.as_dmat4()).expect("invertible");
-        let eye = inverse.transform_point3(DVec3::new(10.0, 8.0, -4.0));
-        assert_eq!(eye, DVec3::new(1.0, 2.0, 1.0));
-        let scale = 100.0 * stretch_bound(model.as_dmat4()) * stretch_bound(inverse);
-        assert!((scale - 100.0).abs() < 1e-12);
-        assert!(invert_matrix(DMat4::ZERO).is_none());
-    }
-}
+#[path = "../../tests/unit/terrain/terrain_scene_pass.rs"]
+mod tests;

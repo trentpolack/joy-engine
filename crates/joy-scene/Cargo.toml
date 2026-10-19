@@ -16,12 +16,6 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 publish = false
-# Integration tests are one binary listed below.
-autotests = false
-
-[[test]]
-name = "joy-scene"
-path = "test/rust/main.rs"
 
 [dependencies]
 joy-core.workspace = true
@@ -36,8 +30,12 @@ serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-# Unit tests build transforms and vectors directly.
-glam.workspace = true
+# Recorded component schemas compare through the shared fixture helpers.
+joy-test-support.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "rendering"
 
 [lints]
 workspace = true

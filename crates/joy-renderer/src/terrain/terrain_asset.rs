@@ -14,7 +14,7 @@ use std::sync::atomic::{
     Ordering,
 };
 
-use glam::Vec3;
+use joy_core::math::Vec3;
 use serde::{
     Deserialize,
     Serialize,

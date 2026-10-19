@@ -25,6 +25,7 @@ use joy_engine::egui::{
     Stroke,
     Vec2 as UiVec2,
 };
+use joy_engine::math::deterministic;
 use joy_engine::prelude::*;
 use joy_engine::rendering::scene_effects::SceneEffectsOptions;
 use joy_engine::rendering::{
@@ -56,6 +57,7 @@ use super::config::{
     STEP_SECONDS,
     TIMING_SAMPLES,
     ZOOM_SENSITIVITY,
+    post_process_settings,
     quality_config,
 };
 use super::room::{
@@ -125,7 +127,7 @@ impl Layout {
 /// Copied lab state (TypeScript `snapshot()`): settings, camera heading, room counts, and the latest renderer
 /// statistics. Times are seconds.
 #[derive(Clone, Debug, PartialEq)]
-#[allow(dead_code, reason = "part of the capture API that test/rust drives")]
+#[allow(dead_code, reason = "part of the capture API that the integration tests drive")]
 pub struct LabSnapshot {
     /// The scene effects the controls request.
     pub effects: SceneEffectsOptions,
@@ -460,9 +462,12 @@ impl SceneEffectsExample {
     }
 }
 
-/// The capture and test API (TypeScript `window.sceneEffectsExample`): direct control over effects, the shadow fixture,
-/// and lights, plus copied snapshots. Headless tests in `test/rust/` drive the lab through it.
-#[allow(dead_code, reason = "the windowed lab drives these through its interface; test/rust calls them directly")]
+/// The capture and test API: direct control over effects, the shadow fixture, and lights, plus copied snapshots.
+/// Headless tests in `tests/integration/` drive the lab through it.
+#[allow(
+    dead_code,
+    reason = "the windowed lab drives these through its interface; integration tests call them directly"
+)]
 impl SceneEffectsExample {
     /// The preview controls; changes reach the renderer at the next render phase.
     pub fn controls_mut(&mut self) -> &mut SceneEffectsControls {
@@ -483,7 +488,7 @@ impl SceneEffectsExample {
         }
         let light = |position: [f32; 3], color: f32, range: f32| PointLight {
             position: Vec3::from(position),
-            color: [color; 3],
+            color: LinearColor::rgb(color, color, color),
             range,
             casts_shadow: true,
         };
@@ -497,7 +502,7 @@ impl SceneEffectsExample {
     }
 
     /// Opt one light in or out of shadow casting while keeping its light (TypeScript `setLightCasting`).
-    pub fn set_light_casting(&mut self, index: usize, enabled: bool) -> GameResult {
+    pub fn set_light_casting(&mut self, index: usize, enabled: bool) -> AppResult {
         let light = self.room.lights.get_mut(index).ok_or("Light index is outside the room.")?;
         light.casts_shadow = enabled;
         self.reset_history();
@@ -505,12 +510,12 @@ impl SceneEffectsExample {
     }
 
     /// Recolor one light with finite nonnegative linear RGB (TypeScript `setLightColor`).
-    pub fn set_light_color(&mut self, index: usize, color: [f32; 3]) -> GameResult {
+    pub fn set_light_color(&mut self, index: usize, color: [f32; 3]) -> AppResult {
         if !color.iter().all(|value| value.is_finite() && *value >= 0.0) {
             return Err("Expected finite nonnegative RGB.".into());
         }
         let light = self.room.lights.get_mut(index).ok_or("Light index is outside the room.")?;
-        light.color = color;
+        light.color = LinearColor::from(color);
         self.reset_history();
         Ok(())
     }
@@ -536,13 +541,13 @@ impl SceneEffectsExample {
     }
 }
 
-impl Game for SceneEffectsExample {
-    fn start(&mut self, context: &mut StartContext<'_>) -> GameResult {
+impl App for SceneEffectsExample {
+    fn start(&mut self, context: &mut StartContext<'_>) -> AppResult {
         self.color_format = format!("{:?}", context.capabilities.scene_format).to_lowercase();
         Ok(())
     }
 
-    fn input(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn input(&mut self, frame: &mut Frame<'_>) -> AppResult {
         let pointer = frame.input.pointer();
         if frame.input.action(ORBIT_ACTION).down && pointer.active {
             if let Some(previous) = self.drag {
@@ -558,7 +563,7 @@ impl Game for SceneEffectsExample {
         Ok(())
     }
 
-    fn simulation(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn simulation(&mut self, frame: &mut Frame<'_>) -> AppResult {
         if !self.paused {
             self.delta_seconds = f64::from(frame.time.elapsed_seconds).min(MAXIMUM_STEP_SECONDS);
             self.time_seconds += self.delta_seconds;
@@ -567,7 +572,7 @@ impl Game for SceneEffectsExample {
         if let Some(moving) = self.room.scene.get_mut(self.room.moving) {
             let (amplitude, rate, spin) = OBJECT_MOTION;
             let (offset, yaw) = if self.object_motion {
-                (((time * rate).sin() * amplitude) as f32, (time * spin) as f32)
+                ((deterministic::sin(time * rate) * amplitude) as f32, (time * spin) as f32)
             } else {
                 (0.0, 0.0)
             };
@@ -576,14 +581,15 @@ impl Game for SceneEffectsExample {
         }
         if self.camera_motion {
             let (amplitude, rate) = CAMERA_MOTION;
-            self.camera.yaw = CAMERA_YAW + self.camera_offset + ((time * rate).sin() * amplitude) as f32;
+            self.camera.yaw = CAMERA_YAW + self.camera_offset + (deterministic::sin(time * rate) * amplitude) as f32;
         }
         Ok(())
     }
 
-    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> GameResult {
+    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
         let renderer = target.renderer();
         self.controls.apply(renderer);
+        renderer.set_post_process(self.controls.with_bloom_choice(post_process_settings()));
         if std::mem::take(&mut self.reset_requested) {
             renderer.reset_history();
         }

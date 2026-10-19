@@ -2,8 +2,8 @@
 # Licensed under the MIT License.
 
 # Joy Editor on the Rust engine: the authoring workspace for game projects (content browser, document tabs, saves with
-# conflict handling, the level editor, and FORM LAB and PARTICLE LAB as hosted tabs). Modules live in
-# `site/src/`, `server/`, and `desktop/` and support the native application and browser build.
+# conflict handling, the level editor, and FORM LAB and PARTICLE LAB as hosted tabs). Modules live in `src/` and
+# support the native application and browser build.
 #
 #   cargo run -p joy-editor -- --workspace=<hosting workspace>
 #   cargo test -p joy-editor
@@ -19,29 +19,17 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 publish = false
-# Integration tests are listed explicitly.
-autotests = false
-autobins = false
 autoexamples = false
 
 [lib]
-path = "site/src/lib.rs"
 # `cdylib` is the browser module; `rlib` serves the native binary and tests.
 crate-type = ["cdylib", "rlib"]
-
-[[bin]]
-name = "joy-editor"
-path = "site/src/main.rs"
-
-[[test]]
-name = "joy-editor"
-path = "test/rust/main.rs"
 
 [dependencies]
 joy-engine.workspace = true
 # Hosted as tabs through `joy_engine::development::AuthoringTool`, without their own browser entry points.
-form-lab = { path = "tools/form-lab", default-features = false }
-particle-lab = { path = "tools/particle-lab", default-features = false }
+form-lab = { path = "../tools/form-lab", default-features = false }
+particle-lab = { path = "../tools/particle-lab", default-features = false }
 
 [lints]
 workspace = true

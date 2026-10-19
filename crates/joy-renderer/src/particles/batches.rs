@@ -23,7 +23,8 @@ use crate::{
     TexturedVertex,
 };
 
-use joy_fx::math;
+use joy_core::math::DVec3;
+use joy_core::math::deterministic;
 use joy_fx::{
     CompiledParticleEffect,
     EffectParticle,
@@ -65,7 +66,7 @@ pub const PARTICLE_XY_BASIS: ParticleCameraBasis =
 
 impl From<CameraBasis> for ParticleCameraBasis {
     fn from(basis: CameraBasis) -> Self {
-        let widen = |vector: glam::Vec3| [f64::from(vector.x), f64::from(vector.y), f64::from(vector.z)];
+        let widen = |vector: joy_core::math::Vec3| [f64::from(vector.x), f64::from(vector.y), f64::from(vector.z)];
         Self { right: widen(basis.right), up: widen(basis.up), backward: widen(basis.backward) }
     }
 }
@@ -391,7 +392,7 @@ fn billow_shape() -> &'static [f64; BILLOW_SAMPLES] {
     SHAPE.get_or_init(|| {
         std::array::from_fn(|index| {
             let angle = ((index as f64 / BILLOW_SAMPLES as f64) * PI) * 2.0;
-            (1.0 + (math::sin(angle * 3.0) * 0.09)) + (math::cos(angle * 5.0) * 0.05)
+            (1.0 + (deterministic::sin(angle * 3.0) * 0.09)) + (deterministic::cos(angle * 5.0) * 0.05)
         })
     })
 }
@@ -406,10 +407,10 @@ fn append_colored_particle(
     let size = particle.size;
     let rotation = particle.rotation;
     let color = [
-        math::max(0.0, particle.r),
-        math::max(0.0, particle.g),
-        math::max(0.0, particle.b),
-        math::min(1.0, particle.alpha),
+        f64::max(0.0, particle.r),
+        f64::max(0.0, particle.g),
+        f64::max(0.0, particle.b),
+        f64::min(1.0, particle.alpha),
     ];
     let edge = [color[0], color[1], color[2], 0.0];
 
@@ -418,7 +419,7 @@ fn append_colored_particle(
     match renderer {
         ParticleRenderer::Circle => add_radial_polygon(&mut local, 0.0, 0.0, size, color, &ROUND, rotation, 0.0),
         ParticleRenderer::Square => append_quad(&mut local, size, rotation, color),
-        ParticleRenderer::Ring => add_ring(&mut local, 0.0, 0.0, size, math::max(0.15, size * 0.045), color, 32, 0.0),
+        ParticleRenderer::Ring => add_ring(&mut local, 0.0, 0.0, size, f64::max(0.15, size * 0.045), color, 32, 0.0),
         ParticleRenderer::Streak => {
             append_streak(vertices, particle, color, camera);
             add_gradient_radial_polygon(&mut local, 0.0, 0.0, size * 1.7, color, edge, &ROUND, rotation, 0.0);
@@ -462,7 +463,7 @@ fn append_streak(out: &mut Vec<f64>, particle: &EffectParticle, color: [f64; 4],
         (velocity[2] * view[0]) - (velocity[0] * view[2]),
         (velocity[0] * view[1]) - (velocity[1] * view[0]),
     ];
-    let length = math::hypot3(side[0], side[1], side[2]);
+    let length = DVec3::from_array(side).length();
     let side = if length > 1e-8 { side.map(|value| value / length) } else { camera.right };
     let head = [particle.x, particle.y, particle.z];
     // A fixed 35 ms velocity trail gives the ribbon a world-space length independent of frame rate.
@@ -481,8 +482,8 @@ fn append_streak(out: &mut Vec<f64>, particle: &EffectParticle, color: [f64; 4],
 
 /// A rotated billboard with `size` as its half extent.
 fn append_quad(out: &mut Vec<f64>, size: f64, rotation: f64, color: [f64; 4]) {
-    let cosine = math::cos(rotation);
-    let sine = math::sin(rotation);
+    let cosine = deterministic::cos(rotation);
+    let sine = deterministic::sin(rotation);
     for (x, y) in [(-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, -1.0), (1.0, 1.0)] {
         out.push(((x * cosine) - (y * sine)) * size);
         out.push(((x * sine) + (y * cosine)) * size);
@@ -501,10 +502,10 @@ fn append_textured_particle(
     dimensions: ParticleTextureDimensions,
 ) {
     let color = [
-        math::max(0.0, particle.r),
-        math::max(0.0, particle.g),
-        math::max(0.0, particle.b),
-        math::min(1.0, particle.alpha),
+        f64::max(0.0, particle.r),
+        f64::max(0.0, particle.g),
+        f64::max(0.0, particle.b),
+        f64::min(1.0, particle.alpha),
     ];
     let mut local = Vec::with_capacity(6 * COLORED_STRIDE);
     append_quad(&mut local, particle.size, particle.rotation, color);
@@ -516,8 +517,8 @@ fn append_textured_particle(
     if animated {
         let elapsed_frames =
             if texture.fps > 0.0 { particle.age * texture.fps } else { (particle.age / particle.lifetime) * frames };
-        let index = math::max(0.0, elapsed_frames.floor());
-        frame = if texture.looping { index % frames } else { math::min(frames - 1.0, index) };
+        let index = f64::max(0.0, elapsed_frames.floor());
+        frame = if texture.looping { index % frames } else { f64::min(frames - 1.0, index) };
     }
     let column = frame % columns;
     let row = (frame / columns).floor();
@@ -576,12 +577,12 @@ fn add_gradient_radial_polygon(
         let second = shape[(index + 1) % shape.len()];
         vertices.extend_from_slice(&[x, y, z]);
         vertices.extend_from_slice(&center);
-        vertices.push(x + ((math::cos(first_angle) * radius) * first));
-        vertices.push(y + ((math::sin(first_angle) * radius) * first));
+        vertices.push(x + ((deterministic::cos(first_angle) * radius) * first));
+        vertices.push(y + ((deterministic::sin(first_angle) * radius) * first));
         vertices.push(z);
         vertices.extend_from_slice(&edge);
-        vertices.push(x + ((math::cos(second_angle) * radius) * second));
-        vertices.push(y + ((math::sin(second_angle) * radius) * second));
+        vertices.push(x + ((deterministic::cos(second_angle) * radius) * second));
+        vertices.push(y + ((deterministic::sin(second_angle) * radius) * second));
         vertices.push(z);
         vertices.extend_from_slice(&edge);
     }
@@ -603,13 +604,13 @@ fn add_ring(
     for index in 0..segments {
         let first_angle = ((index as f64 / count) * PI) * 2.0;
         let second_angle = (((index + 1) as f64 / count) * PI) * 2.0;
-        let inner = math::max(0.0, radius - width);
+        let inner = f64::max(0.0, radius - width);
         let outer = radius + width;
         let corners = [(inner, first_angle), (outer, first_angle), (outer, second_angle), (inner, second_angle)];
         for corner in [0, 1, 2, 0, 2, 3] {
             let (corner_radius, angle) = corners[corner];
-            vertices.push(x + (math::cos(angle) * corner_radius));
-            vertices.push(y + (math::sin(angle) * corner_radius));
+            vertices.push(x + (deterministic::cos(angle) * corner_radius));
+            vertices.push(y + (deterministic::sin(angle) * corner_radius));
             vertices.push(z);
             vertices.extend_from_slice(&color);
         }

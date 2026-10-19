@@ -9,7 +9,7 @@ use bytemuck::{
     Pod,
     Zeroable,
 };
-use glam::Mat4;
+use joy_core::math::Mat4;
 
 use crate::materials::{
     DEPTH_FORMAT,

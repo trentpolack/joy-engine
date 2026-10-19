@@ -1,11 +1,11 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Schemas for every component the engine interprets.
+//! Schemas for the simulation components this crate interprets (`physics` and `vehicle`); `joy-scene` defines the
+//! presentation components' schemas and assembles the engine's full catalog.
 //!
-//! Field defaults come from the same constants the runtime readers use ([`RENDER_COMPONENT_DEFAULTS`],
-//! [`LIGHT_COMPONENT_DEFAULTS`], [`EFFECT_COMPONENT_DEFAULTS`], and the physics body, vehicle, and wheel defaults), so
-//! the inspector always shows what the runtime assumes for an omitted field.
+//! Field defaults come from the same constants the runtime readers use (the physics body, vehicle, and wheel defaults),
+//! so the inspector always shows what the runtime assumes for an omitted field.
 
 use serde_json::{
     Value,
@@ -19,11 +19,7 @@ use super::component_schema::{
     ComponentPreset,
     ComponentSchema,
 };
-use super::components::{
-    EFFECT_COMPONENT_DEFAULTS,
-    LIGHT_COMPONENT_DEFAULTS,
-    RENDER_COMPONENT_DEFAULTS,
-    component_asset_kind,
+use super::component_vocabulary::{
     component_category,
     component_preset,
     component_type,
@@ -45,112 +41,11 @@ use joy_physics::{
 /// Largest authored steering angle in radians (`Math.PI / 2`).
 const MAX_STEER_RADIANS: f64 = std::f64::consts::FRAC_PI_2;
 
-/// The engine's component schemas in authoring display order: render, light, effect, physics, then vehicle.
+/// The simulation components' schemas in authoring display order: physics, then vehicle.
 ///
 /// Each call returns fresh, caller-owned schemas.
 pub fn built_in_component_schemas() -> Vec<ComponentSchema> {
-    vec![render_schema(), light_schema(), effect_schema(), physics_schema(), vehicle_schema()]
-}
-
-/// Primitive or FORM mesh presentation for `LevelScene` and `AssetScene`.
-fn render_schema() -> ComponentSchema {
-    // Render primitives cannot be planes; colliders can.
-    let render_shapes = [PrimitiveShape::Box, PrimitiveShape::Sphere];
-    ComponentSchema {
-        kind: component_type::RENDER.to_owned(),
-        label: "Render".to_owned(),
-        description: "Draws a primitive shape, or a FORM mesh when an asset is assigned. Entity scale multiplies size."
-            .to_owned(),
-        category: component_category::RENDERING.to_owned(),
-        fields: vec![
-            ComponentFieldSchema {
-                label: text("FORM mesh"),
-                description: text("Replaces the primitive shape with a compiled FORM or FORM LAB mesh."),
-                asset_kinds: strings(&[component_asset_kind::FORM, component_asset_kind::FORM_LAB]),
-                ..field("asset", ComponentFieldKind::Asset)
-            },
-            ComponentFieldSchema {
-                description: text("FORM parameter overrides; omitted parameters use the script defaults."),
-                ..field("parameters", ComponentFieldKind::Record)
-            },
-            ComponentFieldSchema {
-                choices: render_shapes.iter().map(|shape| shape.as_str().to_owned()).collect(),
-                description: text("Primitive drawn when no FORM mesh is assigned."),
-                ..field("shape", ComponentFieldKind::Choice)
-            },
-            ComponentFieldSchema {
-                unit: text("m"),
-                step: Some(0.25),
-                default: Some(vector_to_json(RENDER_COMPONENT_DEFAULTS.size)),
-                description: text("Full primitive dimensions before entity scale."),
-                ..field("size", ComponentFieldKind::Vector3)
-            },
-            ComponentFieldSchema {
-                min: Some(0.0),
-                description: text(
-                    "Linear RGB tint. Omitted, primitives draw orange and FORM meshes keep their own colors.",
-                ),
-                ..field("color", ComponentFieldKind::Color)
-            },
-        ],
-        presets: vec![
-            preset(
-                component_preset::RENDER_PRIMITIVE,
-                "Primitive",
-                json!({"shape": PrimitiveShape::Box.as_str(), "size": [1, 1, 1], "color": [0.93, 0.42, 0.22]}),
-            ),
-            preset(component_preset::RENDER_MESH, "FORM Mesh", json!({"asset": "", "parameters": {}})),
-        ],
-        requires: Vec::new(),
-    }
-}
-
-/// World-space point light derived by `LevelScene` from the entity position.
-fn light_schema() -> ComponentSchema {
-    ComponentSchema {
-        kind: component_type::LIGHT.to_owned(),
-        label: "Point Light".to_owned(),
-        description: "Illuminates the scene from the entity position. Rotation and scale are ignored.".to_owned(),
-        category: component_category::LIGHTING.to_owned(),
-        fields: vec![
-            ComponentFieldSchema {
-                default: Some(Value::Bool(LIGHT_COMPONENT_DEFAULTS.enabled)),
-                ..field("enabled", ComponentFieldKind::Boolean)
-            },
-            ComponentFieldSchema {
-                min: Some(0.0),
-                default: Some(color_json(LIGHT_COMPONENT_DEFAULTS.color)),
-                description: text("Linear RGB before intensity."),
-                ..field("color", ComponentFieldKind::Color)
-            },
-            ComponentFieldSchema {
-                unit: text("linear"),
-                min: Some(0.0),
-                step: Some(0.25),
-                default: Some(number_to_json(LIGHT_COMPONENT_DEFAULTS.intensity)),
-                ..field("intensity", ComponentFieldKind::Number)
-            },
-            ComponentFieldSchema {
-                unit: text("m"),
-                min: Some(0.0),
-                min_exclusive: true,
-                step: Some(0.5),
-                default: Some(number_to_json(LIGHT_COMPONENT_DEFAULTS.range)),
-                ..field("range", ComponentFieldKind::Number)
-            },
-            ComponentFieldSchema {
-                label: text("casts shadow"),
-                default: Some(Value::Bool(LIGHT_COMPONENT_DEFAULTS.casts_shadow)),
-                ..field("castsShadow", ComponentFieldKind::Boolean)
-            },
-        ],
-        presets: vec![preset(
-            component_preset::LIGHT_POINT,
-            "Point Light",
-            json!({"enabled": true, "color": [1, 0.88, 0.7], "intensity": 4, "range": 12, "castsShadow": true}),
-        )],
-        requires: Vec::new(),
-    }
+    vec![physics_schema(), vehicle_schema()]
 }
 
 /// Rigid body created by `LevelRuntime`. Collider dimensions are local; entity scale is applied once at spawn.
@@ -380,49 +275,6 @@ fn vehicle_schema() -> ComponentSchema {
     }
 }
 
-/// Particle effect simulated per entity by `AssetScene`.
-fn effect_schema() -> ComponentSchema {
-    ComponentSchema {
-        kind: component_type::EFFECT.to_owned(),
-        label: "Particle Effect".to_owned(),
-        description: "Plays a JOYFX effect attached to the entity transform.".to_owned(),
-        category: component_category::EFFECTS.to_owned(),
-        fields: vec![
-            ComponentFieldSchema {
-                label: text("JOYFX effect"),
-                required: true,
-                asset_kinds: strings(&[component_asset_kind::PARTICLE_EFFECT]),
-                ..field("asset", ComponentFieldKind::Asset)
-            },
-            ComponentFieldSchema {
-                default: Some(Value::Bool(EFFECT_COMPONENT_DEFAULTS.enabled)),
-                ..field("enabled", ComponentFieldKind::Boolean)
-            },
-            ComponentFieldSchema {
-                default: Some(Value::Bool(EFFECT_COMPONENT_DEFAULTS.looping)),
-                description: text("Restart once every particle has expired."),
-                ..field("loop", ComponentFieldKind::Boolean)
-            },
-            ComponentFieldSchema {
-                integer: true,
-                step: Some(1.0),
-                default: Some(Value::from(EFFECT_COMPONENT_DEFAULTS.seed)),
-                ..field("seed", ComponentFieldKind::Number)
-            },
-            ComponentFieldSchema {
-                description: text("Effect parameter overrides; omitted parameters use the effect defaults."),
-                ..field("parameters", ComponentFieldKind::Record)
-            },
-        ],
-        presets: vec![preset(
-            component_preset::EFFECT_PARTICLES,
-            "JOYFX Effect",
-            json!({"asset": "", "enabled": true, "loop": true, "seed": EFFECT_COMPONENT_DEFAULTS.seed, "parameters": {}}),
-        )],
-        requires: Vec::new(),
-    }
-}
-
 // ---------------------------------------------------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------------------------------------------------
@@ -458,17 +310,7 @@ fn preset(id: &str, label: &str, data: Value) -> ComponentPreset {
     ComponentPreset { id: id.to_owned(), label: label.to_owned(), data }
 }
 
-/// An `f32` RGB color as JavaScript-style JSON numbers.
-fn color_json(color: [f32; 3]) -> Value {
-    Value::Array(color.into_iter().map(number_to_json).collect())
-}
-
 /// Optional owned text.
 fn text(value: &str) -> Option<String> {
     Some(value.to_owned())
-}
-
-/// Owned copies of string literals.
-fn strings(values: &[&str]) -> Vec<String> {
-    values.iter().map(|value| (*value).to_owned()).collect()
 }

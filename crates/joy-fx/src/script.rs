@@ -7,12 +7,11 @@
 //! host code. Statements assign particle fields, read-only inputs, or block-scoped locals (`let`), and branch with
 //! `if`/`else`. Values are scalars, XYZ vectors, or RGBA colors with component access (`position.x`, `color.a`).
 //!
-//! Semantics, error messages, and source locations (one-based lines and UTF-16 columns) match the TypeScript
-//! `src/particles/script.ts`, including precedence (`-a^b` is `(-a)^b`), lazy `&&`/`||`, evaluation order (so seeded
-//! `rand()` streams agree), and the instruction budget: every evaluated expression level costs one unit per component.
-//! Budgets: 12,000 UTF-16 code units, 2,000 tokens, 32 nested blocks, and 64 nested expression levels (blocks count
-//! toward the expression limit, as in TypeScript). Every intermediate expression result must be finite and within
-//! ±1 billion.
+//! Unary minus binds tighter than `^` (`-a^b` is `(-a)^b`), `&&` and `||` short-circuit, and operands evaluate left
+//! to right, so seeded `rand()` streams are stable across versions. Conditions treat zero and NaN as false. Every
+//! evaluated expression level costs one instruction unit per component. Budgets: 12,000 characters, 2,000 tokens,
+//! 32 nested blocks, and 64 nested expression levels (blocks count toward the expression limit). Every intermediate
+//! expression result must be finite and within ±1 billion. Diagnostics carry one-based lines and character columns.
 
 use std::collections::{
     HashMap,
@@ -21,9 +20,9 @@ use std::collections::{
 
 use indexmap::IndexMap;
 use joy_core::RandomSource;
+use joy_core::math::deterministic;
 
 use crate::constants::ParticleValueKind;
-use crate::math;
 
 /// Writable per-particle scalar fields, in storage order.
 pub const PARTICLE_FIELDS: [&str; 24] = [
@@ -93,7 +92,7 @@ pub const PARTICLE_CONTAINERS: [(&str, &[&str]); 6] = [
     ("parentVelocity", &["parentVx", "parentVy", "parentVz"]),
 ];
 
-/// Maximum source length in UTF-16 code units.
+/// Maximum source length in characters.
 pub const MAXIMUM_SCRIPT_LENGTH: usize = 12_000;
 
 /// Maximum token count per source.
@@ -119,8 +118,8 @@ pub(crate) const FIXED_SLOT_COUNT: usize = PARTICLE_FIELDS.len() + PARTICLE_INPU
 
 /// A script compilation or evaluation failure with its source location.
 ///
-/// `Display` reads `"{message} (line {line}, column {column})"`, exactly like the TypeScript `ParticleScriptError`.
-/// Lines are one-based; columns are one-based UTF-16 code units, so editors can place diagnostics directly.
+/// `Display` reads `"{message} (line {line}, column {column})"`. Lines and columns are one-based, and columns count
+/// characters, so editors can place diagnostics directly.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[error("{message} (line {line}, column {column})")]
 pub struct ParticleScriptError {
@@ -128,7 +127,7 @@ pub struct ParticleScriptError {
     pub message: String,
     /// One-based source line.
     pub line: u32,
-    /// One-based UTF-16 column.
+    /// One-based character column.
     pub column: u32,
 }
 
@@ -368,25 +367,25 @@ impl Builtin {
     fn call(self, arguments: &[f64], random: &mut dyn RandomSource) -> f64 {
         let argument = |index: usize| arguments.get(index).copied().unwrap_or(f64::NAN);
         match self {
-            Self::Sin => math::sin(argument(0)),
-            Self::Cos => math::cos(argument(0)),
-            Self::Tan => math::tan(argument(0)),
+            Self::Sin => deterministic::sin(argument(0)),
+            Self::Cos => deterministic::cos(argument(0)),
+            Self::Tan => deterministic::tan(argument(0)),
             Self::Abs => argument(0).abs(),
-            Self::Sqrt => math::sqrt(argument(0)),
+            Self::Sqrt => argument(0).sqrt(),
             Self::Floor => argument(0).floor(),
             Self::Ceil => argument(0).ceil(),
-            Self::Round => math::round(argument(0)),
-            Self::Exp => math::exp(argument(0)),
-            Self::Log => math::log(argument(0)),
-            Self::Min => math::min(argument(0), argument(1)),
-            Self::Max => math::max(argument(0), argument(1)),
-            Self::Pow => math::pow(argument(0), argument(1)),
-            Self::Atan2 => math::atan2(argument(0), argument(1)),
-            Self::Clamp => math::max(argument(1), math::min(argument(2), argument(0))),
+            Self::Round => argument(0).round(),
+            Self::Exp => deterministic::exp(argument(0)),
+            Self::Log => deterministic::ln(argument(0)),
+            Self::Min => f64::min(argument(0), argument(1)),
+            Self::Max => f64::max(argument(0), argument(1)),
+            Self::Pow => deterministic::powf(argument(0), argument(1)),
+            Self::Atan2 => deterministic::atan2(argument(0), argument(1)),
+            Self::Clamp => f64::max(argument(1), f64::min(argument(2), argument(0))),
             Self::Mix => argument(0) + ((argument(1) - argument(0)) * argument(2)),
             Self::Smoothstep => {
                 let (edge0, edge1, value) = (argument(0), argument(1), argument(2));
-                let t = math::max(0.0, math::min(1.0, (value - edge0) / (edge1 - edge0)));
+                let t = ((value - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
                 (t * t) * (3.0 - (2.0 * t))
             }
             Self::Rand => {
@@ -407,10 +406,10 @@ fn arities(name: &str) -> &'static [usize] {
     PARTICLE_FUNCTION_ARITIES.iter().find(|(function, _)| *function == name).map_or(&[], |(_, counts)| counts)
 }
 
-/// Smooth one-dimensional value noise in `[-1, 1]`, identical to the TypeScript hash-based noise.
+/// Smooth one-dimensional value noise in `[-1, 1]` from a sine hash; authored effects depend on its exact values.
 fn noise(x: f64) -> f64 {
     let hash = |n: f64| {
-        let value = math::sin((n * 127.1) + 311.7) * 43758.5453;
+        let value = deterministic::sin((n * 127.1) + 311.7) * 43758.5453;
         ((value - value.floor()) * 2.0) - 1.0
     };
     let cell = x.floor();
@@ -447,13 +446,18 @@ fn error(message: impl Into<String>, token: &Token<'_>) -> ParticleScriptError {
     error_at(message, token.line, token.column)
 }
 
+/// Whether a condition value counts as true: anything but zero and NaN.
+fn is_true(value: f64) -> bool {
+    value != 0.0 && !value.is_nan()
+}
+
 fn located_error(message: impl Into<String>, location: Location) -> ParticleScriptError {
     error_at(message, location.line, location.column)
 }
 
-/// Split source into tokens with one-based lines and UTF-16 columns, ending with the synthetic `<end>` token.
+/// Split source into tokens with one-based lines and character columns, ending with the synthetic `<end>` token.
 fn tokenize(source: &str) -> Result<Vec<Token<'_>>, ParticleScriptError> {
-    if math::utf16_length(source) > MAXIMUM_SCRIPT_LENGTH {
+    if source.chars().count() > MAXIMUM_SCRIPT_LENGTH {
         return Err(error_at("Script exceeds 12,000 characters", 1, 1));
     }
 
@@ -469,16 +473,16 @@ fn tokenize(source: &str) -> Result<Vec<Token<'_>>, ParticleScriptError> {
                     break;
                 }
                 offset += comment.len_utf8();
-                column += comment.len_utf16() as u32;
+                column += 1;
             }
             continue;
         }
-        if math::is_whitespace(character) {
+        if character.is_whitespace() {
             if character == '\n' {
                 line += 1;
                 column = 1;
             } else {
-                column += character.len_utf16() as u32;
+                column += 1;
             }
             offset += character.len_utf8();
             continue;
@@ -492,7 +496,7 @@ fn tokenize(source: &str) -> Result<Vec<Token<'_>>, ParticleScriptError> {
             return Err(error("Script exceeds 2,000 tokens", &tokens[tokens.len() - 1]));
         }
         offset += length;
-        // Tokens are ASCII, so their byte length is their UTF-16 length.
+        // Tokens are ASCII, so their byte length is their character count.
         column += length as u32;
     }
     tokens.push(Token { text: END_TOKEN, line, column });
@@ -1001,7 +1005,7 @@ fn run_statements(statements: &[Statement], machine: &mut Machine<'_>) -> Result
         match statement {
             Statement::If { condition, yes, no } => {
                 let value = evaluate(condition, machine)?;
-                run_statements(if math::truthy(value.first()) { yes } else { no }, machine)?;
+                run_statements(if is_true(value.first()) { yes } else { no }, machine)?;
             }
             Statement::Assign { location, operator, expression, target } => {
                 // Evaluate first so swaps and self-references cannot observe partial writes.
@@ -1046,7 +1050,7 @@ fn evaluate_node(node: &Node, machine: &mut Machine<'_>) -> Result<Value, Partic
             match operator {
                 UnaryOperator::Negate => calculate(BinaryOperator::Multiply, value, Value::scalar(-1.0)),
                 UnaryOperator::Plus => value,
-                UnaryOperator::Not => Value::scalar(if math::truthy(value.first()) { 0.0 } else { 1.0 }),
+                UnaryOperator::Not => Value::scalar(if is_true(value.first()) { 0.0 } else { 1.0 }),
             }
         }
         Node::Group(inner) => evaluate(inner, machine)?,
@@ -1076,19 +1080,19 @@ fn evaluate_node(node: &Node, machine: &mut Machine<'_>) -> Result<Value, Partic
             let value = evaluate_node(left, machine)?;
             match operator {
                 BinaryOperator::And => {
-                    if math::truthy(value.first()) {
+                    if is_true(value.first()) {
                         let right = evaluate(right, machine)?;
-                        Value::scalar(if math::truthy(right.first()) { 1.0 } else { 0.0 })
+                        Value::scalar(if is_true(right.first()) { 1.0 } else { 0.0 })
                     } else {
                         Value::scalar(0.0)
                     }
                 }
                 BinaryOperator::Or => {
-                    if math::truthy(value.first()) {
+                    if is_true(value.first()) {
                         Value::scalar(1.0)
                     } else {
                         let right = evaluate(right, machine)?;
-                        Value::scalar(if math::truthy(right.first()) { 1.0 } else { 0.0 })
+                        Value::scalar(if is_true(right.first()) { 1.0 } else { 0.0 })
                     }
                 }
                 _ => {
@@ -1128,7 +1132,7 @@ fn scalar_operation(operator: BinaryOperator, left: f64, right: f64) -> f64 {
         BinaryOperator::Multiply => left * right,
         BinaryOperator::Divide => left / right,
         BinaryOperator::Remainder => left % right,
-        BinaryOperator::Power => math::pow(left, right),
+        BinaryOperator::Power => deterministic::powf(left, right),
         BinaryOperator::Less => boolean(left < right),
         BinaryOperator::Greater => boolean(left > right),
         BinaryOperator::LessEqual => boolean(left <= right),
@@ -1136,59 +1140,11 @@ fn scalar_operation(operator: BinaryOperator, left: f64, right: f64) -> f64 {
         BinaryOperator::Equal => boolean(left == right),
         BinaryOperator::NotEqual => boolean(left != right),
         // Logical operators short-circuit before reaching component arithmetic.
-        BinaryOperator::And => boolean(math::truthy(left) && math::truthy(right)),
-        BinaryOperator::Or => boolean(math::truthy(left) || math::truthy(right)),
+        BinaryOperator::And => boolean(is_true(left) && is_true(right)),
+        BinaryOperator::Or => boolean(is_true(left) || is_true(right)),
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use joy_core::SeededRandom;
-
-    fn run(source: &str, values: &[(&str, f64)]) -> Result<IndexMap<String, f64>, ParticleScriptError> {
-        let script = ParticleScript::compile(source, &[], &[])?;
-        let mut record: IndexMap<String, f64> =
-            values.iter().map(|(name, value)| ((*name).to_owned(), *value)).collect();
-        let mut budget = ParticleScriptBudget { remaining: 1_000 };
-        script.run(&mut record, &mut SeededRandom::new(1), &mut budget)?;
-        Ok(record)
-    }
-
-    #[test]
-    fn numbers_tokenize_like_javascript() {
-        assert_eq!(parse_number("1."), 1.0);
-        assert_eq!(parse_number("1.e2"), 100.0);
-        assert_eq!(parse_number(".5"), 0.5);
-        assert_eq!(parse_number("2E-1"), 0.2);
-        assert_eq!(match_token(b"1e"), Some(1));
-        assert_eq!(match_token(b"1e+5x"), Some(4));
-        assert_eq!(match_token(b"..5"), Some(1));
-        assert_eq!(match_token(b"<=1"), Some(2));
-        assert_eq!(match_token(b"&x"), None);
-    }
-
-    #[test]
-    fn precedence_laziness_and_containers_follow_the_reference() {
-        let record = run(
-            "u0 = -2^2; u1 = 1/0 && 1; u2 = 0 || 3; let v = vector(1, 2, 3); position = v * 2; vx = position.y;",
-            &[],
-        )
-        .unwrap();
-        assert_eq!(record["u0"], 4.0);
-        assert_eq!(record["u1"], 1.0);
-        assert_eq!(record["u2"], 1.0);
-        assert_eq!(record["vx"], 4.0);
-        assert_eq!(record["v.z"], 3.0);
-    }
-
-    #[test]
-    fn diagnostics_carry_locations() {
-        let error = ParticleScript::compile("x = 1;\n  y = foo", &[], &[]).unwrap_err();
-        assert_eq!(error.to_string(), "Unknown numeric value 'foo' or field is not writable (line 2, column 7)");
-        let error = run("x = 1;\nsize /= 0;", &[("size", 1.0), ("x", 0.0)]).unwrap_err();
-        assert_eq!((error.line, error.column), (2, 1));
-        let end = ParticleScript::compile("x = 1 +", &[], &[]).unwrap_err();
-        assert_eq!(end.message, "Unexpected end of script");
-    }
-}
+#[path = "../tests/unit/script.rs"]
+mod tests;

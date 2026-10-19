@@ -7,7 +7,7 @@ use std::fmt;
 
 use indexmap::IndexMap;
 
-use super::components::entity_type;
+use super::component_vocabulary::entity_type;
 use super::entity::EntityBehavior;
 use super::entity_definition::EntityDefinition;
 use super::error::GameplayError;

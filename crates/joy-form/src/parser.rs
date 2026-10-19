@@ -19,8 +19,15 @@ const BLOCK_DEPTH_LIMIT: usize = 48;
 const EXPRESSION_DEPTH_LIMIT: usize = 64;
 const INVALID_DATA_KEY: &str = "Invalid user data field name (1–64 characters; prototype keys are reserved).";
 
-/// Parse FORM without executing authored code. Locations use JavaScript's UTF-16
-/// columns, preserving the authoring tools' diagnostics for Unicode documents.
+/// User data field names FORM rejects. Exported user data lands in glTF `extras`, and these names would alter object
+/// prototypes in the JavaScript viewers and pipelines that read those files.
+pub(crate) const RESERVED_DATA_KEYS: [&str; 3] = ["__proto__", "prototype", "constructor"];
+
+/// The byte-order mark some editors write at the start of a text file.
+const BYTE_ORDER_MARK: char = '\u{feff}';
+
+/// Parse FORM without executing authored code. Locations are one-based lines and
+/// character columns, so editors place diagnostics directly.
 pub(crate) fn parse(source: &str) -> Result<Vec<Statement>, Diagnostic> {
     Parser { tokens: tokenize(source)?, cursor: 0, depth: 0 }.block(false)
 }
@@ -185,10 +192,10 @@ impl Parser {
             let value: String = serde_json::from_str(&value_token.text)
                 .map_err(|_| Diagnostic::at("Project metadata requires double-quoted text.", value_token))?;
             let text_limit = if key == "info" { 160 } else { 120 };
-            if value.encode_utf16().count() > text_limit {
+            if value.chars().count() > text_limit {
                 return Err(Diagnostic::at("Project metadata text is too long.", value_token));
             }
-            if key == "name" && (value.trim_matches(is_js_whitespace).is_empty() || value.contains(['\r', '\n'])) {
+            if key == "name" && (value.trim().is_empty() || value.contains(['\r', '\n'])) {
                 return Err(Diagnostic::at("Project name requires nonempty, single-line text.", value_token));
             }
             if key == "name" {
@@ -306,10 +313,7 @@ impl Parser {
             } else {
                 self.name()?
             };
-            if key.is_empty()
-                || key.encode_utf16().count() > 64
-                || matches!(key.as_str(), "__proto__" | "prototype" | "constructor")
-            {
+            if key.is_empty() || key.chars().count() > 64 || RESERVED_DATA_KEYS.contains(&key.as_str()) {
                 return Err(Diagnostic::at(INVALID_DATA_KEY, &key_token));
             }
             if !names.insert(key.clone()) {
@@ -322,20 +326,17 @@ impl Parser {
             }
         }
         self.expect("}")?;
-        // JavaScript enumerates array-index keys first, then other keys in authored
-        // order. Preserve that evaluation order, including calls in field values.
-        fields.sort_by_key(|(key, _)| array_index(key).unwrap_or(u32::MAX));
+        // Fields evaluate, and are stored, in authored order.
         Ok(fields)
     }
 }
 
-/// Record keys expose JSON.parse diagnostics directly in the TypeScript parser.
-/// Report its string-escape errors using UTF-16 positions, rather than serde's
-/// byte columns. Ordinary string expressions have their own stable diagnostic.
+/// Describe a malformed quoted record key, naming the offending character's one-based
+/// position within the key token. Ordinary string expressions have their own diagnostic.
 fn quoted_key_error(text: &str, error: serde_json::Error) -> String {
     let diagnostic = |description: &str, byte_offset: usize| {
-        let position = text[..byte_offset].encode_utf16().count();
-        format!("{description} in JSON at position {position} (line 1 column {})", position + 1)
+        let position = text[..byte_offset].chars().count() + 1;
+        format!("{description} in quoted key at character {position}.")
     };
     let mut characters = text.char_indices().skip(1);
     while let Some((offset, character)) = characters.next() {
@@ -363,9 +364,9 @@ fn quoted_key_error(text: &str, error: serde_json::Error) -> String {
             _ => return diagnostic("Bad escaped character", escape_offset),
         }
     }
-    // Rust strings cannot represent a lone UTF-16 surrogate. Keep this explicit
-    // rejection instead of silently replacing authored data with U+FFFD.
-    error.to_string()
+    // A `\u` escape naming a lone surrogate has no character to stand for. Reject it
+    // explicitly instead of silently replacing authored data with U+FFFD.
+    format!("Invalid quoted key: {error}.")
 }
 
 fn precedence(operator: &str) -> i32 {
@@ -376,14 +377,6 @@ fn precedence(operator: &str) -> i32 {
         "^" => 40,
         _ => -1,
     }
-}
-
-fn array_index(key: &str) -> Option<u32> {
-    let index: u32 = key.parse().ok()?;
-    if index == u32::MAX || index.to_string() != key {
-        return None;
-    }
-    Some(index)
 }
 
 fn is_name(text: &str) -> bool {
@@ -404,18 +397,12 @@ fn starts_number(bytes: &[u8]) -> bool {
         || (bytes.first() == Some(&b'.') && bytes.get(1).is_some_and(u8::is_ascii_digit))
 }
 
-fn is_js_whitespace(character: char) -> bool {
-    matches!(character,
-        '\u{0009}'..='\u{000d}' | ' ' | '\u{00a0}' | '\u{1680}'
-        | '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}'
-        | '\u{202f}' | '\u{205f}' | '\u{3000}' | '\u{feff}'
-    )
-}
-
 fn tokenize(source: &str) -> Result<Vec<Token>, Diagnostic> {
-    if source.encode_utf16().count() > SOURCE_LIMIT {
+    if source.chars().count() > SOURCE_LIMIT {
         return Err(Diagnostic { message: "Script size limit is 200,000 characters.".into(), line: 1, column: 1 });
     }
+    // A leading byte-order mark is an encoding artifact, not source; it takes no column.
+    let source = source.strip_prefix(BYTE_ORDER_MARK).unwrap_or(source);
     let mut tokens = Vec::new();
     let mut offset = 0;
     let mut line = 1;
@@ -425,16 +412,16 @@ fn tokenize(source: &str) -> Result<Vec<Token>, Diagnostic> {
         let character = remaining.chars().next().unwrap();
         if character == '#' || remaining.starts_with("//") {
             let length = remaining.find('\n').unwrap_or(remaining.len());
-            column += remaining[..length].encode_utf16().count();
+            column += remaining[..length].chars().count();
             offset += length;
             continue;
         }
-        if is_js_whitespace(character) {
+        if character.is_whitespace() {
             if character == '\n' {
                 line += 1;
                 column = 1;
             } else {
-                column += character.len_utf16();
+                column += 1;
             }
             offset += character.len_utf8();
             continue;
@@ -455,15 +442,14 @@ fn tokenize(source: &str) -> Result<Vec<Token>, Diagnostic> {
             return Err(Diagnostic::at("Token limit exceeded.", tokens.last().unwrap()));
         }
         offset += length;
-        column += text.encode_utf16().count();
+        column += text.chars().count();
     }
     tokens.push(Token { text: "<end>".into(), line, column });
     Ok(tokens)
 }
 
-/// Match the original sticky token regex without allocating a regex engine.
-/// Incomplete exponents are left for subsequent tokens, just as regex backtracking
-/// does in JavaScript (for example, `1e+` starts with the number token `1`).
+/// Measure the token at the start of `source` without a regex engine. An incomplete
+/// exponent is left for the following tokens (`1e+` starts with the number token `1`).
 fn token_length(source: &str) -> Option<usize> {
     let bytes = source.as_bytes();
     if bytes[0] == b'"' {

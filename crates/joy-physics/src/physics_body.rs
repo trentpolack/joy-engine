@@ -12,8 +12,8 @@
 //! - Bodies never sleep (cannon worlds default to `allowSleep = false`).
 //! - Forces apply for exactly one fixed step; impulses change velocity immediately.
 
-use glam::Vec3;
 use joy_core::PrimitiveShape;
+use joy_core::math::Vec3;
 use rapier3d::dynamics::{
     CoefficientCombineRule,
     RigidBodyBuilder,
@@ -340,20 +340,5 @@ fn damping_coefficient(damping: f32) -> f32 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn damping_conversion_matches_cannon_decay_over_one_second() {
-        // Sixty fixed steps of rapier damping should remove the same velocity fraction as cannon's (1 - d)^1.
-        for damping in [0.01_f32, 0.1, 0.5] {
-            let coefficient = f64::from(damping_coefficient(damping));
-            let dt = 1.0 / 60.0;
-            let rapier = (1.0 / (1.0 + (dt * coefficient))).powi(60);
-            let cannon = (1.0 - f64::from(damping)).powf(1.0);
-            assert!((rapier - cannon).abs() < 0.02 * cannon.max(0.1), "damping {damping}: {rapier} vs {cannon}");
-        }
-        assert_eq!(damping_coefficient(0.0), 0.0);
-        assert_eq!(damping_coefficient(1.0), MAX_DAMPING_COEFFICIENT);
-    }
-}
+#[path = "../tests/unit/physics_body.rs"]
+mod tests;

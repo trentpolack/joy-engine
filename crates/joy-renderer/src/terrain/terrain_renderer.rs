@@ -13,7 +13,7 @@ use bytemuck::{
     Pod,
     Zeroable,
 };
-use glam::Mat4;
+use joy_core::math::Mat4;
 use web_time::Instant;
 use wgpu::util::DeviceExt;
 
@@ -42,7 +42,7 @@ use crate::terrain::{
     TERRAIN_SOURCE,
     terrain_geometry_source,
 };
-use joy_core::Rgba;
+use joy_core::Color;
 
 /// Bytes of the per-terrain scene block (`TerrainScene`: a matrix and four vectors).
 const SCENE_BUFFER_BYTES: u64 = 128;
@@ -138,8 +138,8 @@ pub struct TerrainFrame {
     pub view: TerrainView,
     /// Shading mode.
     pub diagnostic: TerrainDiagnostic,
-    /// Display-referred background color.
-    pub clear_color: Rgba,
+    /// Background color, written to the display target as given (sRGB-encoded, not tone mapped).
+    pub clear_color: Color,
     /// Monotonic frame time in milliseconds; paces GPU timing samples.
     pub now_milliseconds: f64,
 }
@@ -667,10 +667,10 @@ impl TerrainRenderer {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: f64::from(clear[0]),
-                            g: f64::from(clear[1]),
-                            b: f64::from(clear[2]),
-                            a: f64::from(clear[3]),
+                            r: f64::from(clear.red),
+                            g: f64::from(clear.green),
+                            b: f64::from(clear.blue),
+                            a: f64::from(clear.alpha),
                         }),
                         store: wgpu::StoreOp::Store,
                     },
@@ -848,7 +848,7 @@ mod tests {
     use super::*;
     use crate::BackendPreference;
     use crate::terrain::parse_terrain;
-    use glam::DVec3;
+    use joy_core::math::DVec3;
 
     /// Copy a GPU buffer to the CPU, blocking until the queue finishes.
     fn read_buffer(gpu: &GpuContext, buffer: &wgpu::Buffer) -> Vec<u8> {
@@ -881,8 +881,8 @@ mod tests {
             }
         };
         let asset = parse_terrain(
-            include_str!("../../../../examples/terrain/site/public/dragon-pit/terrain.json"),
-            include_bytes!("../../../../examples/terrain/site/public/dragon-pit/height.bin"),
+            include_str!("../../../../examples/terrain/assets/dragon-pit/terrain.json"),
+            include_bytes!("../../../../examples/terrain/assets/dragon-pit/height.bin"),
         )
         .expect("the example asset is valid");
         let layout = terrain_bind_group_layout(gpu.device());

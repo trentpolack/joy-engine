@@ -52,7 +52,7 @@ struct FormViewer {
 }
 
 impl FormViewer {
-    fn new() -> Result<Self, GameError> {
+    fn new() -> Result<Self, AppError> {
         let environment =
             EnvironmentSystem::new(EnvironmentOptions { time_of_day: 15.5 / 24.0, ..Default::default() })?;
         Ok(Self {
@@ -119,13 +119,15 @@ impl FormViewer {
             for id in keep {
                 self.scene.remove(id);
             }
-            self.scene.insert(MeshInstance::new(primitive_box()).with_transform(ground).with_tint([0.54, 0.6, 0.6]));
+            self.scene.insert(
+                MeshInstance::new(primitive_box()).with_transform(ground).with_tint(LinearColor::rgb(0.54, 0.6, 0.6)),
+            );
         }
     }
 }
 
-impl Game for FormViewer {
-    fn input(&mut self, frame: &mut Frame<'_>) -> GameResult {
+impl App for FormViewer {
+    fn input(&mut self, frame: &mut Frame<'_>) -> AppResult {
         let pointer = frame.input.pointer();
         if frame.input.action("orbit").value > 0.0 && pointer.active {
             if let Some(previous) = self.drag {
@@ -140,7 +142,7 @@ impl Game for FormViewer {
         Ok(())
     }
 
-    fn simulation(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn simulation(&mut self, frame: &mut Frame<'_>) -> AppResult {
         let environment = self.environment.step(f64::from(frame.time.elapsed_seconds))?;
         self.lighting = Some(environment_lighting(&environment, &SkyOptions::default()));
         if self.dirty {
@@ -149,10 +151,10 @@ impl Game for FormViewer {
         Ok(())
     }
 
-    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> GameResult {
+    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
         let inputs = FrameInputs {
             environment: self.lighting.as_ref(),
-            clear_color: [0.09, 0.16, 0.2, 1.0],
+            clear_color: LinearColor::new(0.09, 0.16, 0.2, 1.0),
             time_seconds: frame.time.time_seconds as f32,
             ..Default::default()
         };
@@ -246,7 +248,7 @@ fn options() -> ShellOptions {
 
 fn start() {
     let result =
-        FormViewer::new().map_err(|error| ShellError::Game(error.to_string())).and_then(|game| run(options(), game));
+        FormViewer::new().map_err(|error| ShellError::App(error.to_string())).and_then(|app| run(options(), app));
     if let Err(error) = result {
         joy_engine::log::error!("{error}");
     }

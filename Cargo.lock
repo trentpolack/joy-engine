@@ -1081,6 +1081,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc148d4ddd3930c52f9e5ae79b89805c6f07e9ff417e7b083e0348cea60a5aba"
 dependencies = [
  "bytemuck",
+ "libm",
  "serde_core",
 ]
 
@@ -1423,8 +1424,8 @@ dependencies = [
  "egui",
  "egui-wgpu",
  "env_logger",
- "glam 0.34.1",
  "image",
+ "joy-core",
  "joy-devtools",
  "joy-input",
  "joy-renderer",
@@ -1505,8 +1506,10 @@ dependencies = [
  "egui",
  "indexmap",
  "joy-core",
+ "joy-gameplay",
  "joy-input",
  "joy-renderer",
+ "joy-scene",
  "joy-ui",
  "log",
  "serde_json",
@@ -1528,7 +1531,6 @@ name = "joy-engine"
 version = "1.0.0"
 dependencies = [
  "egui",
- "glam 0.34.1",
  "image",
  "joy-app",
  "joy-audio",
@@ -1557,7 +1559,6 @@ dependencies = [
 name = "joy-environment"
 version = "1.0.0"
 dependencies = [
- "glam 0.34.1",
  "joy-core",
  "log",
  "serde",
@@ -1591,7 +1592,6 @@ dependencies = [
 name = "joy-gameplay"
 version = "1.0.0"
 dependencies = [
- "glam 0.34.1",
  "indexmap",
  "joy-core",
  "joy-physics",
@@ -1606,8 +1606,8 @@ name = "joy-input"
 version = "1.0.0"
 dependencies = [
  "gilrs",
- "glam 0.34.1",
  "indexmap",
+ "joy-core",
  "log",
  "thiserror 2.0.21",
  "wasm-bindgen",
@@ -1619,7 +1619,6 @@ dependencies = [
 name = "joy-physics"
 version = "1.0.0"
 dependencies = [
- "glam 0.34.1",
  "indexmap",
  "joy-core",
  "joy-test-support",
@@ -1645,7 +1644,6 @@ name = "joy-renderer"
 version = "1.0.0"
 dependencies = [
  "bytemuck",
- "glam 0.34.1",
  "image",
  "image-webp",
  "indexmap",
@@ -1667,7 +1665,6 @@ dependencies = [
 name = "joy-scene"
 version = "1.0.0"
 dependencies = [
- "glam 0.34.1",
  "indexmap",
  "joy-core",
  "joy-environment",
@@ -1675,6 +1672,7 @@ dependencies = [
  "joy-fx",
  "joy-gameplay",
  "joy-renderer",
+ "joy-test-support",
  "libm",
  "serde_json",
  "thiserror 2.0.21",
@@ -1705,7 +1703,7 @@ dependencies = [
  "egui",
  "egui-wgpu",
  "egui-winit",
- "glam 0.34.1",
+ "joy-core",
  "joy-renderer",
  "wasm-bindgen",
  "web-sys",

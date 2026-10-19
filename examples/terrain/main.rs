@@ -22,6 +22,7 @@ use joy_engine::development::dock::{
     self,
     DockTool,
 };
+use joy_engine::math::deterministic;
 use joy_engine::prelude::*;
 use joy_engine::rendering::TerrainInstanceId;
 use joy_engine::rendering::terrain::{
@@ -43,10 +44,10 @@ use terrain_camera_controls::{
 use terrain_config::TERRAIN_CONFIG;
 
 /// The compiled Dragon Pit heightfield, embedded so the example runs identically natively and in browsers.
-const MANIFEST: &str = include_str!("site/public/dragon-pit/terrain.json");
-const HEIGHTS: &[u8] = include_bytes!("site/public/dragon-pit/height.bin");
+const MANIFEST: &str = include_str!("assets/dragon-pit/terrain.json");
+const HEIGHTS: &[u8] = include_bytes!("assets/dragon-pit/height.bin");
 /// The MIT notice for the source height data, shown in CONFIG because the data ships inside the binary.
-const SOURCE_LICENSE: &str = include_str!("site/public/dragon-pit/LICENSE-source.txt");
+const SOURCE_LICENSE: &str = include_str!("assets/dragon-pit/LICENSE-source.txt");
 const SOURCE_URL: &str = "https://github.com/trentpolack/worldcreator/blob/main/dragon_pit_01/HeightMap.exr";
 
 /// Camera preset actions.
@@ -96,7 +97,7 @@ struct TerrainLab {
 }
 
 impl TerrainLab {
-    fn new() -> Result<Self, GameError> {
+    fn new() -> Result<Self, AppError> {
         let asset = parse_terrain(MANIFEST, HEIGHTS)?;
         let mut scene = RenderScene::new();
         let scene_terrain = scene.create_terrain(asset.clone());
@@ -155,7 +156,7 @@ impl TerrainLab {
         let fov = f64::from(TERRAIN_CONFIG.camera_controls.vertical_fov_radians);
         TerrainView {
             eye: self.camera.basis().eye.as_dvec3(),
-            projection_scale: f64::from(viewport.logical_size.y) / (2.0 * (fov / 2.0).tan()),
+            projection_scale: f64::from(viewport.logical_size.y) / (2.0 * deterministic::tan(fov / 2.0)),
             tolerance: f64::from(self.tolerance),
             target: self.camera.target.as_dvec3(),
             target_radius: if self.pin { f64::from(TERRAIN_CONFIG.target_radius) } else { 0.0 },
@@ -226,8 +227,8 @@ impl TerrainLab {
     }
 }
 
-impl Game for TerrainLab {
-    fn start(&mut self, context: &mut StartContext<'_>) -> GameResult {
+impl App for TerrainLab {
+    fn start(&mut self, context: &mut StartContext<'_>) -> AppResult {
         self.backend = context.capabilities.backend.label().to_uppercase();
         let renderer = context.renderer.gpu().clone();
         self.terrain = Some(TerrainRenderer::new(&renderer, &self.asset, context.renderer.output_format())?);
@@ -235,7 +236,7 @@ impl Game for TerrainLab {
         Ok(())
     }
 
-    fn input(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn input(&mut self, frame: &mut Frame<'_>) -> AppResult {
         // Presets stay available outside flight; text fields keep keyboard focus (the shell suspends input).
         if frame.input.pressed(GROUND_ACTION) {
             self.ground();
@@ -247,7 +248,7 @@ impl Game for TerrainLab {
         Ok(())
     }
 
-    fn simulation(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn simulation(&mut self, frame: &mut Frame<'_>) -> AppResult {
         let seconds = frame.time.elapsed_seconds.min(MAXIMUM_STEP_SECONDS);
         self.controls.update(&mut self.camera, seconds);
 
@@ -262,7 +263,7 @@ impl Game for TerrainLab {
         Ok(())
     }
 
-    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> GameResult {
+    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
         let view = self.terrain_view(&frame.viewport);
         match self.path {
             DrawPath::TerrainPass => {
@@ -282,9 +283,11 @@ impl Game for TerrainLab {
                     instance.target_radius = view.target_radius as f32;
                     instance.diagnostic = self.diagnostic;
                 }
+                // The scene path tone maps its clear color; the display color goes in unconverted to match the terrain
+                // pass until the display pass encodes sRGB.
                 let inputs = FrameInputs {
                     environment: self.lighting.as_ref(),
-                    clear_color: TERRAIN_CONFIG.background_color,
+                    clear_color: TERRAIN_CONFIG.background_color.reinterpret_as_linear(),
                     time_seconds: frame.time.time_seconds as f32,
                     ..Default::default()
                 };
@@ -436,7 +439,7 @@ fn options() -> ShellOptions {
 
 fn start() {
     let result =
-        TerrainLab::new().map_err(|error| ShellError::Game(error.to_string())).and_then(|game| run(options(), game));
+        TerrainLab::new().map_err(|error| ShellError::App(error.to_string())).and_then(|app| run(options(), app));
     if let Err(error) = result {
         joy_engine::log::error!("Terrain startup failed: {error}");
     }

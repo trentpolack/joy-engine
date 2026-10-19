@@ -34,6 +34,7 @@ mod gpu;
 mod materials;
 mod mesh;
 pub mod particles;
+pub mod post_process;
 mod postprocessor;
 mod renderer;
 mod scene;
@@ -125,6 +126,11 @@ pub use mesh::{
     Submesh,
     TextureMaps,
     VertexMaterial,
+};
+pub use post_process::{
+    PostProcessError,
+    PostProcessOverrides,
+    PostProcessSettings,
 };
 pub use renderer::{
     Renderer,

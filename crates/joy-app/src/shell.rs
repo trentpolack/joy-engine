@@ -1,11 +1,11 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The game shell: one window (native) or canvas (browser), its GPU device and renderer, input, development UI, and the
-//! frame loop that runs a [`Game`]'s phases.
+//! The windowed shell: one window (native) or canvas (browser), its GPU device and renderer, input, development UI, and the
+//! frame loop that runs an [`App`]'s phases.
 //!
 //! Startup proceeds as: create the window or canvas, create the GPU device for its surface, create the renderer and UI
-//! layer, call [`Game::start`], then run frames. Each frame: tick the clock, update input, run the input, simulation,
+//! layer, call [`App::start`], then run frames. Each frame: tick the clock, update input, run the input, simulation,
 //! and presentation phases, acquire the surface, run the render phase, paint UI, present, and run the after-frame phase.
 //! A phase error stops the loop and is shown to the player. Hiding the window resets the clock; losing focus releases
 //! held input.
@@ -54,17 +54,17 @@ use winit::window::{
     WindowId,
 };
 
-use crate::clock::{
-    DEFAULT_MAXIMUM_FRAME_SECONDS,
-    FrameClock,
-};
-use crate::game::{
+use crate::app::{
+    App,
+    AppResult,
     Frame,
-    Game,
-    GameResult,
     RenderTarget,
     ShellRequests,
     StartContext,
+};
+use crate::clock::{
+    DEFAULT_MAXIMUM_FRAME_SECONDS,
+    FrameClock,
 };
 use crate::surface::ConfiguredSurface;
 
@@ -113,31 +113,31 @@ pub enum ShellError {
     /// GPU, surface, or renderer startup failed.
     #[error("Graphics startup failed: {0}")]
     Graphics(#[from] RenderError),
-    /// A game phase returned an error.
-    #[error("The game stopped: {0}")]
-    Game(String),
+    /// An app phase returned an error.
+    #[error("The app stopped: {0}")]
+    App(String),
 }
 
-/// Run `game` until the window closes (native) or indefinitely (browser).
+/// Run `app` until the window closes (native) or indefinitely (browser).
 ///
 /// Native builds block and return when the window closes or a phase fails. Browser builds return immediately after
 /// handing the loop to the page.
-pub fn run<G: Game>(options: ShellOptions, game: G) -> Result<(), ShellError> {
+pub fn run<A: App>(options: ShellOptions, app: A) -> Result<(), ShellError> {
     init_logging();
     let event_loop = EventLoop::new().map_err(|error| ShellError::Window(error.to_string()))?;
     event_loop.set_control_flow(ControlFlow::Wait);
-    let app = App { options, game, phase: Phase::Created, result: Ok(()) };
+    let shell = WindowedShell { options, app, phase: Phase::Created, result: Ok(()) };
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let mut app = app;
-        event_loop.run_app(&mut app).map_err(|error| ShellError::Window(error.to_string()))?;
-        app.result
+        let mut shell = shell;
+        event_loop.run_app(&mut shell).map_err(|error| ShellError::Window(error.to_string()))?;
+        shell.result
     }
     #[cfg(target_arch = "wasm32")]
     {
         use winit::platform::web::EventLoopExtWebSys;
-        event_loop.spawn_app(app);
+        event_loop.spawn_app(shell);
         Ok(())
     }
 }
@@ -173,7 +173,7 @@ struct Running {
     clock: FrameClock,
     requests: ShellRequests,
     started: Instant,
-    /// The game asked for the pointer lock and the shell applied it.
+    /// The app asked for the pointer lock and the shell applied it.
     pointer_lock: bool,
     touches: TouchOwners,
     #[cfg(target_arch = "wasm32")]
@@ -206,14 +206,15 @@ impl TouchOwners {
     }
 }
 
-struct App<G: Game> {
+/// The winit application handler that owns one window and drives an [`App`] through it.
+struct WindowedShell<A: App> {
     options: ShellOptions,
-    game: G,
+    app: A,
     phase: Phase,
     result: Result<(), ShellError>,
 }
 
-impl<G: Game> ApplicationHandler for App<G> {
+impl<A: App> ApplicationHandler for WindowedShell<A> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if !matches!(self.phase, Phase::Created) {
             return;
@@ -261,7 +262,7 @@ impl<G: Game> ApplicationHandler for App<G> {
         let consumed = running.egui.on_window_event(&running.window, &event);
 
         match event {
-            WindowEvent::CloseRequested if self.game.close_requested() => {
+            WindowEvent::CloseRequested if self.app.close_requested() => {
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
@@ -301,14 +302,16 @@ impl<G: Game> ApplicationHandler for App<G> {
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let scale = running.window.scale_factor();
-                running
-                    .input
-                    .handle_pointer_move(glam::Vec2::new((position.x / scale) as f32, (position.y / scale) as f32));
+                running.input.handle_pointer_move(joy_core::math::Vec2::new(
+                    (position.x / scale) as f32,
+                    (position.y / scale) as f32,
+                ));
             }
             WindowEvent::CursorLeft { .. } => running.input.handle_pointer_leave(),
             WindowEvent::Touch(touch) => {
                 let scale = running.window.scale_factor();
-                let position = glam::Vec2::new((touch.location.x / scale) as f32, (touch.location.y / scale) as f32);
+                let position =
+                    joy_core::math::Vec2::new((touch.location.x / scale) as f32, (touch.location.y / scale) as f32);
                 // Touches that start on a UI widget belong to the UI until they end.
                 if running.touches.route_to_gameplay(touch.id, touch.phase, consumed) {
                     match touch.phase {
@@ -329,11 +332,11 @@ impl<G: Game> ApplicationHandler for App<G> {
                 // Hidden pages and minimized windows lose held input and must not catch up when shown again.
                 running.clock.reset();
                 running.input.set_visible(!occluded);
-                self.game.visibility_changed(!occluded);
+                self.app.visibility_changed(!occluded);
             }
             WindowEvent::RedrawRequested => {
                 if let Err(error) = self.frame(event_loop) {
-                    self.fail(event_loop, ShellError::Game(error.to_string()));
+                    self.fail(event_loop, ShellError::App(error.to_string()));
                 }
             }
             _ => {}
@@ -349,7 +352,9 @@ impl<G: Game> ApplicationHandler for App<G> {
             && running.pointer_lock
         {
             let scale = running.window.scale_factor();
-            running.input.handle_pointer_motion(glam::Vec2::new((delta.0 / scale) as f32, (delta.1 / scale) as f32));
+            running
+                .input
+                .handle_pointer_motion(joy_core::math::Vec2::new((delta.0 / scale) as f32, (delta.1 / scale) as f32));
         }
     }
 
@@ -365,8 +370,8 @@ impl<G: Game> ApplicationHandler for App<G> {
     }
 }
 
-impl<G: Game> App<G> {
-    /// Create the renderer and UI for a started device, then call the game's start hook.
+impl<A: App> WindowedShell<A> {
+    /// Create the renderer and UI for a started device, then call the app's start hook.
     fn finish_startup(&mut self, event_loop: &ActiveEventLoop, window: Arc<Window>, startup: Startup) {
         let Startup { gpu, mut surface } = startup;
         // Browser canvases can be laid out while the device starts; adopt the current size.
@@ -379,8 +384,8 @@ impl<G: Game> App<G> {
 
         let viewport = Viewport { logical_size: renderer.logical_size(), scale_factor };
         let mut context = StartContext { capabilities: gpu.capabilities(), renderer: &mut renderer, viewport };
-        if let Err(error) = self.game.start(&mut context) {
-            self.fail(event_loop, ShellError::Game(error.to_string()));
+        if let Err(error) = self.app.start(&mut context) {
+            self.fail(event_loop, ShellError::App(error.to_string()));
             return;
         }
 
@@ -421,7 +426,7 @@ impl<G: Game> App<G> {
     }
 
     /// Run one frame's phases, render, UI, and presentation.
-    fn frame(&mut self, event_loop: &ActiveEventLoop) -> GameResult {
+    fn frame(&mut self, event_loop: &ActiveEventLoop) -> AppResult {
         let Phase::Running(running) = &mut self.phase else {
             return Ok(());
         };
@@ -442,7 +447,7 @@ impl<G: Game> App<G> {
             #[cfg(target_arch = "wasm32")]
             first_frame_presented,
         } = &mut **running;
-        let game = &mut self.game;
+        let app = &mut self.app;
 
         if std::mem::take(&mut requests.reset_clock) {
             clock.reset();
@@ -464,9 +469,9 @@ impl<G: Game> App<G> {
         let mut frame = Frame { time, viewport, input, dev_tools, requests };
 
         // Simulation-facing phases.
-        game.input(&mut frame)?;
-        game.simulation(&mut frame)?;
-        game.presentation(&mut frame)?;
+        app.input(&mut frame)?;
+        app.simulation(&mut frame)?;
+        app.presentation(&mut frame)?;
 
         // Acquire the presentation texture; transient surface states skip this frame's drawing.
         let texture = match surface.surface.get_current_texture() {
@@ -486,7 +491,7 @@ impl<G: Game> App<G> {
 
         // Render phase.
         let mut target = RenderTarget { renderer, encoder: &mut encoder, output: &view, drawn: false };
-        game.render(&mut frame, &mut target)?;
+        app.render(&mut frame, &mut target)?;
         if !target.drawn {
             clear(target.encoder, &view);
         }
@@ -495,7 +500,7 @@ impl<G: Game> App<G> {
         // Immediate-mode UI over the scene.
         let size = [surface.config.width, surface.config.height];
         egui.paint(gpu, window, &mut encoder, &view, size, |context| {
-            game.ui(context, &mut frame);
+            app.ui(context, &mut frame);
             frame.dev_tools.ui(context, &diagnostics, viewport);
         });
 
@@ -509,7 +514,7 @@ impl<G: Game> App<G> {
             *first_frame_presented = true;
         }
 
-        game.after_frame(&mut frame)?;
+        app.after_frame(&mut frame)?;
         frame.dev_tools.frame(time.elapsed_seconds);
         // A browser may release the lock on its own (Escape), so a new request locks again even if the shell still
         // thinks it holds one.
@@ -648,24 +653,5 @@ fn init_logging() {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn touches_that_start_on_the_interface_stay_there_until_released() {
-        let mut owners = TouchOwners::default();
-        // A drag that starts on a slider: none of it reaches gameplay.
-        assert!(!owners.route_to_gameplay(7, TouchPhase::Started, true));
-        assert!(!owners.route_to_gameplay(7, TouchPhase::Moved, false), "moving off the widget stays with the UI");
-        assert!(!owners.route_to_gameplay(7, TouchPhase::Ended, false));
-        // A touch on the scene reaches gameplay throughout, even with the same identifier reused.
-        assert!(owners.route_to_gameplay(7, TouchPhase::Started, false));
-        assert!(owners.route_to_gameplay(7, TouchPhase::Moved, true), "passing over a widget does not steal it");
-        assert!(owners.route_to_gameplay(7, TouchPhase::Cancelled, false));
-        // Simultaneous touches are owned independently.
-        assert!(!owners.route_to_gameplay(1, TouchPhase::Started, true));
-        assert!(owners.route_to_gameplay(2, TouchPhase::Started, false));
-        assert!(!owners.route_to_gameplay(1, TouchPhase::Moved, false));
-        assert!(owners.route_to_gameplay(2, TouchPhase::Moved, false));
-    }
-}
+#[path = "../tests/unit/shell.rs"]
+mod tests;

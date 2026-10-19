@@ -8,6 +8,7 @@
 //! runs reuse the unlit blend pipeline through the renderer's transient buffer; textured runs use this pass's own
 //! vertex buffer. Textures upload on first use and release once their [`TextureAsset`] is dropped everywhere.
 
+use joy_core::LinearColor;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Weak;
@@ -181,7 +182,12 @@ impl TexturedPass {
                     }
                     let start = transient.len() as u32;
                     transient.extend(complete.iter().map(|vertex| {
-                        MeshVertex::new(vertex.position, [0.0; 3], vertex.color, VertexMaterial::default())
+                        MeshVertex::new(
+                            vertex.position,
+                            [0.0; 3],
+                            LinearColor::from(vertex.color),
+                            VertexMaterial::default(),
+                        )
                     }));
                     plan.push(PlannedDraw::Colored(start..transient.len() as u32));
                 }

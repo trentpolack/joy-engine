@@ -8,11 +8,8 @@ use bytemuck::{
     Pod,
     Zeroable,
 };
-use glam::Vec3;
-use joy_core::{
-    Rgb,
-    Rgba,
-};
+use joy_core::LinearColor;
+use joy_core::math::Vec3;
 
 use crate::environment::ImageLighting;
 use crate::texture::TextureAsset;
@@ -29,8 +26,8 @@ pub const DEFAULT_AMBIENT_WITHOUT_ENVIRONMENT: f32 = 0.3;
 pub struct PointLight {
     /// World position.
     pub position: Vec3,
-    /// Linear RGB irradiance at the light (color multiplied by intensity).
-    pub color: Rgb,
+    /// Linear irradiance at the light (color multiplied by intensity); alpha is unused.
+    pub color: LinearColor,
     /// Distance at which the light's contribution reaches zero; must be positive.
     pub range: f32,
     /// Whether the light casts soft shadows from six depth faces. The TypeScript default is `true`.
@@ -42,8 +39,8 @@ pub struct PointLight {
 pub struct CelestialLight {
     /// Unit direction toward the light, Y-up world space.
     pub direction: Vec3,
-    /// Linear RGB color before intensity.
-    pub color: Rgb,
+    /// Linear color before intensity; alpha is unused.
+    pub color: LinearColor,
     /// Radiance multiplier.
     pub intensity: f32,
     /// Disc angular radius in radians.
@@ -67,8 +64,8 @@ pub struct EnvironmentLighting {
     pub moon: CelestialLight,
     /// The light that illuminates and shadows surfaces (the sun by day, the moon by night).
     pub primary: CelestialLight,
-    /// Linear RGB skylight color.
-    pub skylight_color: Rgb,
+    /// Linear skylight color; alpha is unused.
+    pub skylight_color: LinearColor,
     /// Skylight intensity.
     pub skylight_intensity: f32,
     /// Wind velocity in world units per second.
@@ -89,7 +86,7 @@ impl EnvironmentLighting {
         let light = |light: &CelestialLight| -> ([f32; 4], [f32; 4]) {
             (
                 light.direction.extend(light.intensity).to_array(),
-                [light.color[0], light.color[1], light.color[2], light.angular_radius],
+                light.color.with_alpha(light.angular_radius).to_array(),
             )
         };
         let (sun_direction, sun_color) = light(&self.sun);
@@ -99,7 +96,7 @@ impl EnvironmentLighting {
         packed[1] = sun_color;
         packed[2] = moon_direction;
         packed[3] = moon_color;
-        packed[4] = [self.skylight_color[0], self.skylight_color[1], self.skylight_color[2], self.skylight_intensity];
+        packed[4] = self.skylight_color.with_alpha(self.skylight_intensity).to_array();
         packed[5] = self.wind_velocity.extend(self.elapsed_seconds).to_array();
         packed[6] = self.scattering;
         packed[7] = self.fog_and_clouds;
@@ -171,7 +168,7 @@ pub struct FrameInputs<'a> {
     /// Ambient irradiance; `None` uses 0.3 without an environment and 0 with one.
     pub ambient: Option<f32>,
     /// Linear background color behind the sky and geometry.
-    pub clear_color: Rgba,
+    pub clear_color: LinearColor,
     /// Scene time in seconds (grain animation and diagnostics).
     pub time_seconds: f32,
     /// Opaque triangles (three vertices each), lit like `Shading::Lit` meshes.
@@ -192,7 +189,7 @@ impl Default for FrameInputs<'_> {
             environment: None,
             lights: &[],
             ambient: None,
-            clear_color: [0.0, 0.0, 0.0, 1.0],
+            clear_color: LinearColor::BLACK,
             time_seconds: 0.0,
             opaque_triangles: &[],
             transparent_triangles: &[],
@@ -229,27 +226,5 @@ pub fn sort_transparent_triangles(vertices: &[ColorVertex], backward: Vec3) -> V
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn transparent_triangles_sort_back_to_front() {
-        let triangle = |z: f32| {
-            [
-                ColorVertex { position: [0.0, 0.0, z], color: [1.0; 4] },
-                ColorVertex { position: [1.0, 0.0, z], color: [1.0; 4] },
-                ColorVertex { position: [0.0, 1.0, z], color: [1.0; 4] },
-            ]
-        };
-        let vertices: Vec<ColorVertex> = [triangle(5.0), triangle(-5.0), triangle(0.0)].concat();
-        // Camera on +Z looking toward -Z: the farthest (most negative Z) triangle draws first.
-        let sorted = sort_transparent_triangles(&vertices, Vec3::Z);
-        let order: Vec<f32> = sorted.as_chunks::<3>().0.iter().map(|triangle| triangle[0].position[2]).collect();
-        assert_eq!(order, [-5.0, 0.0, 5.0]);
-    }
-
-    #[test]
-    fn ambient_default_depends_on_environment() {
-        assert_eq!(FrameInputs::default().resolved_ambient(), DEFAULT_AMBIENT_WITHOUT_ENVIRONMENT);
-    }
-}
+#[path = "../tests/unit/frame.rs"]
+mod tests;

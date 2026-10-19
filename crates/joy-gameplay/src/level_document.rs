@@ -3,13 +3,12 @@
 
 //! Versioned `.joylevel` documents and the editable [`LevelDocument`] with undo history.
 //!
-//! Parsing validates the version, a nonblank name, every entity definition, unique entity ids, and the optional
-//! post-processing profile. Serialization writes pretty JSON with two-space indentation, stable key order, and a
-//! trailing newline, preserving the authored document format. Component data is never evaluated.
+//! Parsing validates the version, a nonblank name, every entity definition, and unique entity ids. Serialization writes
+//! pretty JSON with two-space indentation, stable key order, and a trailing newline, preserving the authored document
+//! format. Component data is never evaluated; post-processing lives in entities' `postProcess` components.
 
 use std::collections::VecDeque;
 
-use joy_core::PostProcessingProfile;
 use serde::de::Error as _;
 use serde::{
     Deserialize,
@@ -28,6 +27,9 @@ use super::error::LevelError;
 /// The only supported level format version.
 pub const LEVEL_VERSION: u32 = 1;
 
+/// The retired level-wide post-processing key, rejected with a migration message.
+const RETIRED_POST_PROCESSING_KEY: &str = "postProcessing";
+
 /// Undo transactions a [`LevelDocument`] keeps; older snapshots are discarded first.
 pub const LEVEL_HISTORY_LIMIT: usize = 80;
 
@@ -40,14 +42,12 @@ pub struct LevelData {
     pub name: String,
     /// Entity definitions in authored order; ids are unique.
     pub entities: Vec<EntityDefinition>,
-    /// Optional display profile, validated by `PostProcessingProfile::validate`.
-    pub post_processing: Option<PostProcessingProfile>,
 }
 
 impl LevelData {
     /// An empty level with a name.
     pub fn new(name: impl Into<String>) -> Self {
-        Self { version: LEVEL_VERSION, name: name.into(), entities: Vec::new(), post_processing: None }
+        Self { version: LEVEL_VERSION, name: name.into(), entities: Vec::new() }
     }
 
     /// Validate a parsed JSON level and return an owned copy.
@@ -75,25 +75,21 @@ impl LevelData {
             entities.push(entity);
         }
 
-        // A present key is validated even when null, matching `Object.hasOwn` in the TypeScript engine.
-        let post_processing = match record.get("postProcessing") {
-            None => None,
-            Some(profile) => Some(PostProcessingProfile::validate(profile)?),
-        };
-        Ok(Self { version: LEVEL_VERSION, name, entities, post_processing })
+        // Post-processing moved into `postProcess` volume components; a leftover level-wide profile would silently stop
+        // applying, so it fails with a migration message instead.
+        if record.contains_key(RETIRED_POST_PROCESSING_KEY) {
+            return Err(LevelError::LevelPostProcessingMoved);
+        }
+        Ok(Self { version: LEVEL_VERSION, name, entities })
     }
 
-    /// Serialize in the TypeScript key order: `version`, `name`, `entities`, then `postProcessing` when present.
+    /// Serialize in the format's key order: `version`, `name`, then `entities`.
     pub fn to_json(&self) -> Value {
         let mut record = Map::new();
         record.insert("version".to_owned(), Value::from(self.version));
         record.insert("name".to_owned(), Value::String(self.name.clone()));
         record
             .insert("entities".to_owned(), Value::Array(self.entities.iter().map(EntityDefinition::to_json).collect()));
-        if let Some(profile) = &self.post_processing {
-            let profile = serde_json::to_value(profile).expect("post-processing profiles always serialize to JSON");
-            record.insert("postProcessing".to_owned(), profile);
-        }
         Value::Object(record)
     }
 

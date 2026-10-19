@@ -33,7 +33,7 @@ def main():
     args = parser.parse_args()
     try:
         repository = Repository('joy-engine', args.root)
-        report = Audit(repository, private_repositories=args.private_repo, architecture=True).scan(args.skip_schema_validation)
+        report = Audit(repository, private_repositories=args.private_repo).scan(args.skip_schema_validation)
         if args.json_stdout:
             print(json.dumps(report))
         else:

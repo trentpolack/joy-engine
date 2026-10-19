@@ -310,7 +310,7 @@ impl Procedural {
                 arity(name, values, 2)?;
                 let label = text(&values[0])?;
                 if label.trim().is_empty()
-                    || label.encode_utf16().count() > 64
+                    || label.chars().count() > 64
                     || self.outputs.iter().any(|o| o["name"] == label)
                 {
                     return Err("Output names must be unique, nonempty text of at most 64 characters.".into());

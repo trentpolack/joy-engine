@@ -19,7 +19,7 @@ use super::chunk_support::{
     ChunkSupportOptions,
     ChunkSupportState,
 };
-use joy_core::Vector3;
+use joy_core::math::DVec3;
 
 /// Direction components smaller than this are treated as parallel to a slab in ray tests.
 const PARALLEL_EPSILON: f64 = 1e-9;
@@ -31,9 +31,9 @@ pub struct DestructibleChunkDefinition {
     /// Stable, nonempty id, unique within a structure.
     pub id: String,
     /// Box center in world units.
-    pub center: Vector3,
+    pub center: DVec3,
     /// Full box dimensions in world units; every component positive.
-    pub size: Vector3,
+    pub size: DVec3,
     /// Nonempty material name (presentation looks it up; `frame` and `interior` have built-in chunk tints).
     pub material: String,
     /// Starting hit points; positive.
@@ -44,7 +44,7 @@ pub struct DestructibleChunkDefinition {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RadialDamage {
     /// Sphere center in world units; finite.
-    pub center: Vector3,
+    pub center: DVec3,
     /// Sphere radius in world units; finite and positive.
     pub radius: f64,
     /// Hit points removed from each intersected chunk; finite and positive.
@@ -88,7 +88,7 @@ pub struct ChunkRaycastHit<'a> {
     /// Ray parameter of the entry point: world distance for a unit direction. Zero when the origin is inside.
     pub distance: f64,
     /// World-space entry point, `origin + direction * distance`.
-    pub point: Vector3,
+    pub point: DVec3,
 }
 
 /// Mutable damage state for one chunk.
@@ -152,7 +152,7 @@ impl ChunkStructure {
 
     /// Queue radial damage. Geometry, collision, and diagnostics stay unchanged until [`ChunkStructure::commit`].
     pub fn queue_damage(&mut self, damage: RadialDamage) -> Result<(), DestructionError> {
-        if !damage.center.iter().all(|value| value.is_finite()) {
+        if !damage.center.is_finite() {
             return Err(DestructionError::InvalidDamageCenter);
         }
         let positive = |value: f64| value.is_finite() && value > 0.0;
@@ -276,11 +276,11 @@ impl ChunkStructure {
     /// distance that is not finite and positive.
     pub fn raycast(
         &self,
-        origin: Vector3,
-        direction: Vector3,
+        origin: DVec3,
+        direction: DVec3,
         maximum_distance: f64,
     ) -> Result<Option<ChunkRaycastHit<'_>>, DestructionError> {
-        let finite = origin.iter().chain(&direction).all(|value| value.is_finite());
+        let finite = origin.is_finite() && direction.is_finite();
         if !finite || !maximum_distance.is_finite() || maximum_distance <= 0.0 {
             return Err(DestructionError::InvalidRaycast);
         }
@@ -293,7 +293,7 @@ impl ChunkStructure {
             if distance > maximum_distance || nearest.is_some_and(|hit| distance >= hit.distance) {
                 continue;
             }
-            let point = [0, 1, 2].map(|axis| origin[axis] + (direction[axis] * distance));
+            let point = origin + (direction * distance);
             nearest = Some(ChunkRaycastHit { chunk, distance, point });
         }
         Ok(nearest)
@@ -301,9 +301,9 @@ impl ChunkStructure {
 
     /// Whether an axis-aligned probe (for example a player's collision box) fits at `center` without overlapping any
     /// active chunk. Touching faces do not overlap. Fails for a non-finite center or non-positive half extents.
-    pub fn can_occupy(&self, center: Vector3, half_extents: Vector3) -> Result<bool, DestructionError> {
-        let finite_center = center.iter().all(|value| value.is_finite());
-        let positive_extents = half_extents.iter().all(|value| value.is_finite() && *value > 0.0);
+    pub fn can_occupy(&self, center: DVec3, half_extents: DVec3) -> Result<bool, DestructionError> {
+        let finite_center = center.is_finite();
+        let positive_extents = half_extents.is_finite() && half_extents.cmpgt(DVec3::ZERO).all();
         if !finite_center || !positive_extents {
             return Err(DestructionError::InvalidOccupancyQuery);
         }
@@ -335,8 +335,8 @@ fn validate_definition(definition: &DestructibleChunkDefinition) -> Result<(), D
     if definition.id.is_empty() || definition.material.is_empty() {
         return Err(DestructionError::InvalidChunkIdentity);
     }
-    let finite_center = definition.center.iter().all(|value| value.is_finite());
-    let positive_size = definition.size.iter().all(|value| value.is_finite() && *value > 0.0);
+    let finite_center = definition.center.is_finite();
+    let positive_size = definition.size.is_finite() && definition.size.cmpgt(DVec3::ZERO).all();
     let positive_health = definition.hit_points.is_finite() && definition.hit_points > 0.0;
     if !finite_center || !positive_size || !positive_health {
         return Err(DestructionError::InvalidChunkDimensions);
@@ -345,19 +345,15 @@ fn validate_definition(definition: &DestructibleChunkDefinition) -> Result<(), D
 }
 
 /// Whether a sphere touches a chunk's box (closest-point distance, inclusive).
-fn sphere_intersects_box(center: Vector3, radius: f64, chunk: &DestructibleChunkDefinition) -> bool {
-    let mut distance_squared = 0.0;
-    for (axis, coordinate) in center.iter().enumerate() {
-        let half = chunk.size[axis] / 2.0;
-        let closest = js_max(chunk.center[axis] - half, js_min(*coordinate, chunk.center[axis] + half));
-        let offset = coordinate - closest;
-        distance_squared += offset * offset;
-    }
-    distance_squared <= radius * radius
+fn sphere_intersects_box(center: DVec3, radius: f64, chunk: &DestructibleChunkDefinition) -> bool {
+    let half = chunk.size / 2.0;
+    // Chunk sizes are validated positive, so the box's lower corner never exceeds its upper corner.
+    let closest = center.min(chunk.center + half).max(chunk.center - half);
+    (center - closest).length_squared() <= radius * radius
 }
 
 /// Slab test: the entry parameter of a ray into a chunk's box, or `None` when it misses.
-fn ray_box_distance(origin: Vector3, direction: Vector3, chunk: &DestructibleChunkDefinition) -> Option<f64> {
+fn ray_box_distance(origin: DVec3, direction: DVec3, chunk: &DestructibleChunkDefinition) -> Option<f64> {
     let mut minimum: f64 = 0.0;
     let mut maximum = f64::INFINITY;
     for axis in 0..3 {
@@ -372,8 +368,8 @@ fn ray_box_distance(origin: Vector3, direction: Vector3, chunk: &DestructibleChu
         }
         let first = (lower - origin[axis]) / direction[axis];
         let second = (upper - origin[axis]) / direction[axis];
-        minimum = js_max(minimum, js_min(first, second));
-        maximum = js_min(maximum, js_max(first, second));
+        minimum = minimum.max(first.min(second));
+        maximum = maximum.min(first.max(second));
         if maximum < minimum {
             return None;
         }
@@ -382,28 +378,6 @@ fn ray_box_distance(origin: Vector3, direction: Vector3, chunk: &DestructibleChu
 }
 
 /// Strict overlap of two axis-aligned boxes on every axis.
-fn boxes_overlap(first_center: Vector3, first_half: Vector3, second_center: Vector3, second_half: Vector3) -> bool {
-    (0..3).all(|axis| (first_center[axis] - second_center[axis]).abs() < first_half[axis] + second_half[axis])
-}
-
-/// JavaScript `Math.max` for two values: NaN propagates and +0 wins over -0.
-fn js_max(first: f64, second: f64) -> f64 {
-    if first.is_nan() || second.is_nan() {
-        return f64::NAN;
-    }
-    if first == second {
-        return if first.is_sign_positive() { first } else { second };
-    }
-    if first > second { first } else { second }
-}
-
-/// JavaScript `Math.min` for two values: NaN propagates and -0 wins over +0.
-fn js_min(first: f64, second: f64) -> f64 {
-    if first.is_nan() || second.is_nan() {
-        return f64::NAN;
-    }
-    if first == second {
-        return if first.is_sign_negative() { first } else { second };
-    }
-    if first < second { first } else { second }
+fn boxes_overlap(first_center: DVec3, first_half: DVec3, second_center: DVec3, second_half: DVec3) -> bool {
+    (first_center - second_center).abs().cmplt(first_half + second_half).all()
 }

@@ -87,8 +87,8 @@ pub struct PropLibrary {
 
 impl PropLibrary {
     /// Evaluate and bake every prop. Fails if a bundled FORM source or its geometry is invalid.
-    pub fn load() -> GameResult<Self> {
-        let props = PROPS.iter().map(build_prop).collect::<GameResult<Vec<Prop>>>()?;
+    pub fn load() -> AppResult<Self> {
+        let props = PROPS.iter().map(build_prop).collect::<AppResult<Vec<Prop>>>()?;
         Ok(Self { props })
     }
 
@@ -114,7 +114,7 @@ impl PropLibrary {
 }
 
 /// Evaluate one prop's FORM source and build its colliders.
-fn build_prop(definition: &PropDefinition) -> GameResult<Prop> {
+fn build_prop(definition: &PropDefinition) -> AppResult<Prop> {
     let geometry = CompiledScript::parse(definition.source)?.evaluate(&Value::Object(Map::new()), None)?;
     let asset = form_mesh_asset(&geometry, Shading::Pbr)?;
 

@@ -16,14 +16,14 @@
 //!   Entities spawned by behaviors through `SimulationContext::request_spawn` bypass physics setup, as do entities
 //!   spawned directly on `EntityWorld`.
 
-use glam::Vec3;
+use joy_core::math::Vec3;
 use joy_core::{
     JsonRecord,
     PrimitiveShape,
 };
 use serde_json::Value;
 
-use super::components::component_type;
+use super::component_vocabulary::component_type;
 use super::entity::EntityId;
 use super::entity_definition::{
     EntityDefinition,

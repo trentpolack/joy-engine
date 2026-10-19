@@ -10,23 +10,20 @@
 //!
 //! [`add_circle`]: crate::add_circle
 
-use glam::Vec2;
+use joy_core::math::Vec2;
 
 use crate::materials::{
     DEPTH_FORMAT,
     uniform_entry,
 };
+use crate::post_process::PostProcessSettings;
 use crate::postprocessor::PostProcessor;
 use crate::{
     ColorVertex,
     GpuContext,
     RenderError,
 };
-use joy_core::post_processing::ToneMapper;
-use joy_core::{
-    PostProcessingConfig,
-    Rgba,
-};
+use joy_core::LinearColor;
 
 /// Shader markers the TypeScript engine expands so geometry shaders leave display processing to the post chain.
 const POST_UNIFORMS_MARKER: &str = "// JOY_POST_UNIFORMS_MACRO";
@@ -50,8 +47,8 @@ pub struct TriangleRendererOptions {
     pub shader: String,
     /// Size in bytes of the uniform block; a positive multiple of 16.
     pub uniform_size: usize,
-    /// Display processing; `None` presents scene color unchanged (no tone mapping or effects).
-    pub post_processing: Option<PostProcessingConfig>,
+    /// Post-processing; `None` presents scene color unchanged ([`PostProcessSettings::NEUTRAL`]).
+    pub post_process: Option<PostProcessSettings>,
 }
 
 /// Borrowed inputs for one frame. Geometry is world space in the caller's units; the caller's shader projects it.
@@ -64,8 +61,8 @@ pub struct TriangleFrame<'a> {
     pub transparent: &'a [ColorVertex],
     /// Uniform block bytes; exactly `uniform_size` long.
     pub uniforms: &'a [u8],
-    /// Linear RGBA background.
-    pub clear_color: Rgba,
+    /// Linear background color.
+    pub clear_color: LinearColor,
     /// Animation time in seconds (film grain).
     pub time_seconds: f32,
 }
@@ -142,8 +139,8 @@ impl TriangleRenderer {
             layout: &layout,
             entries: &[wgpu::BindGroupEntry { binding: 0, resource: uniform_buffer.as_entire_binding() }],
         });
-        let post_config = options.post_processing.unwrap_or_else(neutral_post_processing);
-        let post = PostProcessor::new(device, scene_format, output_format, post_config);
+        let settings = options.post_process.unwrap_or(PostProcessSettings::NEUTRAL);
+        let post = PostProcessor::new(device, scene_format, output_format, settings);
 
         Ok(Self {
             opaque_pipeline,
@@ -178,9 +175,9 @@ impl TriangleRenderer {
         self.logical_size
     }
 
-    /// Replace display settings.
-    pub fn set_post_processing(&mut self, config: PostProcessingConfig) {
-        self.post.set_config(config);
+    /// Replace post-processing settings; cheap enough to call every frame.
+    pub fn set_post_process(&mut self, settings: PostProcessSettings) {
+        self.post.set_settings(settings);
     }
 
     /// Record one frame into `encoder`, ending in `output`. Nothing is submitted.
@@ -218,7 +215,7 @@ impl TriangleRenderer {
         }
 
         {
-            let [red, green, blue, alpha] = frame.clear_color.map(f64::from);
+            let [red, green, blue, alpha] = frame.clear_color.to_array().map(f64::from);
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("triangles"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -291,20 +288,6 @@ pub(crate) fn expand_post_markers(source: &str) -> String {
         .replace(POST_APPLY_MARKER, "return sourceColor;")
 }
 
-/// Settings that present scene color unchanged.
-fn neutral_post_processing() -> PostProcessingConfig {
-    PostProcessingConfig {
-        tone_mapper: ToneMapper::None,
-        bloom_strength: 0.0,
-        blur_radius: 0.0,
-        vignette_blur: 0.0,
-        vignette_strength: 0.0,
-        film_grain: 0.0,
-        antialias_strength: 0.0,
-        ..PostProcessingConfig::default()
-    }
-}
-
 /// One of the two triangle pipelines: opaque (depth writes) or transparent (blended, depth tested only).
 fn triangle_pipeline(
     device: &wgpu::Device,
@@ -349,15 +332,5 @@ fn triangle_pipeline(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn post_markers_expand_like_the_typescript_engine() {
-        let source = "struct U {\n  a: vec4f,\n  // JOY_POST_UNIFORMS_MACRO\n};\n// JOY_POST_DECLARATIONS_MACRO\nfn f() -> vec4f {\n  let sourceColor = vec4f(1.0);\n  // JOY_POST_APPLY_MACRO\n}";
-        let expanded = expand_post_markers(source);
-        assert!(!expanded.contains("JOY_POST"));
-        assert!(expanded.contains("return sourceColor;"));
-        assert_eq!(expand_post_markers("plain"), "plain");
-    }
-}
+#[path = "../tests/unit/triangle_renderer.rs"]
+mod tests;

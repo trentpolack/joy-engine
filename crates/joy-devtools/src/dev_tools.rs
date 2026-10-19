@@ -35,7 +35,7 @@ pub struct DevTools {
     intervals: Vec<f32>,
     cursor: usize,
 
-    // Game-published key/value diagnostics, in insertion order.
+    // App-published key/value diagnostics, in insertion order.
     values: IndexMap<String, String>,
 }
 

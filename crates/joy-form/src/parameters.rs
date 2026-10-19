@@ -82,8 +82,11 @@ pub fn create(
     let max = bound("max", 2, if kind == "color" { 1.0 } else { f64::NAN })?;
     let step = bound("step", 3, if kind == "color" { 0.01 } else { f64::NAN })?;
     let defaults = components(default)?;
-    if kind == "color" && (min < 0.0 || max > 1.0 || defaults.iter().any(|v| *v < 0.0 || *v > 1.0)) {
-        return Err("Color parameters require components and bounds in 0–1.".into());
+    // Color RGB may exceed one for HDR glow when the author raises `max`; alpha stays opacity in 0–1.
+    if kind == "color"
+        && (min < 0.0 || defaults.iter().any(|v| *v < 0.0) || defaults.get(3).is_some_and(|alpha| *alpha > 1.0))
+    {
+        return Err("Color parameters require nonnegative components and bounds, with alpha in 0–1.".into());
     }
     if min > max || step <= 0.0 || defaults.iter().any(|v| *v < min || *v > max) {
         return Err("Parameter requires min ≤ default ≤ max and a positive step.".into());
@@ -102,7 +105,14 @@ pub fn create(
     if matches!(default, Value::Array(_)) != matches!(supplied, Value::Array(_)) || components.len() != defaults.len() {
         return Err("Parameter override must match the declared components.".into());
     }
-    let clamped: Vec<f64> = components.into_iter().map(|v| v.max(min).min(max)).collect();
+    let clamped: Vec<f64> = components
+        .into_iter()
+        .enumerate()
+        .map(|(index, v)| {
+            let upper = if kind == "color" && index == 3 { max.min(1.0) } else { max };
+            v.max(min).min(upper)
+        })
+        .collect();
     let value = if matches!(default, Value::Array(_)) { Value::Array(clamped) } else { Value::Number(clamped[0]) };
     Ok((
         json!({"name":name,"type":kind,"min":min,"max":max,"step":step,"defaultValue":default.json(),"value":value.json()}),

@@ -678,13 +678,5 @@ fn transform_bytes(scale: [f32; 2]) -> [u8; 16] {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn texture_scale_corrects_aspect_like_luma() {
-        assert_eq!(texture_scale((1920, 1080), (960, 540)), [1.0, 1.0]);
-        assert_eq!(texture_scale((100, 100), (200, 100)), [1.0, 2.0]);
-        assert_eq!(texture_scale((200, 100), (100, 100)), [2.0, 1.0]);
-    }
-}
+#[path = "../../tests/unit/scene_effects/chain.rs"]
+mod tests;

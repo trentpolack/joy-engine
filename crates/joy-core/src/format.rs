@@ -1,30 +1,27 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Number formatting shared by error messages and JSON writers, preserving JavaScript-compatible number text.
+//! Number formatting shared by error messages, interface text, and JSON writers.
+//!
+//! [`format_number`] writes the shortest decimal that round-trips, without a trailing `.0` on integers and with an
+//! exponent only for very large or very small magnitudes, so authored documents and messages stay compact and stable.
 
 use serde_json::Value;
 
-/// Largest magnitude JavaScript represents as an exact integer (`Number.MAX_SAFE_INTEGER`).
+/// Largest integer magnitude an `f64` represents exactly together with all its neighbors (2^53 - 1).
 const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 
-/// Smallest magnitude JavaScript prints without an exponent.
+/// Smallest magnitude written without an exponent.
 const MIN_FIXED_MAGNITUDE: f64 = 1e-6;
 
-/// Magnitude from which JavaScript prints an exponent.
+/// Magnitude from which numbers are written with an exponent.
 const MIN_EXPONENT_MAGNITUDE: f64 = 1e21;
 
-/// Format a range bound the way JavaScript prints numbers (`Infinity`, `-Infinity`, `5e-324`, `0.001`).
-pub fn format_bound(value: f64) -> String {
-    format_js_number(value)
-}
-
-/// Format a number exactly like JavaScript's `String(value)`.
+/// Format a number as the shortest decimal that round-trips (`2`, `0.1`, `1.5e-7`, `1e+21`).
 ///
-/// Both languages print the shortest decimal that round trips; JavaScript additionally switches to exponent notation
-/// (with an explicit `+` for positive exponents) below `1e-6` and from `1e21`, prints `-0` as `0`, and spells the
-/// non-finite values `NaN`, `Infinity`, and `-Infinity`.
-pub fn format_js_number(value: f64) -> String {
+/// Magnitudes below `1e-6` and from `1e21` use exponent notation (with an explicit `+` for positive exponents),
+/// negative zero is written `0`, and the non-finite values are spelled `NaN`, `Infinity`, and `-Infinity`.
+pub fn format_number(value: f64) -> String {
     if value.is_nan() {
         return "NaN".to_owned();
     }
@@ -49,10 +46,10 @@ pub fn format_js_number(value: f64) -> String {
     format!("{value}")
 }
 
-/// Convert a number to the JSON value `JSON.stringify` would write.
+/// Convert a number to the JSON value authored documents store.
 ///
-/// Integral values in JavaScript's safe range become JSON integers (`1`, never `1.0`, and `-0` becomes `0`); other
-/// finite values keep their shortest round-trip form; non-finite values become `null`, as in JavaScript.
+/// Integral values within `±(2^53 - 1)` become JSON integers (`1`, never `1.0`, and `-0` becomes `0`); other finite
+/// values keep their shortest round-trip form; non-finite values, which JSON cannot represent, become `null`.
 pub fn json_number(value: f64) -> Value {
     if !value.is_finite() {
         return Value::Null;
@@ -65,20 +62,5 @@ pub fn json_number(value: f64) -> Value {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn numbers_print_like_javascript() {
-        assert_eq!(format_js_number(1.0), "1");
-        assert_eq!(format_js_number(-0.0), "0");
-        assert_eq!(format_js_number(0.000001), "0.000001");
-        assert_eq!(format_js_number(1.5e-7), "1.5e-7");
-        assert_eq!(format_js_number(1e21), "1e+21");
-        assert_eq!(format_js_number(std::f64::consts::FRAC_PI_2), "1.5707963267948966");
-        assert_eq!(format_js_number(f64::NAN), "NaN");
-        assert_eq!(json_number(2.0).to_string(), "2");
-        assert_eq!(json_number(0.25).to_string(), "0.25");
-        assert_eq!(json_number(f64::INFINITY), Value::Null);
-    }
-}
+#[path = "../tests/unit/format.rs"]
+mod tests;

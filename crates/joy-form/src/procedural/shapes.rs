@@ -14,6 +14,7 @@ use crate::{
     math::hypot,
     value::integer_range,
 };
+use joy_core::math::deterministic;
 use serde_json::{
     Value as Json,
     json,
@@ -37,7 +38,10 @@ pub fn revolve(store: &mut Store, profile: &Json, segments: f64) -> Result<Json,
             let mut ring = Vec::new();
             for side in 0..segments {
                 let angle = side as f64 / segments as f64 * std::f64::consts::PI * 2.0;
-                ring.push(store.add_point(&mut result, &[angle.cos() * radius, height, angle.sin() * radius])?);
+                ring.push(store.add_point(
+                    &mut result,
+                    &[deterministic::cos(angle) * radius, height, deterministic::sin(angle) * radius],
+                )?);
             }
             rings.push(ring);
         }
@@ -75,7 +79,11 @@ pub fn tube(store: &mut Store, path: &Json, radius: f64, sides: f64) -> Result<J
         for side in 0..sides {
             let angle = side as f64 / sides as f64 * std::f64::consts::PI * 2.0;
             let position = (0..3)
-                .map(|axis| points[row][axis] + radius * (frame[axis] * angle.cos() + binormal[axis] * angle.sin()))
+                .map(|axis| {
+                    points[row][axis]
+                        + radius
+                            * (frame[axis] * deterministic::cos(angle) + binormal[axis] * deterministic::sin(angle))
+                })
                 .collect::<Vec<_>>();
             ring.push(store.add_point(&mut result, &position)?);
         }

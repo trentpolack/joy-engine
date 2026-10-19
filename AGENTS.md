@@ -62,11 +62,12 @@ Keep the unit suite focused on core behavior and costly regressions: document an
 Do not add tests solely for coverage counts, trivial helpers, fixed tuning values, visual styling, source-text patterns, or implementation details already exercised through behavior. Review appearance and game feel with the existing browser checks and captures. Preserve regression cases for data loss, resource leaks, runaway work, and compatibility failures.
 
 ## Workspace structure
-- `crates/`: the engine's system crates (`joy-core`, `joy-environment`, `joy-physics`, `joy-gameplay`, `joy-form`, `joy-fx`, `joy-dcc-gltf`, `joy-project`, `joy-renderer`, `joy-scene`, `joy-app`, `joy-input`, `joy-audio`, `joy-storage`, `joy-ui`, `joy-devtools`, and `joy-authoring`), each with its own tests and fixtures; `architecture/layers.json` assigns each crate a layer.
+- `crates/`: the engine's system crates (`joy-core`, `joy-environment`, `joy-physics`, `joy-gameplay`, `joy-form`, `joy-fx`, `joy-dcc-gltf`, `joy-project`, `joy-renderer`, `joy-scene`, `joy-app`, `joy-input`, `joy-audio`, `joy-storage`, `joy-ui`, `joy-devtools`, and `joy-authoring`), each with its own tests and fixtures; each crate names its architecture layer in its `Cargo.toml` (`[package.metadata.joy]`).
 - `src/`, `schemas/`, `assets/`: the `joy-engine` facade package (public entry points are listed in [README.md](README.md)), which re-exports the system crates under their module names, plus shared schemas and assets.
-- `test/`, `scripts/`, `docs/`: the engine's unit suite, tooling, guides and API documentation sources.
-- `editor/`: Joy Editor (`joy-editor`), a separate Rust package with npm build metadata; FORM LAB and PARTICLE LAB live in `editor/tools/`.
-- `Cargo.toml`, `src/**/*.rs`, `test/rust/`: the engine workspace, the `joy-engine` facade crate, and its integration tests. `joy-renderer` is the only renderer; tools and FORM content draw through it (by way of `joy-scene`) rather than owning renderers.
+- `tests/`, `scripts/`, `docs/`: the facade's tests and the tooling tests, tooling, guides and API documentation sources. Every package keeps its tests in its own `tests/` folder (`integration/`, `unit/`, `fixtures/`, and `tooling/`); see the [Rust coding standards](docs/rust-coding-standards.md#tests).
+- `editor/`: Joy Editor (`joy-editor`), a separate Rust package with npm build metadata.
+- `tools/`: FORM LAB (`form-lab`) and PARTICLE LAB (`particle-lab`), standalone tool packages that Joy Editor hosts as tabs.
+- `Cargo.toml`, `src/**/*.rs`, `tests/integration/`: the engine workspace, the `joy-engine` facade crate, and its integration tests. `joy-renderer` is the only renderer; tools and FORM content draw through it (by way of `joy-scene`) rather than owning renderers.
 - `examples/*`: engine feature demonstrations. A hosting workspace can publish examples that opt in with `gameSite.category: "example"`; examples remain independent of games and the host.
 
 The engine package never imports the editor, tools or examples. The editor depends on the engine crate and hosts the lab crates. Tests, fixtures and tooling live inside the owning package. Nothing in this repository may depend on a particular game; game-specific fixtures belong in the consuming repository.

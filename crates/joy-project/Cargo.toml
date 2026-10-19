@@ -15,12 +15,6 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 publish = false
-# Integration tests are one binary listed below.
-autotests = false
-
-[[test]]
-name = "joy-project"
-path = "test/rust/main.rs"
 
 [dependencies]
 serde.workspace = true
@@ -30,6 +24,10 @@ thiserror.workspace = true
 
 [dev-dependencies]
 joy-test-support.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "content"
 
 [lints]
 workspace = true

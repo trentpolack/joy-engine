@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use glam::Mat4;
+use joy_core::math::Mat4;
 
 use crate::scene_effects::chain::{
     ChainResources,
@@ -268,7 +268,7 @@ impl SceneEffectsRuntime {
             uniforms.insert(
                 "screenSpaceOutline",
                 vec![
-                    ("color", outlines.color.to_vec()),
+                    ("color", outlines.color.to_array().to_vec()),
                     ("thickness", scalar(outlines.thickness)),
                     ("depthThreshold", scalar(outlines.depth_threshold)),
                     ("normalThreshold", scalar(outlines.normal_threshold)),
@@ -279,7 +279,7 @@ impl SceneEffectsRuntime {
             uniforms.insert(
                 "volumetricFog",
                 vec![
-                    ("fogColor", fog.fog_color.to_vec()),
+                    ("fogColor", fog.fog_color.to_array().to_vec()),
                     ("density", scalar(fog.density)),
                     ("heightFalloff", scalar(fog.height_falloff)),
                     ("scattering", scalar(fog.scattering)),
@@ -295,7 +295,7 @@ impl SceneEffectsRuntime {
                 ));
             };
             let mut trace = vec![
-                ("fogColor", clustered.fog_color.to_vec()),
+                ("fogColor", clustered.fog_color.rgb_array().to_vec()),
                 ("density", scalar(clustered.density)),
                 ("heightFalloff", scalar(clustered.height_falloff)),
                 ("fogHeight", scalar(clustered.fog_height)),

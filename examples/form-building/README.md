@@ -16,6 +16,6 @@ The native command runs the Cargo example. Browser output lives in this workspac
 Open the supplied `.formlab` recipes in FORM LAB to edit parameters, materials, and mesh resources. Save editable recipe writes source/input state; Bake mesh JSON writes evaluated geometry. Browser actions download; native actions write their named output files. GLB exports are baked interchange and do not preserve procedural source. Baked mode loads the supplied mesh without evaluating FORM.
 
 ## Validation and Limits
-`test/rust/example_form_building.rs` covers presets, failure isolation, baked round trips, tool documents through `FormAssetLibrary`, and headless renders. Browser captures provide startup/image evidence. CPU frame encoding is not GPU execution time.
+`tests/integration/example_form_building.rs` covers presets, failure isolation, baked round trips, tool documents through `FormAssetLibrary`, and headless renders. Browser captures provide startup/image evidence. CPU frame encoding is not GPU execution time.
 
 The example is not a DCC bridge, node graph, automatic collision/LOD generator, or runtime fracture system. FORM remains the source of geometry, and the host remains its consumer.

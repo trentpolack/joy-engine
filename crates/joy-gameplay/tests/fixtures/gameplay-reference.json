@@ -1,0 +1,1410 @@
+{
+ "builtIns": [
+  {
+   "type": "physics",
+   "label": "Physics",
+   "description": "Creates a rigid body. Mass 0 is static; colliders are authored separately from render meshes.",
+   "category": "Physics",
+   "fields": [
+    {
+     "name": "shape",
+     "kind": "choice",
+     "choices": [
+      "box",
+      "sphere",
+      "plane"
+     ],
+     "required": true
+    },
+    {
+     "name": "mass",
+     "kind": "number",
+     "unit": "kg",
+     "min": 0,
+     "step": 1,
+     "default": 0,
+     "description": "0 makes the body static; planes must be static."
+    },
+    {
+     "name": "halfExtents",
+     "kind": "vector3",
+     "label": "half extents",
+     "unit": "m",
+     "min": 0,
+     "minExclusive": true,
+     "step": 0.25,
+     "default": [
+      0.5,
+      0.5,
+      0.5
+     ],
+     "when": {
+      "field": "shape",
+      "equals": [
+       "box"
+      ]
+     }
+    },
+    {
+     "name": "radius",
+     "kind": "number",
+     "unit": "m",
+     "min": 0,
+     "minExclusive": true,
+     "step": 0.25,
+     "default": 0.5,
+     "when": {
+      "field": "shape",
+      "equals": [
+       "sphere"
+      ]
+     },
+     "description": "Spheres require uniform entity scale."
+    },
+    {
+     "name": "friction",
+     "kind": "number",
+     "min": 0,
+     "step": 0.05,
+     "default": 0.5
+    },
+    {
+     "name": "restitution",
+     "kind": "number",
+     "min": 0,
+     "max": 1,
+     "step": 0.05,
+     "default": 0
+    },
+    {
+     "name": "linearDamping",
+     "kind": "number",
+     "label": "linear damping",
+     "min": 0,
+     "max": 1,
+     "step": 0.01,
+     "default": 0.01
+    },
+    {
+     "name": "angularDamping",
+     "kind": "number",
+     "label": "angular damping",
+     "min": 0,
+     "max": 1,
+     "step": 0.01,
+     "default": 0.1
+    }
+   ],
+   "presets": [
+    {
+     "id": "physics.box",
+     "label": "Box Collider",
+     "data": {
+      "shape": "box",
+      "mass": 0,
+      "halfExtents": [
+       0.5,
+       0.5,
+       0.5
+      ]
+     }
+    },
+    {
+     "id": "physics.sphere",
+     "label": "Sphere Collider",
+     "data": {
+      "shape": "sphere",
+      "mass": 0,
+      "radius": 0.5
+     }
+    }
+   ]
+  },
+  {
+   "type": "vehicle",
+   "label": "Vehicle",
+   "description": "Raycast suspension and drive on the physics body. Requires uniform entity scale.",
+   "category": "Physics",
+   "requires": [
+    "physics"
+   ],
+   "fields": [
+    {
+     "name": "wheels",
+     "kind": "list",
+     "required": true,
+     "items": [
+      {
+       "name": "position",
+       "kind": "vector3",
+       "unit": "m",
+       "step": 0.05,
+       "required": true
+      },
+      {
+       "name": "radius",
+       "kind": "number",
+       "unit": "m",
+       "min": 0,
+       "minExclusive": true,
+       "step": 0.05,
+       "default": 0.35
+      },
+      {
+       "name": "steering",
+       "kind": "boolean",
+       "default": false
+      },
+      {
+       "name": "driven",
+       "kind": "boolean",
+       "default": false
+      },
+      {
+       "name": "brake",
+       "kind": "boolean",
+       "default": false
+      },
+      {
+       "name": "suspensionRestLength",
+       "kind": "number",
+       "label": "suspension rest length",
+       "unit": "m",
+       "min": 0,
+       "step": 0.05,
+       "default": 0.3
+      },
+      {
+       "name": "suspensionStiffness",
+       "kind": "number",
+       "label": "suspension stiffness",
+       "min": 0,
+       "step": 1,
+       "default": 30
+      },
+      {
+       "name": "dampingCompression",
+       "kind": "number",
+       "label": "damping compression",
+       "min": 0,
+       "step": 0.1,
+       "default": 4.4
+      },
+      {
+       "name": "dampingRelaxation",
+       "kind": "number",
+       "label": "damping relaxation",
+       "min": 0,
+       "step": 0.1,
+       "default": 2.3
+      },
+      {
+       "name": "maxSuspensionTravel",
+       "kind": "number",
+       "label": "max suspension travel",
+       "unit": "m",
+       "min": 0,
+       "step": 0.05,
+       "default": 0.3
+      },
+      {
+       "name": "maxSuspensionForce",
+       "kind": "number",
+       "label": "max suspension force",
+       "unit": "N",
+       "min": 0,
+       "step": 100,
+       "default": 100000
+      },
+      {
+       "name": "frictionSlip",
+       "kind": "number",
+       "label": "friction slip",
+       "min": 0,
+       "step": 0.1,
+       "description": "Defaults to the vehicle friction slip."
+      },
+      {
+       "name": "rollInfluence",
+       "kind": "number",
+       "label": "roll influence",
+       "min": 0,
+       "max": 1,
+       "step": 0.01,
+       "default": 0.01
+      }
+     ]
+    },
+    {
+     "name": "engineForce",
+     "kind": "number",
+     "label": "engine force",
+     "unit": "N",
+     "min": 0,
+     "step": 10,
+     "default": 400
+    },
+    {
+     "name": "maxSteer",
+     "kind": "number",
+     "label": "max steer",
+     "unit": "rad",
+     "min": 0,
+     "max": 1.5707963267948966,
+     "step": 0.05,
+     "default": 0.45
+    },
+    {
+     "name": "brakeForce",
+     "kind": "number",
+     "label": "brake force",
+     "unit": "N",
+     "min": 0,
+     "step": 1,
+     "default": 20
+    },
+    {
+     "name": "frictionSlip",
+     "kind": "number",
+     "label": "friction slip",
+     "min": 0,
+     "step": 0.1,
+     "default": 5
+    }
+   ],
+   "presets": [
+    {
+     "id": "vehicle.four-wheel",
+     "label": "Four-Wheel Vehicle",
+     "data": {
+      "wheels": [
+       {
+        "position": [
+         -0.75,
+         -0.05,
+         0.75
+        ],
+        "steering": true,
+        "brake": true
+       },
+       {
+        "position": [
+         0.75,
+         -0.05,
+         0.75
+        ],
+        "steering": true,
+        "brake": true
+       },
+       {
+        "position": [
+         -0.75,
+         -0.05,
+         -0.75
+        ],
+        "driven": true,
+        "brake": true
+       },
+       {
+        "position": [
+         0.75,
+         -0.05,
+         -0.75
+        ],
+        "driven": true,
+        "brake": true
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ],
+ "validationCases": [
+  {
+   "type": "physics",
+   "data": {
+    "shape": "box",
+    "radius": -1
+   },
+   "issues": []
+  },
+  {
+   "type": "physics",
+   "data": {
+    "shape": "sphere",
+    "radius": -1
+   },
+   "issues": [
+    {
+     "component": "physics",
+     "field": "radius",
+     "message": "Radius must be greater than 0."
+    }
+   ]
+  },
+  {
+   "type": "physics",
+   "data": {
+    "mass": 1
+   },
+   "issues": [
+    {
+     "component": "physics",
+     "field": "shape",
+     "message": "Shape is required."
+    }
+   ]
+  },
+  {
+   "type": "physics",
+   "data": {
+    "shape": "cone",
+    "mass": -1,
+    "friction": null,
+    "restitution": 1.5,
+    "linearDamping": 2,
+    "angularDamping": -0.1
+   },
+   "issues": [
+    {
+     "component": "physics",
+     "field": "shape",
+     "message": "Shape must be one of box, sphere, plane."
+    },
+    {
+     "component": "physics",
+     "field": "mass",
+     "message": "Mass must be at least 0."
+    },
+    {
+     "component": "physics",
+     "field": "friction",
+     "message": "Friction must be a finite number."
+    },
+    {
+     "component": "physics",
+     "field": "restitution",
+     "message": "Restitution must be at most 1."
+    },
+    {
+     "component": "physics",
+     "field": "linearDamping",
+     "message": "Linear damping must be at most 1."
+    },
+    {
+     "component": "physics",
+     "field": "angularDamping",
+     "message": "Angular damping must be at least 0."
+    }
+   ]
+  },
+  {
+   "type": "physics",
+   "data": {
+    "shape": "box",
+    "halfExtents": [
+     0.5,
+     0,
+     0.5
+    ]
+   },
+   "issues": [
+    {
+     "component": "physics",
+     "field": "halfExtents",
+     "message": "Half extents values must be greater than 0."
+    }
+   ]
+  },
+  {
+   "type": "physics",
+   "data": {
+    "shape": "box",
+    "halfExtents": [
+     0.5,
+     "a",
+     0.5
+    ]
+   },
+   "issues": [
+    {
+     "component": "physics",
+     "field": "halfExtents",
+     "message": "Half extents must contain three finite numbers."
+    }
+   ]
+  },
+  {
+   "type": "vehicle",
+   "data": {
+    "wheels": [
+     {
+      "position": [
+       0,
+       0,
+       1
+      ]
+     },
+     {
+      "position": [
+       0,
+       0
+      ],
+      "radius": 0
+     },
+     7
+    ]
+   },
+   "issues": [
+    {
+     "component": "vehicle",
+     "field": "wheels.1.position",
+     "message": "Position must contain three finite numbers."
+    },
+    {
+     "component": "vehicle",
+     "field": "wheels.1.radius",
+     "message": "Radius must be greater than 0."
+    },
+    {
+     "component": "vehicle",
+     "field": "wheels.2",
+     "message": "Wheels item 3 must be a record."
+    }
+   ]
+  },
+  {
+   "type": "vehicle",
+   "data": {
+    "wheels": "four",
+    "engineForce": -1,
+    "maxSteer": 2,
+    "brakeForce": 1.5,
+    "frictionSlip": "x"
+   },
+   "issues": [
+    {
+     "component": "vehicle",
+     "field": "wheels",
+     "message": "Wheels must be a list."
+    },
+    {
+     "component": "vehicle",
+     "field": "engineForce",
+     "message": "Engine force must be at least 0."
+    },
+    {
+     "component": "vehicle",
+     "field": "maxSteer",
+     "message": "Max steer must be at most 1.5707963267948966."
+    },
+    {
+     "component": "vehicle",
+     "field": "frictionSlip",
+     "message": "Friction slip must be a finite number."
+    }
+   ]
+  },
+  {
+   "type": "vehicle",
+   "data": {
+    "wheels": [
+     {
+      "position": [
+       1,
+       0,
+       1
+      ],
+      "steering": "yes",
+      "rollInfluence": 1.5,
+      "maxSuspensionForce": -100,
+      "frictionSlip": -1
+     }
+    ]
+   },
+   "issues": [
+    {
+     "component": "vehicle",
+     "field": "wheels.0.steering",
+     "message": "Steering must be true or false."
+    },
+    {
+     "component": "vehicle",
+     "field": "wheels.0.maxSuspensionForce",
+     "message": "Max suspension force must be at least 0."
+    },
+    {
+     "component": "vehicle",
+     "field": "wheels.0.frictionSlip",
+     "message": "Friction slip must be at least 0."
+    },
+    {
+     "component": "vehicle",
+     "field": "wheels.0.rollInfluence",
+     "message": "Roll influence must be at most 1."
+    }
+   ]
+  },
+  {
+   "type": "vehicle",
+   "data": {},
+   "issues": [
+    {
+     "component": "vehicle",
+     "field": "wheels",
+     "message": "Wheels is required."
+    }
+   ]
+  },
+  {
+   "type": "gameplay",
+   "data": {
+    "anything": true
+   },
+   "issues": []
+  }
+ ],
+ "entityCases": [
+  {
+   "entity": {
+    "id": "loose",
+    "name": "loose",
+    "type": "entity",
+    "tags": [],
+    "transform": {
+     "position": [
+      0,
+      1,
+      0
+     ],
+     "rotation": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ]
+    },
+    "components": {
+     "vehicle": {
+      "wheels": []
+     },
+     "gameplay": {
+      "anything": [
+       1,
+       "two"
+      ]
+     }
+    }
+   },
+   "issues": [
+    {
+     "component": "vehicle",
+     "field": null,
+     "message": "Vehicle requires a Physics component."
+    }
+   ]
+  },
+  {
+   "entity": {
+    "id": "custom",
+    "name": "custom",
+    "type": "entity",
+    "tags": [],
+    "transform": {
+     "position": [
+      0,
+      1,
+      0
+     ],
+     "rotation": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ]
+    },
+    "components": {
+     "spawner": {
+      "interval": 2
+     },
+     "vehicle": {
+      "wheels": [
+       {}
+      ]
+     }
+    }
+   },
+   "issues": [
+    {
+     "component": "vehicle",
+     "field": "wheels.0.position",
+     "message": "Position is required."
+    },
+    {
+     "component": "vehicle",
+     "field": null,
+     "message": "Vehicle requires a Physics component."
+    }
+   ]
+  }
+ ],
+ "presets": [
+  {
+   "id": "physics.box",
+   "created": {
+    "type": "physics",
+    "data": {
+     "shape": "box",
+     "mass": 0,
+     "halfExtents": [
+      0.5,
+      0.5,
+      0.5
+     ]
+    }
+   }
+  },
+  {
+   "id": "physics.sphere",
+   "created": {
+    "type": "physics",
+    "data": {
+     "shape": "sphere",
+     "mass": 0,
+     "radius": 0.5
+    }
+   }
+  },
+  {
+   "id": "vehicle.four-wheel",
+   "created": {
+    "type": "vehicle",
+    "data": {
+     "wheels": [
+      {
+       "position": [
+        -0.75,
+        -0.05,
+        0.75
+       ],
+       "steering": true,
+       "brake": true
+      },
+      {
+       "position": [
+        0.75,
+        -0.05,
+        0.75
+       ],
+       "steering": true,
+       "brake": true
+      },
+      {
+       "position": [
+        -0.75,
+        -0.05,
+        -0.75
+       ],
+       "driven": true,
+       "brake": true
+      },
+      {
+       "position": [
+        0.75,
+        -0.05,
+        -0.75
+       ],
+       "driven": true,
+       "brake": true
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "fieldCases": [
+  {
+   "type": "vehicle",
+   "path": [
+    "wheels",
+    "3",
+    "radius"
+   ],
+   "field": "radius",
+   "unit": "m"
+  },
+  {
+   "type": "vehicle",
+   "path": [
+    "wheels"
+   ],
+   "field": "wheels",
+   "unit": null
+  },
+  {
+   "type": "vehicle",
+   "path": [
+    "wheels",
+    "3"
+   ],
+   "field": null,
+   "unit": null
+  },
+  {
+   "type": "vehicle",
+   "path": [
+    "wheels",
+    "x",
+    "position"
+   ],
+   "field": "position",
+   "unit": "m"
+  },
+  {
+   "type": "physics",
+   "path": [
+    "halfExtents",
+    "0"
+   ],
+   "field": null,
+   "unit": null
+  },
+  {
+   "type": "missing",
+   "path": [
+    "x"
+   ],
+   "field": null,
+   "unit": null
+  },
+  {
+   "type": "physics",
+   "path": [],
+   "field": null,
+   "unit": null
+  }
+ ],
+ "activeCases": [
+  {
+   "record": {
+    "shape": "box"
+   },
+   "active": [
+    true,
+    true,
+    true,
+    false,
+    true,
+    true,
+    true,
+    true
+   ]
+  },
+  {
+   "record": {
+    "shape": "sphere"
+   },
+   "active": [
+    true,
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true
+   ]
+  },
+  {
+   "record": {
+    "shape": 3
+   },
+   "active": [
+    true,
+    true,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true
+   ]
+  },
+  {
+   "record": {},
+   "active": [
+    true,
+    true,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true
+   ]
+  }
+ ],
+ "registrationCases": [
+  {
+   "name": "emptyType",
+   "schema": {
+    "type": " ",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [],
+    "presets": [
+     {
+      "id": "x.default",
+      "label": "X",
+      "data": {}
+     }
+    ]
+   },
+   "result": {
+    "error": "Component schemas require a nonempty type."
+   }
+  },
+  {
+   "name": "noPresets",
+   "schema": {
+    "type": "x",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [],
+    "presets": []
+   },
+   "result": {
+    "error": "Component schema x requires at least one preset."
+   }
+  },
+  {
+   "name": "fieldNames",
+   "schema": {
+    "type": "x",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [
+     {
+      "name": "a",
+      "kind": "number"
+     },
+     {
+      "name": "a",
+      "kind": "text"
+     }
+    ],
+    "presets": [
+     {
+      "id": "x.default",
+      "label": "X",
+      "data": {}
+     }
+    ]
+   },
+   "result": {
+    "error": "Component schema x requires unique, nonempty field names."
+   }
+  },
+  {
+   "name": "choices",
+   "schema": {
+    "type": "x",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [
+     {
+      "name": "mode",
+      "kind": "choice"
+     }
+    ],
+    "presets": [
+     {
+      "id": "x.default",
+      "label": "X",
+      "data": {}
+     }
+    ]
+   },
+   "result": {
+    "error": "Choice field x.mode requires choices."
+   }
+  },
+  {
+   "name": "assetKinds",
+   "schema": {
+    "type": "x",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [
+     {
+      "name": "mesh",
+      "kind": "asset"
+     }
+    ],
+    "presets": [
+     {
+      "id": "x.default",
+      "label": "X",
+      "data": {}
+     }
+    ]
+   },
+   "result": {
+    "error": "Asset field x.mesh requires asset kinds."
+   }
+  },
+  {
+   "name": "items",
+   "schema": {
+    "type": "x",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [
+     {
+      "name": "size",
+      "kind": "vector3",
+      "items": []
+     }
+    ],
+    "presets": [
+     {
+      "id": "x.default",
+      "label": "X",
+      "data": {}
+     }
+    ]
+   },
+   "result": {
+    "error": "Only list fields may declare items (x.size)."
+   }
+  },
+  {
+   "name": "nestedItems",
+   "schema": {
+    "type": "x",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [
+     {
+      "name": "list",
+      "kind": "list",
+      "items": [
+       {
+        "name": "mode",
+        "kind": "choice"
+       }
+      ]
+     }
+    ],
+    "presets": [
+     {
+      "id": "x.default",
+      "label": "X",
+      "data": {}
+     }
+    ]
+   },
+   "result": {
+    "error": "Choice field x.mode requires choices."
+   }
+  },
+  {
+   "name": "condition",
+   "schema": {
+    "type": "x",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [
+     {
+      "name": "size",
+      "kind": "vector3",
+      "when": {
+       "field": "missing",
+       "equals": [
+        "a"
+       ]
+      }
+     }
+    ],
+    "presets": [
+     {
+      "id": "x.default",
+      "label": "X",
+      "data": {}
+     }
+    ]
+   },
+   "result": {
+    "error": "Component field x.size must depend on a sibling choice field."
+   }
+  },
+  {
+   "name": "conditionNotChoice",
+   "schema": {
+    "type": "x",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [
+     {
+      "name": "mode",
+      "kind": "text"
+     },
+     {
+      "name": "size",
+      "kind": "vector3",
+      "when": {
+       "field": "mode",
+       "equals": [
+        "a"
+       ]
+      }
+     }
+    ],
+    "presets": [
+     {
+      "id": "x.default",
+      "label": "X",
+      "data": {}
+     }
+    ]
+   },
+   "result": {
+    "error": "Component field x.size must depend on a sibling choice field."
+   }
+  },
+  {
+   "name": "presetId",
+   "schema": {
+    "type": "x",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [],
+    "presets": [
+     {
+      "id": " ",
+      "label": "X",
+      "data": {}
+     }
+    ]
+   },
+   "result": {
+    "error": "Component schema x presets require an id, label and record data."
+   }
+  },
+  {
+   "name": "repeatedPreset",
+   "schema": {
+    "type": "x",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [],
+    "presets": [
+     {
+      "id": "x.a",
+      "label": "A",
+      "data": {}
+     },
+     {
+      "id": "x.a",
+      "label": "B",
+      "data": {}
+     }
+    ]
+   },
+   "result": {
+    "error": "Component schema x repeats preset x.a."
+   }
+  },
+  {
+   "name": "duplicateType",
+   "schema": {
+    "type": "physics",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [],
+    "presets": [
+     {
+      "id": "x.default",
+      "label": "X",
+      "data": {}
+     }
+    ]
+   },
+   "result": {
+    "error": "Component schema physics is already registered."
+   }
+  },
+  {
+   "name": "duplicatePreset",
+   "schema": {
+    "type": "x",
+    "label": "X",
+    "description": "",
+    "category": "Gameplay",
+    "fields": [],
+    "presets": [
+     {
+      "id": "physics.box",
+      "label": "Copy",
+      "data": {}
+     }
+    ]
+   },
+   "result": {
+    "error": "Component preset physics.box is already registered."
+   }
+  }
+ ],
+ "unknownPreset": {
+  "error": "Unknown component preset: physics.nothing."
+ },
+ "levelDocument": {
+  "base": {
+   "version": 1,
+   "name": "Track",
+   "entities": [
+    {
+     "id": "box",
+     "name": "Box",
+     "type": "Entity",
+     "tags": [],
+     "transform": {
+      "position": [
+       0,
+       1,
+       0
+      ],
+      "rotation": [
+       0,
+       0,
+       0
+      ],
+      "scale": [
+       1,
+       1,
+       1
+      ]
+     },
+     "components": {
+      "custom": {
+       "nested": [
+        1,
+        {
+         "label": "retain me"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "id": "lamp",
+     "name": "Lamp",
+     "type": "entity",
+     "tags": [
+      "light"
+     ],
+     "transform": {
+      "position": [
+       2,
+       3,
+       0
+      ],
+      "rotation": [
+       0,
+       0.5,
+       0
+      ],
+      "scale": [
+       1,
+       1,
+       1
+      ]
+     },
+     "components": {
+      "light": {
+       "range": 6
+      },
+      "tag": {
+       "value": 1
+      }
+     }
+    }
+   ]
+  },
+  "history": [
+   {
+    "operation": "select lamp",
+    "result": null,
+    "canUndo": false,
+    "canRedo": false,
+    "selectedId": "lamp",
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Box\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2,\n          3,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"light\": {\n          \"range\": 6\n        },\n        \"tag\": {\n          \"value\": 1\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "select missing",
+    "result": null,
+    "canUndo": false,
+    "canRedo": false,
+    "selectedId": null,
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Box\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2,\n          3,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"light\": {\n          \"range\": 6\n        },\n        \"tag\": {\n          \"value\": 1\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "select box",
+    "result": null,
+    "canUndo": false,
+    "canRedo": false,
+    "selectedId": "box",
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Box\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2,\n          3,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"light\": {\n          \"range\": 6\n        },\n        \"tag\": {\n          \"value\": 1\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "rename",
+    "result": true,
+    "canUndo": true,
+    "canRedo": false,
+    "selectedId": "box",
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2,\n          3,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"light\": {\n          \"range\": 6\n        },\n        \"tag\": {\n          \"value\": 1\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "noop",
+    "result": false,
+    "canUndo": true,
+    "canRedo": false,
+    "selectedId": "box",
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2,\n          3,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"light\": {\n          \"range\": 6\n        },\n        \"tag\": {\n          \"value\": 1\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "same components",
+    "result": false,
+    "canUndo": true,
+    "canRedo": false,
+    "selectedId": "box",
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2,\n          3,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"light\": {\n          \"range\": 6\n        },\n        \"tag\": {\n          \"value\": 1\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "reorder components",
+    "result": true,
+    "canUndo": true,
+    "canRedo": false,
+    "selectedId": "box",
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2,\n          3,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"tag\": {\n          \"value\": 1\n        },\n        \"light\": {\n          \"range\": 6\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "invalid duplicate",
+    "result": "Duplicate entity ID: box",
+    "canUndo": true,
+    "canRedo": false,
+    "selectedId": "box",
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2,\n          3,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"tag\": {\n          \"value\": 1\n        },\n        \"light\": {\n          \"range\": 6\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "invalid position",
+    "result": "Entity position must contain three finite numbers.",
+    "canUndo": true,
+    "canRedo": false,
+    "selectedId": "box",
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2,\n          3,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"tag\": {\n          \"value\": 1\n        },\n        \"light\": {\n          \"range\": 6\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "move",
+    "result": true,
+    "canUndo": true,
+    "canRedo": false,
+    "selectedId": "box",
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2.5,\n          3,\n          -0.25\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"tag\": {\n          \"value\": 1\n        },\n        \"light\": {\n          \"range\": 6\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "remove box",
+    "result": true,
+    "canUndo": true,
+    "canRedo": false,
+    "selectedId": null,
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2.5,\n          3,\n          -0.25\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"tag\": {\n          \"value\": 1\n        },\n        \"light\": {\n          \"range\": 6\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "undo",
+    "result": true,
+    "canUndo": true,
+    "canRedo": true,
+    "selectedId": null,
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2.5,\n          3,\n          -0.25\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"tag\": {\n          \"value\": 1\n        },\n        \"light\": {\n          \"range\": 6\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "undo",
+    "result": true,
+    "canUndo": true,
+    "canRedo": true,
+    "selectedId": null,
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2,\n          3,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"tag\": {\n          \"value\": 1\n        },\n        \"light\": {\n          \"range\": 6\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "redo",
+    "result": true,
+    "canUndo": true,
+    "canRedo": true,
+    "selectedId": null,
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Track\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2.5,\n          3,\n          -0.25\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"tag\": {\n          \"value\": 1\n        },\n        \"light\": {\n          \"range\": 6\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "fork",
+    "result": true,
+    "canUndo": true,
+    "canRedo": false,
+    "selectedId": null,
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Forked\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2.5,\n          3,\n          -0.25\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"tag\": {\n          \"value\": 1\n        },\n        \"light\": {\n          \"range\": 6\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "redo empty",
+    "result": false,
+    "canUndo": true,
+    "canRedo": false,
+    "selectedId": null,
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Forked\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2.5,\n          3,\n          -0.25\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"tag\": {\n          \"value\": 1\n        },\n        \"light\": {\n          \"range\": 6\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "after 85 edits",
+    "result": null,
+    "canUndo": true,
+    "canRedo": false,
+    "selectedId": null,
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Edit 84\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2.5,\n          3,\n          -0.25\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"tag\": {\n          \"value\": 1\n        },\n        \"light\": {\n          \"range\": 6\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "undo all 80",
+    "result": 80,
+    "canUndo": false,
+    "canRedo": true,
+    "selectedId": null,
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Edit 4\",\n  \"entities\": [\n    {\n      \"id\": \"box\",\n      \"name\": \"Edited\",\n      \"type\": \"Entity\",\n      \"tags\": [],\n      \"transform\": {\n        \"position\": [\n          0,\n          1,\n          0\n        ],\n        \"rotation\": [\n          0,\n          0,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"custom\": {\n          \"nested\": [\n            1,\n            {\n              \"label\": \"retain me\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"id\": \"lamp\",\n      \"name\": \"Lamp\",\n      \"type\": \"entity\",\n      \"tags\": [\n        \"light\"\n      ],\n      \"transform\": {\n        \"position\": [\n          2.5,\n          3,\n          -0.25\n        ],\n        \"rotation\": [\n          0,\n          0.5,\n          0\n        ],\n        \"scale\": [\n          1,\n          1,\n          1\n        ]\n      },\n      \"components\": {\n        \"tag\": {\n          \"value\": 1\n        },\n        \"light\": {\n          \"range\": 6\n        }\n      }\n    }\n  ]\n}\n"
+   },
+   {
+    "operation": "clear entities",
+    "result": true,
+    "canUndo": true,
+    "canRedo": false,
+    "selectedId": null,
+    "text": "{\n  \"version\": 1,\n  \"name\": \"Edit 4\",\n  \"entities\": []\n}\n"
+   }
+  ]
+ }
+}

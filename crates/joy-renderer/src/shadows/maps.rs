@@ -8,7 +8,7 @@ use bytemuck::{
     Pod,
     Zeroable,
 };
-use glam::Mat4;
+use joy_core::math::Mat4;
 
 use crate::frame::MAX_POINT_LIGHTS;
 use crate::materials::SHADOW_FORMAT;

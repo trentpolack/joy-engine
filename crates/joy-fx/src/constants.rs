@@ -71,7 +71,8 @@ pub enum ParticleParameterType {
     Scalar,
     /// Three numbers exposed to scripts as `nameX`, `nameY`, `nameZ` and the vector `name`.
     Vector3,
-    /// Four numbers in `[0, 1]` exposed to scripts as the color `name`.
+    /// Four linear numbers (nonnegative RGB that may exceed one, alpha in `[0, 1]`) exposed to scripts as the color
+    /// `name`.
     Color,
 }
 
@@ -133,15 +134,5 @@ impl std::fmt::Display for ParticleValueKind {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn renderer_spellings_round_trip() {
-        for renderer in ParticleRenderer::ALL {
-            assert_eq!(ParticleRenderer::parse(renderer.as_str()), Some(renderer));
-        }
-        assert_eq!(ParticleRenderer::parse("Soft"), None);
-        assert!(ParticleRenderer::Flipbook.is_textured() && !ParticleRenderer::Billow.is_textured());
-    }
-}
+#[path = "../tests/unit/constants.rs"]
+mod tests;

@@ -2,8 +2,8 @@
 # Licensed under the MIT License.
 
 # Joy Engine: the `joy-engine` facade package (`src/lib.rs`, the API games and tools use) and the workspace of engine
-# crates in `crates/`. Each crate owns one system; `architecture/layers.json` records which crates may depend on which,
-# and `npm run check` enforces it.
+# crates in `crates/`. Each crate owns one system and names its architecture layer in `[package.metadata.joy]`;
+# `[workspace.metadata.joy]` below orders the layers, and `npm run check` enforces both.
 #
 #   cargo test                          # every engine crate: unit, parity, and headless GPU tests
 #   cargo test -p joy-gameplay          # one crate (simulation and content crates build without wgpu or winit)
@@ -25,9 +25,8 @@ authors.workspace = true
 repository.workspace = true
 publish = false
 
-# Example and integration-test targets are listed explicitly.
+# Example targets are listed explicitly.
 autoexamples = false
-autotests = false
 
 [[example]]
 name = "form-viewer"
@@ -53,10 +52,6 @@ path = "examples/form-destruction/main.rs"
 name = "sdf-collisions"
 path = "examples/sdf-collisions/main.rs"
 
-[[test]]
-name = "engine"
-path = "test/rust/main.rs"
-
 [dependencies]
 # Engine crates. The facade re-exports them under their historical module names (`joy_engine::physics`).
 joy-app.workspace = true
@@ -77,8 +72,7 @@ joy-scene.workspace = true
 joy-storage.workspace = true
 joy-ui.workspace = true
 
-# Math, data, and logging, re-exported for games and tools.
-glam.workspace = true
+# Data and logging, re-exported for games and tools.
 serde_json.workspace = true
 log.workspace = true
 
@@ -101,7 +95,7 @@ workspace = true
 # live in `crates/`; the editor and labs are member packages. `cargo test` at the root tests the facade and every
 # engine crate, but not the tools.
 [workspace]
-members = ["crates/*", "editor", "editor/tools/form-lab", "editor/tools/particle-lab"]
+members = ["crates/*", "editor", "tools/*"]
 default-members = [
   ".",
   "crates/joy-app",
@@ -158,7 +152,9 @@ joy-test-support = { path = "crates/joy-test-support" }
 joy-ui = { path = "crates/joy-ui" }
 
 # Math and data.
-glam = { version = "0.34.1", features = ["bytemuck", "serde"] }
+# `libm` routes glam's own trigonometry (rotations, angles) through the portable libm crate, so it computes the same
+# results natively and in WebAssembly.
+glam = { version = "0.34.1", features = ["bytemuck", "serde", "libm"] }
 bytemuck = { version = "1.25.2", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"] }
 
@@ -278,6 +274,26 @@ missing_docs = "warn"
 [workspace.lints.clippy]
 # Explicit parenthesized arithmetic is part of the house style; keep clippy from fighting it.
 precedence = "allow"
+
+# Engine architecture, enforced by `npm run check` (`scripts/check-boundaries.mjs`). Each crate in `crates/` names its
+# layer in `[package.metadata.joy]` (or marks itself `test-support`). A crate may depend only on crates in its own layer
+# or an earlier one in `layers`, and on a backend crate only from the layers listed for it. Apps (the editor, the labs,
+# the examples, and games) reach all of it through `joy-engine` and never depend on engine or backend crates directly.
+[workspace.metadata.joy]
+layers = ["foundation", "simulation", "content", "rendering", "platform"]
+
+[workspace.metadata.joy.backend-crates]
+# Math types reach every crate through `joy_core::math`, so a math library change stays in one module.
+glam = ["foundation"]
+rapier3d = ["simulation"]
+wgpu = ["rendering", "platform"]
+winit = ["platform"]
+egui = ["platform"]
+egui-wgpu = ["platform"]
+egui-winit = ["platform"]
+gilrs = ["platform"]
+cpal = ["platform"]
+rfd = ["platform"]
 
 [profile.dev]
 # Line tables keep backtraces useful without multi-gigabyte debug info.

@@ -17,8 +17,8 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+joy-core.workspace = true
 joy-renderer.workspace = true
-glam.workspace = true
 egui.workspace = true
 egui-wgpu.workspace = true
 wgpu.workspace = true
@@ -31,6 +31,10 @@ egui-winit.workspace = true
 wasm-bindgen.workspace = true
 web-sys.workspace = true
 web-time.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "platform"
 
 [lints]
 workspace = true

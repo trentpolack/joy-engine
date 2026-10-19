@@ -18,7 +18,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
-glam.workspace = true
+joy-core.workspace = true
 indexmap.workspace = true
 thiserror.workspace = true
 winit.workspace = true
@@ -30,6 +30,10 @@ log.workspace = true
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true
 web-sys.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "platform"
 
 [lints]
 workspace = true

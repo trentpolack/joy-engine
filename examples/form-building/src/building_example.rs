@@ -76,9 +76,13 @@ const ZOOM_SENSITIVITY: f32 = 0.001;
 
 /// Lighting: strong ambient, a dark blue background, and one warm shadowed point light above the front corner.
 const AMBIENT: f32 = 0.65;
-const CLEAR_COLOR: [f32; 4] = [0.065, 0.105, 0.15, 1.0];
-const LIGHT: PointLight =
-    PointLight { position: Vec3::new(8.0, 20.0, 14.0), color: [4.0, 3.6, 3.1], range: 60.0, casts_shadow: true };
+const CLEAR_COLOR: LinearColor = LinearColor::rgb(0.065, 0.105, 0.15);
+const LIGHT: PointLight = PointLight {
+    position: Vec3::new(8.0, 20.0, 14.0),
+    color: LinearColor::rgb(4.0, 3.6, 3.1),
+    range: 60.0,
+    casts_shadow: true,
+};
 
 /// Render timing samples kept for the statistics.
 const TIMING_SAMPLES: usize = 120;
@@ -158,7 +162,7 @@ pub struct BuildingExample {
 
 impl BuildingExample {
     /// The example in `mode`, showing the cottage. Fails when the bundled source, presets, or baked record are invalid.
-    pub fn new(mode: BuildingMode) -> GameResult<Self> {
+    pub fn new(mode: BuildingMode) -> AppResult<Self> {
         let presets: Map<String, Value> = serde_json::from_str(PRESETS)?;
         let program = match mode {
             BuildingMode::Editable => Some(CompiledScript::parse(SOURCE)?),
@@ -219,7 +223,7 @@ impl BuildingExample {
     }
 
     /// Evaluate a named preset and frame it. Baked mode ignores presets.
-    pub fn set_preset(&mut self, name: &str) -> GameResult {
+    pub fn set_preset(&mut self, name: &str) -> AppResult {
         if self.mode == BuildingMode::Baked {
             return Ok(());
         }
@@ -236,7 +240,7 @@ impl BuildingExample {
     ///
     /// On failure the previous building, parameters, and timings stay as they were and the located diagnostic is
     /// returned.
-    pub fn regenerate(&mut self, overrides: Map<String, Value>) -> GameResult {
+    pub fn regenerate(&mut self, overrides: Map<String, Value>) -> AppResult {
         let Some(program) = &self.program else {
             return Ok(());
         };
@@ -345,7 +349,7 @@ impl BuildingExample {
         }
     }
 
-    fn save(&mut self, file_name: &str, value: Option<Value>) -> GameResult {
+    fn save(&mut self, file_name: &str, value: Option<Value>) -> AppResult {
         let value = value.ok_or("Nothing to save yet.")?;
         let text = serde_json::to_string_pretty(&value)?;
         self.notice = format!("Saved {}", save_text_file(file_name, &text)?);
@@ -439,13 +443,13 @@ impl BuildingExample {
     }
 }
 
-impl Game for BuildingExample {
-    fn start(&mut self, context: &mut StartContext<'_>) -> GameResult {
+impl App for BuildingExample {
+    fn start(&mut self, context: &mut StartContext<'_>) -> AppResult {
         self.backend = context.capabilities.backend.label();
         Ok(())
     }
 
-    fn input(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn input(&mut self, frame: &mut Frame<'_>) -> AppResult {
         let pointer = frame.input.pointer();
         if frame.input.action(ORBIT_ACTION).down && pointer.active {
             if let Some(previous) = self.drag {
@@ -461,7 +465,7 @@ impl Game for BuildingExample {
         Ok(())
     }
 
-    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> GameResult {
+    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
         if std::mem::take(&mut self.reset_history) {
             target.renderer().reset_history();
         }

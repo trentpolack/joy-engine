@@ -6,13 +6,13 @@ Joy Engine runs games and tools from one Rust codebase on Windows, macOS, Linux,
 
 | Layer | Crates and modules | Responsibility |
 | --- | --- | --- |
-| Foundation | `joy-core` (`core`, `scripting`) | Math, transforms, colors, shapes, seeded randomness, display profiles, and script language catalogs. |
+| Foundation | `joy-core` (`core`, `scripting`) | Math, transforms, colors, shapes, seeded randomness, and script language catalogs. |
 | Simulation | `joy-environment` (`environment`), `joy-physics` (`physics`), `joy-gameplay` (`gameplay`) | Environment clocks, rigid bodies, vehicles, destruction, entities, controllers, and authored documents. |
 | Content | `joy-form` (`form`), `joy-fx` (`particles`), `joy-dcc-gltf` (`dcc`), `joy-project` (`project`) | Procedural geometry, particle documents and simulation, glTF and GLB imports, and project manifests. |
-| Rendering | `joy-renderer` (`rendering`, `particles` drawing), `joy-scene` (`rendering`) | Meshes, terrain, materials, lighting, sky settings, shadows, effects, particle drawing, and captures; level, asset, FORM, and environment presentation. |
+| Rendering | `joy-renderer` (`rendering`, `particles` drawing), `joy-scene` (`rendering`) | Meshes, terrain, materials, lighting, sky and post-processing settings, shadows, effects, particle drawing, and captures; presentation components, post-process volumes, and level, asset, FORM, and environment presentation. |
 | Platform | `joy-app`, `joy-input`, `joy-audio`, `joy-storage`, `joy-ui` (`runtime`), `joy-devtools`, `joy-authoring` (`development`) | Window/canvas shell and frame phases, input, audio, storage, egui UI and theme, the development dock, and authoring widgets, each with its browser backend. |
 
-The [dependency checker](architecture/dependency-layers.md) validates these boundaries. Each system crate has its own integration tests (`crates/<crate>/test/rust/`, run with `cargo test -p <crate>`); `test/rust/` holds the facade's cross-crate integration tests; examples use `examples/<name>/main.rs` and project-local modules. Rust API documentation comes from `cargo doc --no-deps`.
+The [dependency checker](architecture/dependency-layers.md) validates these boundaries. Each system crate has its own integration tests (`crates/<crate>/tests/integration/`, run with `cargo test -p <crate>`); `tests/integration/` holds the facade's cross-crate integration tests; examples use `examples/<name>/main.rs` and project-local modules. Rust API documentation comes from `cargo doc --no-deps`.
 
 ## One Renderer
 FORM returns renderer-free geometry. `compile_form_mesh`, `form_mesh_asset`, and `FormAssetLibrary` turn it into assets drawn by the same renderer as games, level previews, and tools. Meshes share immutable `MeshAsset` handles and use retained `MeshInstance`s in `RenderScene`; scene nodes group mesh and terrain transforms and visibility. GPU copies are released when their asset handles are no longer used.
@@ -22,11 +22,11 @@ Frame rendering performs frustum culling and directional/point-light shadows, dr
 Optional [scene effects](scene-effects.md) consume depth, surface, and motion data. [Terrain](rust-terrain.md), [particles](rust-particles.md), and `EditorGrid` share the renderer. Arcade projects may use `TriangleRenderer` with a project-owned WGSL program and shared display processing.
 
 ## Frame Phases
-`joy_engine::run` owns the window or canvas, GPU startup, input, and development UI. It calls a `Game`'s `input`, `simulation`, `presentation`, `render`, `ui`, and `after_frame` phases. Elapsed time is seconds, clamped to 0.1. Hidden windows reset the clock and notify `visibility_changed`; focus loss releases held input. A phase error stops the loop and presents the failure.
+`joy_engine::run` owns the window or canvas, GPU startup, input, and development UI. It calls an `App`'s `input`, `simulation`, `presentation`, `render`, `ui`, and `after_frame` phases. Elapsed time is seconds, clamped to 0.1. Hidden windows reset the clock and notify `visibility_changed`; focus loss releases held input. A phase error stops the loop and presents the failure.
 
-Native close requests call `Game::close_requested`; returning false lets an editor protect unsaved work. `Frame::request_exit` closes later. `HeadlessShell` runs these phases offscreen at a fixed step for tests; `step_with_ui` adds synthetic egui input and UI rendering for captures.
+Games, tools, and examples all implement `App`. Native close requests call `App::close_requested`; returning false lets an editor protect unsaved work. `Frame::request_exit` closes later. `HeadlessShell` runs these phases offscreen at a fixed step for tests; `step_with_ui` adds synthetic egui input and UI rendering for captures.
 
-Use `FixedStepLoop` for games tuned to fixed ticks, keep cosmetic randomness separate from gameplay, and use `SeededRandom` for repeatable runs. Portable numerical helpers preserve deterministic simulation across native and WebAssembly targets. `runtime::launch_parameter` reads browser query parameters or native `--name=value` arguments.
+Use `core::FixedStepLoop` for simulations tuned to fixed ticks, keep cosmetic randomness separate from gameplay, and use `SeededRandom` for repeatable runs. Portable numerical helpers preserve deterministic simulation across native and WebAssembly targets. `runtime::launch_parameter` reads browser query parameters or native `--name=value` arguments.
 
 ## Browser Builds
 A game's library is a `cdylib` and exposes its startup with `joy_engine::web_main!(start)`. The Node build wrapper compiles WebAssembly, invokes the lockfile-matched wasm-bindgen CLI, and emits the page and browser bindings. These generated bindings are required browser infrastructure.

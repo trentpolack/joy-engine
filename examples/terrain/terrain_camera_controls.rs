@@ -10,7 +10,7 @@
 
 use std::collections::HashSet;
 
-use joy_engine::glam::{
+use joy_engine::math::{
     Vec2,
     Vec3,
 };

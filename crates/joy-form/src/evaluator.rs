@@ -396,7 +396,7 @@ impl Runtime<'_> {
             && let Value::Array(color) = &values[0]
             && color.len() == 4
         {
-            self.geometry.color = color.iter().map(|v| v.clamp(0.0, 1.0)).collect();
+            self.geometry.color = color_channels(color);
             return Ok(());
         }
         let args = scalars(&values)?;
@@ -421,11 +421,8 @@ impl Runtime<'_> {
                 if args.len() != 3 && args.len() != 4 {
                     return Err("color expects RGB, RGBA, or a color value.".to_string().into());
                 }
-                self.geometry.color = args[..3]
-                    .iter()
-                    .chain(std::iter::once(args.get(3).unwrap_or(&1.0)))
-                    .map(|v| v.clamp(0.0, 1.0))
-                    .collect();
+                let alpha = args.get(3).copied().unwrap_or(1.0);
+                self.geometry.color = color_channels(&[args[0], args[1], args[2], alpha]);
             }
             "seed" => {
                 arity(name, args.len(), 1)?;
@@ -576,4 +573,11 @@ impl Runtime<'_> {
 }
 fn scalars(values: &[Value]) -> std::result::Result<Vec<f64>, String> {
     values.iter().map(Value::scalar).collect()
+}
+
+/// Linear vertex color channels as FORM stores them: RGB may exceed one for HDR glow (negative values become zero), and
+/// alpha is opacity in 0–1.
+fn color_channels(rgba: &[f64]) -> Vec<f64> {
+    let [red, green, blue, alpha] = [rgba[0], rgba[1], rgba[2], rgba[3]];
+    vec![red.max(0.0), green.max(0.0), blue.max(0.0), alpha.clamp(0.0, 1.0)]
 }

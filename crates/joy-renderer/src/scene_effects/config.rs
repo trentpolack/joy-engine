@@ -6,6 +6,7 @@
 //! Each effect is off (`None`) or on with its settings. `Some(Default::default())` enables an effect with its default
 //! settings. [`SceneEffectsOptions::validate`] checks every setting's accepted range and relationships.
 
+use joy_core::LinearColor;
 use serde::{
     Deserialize,
     Serialize,
@@ -161,8 +162,8 @@ impl Default for SsgiOptions {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct OutlineOptions {
-    /// Straight-alpha linear RGBA; alpha scales coverage.
-    pub color: [f32; 4],
+    /// Linear outline color; alpha scales coverage.
+    pub color: LinearColor,
     /// Line width in pixels.
     pub thickness: f32,
     /// Depth edge threshold.
@@ -176,7 +177,7 @@ pub struct OutlineOptions {
 impl Default for OutlineOptions {
     fn default() -> Self {
         Self {
-            color: [0.02, 0.025, 0.035, 1.0],
+            color: LinearColor::rgb(0.02, 0.025, 0.035),
             thickness: 1.0,
             depth_threshold: 0.01,
             normal_threshold: 0.2,
@@ -263,8 +264,8 @@ impl Default for SsrOptions {
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct HeightFogOptions {
-    /// Straight-alpha linear RGBA fog color.
-    pub fog_color: [f32; 4],
+    /// Linear fog color; alpha scales the fog's opacity.
+    pub fog_color: LinearColor,
     /// Fog density.
     pub density: f32,
     /// Density falloff with height.
@@ -275,7 +276,12 @@ pub struct HeightFogOptions {
 
 impl Default for HeightFogOptions {
     fn default() -> Self {
-        Self { fog_color: [0.18, 0.34, 0.48, 0.6], density: 0.22, height_falloff: 3.0, scattering: 0.35 }
+        Self {
+            fog_color: LinearColor::new(0.18, 0.34, 0.48, 0.6),
+            density: 0.22,
+            height_falloff: 3.0,
+            scattering: 0.35,
+        }
     }
 }
 
@@ -285,8 +291,9 @@ impl Default for HeightFogOptions {
 pub struct ClusteredLightingOptions {
     /// Intermediate resolution, 0.25 to 1.
     pub resolution_scale: f32,
-    /// Linear RGB fog color.
-    pub fog_color: [f32; 3],
+    /// Linear fog color, stored as `[red, green, blue]`; alpha is unused.
+    #[serde(with = "joy_core::color::rgb_array")]
+    pub fog_color: LinearColor,
     /// Medium density.
     pub density: f32,
     /// Density falloff with height.
@@ -317,7 +324,7 @@ impl Default for ClusteredLightingOptions {
     fn default() -> Self {
         Self {
             resolution_scale: 0.5,
-            fog_color: [0.18, 0.3, 0.48],
+            fog_color: LinearColor::rgb(0.18, 0.3, 0.48),
             density: 0.055,
             height_falloff: 0.23,
             fog_height: 0.2,
@@ -566,7 +573,7 @@ impl SceneEffectsOptions {
         }
         if let Some(outlines) = &self.outlines {
             let name = "outlines";
-            check_color(name, "color", &outlines.color)?;
+            check_color(name, "color", &outlines.color.to_array())?;
             check(name, "thickness", outlines.thickness, POSITIVE, UNBOUNDED)?;
             check(name, "depthThreshold", outlines.depth_threshold, POSITIVE, UNBOUNDED)?;
             check(name, "normalThreshold", outlines.normal_threshold, 0.0, UNBOUNDED)?;
@@ -595,7 +602,7 @@ impl SceneEffectsOptions {
         }
         if let Some(fog) = &self.height_fog {
             let name = "heightFog";
-            check_color(name, "fogColor", &fog.fog_color)?;
+            check_color(name, "fogColor", &fog.fog_color.to_array())?;
             check(name, "density", fog.density, 0.0, UNBOUNDED)?;
             check(name, "heightFalloff", fog.height_falloff, 0.0, UNBOUNDED)?;
             check(name, "scattering", fog.scattering, 0.0, UNBOUNDED)?;
@@ -603,7 +610,7 @@ impl SceneEffectsOptions {
         if let Some(clustered) = &self.clustered_lighting {
             let name = "clusteredLighting";
             check(name, "resolutionScale", clustered.resolution_scale, 0.25, 1.0)?;
-            check_color(name, "fogColor", &clustered.fog_color)?;
+            check_color(name, "fogColor", &clustered.fog_color.rgb_array())?;
             check(name, "density", clustered.density, 0.0, UNBOUNDED)?;
             check(name, "heightFalloff", clustered.height_falloff, 0.0, UNBOUNDED)?;
             check(name, "fogHeight", clustered.fog_height, f32::NEG_INFINITY, UNBOUNDED)?;
@@ -671,73 +678,5 @@ impl SceneEffectsOptions {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn defaults_validate_and_report_requirements() {
-        let all = SceneEffectsOptions {
-            depth_aware_blur: Some(Default::default()),
-            gtao: Some(Default::default()),
-            ssgi: Some(Default::default()),
-            outlines: Some(Default::default()),
-            taa: Some(Default::default()),
-            motion_blur: Some(Default::default()),
-            ssr: Some(Default::default()),
-            height_fog: Some(Default::default()),
-            clustered_lighting: Some(Default::default()),
-            adaptive_exposure: Some(Default::default()),
-            ..Default::default()
-        };
-        all.validate().unwrap();
-        let requirements = all.requirements();
-        assert!(requirements.depth_texture && requirements.normal_texture && requirements.velocity_texture);
-        assert!(requirements.taa_velocity_texture && requirements.clustered_lighting);
-        assert_eq!(all.enabled_names().count(), 10);
-
-        let exposure_only = SceneEffectsOptions { adaptive_exposure: Some(Default::default()), ..Default::default() };
-        assert!(!exposure_only.requirements().depth_texture);
-        assert!(!SceneEffectsOptions::default().any_enabled());
-    }
-
-    #[test]
-    fn invalid_settings_report_typescript_messages() {
-        let both = SceneEffectsOptions {
-            ssao: Some(Default::default()),
-            gtao: Some(Default::default()),
-            ..Default::default()
-        };
-        assert_eq!(both.validate(), Err(SceneEffectsError::ExclusiveOcclusion));
-        let scale = SceneEffectsOptions {
-            ssao: Some(SsaoOptions { resolution_scale: 0.1, ..Default::default() }),
-            ..Default::default()
-        };
-        assert_eq!(
-            scale.validate().unwrap_err().to_string(),
-            "ssao.resolutionScale must be a finite number from 0.25 through 1."
-        );
-        let rays = SceneEffectsOptions {
-            ssgi: Some(SsgiOptions { ray_count: 2.5, ..Default::default() }),
-            ..Default::default()
-        };
-        assert_eq!(rays.validate(), Err(SceneEffectsError::NotAnInteger("ssgi.rayCount".into())));
-        let exposure = SceneEffectsOptions {
-            adaptive_exposure: Some(AdaptiveExposureOptions { minimum_exposure: 9.0, ..Default::default() }),
-            ..Default::default()
-        };
-        assert_eq!(exposure.validate(), Err(SceneEffectsError::ExposureBounds));
-    }
-
-    #[test]
-    fn options_read_typescript_json_spellings() {
-        let options: SceneEffectsOptions = serde_json::from_str(
-            r#"{"ssao": {"normalSource": "normal-texture"}, "taa": {"reprojection": "camera"}, "colorFormat": "rgba8unorm"}"#,
-        )
-        .unwrap();
-        assert_eq!(options.ssao.unwrap().normal_source, NormalSource::NormalTexture);
-        assert_eq!(options.ssao.unwrap().radius, 7.0);
-        assert_eq!(options.taa.unwrap().reprojection, Reprojection::Camera);
-        assert_eq!(options.color_format, Some(SceneEffectsColorFormat::Rgba8unorm));
-        assert!(serde_json::from_str::<SceneEffectsOptions>(r#"{"bloom": {}}"#).is_err());
-    }
-}
+#[path = "../../tests/unit/scene_effects/config.rs"]
+mod tests;

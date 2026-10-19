@@ -6,8 +6,9 @@
 //! [`PanelLayout`], the [`ScriptEditor`] with its [`script_language_tools`], viewport gestures, [`FileDialogs`], and the
 //! shared Joy look in [`components`] (see `docs/rust-authoring.md`).
 //!
-//! [`AuthoringTool`] is the contract that lets authoring tools run standalone (as a `joy-app` game) and as Joy Editor
-//! tabs. Tools reach the kit through `joy_engine::development`, beside the development tools from `joy-devtools`.
+//! [`AuthoringTool`] is the contract that lets authoring tools run standalone (as a `joy-app` [`App`](joy_app::App))
+//! and as Joy Editor tabs. Tools reach the kit through `joy_engine::development`, beside the development tools from
+//! `joy-devtools`.
 
 mod authoring_tool;
 pub mod components;

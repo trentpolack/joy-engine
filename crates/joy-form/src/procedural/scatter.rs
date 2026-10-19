@@ -23,6 +23,7 @@ use crate::{
     },
     value::integer_range,
 };
+use joy_core::math::deterministic;
 use serde_json::{
     Value as Json,
     json,
@@ -95,9 +96,9 @@ pub fn scatter(store: &mut Store, source: &Json, amount: f64, seed: f64, weight:
         };
         let mut barycentric = Vec::new();
         for corner in 0..3 {
-            let mut sample = -random().max(f64::from_bits(1)).ln();
+            let mut sample = -deterministic::ln(random().max(f64::from_bits(1)));
             if corner == selected {
-                sample += -random().max(f64::from_bits(1)).ln();
+                sample += -deterministic::ln(random().max(f64::from_bits(1)));
             }
             barycentric.push(sample);
         }
@@ -128,7 +129,13 @@ pub fn scatter(store: &mut Store, source: &Json, amount: f64, seed: f64, weight:
             if name != "position" && name != "normal" {
                 let mut value = interpolate(name)?;
                 if name == "color" {
-                    value = json!(numbers(&value).iter().map(|v| v.clamp(0.0, 1.0)).collect::<Vec<_>>());
+                    // Interpolation cannot leave the corners' range, but rounding can step just outside it.
+                    let channels: Vec<f64> = numbers(&value)
+                        .iter()
+                        .enumerate()
+                        .map(|(index, channel)| if index == 3 { channel.clamp(0.0, 1.0) } else { channel.max(0.0) })
+                        .collect();
+                    value = json!(channels);
                 }
                 store.set(&mut result, "points", name, index, &value, false)?;
             }

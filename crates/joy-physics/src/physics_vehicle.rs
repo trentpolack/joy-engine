@@ -18,7 +18,7 @@
 //!   not. Brake impulses that hit the `brake_force` bound behave identically; gentle rolling resistance is weaker.
 //! - Rapier does not apply the equal-and-opposite side impulse to a dynamic ground body.
 
-use glam::Vec3;
+use joy_core::math::Vec3;
 use rapier3d::control::{
     DynamicRayCastVehicleController,
     WheelTuning,

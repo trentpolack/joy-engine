@@ -133,7 +133,7 @@ pub mod tokens {
 }
 
 /// Apply the authoring tools' look (the shared Joy design tokens) to an egui context: navy panels, square fields with
-/// thin borders, orange focus and accents, and the lab type scale. Tools call this from `Game::start` or their first
+/// thin borders, orange focus and accents, and the lab type scale. Tools call this from `App::start` or their first
 /// UI pass; it replaces the game look from [`apply`] for the whole context.
 ///
 pub fn apply_authoring(context: &egui::Context) {

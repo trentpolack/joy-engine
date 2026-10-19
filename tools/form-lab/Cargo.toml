@@ -1,0 +1,36 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# FORM LAB on the Rust Joy Engine: script procedural geometry with a live engine preview, natively and in browsers,
+# standalone or as a Joy Editor tab (`form_lab::FormLab` implements `AuthoringTool`). Modules live in `src/`.
+#
+#   cargo run -p form-lab
+#   cargo test -p form-lab
+#   node ../../scripts/rust/build-web.mjs --package form-lab --title "FORM LAB"
+
+[package]
+name = "form-lab"
+description = "FORM LAB: script procedural geometry with a live Joy Engine preview, natively and in browsers."
+version = "0.7.3"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["web-entry"]
+# The browser entry point (`web_main!`). Hosts that embed FORM LAB, such as Joy Editor, turn it off so their own entry
+# point is the only one in the build.
+web-entry = []
+
+[dependencies]
+# Tools depend on the engine alone, like games.
+joy-engine.workspace = true
+
+[lints]
+workspace = true

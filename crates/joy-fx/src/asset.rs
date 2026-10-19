@@ -13,6 +13,7 @@
 use std::sync::Arc;
 
 use indexmap::IndexMap;
+use joy_core::format_number;
 use serde_json::{
     Map,
     Value,
@@ -23,7 +24,6 @@ use crate::constants::{
     ParticleRenderer,
     ParticleValueKind,
 };
-use crate::math;
 use crate::script::{
     FIXED_SLOT_COUNT,
     PARTICLE_FIELDS,
@@ -62,6 +62,10 @@ const MAXIMUM_TEXTURE_TEXT: usize = 4 * 1024 * 1024;
 /// Largest magnitude of a parameter bound or value.
 const MAXIMUM_PARAMETER_MAGNITUDE: f64 = 1e6;
 
+/// Upper bounds of color parameter channels: linear RGB may exceed one for HDR tints, and alpha is opacity.
+const COLOR_PARAMETER_LIMITS: [f64; 4] =
+    [MAXIMUM_PARAMETER_MAGNITUDE, MAXIMUM_PARAMETER_MAGNITUDE, MAXIMUM_PARAMETER_MAGNITUDE, 1.0];
+
 /// Names a parameter may not take: script fields, inputs, keywords, and JavaScript prototype keys.
 const RESERVED_NAMES: [&str; 6] = ["let", "if", "else", "constructor", "prototype", "__proto__"];
 
@@ -86,7 +90,8 @@ pub enum ParticleParameter {
         /// Per-axis upper bounds.
         max: [f64; 3],
     },
-    /// RGBA components in `[0, 1]`, readable in scripts as the color `name`.
+    /// Linear RGBA components, readable in scripts as the color `name`: RGB is nonnegative and may exceed one for HDR
+    /// tints, and alpha is in `[0, 1]`.
     Color {
         /// Default components within the bounds.
         value: [f64; 4],
@@ -597,8 +602,8 @@ fn is_reserved(name: &str) -> bool {
 fn read_parameter(parameter: &Map<String, Value>, key: &str) -> Result<ParticleParameter, ParticleAssetError> {
     let kind = parameter.get("type");
     if kind.and_then(Value::as_str) == Some(ParticleParameterType::Color.as_str()) {
-        let min = components::<4>(parameter.get("min"), &format!("{key}.min"), &[0.0; 4], &[1.0; 4])?;
-        let max = components::<4>(parameter.get("max"), &format!("{key}.max"), &min, &[1.0; 4])?;
+        let min = components::<4>(parameter.get("min"), &format!("{key}.min"), &[0.0; 4], &COLOR_PARAMETER_LIMITS)?;
+        let max = components::<4>(parameter.get("max"), &format!("{key}.max"), &min, &COLOR_PARAMETER_LIMITS)?;
         let value = components::<4>(parameter.get("value"), &format!("{key}.value"), &min, &max)?;
         return Ok(ParticleParameter::Color { value, min, max });
     }
@@ -771,11 +776,7 @@ fn record<'v>(value: Option<&'v Value>, path: &str) -> Result<&'v Map<String, Va
 
 fn label<'v>(value: Option<&'v Value>, path: &str) -> Result<&'v str, ParticleAssetError> {
     match value {
-        Some(Value::String(text))
-            if !text.trim_matches(math::is_whitespace).is_empty() && math::utf16_length(text) <= 80 =>
-        {
-            Ok(text)
-        }
+        Some(Value::String(text)) if !text.trim().is_empty() && text.chars().count() <= 80 => Ok(text),
         _ => Err(invalid(format!("{path} requires 1–80 characters."))),
     }
 }
@@ -793,12 +794,12 @@ fn identifier<'v>(value: Option<&'v Value>, path: &str) -> Result<&'v str, Parti
 }
 
 fn number(value: Option<&Value>, path: &str, min: f64, max: f64, integer: bool) -> Result<f64, ParticleAssetError> {
-    let number = value.and_then(Value::as_f64).filter(|number| {
-        number.is_finite() && *number >= min && *number <= max && (!integer || math::is_integer(*number))
-    });
+    let number = value
+        .and_then(Value::as_f64)
+        .filter(|number| number.is_finite() && *number >= min && *number <= max && (!integer || number.fract() == 0.0));
     number.ok_or_else(|| {
         let kind = if integer { "an integer" } else { "a number" };
-        invalid(format!("{path} must be {kind} from {} to {}.", math::number_text(min), math::number_text(max)))
+        invalid(format!("{path} must be {kind} from {} to {}.", format_number(min), format_number(max)))
     })
 }
 
@@ -815,44 +816,5 @@ fn json_numbers(values: &[f64]) -> Value {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    fn document(emitter: Value) -> Value {
-        let mut base = json!({"id": "main", "enabled": true, "root": true, "duration": 0, "rate": 0,
-            "bursts": [{"time": 0, "count": 2}], "lifetime": 1, "renderer": "soft", "spawn": "", "update": ""});
-        if let (Value::Object(base), Value::Object(overrides)) = (&mut base, emitter) {
-            base.extend(overrides);
-        }
-        json!({"version": 1, "name": "Test", "maxParticles": 64, "parameters": {}, "emitters": [base]})
-    }
-
-    #[test]
-    fn documents_normalize_defaults_and_sort_bursts() {
-        let compiled = compile_particle_effect(&document(json!({"duration": 2,
-            "bursts": [{"time": 1, "count": 1}, {"time": 0.5, "count": 3}]})))
-        .unwrap();
-        let emitter = &compiled.asset().emitters[0];
-        assert_eq!(emitter.bursts.iter().map(|burst| burst.time).collect::<Vec<_>>(), [0.5, 1.0]);
-        assert_eq!(compiled.asset().to_json()["emitters"][0]["bursts"][0], json!({"time": 0.5, "count": 3}));
-    }
-
-    #[test]
-    fn invalid_documents_report_reference_messages() {
-        let message = |value: Value| compile_particle_effect(&value).unwrap_err().to_string();
-        assert_eq!(
-            message(document(json!({"lifetime": 0}))),
-            "main.lifetime must be a number from 0.0016666666666666668 to 30."
-        );
-        assert_eq!(message(document(json!({"renderer": "flipbook"}))), "main: flipbook requires a texture.");
-        assert_eq!(
-            message(document(json!({"death": {"emitter": "missing", "count": 1}}))),
-            "Emitter 'main' references missing child 'missing'."
-        );
-        assert_eq!(
-            message(document(json!({"spawn": "x = missing;"}))),
-            "Emitter 'main': Unknown numeric value 'missing' or field is not writable (line 1, column 5)"
-        );
-    }
-}
+#[path = "../tests/unit/asset.rs"]
+mod tests;

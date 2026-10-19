@@ -14,15 +14,16 @@
 //! over the opaque HDR color, then transparency against the same depth. Temporal antialiasing jitters the raster
 //! projection by a Halton sequence; history resets on camera cuts, time jumps, and projection changes.
 
+use joy_core::LinearColor;
 use std::collections::HashMap;
 use std::sync::Weak;
 
-use glam::{
+use crate::post_process::PostProcessSettings;
+use joy_core::math::{
     Mat4,
     Vec2,
     Vec3,
 };
-use joy_core::post_processing::PostProcessingConfig;
 use wgpu::util::DeviceExt;
 
 use crate::RenderError;
@@ -121,8 +122,8 @@ pub struct RendererOptions {
     pub shadows: Option<ShadowOptions>,
     /// Draw the procedural sky when an environment is supplied.
     pub atmosphere: bool,
-    /// Display settings; replace later with [`Renderer::set_post_processing`].
-    pub post_processing: PostProcessingConfig,
+    /// Post-processing settings; replace later with [`Renderer::set_post_process`].
+    pub post_process: PostProcessSettings,
     /// Opaque-scene effects (ambient occlusion, reflections, antialiasing, ...); replace later with
     /// [`Renderer::set_scene_effects`]. Ignored on backends without scene effects (WebGL 2).
     pub scene_effects: Option<SceneEffectsOptions>,
@@ -133,7 +134,7 @@ impl Default for RendererOptions {
         Self {
             shadows: Some(ShadowOptions::default()),
             atmosphere: true,
-            post_processing: PostProcessingConfig::default(),
+            post_process: PostProcessSettings::DEFAULT,
             scene_effects: None,
         }
     }
@@ -339,8 +340,7 @@ impl Renderer {
         let pipelines = ScenePipelines::new(device, capabilities.scene_format, bias);
         let textured =
             TexturedPass::new(device, &pipelines.frame_layout, &pipelines.shadow_layout, capabilities.scene_format);
-        let post =
-            PostProcessor::new(device, capabilities.scene_format, output_format, options.post_processing.clone());
+        let post = PostProcessor::new(device, capabilities.scene_format, output_format, options.post_process.clone());
 
         let frame_buffer = uniform_buffer(device, "frame uniforms", std::mem::size_of::<FrameUniforms>());
         let frame_bind_group = single_buffer_group(device, "frame", &pipelines.frame_layout, &frame_buffer);
@@ -512,15 +512,19 @@ impl Renderer {
         Vec2::new(self.physical_size.0 as f32, self.physical_size.1 as f32) / self.scale_factor
     }
 
-    /// Current display settings.
-    pub fn post_processing(&self) -> &PostProcessingConfig {
-        self.post.config()
+    /// Current post-processing settings.
+    pub fn post_process(&self) -> &PostProcessSettings {
+        self.post.settings()
     }
 
-    /// Replace display settings for the next frame; only graph-shape changes reallocate targets.
-    pub fn set_post_processing(&mut self, config: PostProcessingConfig) {
-        self.options.post_processing = config.clone();
-        self.post.set_config(config);
+    /// Replace post-processing settings for the next frame. Cheap enough to call every frame (for example with
+    /// settings resolved from post-process volumes at the camera); only changes to the effect graph's shape (bloom,
+    /// blur, or lens streaks turning on or off, or a new bloom quality) reallocate targets.
+    pub fn set_post_process(&mut self, settings: PostProcessSettings) {
+        if self.options.post_process != settings {
+            self.options.post_process = settings.clone();
+            self.post.set_settings(settings);
+        }
     }
 
     /// Whether the procedural sky draws behind scenes that supply an environment ([`RendererOptions::atmosphere`]).
@@ -810,10 +814,10 @@ impl Renderer {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: f64::from(clear[0]),
-                            g: f64::from(clear[1]),
-                            b: f64::from(clear[2]),
-                            a: f64::from(clear[3]),
+                            r: f64::from(clear.red),
+                            g: f64::from(clear.green),
+                            b: f64::from(clear.blue),
+                            a: f64::from(clear.alpha),
                         }),
                         store: wgpu::StoreOp::Store,
                     },
@@ -1190,7 +1194,7 @@ impl Renderer {
             Some(environment) => {
                 let primary = environment.primary;
                 let direction = context.camera.view.transform_vector3(primary.direction);
-                (direction.to_array(), primary.color.map(|channel| channel * primary.intensity))
+                (direction.to_array(), primary.color.scaled(primary.intensity).rgb_array())
             }
             None => ([0.0, 1.0, 0.0], [0.0; 3]),
         };
@@ -1436,20 +1440,15 @@ impl Renderer {
             lights.iter_mut().zip(inputs.lights.iter().take(MAX_POINT_LIGHTS)).zip(shadow_slots)
         {
             slot.position_range = light.position.extend(light.range).to_array();
-            slot.color = [light.color[0], light.color[1], light.color[2], *shadow];
+            slot.color = light.color.with_alpha(*shadow).to_array();
         }
         let (primary_direction, primary_color, skylight) = match inputs.environment {
             Some(environment) => {
                 let primary = environment.primary;
                 (
                     primary.direction.extend(primary.intensity).to_array(),
-                    [primary.color[0], primary.color[1], primary.color[2], 0.0],
-                    [
-                        environment.skylight_color[0],
-                        environment.skylight_color[1],
-                        environment.skylight_color[2],
-                        environment.skylight_intensity,
-                    ],
+                    primary.color.with_alpha(0.0).to_array(),
+                    environment.skylight_color.with_alpha(environment.skylight_intensity).to_array(),
                 )
             }
             None => ([0.0, 1.0, 0.0, 0.0], [0.0; 4], [0.0; 4]),
@@ -1517,7 +1516,7 @@ fn halton(mut index: u32, base: u32) -> f32 {
 fn instance_raw(instance: &MeshInstance, model: Mat4) -> InstanceRaw {
     InstanceRaw {
         model: model.to_cols_array_2d(),
-        tint: [instance.tint[0], instance.tint[1], instance.tint[2], instance.opacity.clamp(0.0, 1.0)],
+        tint: instance.tint.with_alpha(instance.opacity.clamp(0.0, 1.0)).to_array(),
         flags: [if instance.receives_shadow { 1.0 } else { 0.0 }, instance.scene_roughness.clamp(0.0, 1.0), 0.0, 0.0],
     }
 }
@@ -1546,7 +1545,9 @@ fn transient_vertices(opaque: &[ColorVertex], transparent: &[ColorVertex]) -> Ve
     opaque[..complete(opaque)]
         .iter()
         .chain(&transparent[..complete(transparent)])
-        .map(|vertex| MeshVertex::new(vertex.position, [0.0; 3], vertex.color, VertexMaterial::default()))
+        .map(|vertex| {
+            MeshVertex::new(vertex.position, [0.0; 3], LinearColor::from(vertex.color), VertexMaterial::default())
+        })
         .collect()
 }
 
@@ -1556,9 +1557,10 @@ fn validate_lights(inputs: &FrameInputs<'_>) -> Result<(), RenderError> {
         return Err(RenderError::InvalidFrame(format!("at most {MAX_POINT_LIGHTS} point lights are supported")));
     }
     for light in inputs.lights {
-        let finite =
-            light.position.is_finite() && light.color.iter().all(|value| value.is_finite()) && light.range.is_finite();
-        if !finite || light.range <= 0.0 || light.color.iter().any(|value| *value < 0.0) {
+        let finite = light.position.is_finite()
+            && light.color.rgb_array().iter().all(|value| value.is_finite())
+            && light.range.is_finite();
+        if !finite || light.range <= 0.0 || light.color.rgb_array().iter().any(|value| *value < 0.0) {
             return Err(RenderError::InvalidFrame(
                 "point lights need finite values, nonnegative color, and positive range".into(),
             ));
@@ -1648,17 +1650,5 @@ fn single_buffer_group(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn frustum_culling_rejects_geometry_behind_the_camera() {
-        let bounds = Bounds { min: Vec3::splat(-0.5), max: Vec3::splat(0.5) };
-        let view = crate::camera::look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, Vec3::Y);
-        let projection = crate::camera::perspective(1.0, 1.0, 0.1, 100.0);
-        let view_projection = projection * view;
-        assert!(!outside_frustum(bounds, Mat4::IDENTITY, view_projection));
-        assert!(outside_frustum(bounds, Mat4::from_translation(Vec3::new(0.0, 0.0, 20.0)), view_projection));
-        assert!(outside_frustum(bounds, Mat4::from_translation(Vec3::new(50.0, 0.0, 0.0)), view_projection));
-    }
-}
+#[path = "../tests/unit/renderer.rs"]
+mod tests;

@@ -1,0 +1,29 @@
+{
+  "name": "@joy-games/particle-lab",
+  "version": "0.2.8",
+  "private": true,
+  "type": "module",
+  "description": "Live authoring for deterministic Joy Engine particle effects.",
+  "author": "Trent Polack",
+  "license": "MIT",
+  "gameSite": {
+    "category": "tool",
+    "title": "PARTICLE LAB",
+    "description": "Author deterministic, layered particle effects with scripts, child emitters, and a live GPU preview.",
+    "status": "Creative tool",
+    "accent": "#ed6c39",
+    "startedAt": "2026-09-15",
+    "screenshot": "particle-lab.png"
+  },
+  "scripts": {
+    "dev": "cargo run --package particle-lab",
+    "build": "node ../../scripts/rust/build-web.mjs --package particle-lab --release --title \"PARTICLE LAB \u00b7 Joy Engine\" --out dist",
+    "preview": "node ../../scripts/preview-web.mjs",
+    "check": "cargo check --package particle-lab --all-targets",
+    "test": "cargo test --package particle-lab",
+    "capture": "node ../../scripts/capture-web.mjs"
+  },
+  "dependencies": {
+    "joy-engine": "file:../.."
+  }
+}

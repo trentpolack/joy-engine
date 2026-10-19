@@ -72,9 +72,9 @@ pub use sdf::{
     SdfShape,
 };
 
-use glam::Vec3;
+use joy_core::math::Vec3;
 
-use joy_core::format::format_bound;
+use joy_core::format::format_number;
 
 /// Opaque handle to a rigid body owned by one [`PhysicsWorld`].
 ///
@@ -119,7 +119,7 @@ pub struct RaycastHit {
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum PhysicsError {
     /// A scalar was non-finite or outside its inclusive range.
-    #[error("{name} must be finite and between {} and {}.", format_bound(*.minimum), format_bound(*.maximum))]
+    #[error("{name} must be finite and between {} and {}.", format_number(*.minimum), format_number(*.maximum))]
     OutOfRange {
         /// Option or argument name, in TypeScript spelling.
         name: &'static str,

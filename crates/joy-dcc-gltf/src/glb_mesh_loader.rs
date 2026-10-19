@@ -539,14 +539,5 @@ fn invalid(message: &str) -> GlbError {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn base64_decodes_padded_and_unpadded_text() {
-        assert_eq!(decode_base64("AAECAw==").unwrap(), [0, 1, 2, 3]);
-        assert_eq!(decode_base64("AAECAw").unwrap(), [0, 1, 2, 3]);
-        assert_eq!(decode_base64("bWVzaA==").unwrap(), b"mesh");
-        assert!(decode_base64("!!").is_none());
-    }
-}
+#[path = "../tests/unit/glb_mesh_loader.rs"]
+mod tests;

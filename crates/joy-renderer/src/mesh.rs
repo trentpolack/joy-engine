@@ -21,11 +21,12 @@ use bytemuck::{
     Pod,
     Zeroable,
 };
-use glam::Vec3;
+use joy_core::math::Vec3;
 
 use crate::RenderError;
 use crate::texture::TextureAsset;
 use joy_core::{
+    LinearColor,
     MaterialAlphaMode,
     MeshAssetData,
     PbrMaterial,
@@ -86,8 +87,8 @@ pub struct VertexMaterial {
     pub metallic: f32,
     /// Perceptual roughness in `[0, 1]`.
     pub roughness: f32,
-    /// Linear RGB emission.
-    pub emissive: [f32; 3],
+    /// Linear emission; RGB may exceed one, and alpha is unused.
+    pub emissive: LinearColor,
     /// Transparency handling.
     pub alpha_mode: AlphaMode,
     /// Cutoff used by `AlphaMode::Mask`.
@@ -99,7 +100,7 @@ impl Default for VertexMaterial {
         Self {
             metallic: 0.0,
             roughness: DEFAULT_ROUGHNESS,
-            emissive: [0.0; 3],
+            emissive: LinearColor::BLACK,
             alpha_mode: AlphaMode::Opaque,
             alpha_cutoff: 0.5,
         }
@@ -108,13 +109,13 @@ impl Default for VertexMaterial {
 
 impl MeshVertex {
     /// Build a vertex from its channels and baked material.
-    pub fn new(position: [f32; 3], normal: [f32; 3], color: [f32; 4], material: VertexMaterial) -> Self {
+    pub fn new(position: [f32; 3], normal: [f32; 3], color: LinearColor, material: VertexMaterial) -> Self {
         Self {
             position,
             normal,
-            color,
+            color: color.to_array(),
             surface: [material.metallic, material.roughness, material.alpha_cutoff, material.alpha_mode.shader_value()],
-            emissive: [material.emissive[0], material.emissive[1], material.emissive[2], 0.0],
+            emissive: material.emissive.with_alpha(0.0).to_array(),
             uv: [0.0; 2],
         }
     }
@@ -398,8 +399,13 @@ impl MeshAsset {
                     [color[0] * material.base[0], color[1] * material.base[1], color[2] * material.base[2], alpha];
                 let uv = read(&mesh.uvs, index, 2);
                 vertices.push(
-                    MeshVertex::new(positions[corner].to_array(), normal.to_array(), rgba, material.factors)
-                        .with_uv([uv[0], uv[1]]),
+                    MeshVertex::new(
+                        positions[corner].to_array(),
+                        normal.to_array(),
+                        LinearColor::from(rgba),
+                        material.factors,
+                    )
+                    .with_uv([uv[0], uv[1]]),
                 );
             }
             match submeshes.last_mut() {
@@ -472,7 +478,7 @@ impl MeshAsset {
                     alpha_mode: if alpha < 1.0 { AlphaMode::Blend } else { AlphaMode::Opaque },
                     ..VertexMaterial::default()
                 };
-                MeshVertex::new(position, normal, [color[0], color[1], color[2], alpha], material)
+                MeshVertex::new(position, normal, LinearColor::new(color[0], color[1], color[2], alpha), material)
             })
             .collect();
         Self::new(MeshData { vertices, indices: channels.indices.to_vec() })
@@ -601,7 +607,11 @@ fn resolve_material(
         factors: VertexMaterial {
             metallic: material.metallic as f32,
             roughness: material.roughness as f32,
-            emissive: [material.emissive[0] as f32, material.emissive[1] as f32, material.emissive[2] as f32],
+            emissive: LinearColor::rgb(
+                material.emissive[0] as f32,
+                material.emissive[1] as f32,
+                material.emissive[2] as f32,
+            ),
             alpha_mode,
             alpha_cutoff: material.alpha_cutoff as f32,
         },
@@ -634,127 +644,5 @@ fn validate(data: &MeshData) -> Result<(), RenderError> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn triangle(alpha: f32) -> MeshAsset {
-        MeshAsset::from_channels(MeshChannels {
-            positions: &[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
-            indices: &[0, 1, 2],
-            alphas: &[alpha, alpha, alpha],
-            ..Default::default()
-        })
-        .unwrap()
-    }
-
-    #[test]
-    fn assets_validate_and_partition_blending() {
-        let opaque = triangle(1.0);
-        assert_eq!(opaque.submeshes(), &[Submesh { indices: 0..3, blend: false, masked: false, textures: None }]);
-        assert!(!opaque.has_vertex_alpha());
-
-        let blended = triangle(0.5);
-        assert_eq!(blended.submeshes(), &[Submesh { indices: 0..3, blend: true, masked: false, textures: None }]);
-        assert!(blended.has_vertex_alpha());
-        assert_ne!(opaque.id(), blended.id());
-    }
-
-    #[test]
-    fn shared_mesh_records_convert_with_their_colors() {
-        let data = MeshAssetData {
-            positions: vec![0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 3.0, 0.0],
-            indices: vec![0, 1, 2],
-            colors: Some([1.0, 0.5, 0.25].repeat(3)),
-            ..Default::default()
-        };
-        let asset = MeshAsset::from_asset_data(&data).unwrap();
-        assert_eq!(asset.data().vertices[1].color, [1.0, 0.5, 0.25, 1.0]);
-        assert_eq!(asset.bounds().max, Vec3::new(2.0, 3.0, 0.0));
-        assert!(!asset.has_vertex_alpha());
-        let misaligned = MeshAssetData { colors: Some(vec![1.0; 4]), ..data };
-        assert!(MeshAsset::from_asset_data(&misaligned).is_err());
-    }
-
-    fn pbr_material(alpha_mode: MaterialAlphaMode, base_color: Option<&str>) -> PbrMaterial {
-        PbrMaterial {
-            base_color: vec![0.5, 1.0, 1.0, 0.8],
-            emissive: vec![0.1, 0.0, 0.0],
-            metallic: 0.25,
-            roughness: 0.75,
-            alpha_mode,
-            alpha_cutoff: 0.4,
-            textures: joy_core::PbrMaterialTextures { base_color: base_color.map(str::to_owned), ..Default::default() },
-        }
-    }
-
-    fn pbr_mesh(materials: Vec<PbrMaterial>, triangle_materials: Vec<u32>) -> PbrMesh {
-        PbrMesh {
-            positions: vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0],
-            normals: vec![0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0],
-            uvs: vec![0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-            colors: vec![1.0; 12],
-            alphas: vec![1.0, 1.0, 1.0, 0.5],
-            triangles: vec![0, 2, 1, 1, 2, 3],
-            triangle_materials,
-            materials,
-        }
-    }
-
-    #[test]
-    fn pbr_meshes_group_materials_and_bake_factors() {
-        let texture = TextureAsset::from_rgba8(1, 1, vec![255; 4]).unwrap();
-        let materials = vec![
-            pbr_material(MaterialAlphaMode::Blend, None),
-            pbr_material(MaterialAlphaMode::Mask, Some("cutout.png")),
-        ];
-        let asset = MeshAsset::from_pbr_mesh(&pbr_mesh(materials, vec![0, 1]), |source| {
-            (source == "cutout.png").then(|| texture.clone())
-        })
-        .unwrap();
-
-        // Blended materials draw last; every triangle owns its three vertices.
-        let submeshes = asset.submeshes();
-        assert_eq!(submeshes.len(), 2);
-        assert!(!submeshes[0].blend && submeshes[0].masked && submeshes[0].textures.is_some());
-        assert!(submeshes[1].blend && !submeshes[1].masked && submeshes[1].textures.is_none());
-        assert_eq!(asset.data().vertices.len(), 6);
-        assert!(!asset.has_vertex_alpha(), "alpha belongs to the materials");
-
-        // The masked triangle (1, 2, 3) comes first: factors multiply vertex color and alpha.
-        let vertices = &asset.data().vertices;
-        assert_eq!(vertices[0].position, [1.0, 0.0, 0.0]);
-        assert_eq!(vertices[0].color, [0.5, 1.0, 1.0, 0.8]);
-        assert_eq!(vertices[2].color[3], 0.5 * 0.8);
-        assert_eq!(vertices[0].surface, [0.25, 0.75, 0.4, 1.0]);
-        assert_eq!(vertices[0].emissive, [0.1, 0.0, 0.0, 0.0]);
-        assert_eq!(vertices[2].uv, [1.0, 1.0]);
-        // A zero authored normal takes the face normal; authored normals are normalized.
-        assert_eq!(vertices[0].normal, [0.0, 1.0, 0.0]);
-        assert_eq!(vertices[3].normal, [0.0, 1.0, 0.0]);
-    }
-
-    #[test]
-    fn pbr_meshes_reject_bad_documents() {
-        let resolve = |_: &str| None;
-        let missing = pbr_mesh(vec![pbr_material(MaterialAlphaMode::Opaque, Some("missing.png"))], vec![0, 0]);
-        assert!(matches!(MeshAsset::from_pbr_mesh(&missing, resolve), Err(RenderError::InvalidMesh(_))));
-        let unknown = pbr_mesh(vec![pbr_material(MaterialAlphaMode::Opaque, None)], vec![0, 3]);
-        assert!(MeshAsset::from_pbr_mesh(&unknown, resolve).is_err());
-        let mut misaligned = pbr_mesh(vec![pbr_material(MaterialAlphaMode::Opaque, None)], vec![0, 0]);
-        misaligned.uvs.pop();
-        assert!(MeshAsset::from_pbr_mesh(&misaligned, resolve).is_err());
-        let mut rough = pbr_mesh(vec![pbr_material(MaterialAlphaMode::Opaque, None)], vec![0, 0]);
-        rough.materials[0].roughness = 1.5;
-        assert!(MeshAsset::from_pbr_mesh(&rough, resolve).is_err());
-    }
-
-    #[test]
-    fn malformed_geometry_is_rejected() {
-        let result = MeshAsset::from_channels(MeshChannels {
-            positions: &[0.0, 0.0, 0.0],
-            indices: &[0, 1, 2],
-            ..Default::default()
-        });
-        assert!(matches!(result, Err(RenderError::InvalidMesh(_))));
-    }
-}
+#[path = "../tests/unit/mesh.rs"]
+mod tests;

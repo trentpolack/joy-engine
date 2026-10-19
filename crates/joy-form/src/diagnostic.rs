@@ -9,9 +9,9 @@ use crate::ast::Token;
 
 /// A parse or evaluation failure with its source location.
 ///
-/// `line` is one-based. `column` is one-based and counts UTF-16 code units, matching the
-/// TypeScript runtime and FORM LAB's editor. Failures without a source position (overrides,
-/// palettes, primitive helpers, and transport errors) report line 1, column 1.
+/// `line` is one-based. `column` is one-based and counts characters, as FORM LAB's editor
+/// does. Failures without a source position (overrides, palettes, primitive helpers, and
+/// transport errors) report line 1, column 1.
 #[derive(Serialize, Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{message} (line {line}, column {column})")]
 pub struct Diagnostic {
@@ -19,7 +19,7 @@ pub struct Diagnostic {
     pub message: String,
     /// One-based source line.
     pub line: usize,
-    /// One-based source column in UTF-16 code units.
+    /// One-based source column in characters.
     pub column: usize,
 }
 
@@ -54,6 +54,6 @@ pub struct SourceToken {
     pub text: String,
     /// One-based source line.
     pub line: usize,
-    /// One-based source column in UTF-16 code units.
+    /// One-based source column in characters.
     pub column: usize,
 }

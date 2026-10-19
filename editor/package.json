@@ -15,7 +15,7 @@
     "build": "node ../scripts/rust/build-web.mjs --package joy-editor --release --title \"Joy Editor\" --canvas joy-editor --out dist",
     "preview": "node ../scripts/preview-web.mjs",
     "check": "cargo check --package joy-editor --all-targets",
-    "test": "cargo test --package joy-editor && node --test test/*.test.mjs",
+    "test": "cargo test --package joy-editor && node --test tests/tooling/*.test.mjs",
     "capture": "node ../scripts/capture-web.mjs"
   },
   "dependencies": {

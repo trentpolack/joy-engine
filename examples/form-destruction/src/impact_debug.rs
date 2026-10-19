@@ -43,7 +43,7 @@ impl ImpactDebugDraw {
 
     /// Mark a hit at `point` (meters) for a unit incoming `direction` and damage `radius`; the oldest marker is replaced
     /// at the limit. Disabled markers allocate nothing.
-    pub fn add(&mut self, scene: &mut RenderScene, point: [f64; 3], direction: Vec3, radius: f32) -> GameResult {
+    pub fn add(&mut self, scene: &mut RenderScene, point: DVec3, direction: Vec3, radius: f32) -> AppResult {
         if !self.enabled {
             return Ok(());
         }
@@ -99,7 +99,7 @@ impl ImpactDebugDraw {
     }
 
     /// Live markers.
-    #[allow(dead_code, reason = "part of the capture and test API that test/rust drives")]
+    #[allow(dead_code, reason = "part of the capture and test API that the integration tests drive")]
     pub fn count(&self) -> usize {
         self.markers.len()
     }
@@ -118,7 +118,7 @@ impl ImpactDebugDraw {
 }
 
 /// Marker geometry around the local origin: the incoming ray, three great circles of the damage sphere, and the cross.
-fn marker_asset(direction: Vec3, radius: f32) -> GameResult<MeshAsset> {
+fn marker_asset(direction: Vec3, radius: f32) -> AppResult<MeshAsset> {
     let mut geometry = MarkerGeometry::default();
     let direction = direction.normalize_or(Vec3::NEG_Z);
     geometry.segment(-direction * IMPACT_DEBUG.ray_length, Vec3::ZERO, IMPACT_DEBUG.ray_color);

@@ -14,6 +14,7 @@
 
 use std::f64::consts::PI;
 
+use joy_core::math::deterministic;
 use joy_core::{
     RandomSource,
     SeededRandom,
@@ -24,7 +25,6 @@ use crate::asset::{
     CompiledParticleEffect,
     ParticleParameterValue,
 };
-use crate::math;
 use crate::profile::{
     ParticleProfile,
     create_particle_profile,
@@ -297,13 +297,16 @@ impl Default for ParticleEffectOptions {
     }
 }
 
-/// Normalize a seed given as a JavaScript number, exactly like the TypeScript constructor: it must be a finite integer,
-/// and wraps modulo 2^32 (`seed >>> 0`). Use it when seeds come from authored JSON.
+/// Normalize an authored seed: it must be a finite whole number, and wraps modulo 2^32 so every whole number (negative
+/// ones included) selects a stable `u32` random stream. Use it when seeds come from authored JSON.
 pub fn particle_seed(value: f64) -> Result<u32, ParticleEffectError> {
-    if !math::is_integer(value) {
+    const SEED_MODULUS: f64 = 4_294_967_296.0;
+    if !value.is_finite() || value.fract() != 0.0 {
         return Err(ParticleEffectError::InvalidSeed);
     }
-    Ok(math::to_uint32(value))
+
+    // `rem_euclid` is exact for every whole `f64`, and its result is always in `[0, 2^32)`.
+    Ok(value.rem_euclid(SEED_MODULUS) as u32)
 }
 
 /// Root emitter bookkeeping.
@@ -542,7 +545,7 @@ impl ParticleEffect {
         self.accumulator += delta_seconds;
         while self.accumulator + TIME_EPSILON >= PARTICLE_STEP_SECONDS {
             self.step()?;
-            self.accumulator = math::max(0.0, self.accumulator - PARTICLE_STEP_SECONDS);
+            self.accumulator = f64::max(0.0, self.accumulator - PARTICLE_STEP_SECONDS);
         }
         Ok(())
     }
@@ -566,7 +569,7 @@ impl ParticleEffect {
             self.profile.steps += 1;
             refresh_particle_profile_live(&mut self.profile, &self.particles);
             let elapsed = (self.profile_clock)() - started;
-            self.profile.simulation_ms += math::max(0.0, elapsed);
+            self.profile.simulation_ms += f64::max(0.0, elapsed);
         }
         result
     }
@@ -608,7 +611,7 @@ impl ParticleEffect {
         if self.profile.enabled {
             refresh_particle_profile_live(&mut self.profile, &self.particles);
             let elapsed = (self.profile_clock)() - started;
-            self.profile.simulation_ms += math::max(0.0, elapsed);
+            self.profile.simulation_ms += f64::max(0.0, elapsed);
         }
         result
     }
@@ -737,7 +740,7 @@ impl ParticleEffect {
                 let update_started = if timed { profile_clock() } else { 0.0 };
                 let outcome = update_particle(&mut runner, emitter, particle, *stopped, &mut children);
                 if timed && let Some(row) = runner.profile.emitters.get_mut(emitter_index) {
-                    row.update_ms += math::max(0.0, profile_clock() - update_started);
+                    row.update_ms += f64::max(0.0, profile_clock() - update_started);
                 }
                 alive.push(outcome?);
             }
@@ -763,10 +766,10 @@ impl ParticleEffect {
                 continue;
             }
             let state = &mut self.root_states[index];
-            let active_seconds = math::max(0.0, math::min(end, emitter.duration) - math::min(start, emitter.duration));
+            let active_seconds = f64::max(0.0, f64::min(end, emitter.duration) - f64::min(start, emitter.duration));
             state.accumulator += emitter.rate * active_seconds;
             let mut count = (state.accumulator + TIME_EPSILON).floor();
-            state.accumulator = math::max(0.0, state.accumulator - count);
+            state.accumulator = f64::max(0.0, state.accumulator - count);
             while state.next_burst < emitter.bursts.len() && emitter.bursts[state.next_burst].time <= end + TIME_EPSILON
             {
                 count += f64::from(emitter.bursts[state.next_burst].count);
@@ -833,7 +836,7 @@ impl ParticleEffect {
         }
 
         if timed && let Some(row) = runner.profile.emitters.get_mut(emitter_index) {
-            row.spawn_ms += math::max(0.0, profile_clock() - started);
+            row.spawn_ms += f64::max(0.0, profile_clock() - started);
         }
         result
     }
@@ -866,7 +869,7 @@ impl ScriptRunner<'_> {
         let inputs = [
             PARTICLE_STEP_SECONDS,
             particle.age,
-            math::min(1.0, particle.age / math::max(1e-10, particle.lifetime)),
+            f64::min(1.0, particle.age / f64::max(1e-10, particle.lifetime)),
             particle.index as f64,
             self.time,
             particle.origin_x,
@@ -987,7 +990,7 @@ fn integrate(particle: &mut EffectParticle) -> Result<(), ParticleFault> {
     particle.x += particle.vx * dt;
     particle.y += particle.vy * dt;
     particle.z += particle.vz * dt;
-    let damping = math::exp(-particle.drag * dt);
+    let damping = deterministic::exp(-particle.drag * dt);
     particle.vx *= damping;
     particle.vy *= damping;
     particle.vz *= damping;

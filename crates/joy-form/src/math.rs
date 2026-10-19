@@ -8,6 +8,7 @@ use crate::value::{
     Value,
     arity,
 };
+use joy_core::math::deterministic;
 
 pub fn arithmetic(operator: &str, left: &Value, right: &Value) -> Result<Value, String> {
     if let (Value::Number(a), Value::Number(b)) = (left, right) {
@@ -23,7 +24,7 @@ pub fn arithmetic(operator: &str, left: &Value, right: &Value) -> Result<Value, 
             "*" => a * b,
             "/" => a / b,
             "%" => a % b,
-            _ => a.powf(*b),
+            _ => deterministic::powf(*a, *b),
         };
         return Ok(Value::Number(result));
     }
@@ -106,9 +107,9 @@ pub fn function(name: &str, args: &[f64]) -> Result<Option<f64>, String> {
     arity(name, args.len(), count)?;
     let a = args[0];
     let result = match name {
-        "sin" => a.sin(),
-        "cos" => a.cos(),
-        "tan" => a.tan(),
+        "sin" => deterministic::sin(a),
+        "cos" => deterministic::cos(a),
+        "tan" => deterministic::tan(a),
         "abs" => a.abs(),
         "sqrt" => a.sqrt(),
         "floor" => a.floor(),
@@ -121,12 +122,12 @@ pub fn function(name: &str, args: &[f64]) -> Result<Option<f64>, String> {
                 if a - lower < 0.5 { lower } else { lower + 1.0 }
             }
         }
-        "exp" => a.exp(),
-        "log" => a.ln(),
+        "exp" => deterministic::exp(a),
+        "log" => deterministic::ln(a),
         "min" => a.min(args[1]),
         "max" => a.max(args[1]),
-        "pow" => a.powf(args[1]),
-        "atan2" => a.atan2(args[1]),
+        "pow" => deterministic::powf(a, args[1]),
+        "atan2" => deterministic::atan2(a, args[1]),
         "noise" => noise(a, args[1], args[2]),
         "smoothstep" => {
             if args[1] <= a {
@@ -177,5 +178,5 @@ pub fn hypot(values: &[f64]) -> f64 {
     if scale == 0.0 {
         return 0.0;
     }
-    values.iter().map(|v| (v / scale).powi(2)).sum::<f64>().sqrt() * scale
+    values.iter().map(|v| deterministic::powi(v / scale, 2)).sum::<f64>().sqrt() * scale
 }

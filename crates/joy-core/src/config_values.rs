@@ -20,7 +20,7 @@ use serde_json::{
 };
 
 use crate::format::{
-    format_js_number,
+    format_number,
     json_number,
 };
 
@@ -110,7 +110,7 @@ pub enum ConfigError {
     #[error("Config value \"{0}\" must be finite.")]
     NonFiniteValue(String),
     /// A value was below its field's minimum.
-    #[error("Config value \"{key}\" is below its minimum of {}.", format_js_number(*.minimum))]
+    #[error("Config value \"{key}\" is below its minimum of {}.", format_number(*.minimum))]
     BelowMinimum {
         /// Field key.
         key: String,
@@ -118,7 +118,7 @@ pub enum ConfigError {
         minimum: f64,
     },
     /// A value exceeded its field's maximum.
-    #[error("Config value \"{key}\" exceeds its maximum of {}.", format_js_number(*.maximum))]
+    #[error("Config value \"{key}\" exceeds its maximum of {}.", format_number(*.maximum))]
     AboveMaximum {
         /// Field key.
         key: String,

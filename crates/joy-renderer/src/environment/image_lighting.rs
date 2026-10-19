@@ -10,6 +10,7 @@
 
 use crate::RenderError;
 use crate::gpu::GpuContext;
+use joy_core::math::deterministic;
 
 const FILTER_SOURCE: &str = include_str!("../shaders/environment-filter.wgsl");
 /// Byte stride between per-draw filter uniforms; the portable minimum uniform offset alignment.
@@ -423,25 +424,13 @@ pub(crate) fn prepare_environment_map(
 /// TypeScript `encodePositiveHalf`.
 fn encode_positive_half(value: f32) -> u16 {
     let value = f64::from(value);
-    if value < 2_f64.powi(-14) {
-        return (value * 2_f64.powi(24)).round() as u16;
+    if value < deterministic::powi(2_f64, -14) {
+        return (value * deterministic::powi(2_f64, 24)).round() as u16;
     }
-    let exponent = value.log2().floor();
-    ((exponent + 15.0) * 1024.0 + ((value / 2_f64.powf(exponent) - 1.0) * 1024.0).round()) as u16
+    let exponent = deterministic::log2(value).floor();
+    ((exponent + 15.0) * 1024.0 + ((value / deterministic::powf(2_f64, exponent) - 1.0) * 1024.0).round()) as u16
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn half_floats_match_ieee_encoding() {
-        assert_eq!(encode_positive_half(0.0), 0);
-        assert_eq!(encode_positive_half(1.0), 0x3c00);
-        assert_eq!(encode_positive_half(0.5), 0x3800);
-        assert_eq!(encode_positive_half(65504.0), 0x7bff);
-        assert_eq!(encode_positive_half(2_f32.powi(-24)), 1);
-        // Rounding up the mantissa carries into the exponent.
-        assert_eq!(encode_positive_half(1.9999), 0x4000);
-    }
-}
+#[path = "../../tests/unit/environment/image_lighting.rs"]
+mod tests;

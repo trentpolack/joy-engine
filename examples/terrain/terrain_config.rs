@@ -4,7 +4,8 @@
 //! Tuning for the terrain example, matching the TypeScript `terrain-config.js`. Demonstration units only; they are not
 //! the source's physical dimensions.
 
-use joy_engine::glam::Vec3;
+use joy_engine::core::Color;
+use joy_engine::math::Vec3;
 
 /// Camera control speeds: world units per second for flight, radians per CSS pixel for angles.
 #[derive(Clone, Copy, Debug)]
@@ -44,8 +45,8 @@ pub struct TerrainConfig {
     pub tolerance_range: (f32, f32, f32),
     /// Stable-detail radius around the camera focus in world units.
     pub target_radius: f32,
-    /// The page's Joy blue (#1b293d), display-referred; terrain materials stay local.
-    pub background_color: [f32; 4],
+    /// The page's Joy blue (#1b293d), sRGB-encoded; terrain materials stay local.
+    pub background_color: Color,
     /// Overview orbit distance in world units.
     pub orbit_distance: f32,
     /// Overview framed radius in world units (drives the automatic far plane).
@@ -75,7 +76,7 @@ pub const TERRAIN_CONFIG: TerrainConfig = TerrainConfig {
     tolerance: 2.0,
     tolerance_range: (0.5, 12.0, 0.5),
     target_radius: 90.0,
-    background_color: [0.1058, 0.1607, 0.2392, 1.0],
+    background_color: Color::new(0.1058, 0.1607, 0.2392, 1.0),
     orbit_distance: 2300.0,
     orbit_radius: 1500.0,
     orbit_pitch: 0.52,

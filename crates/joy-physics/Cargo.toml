@@ -16,16 +16,9 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 publish = false
-# Integration tests are one binary listed below.
-autotests = false
-
-[[test]]
-name = "joy-physics"
-path = "test/rust/main.rs"
 
 [dependencies]
 joy-core.workspace = true
-glam.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 indexmap.workspace = true
@@ -34,6 +27,10 @@ rapier3d.workspace = true
 
 [dev-dependencies]
 joy-test-support.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "simulation"
 
 [lints]
 workspace = true

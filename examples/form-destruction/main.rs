@@ -25,7 +25,7 @@ fn options() -> ShellOptions {
 
 fn start() {
     let result = FormDestructionDemo::new()
-        .map_err(|error| ShellError::Game(error.to_string()))
+        .map_err(|error| ShellError::App(error.to_string()))
         .and_then(|demo| run(options(), demo));
     if let Err(error) = result {
         joy_engine::log::error!("{error}");

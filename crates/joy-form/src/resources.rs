@@ -11,6 +11,7 @@ use crate::{
     },
     value::Budget,
 };
+use joy_core::math::deterministic;
 use serde_json::{
     Value as Json,
     json,
@@ -50,7 +51,7 @@ pub fn material_pbr(color: &[f64], metallic: f64, roughness: f64) -> Result<Json
 pub fn read_mesh(value: &Json) -> Result<Json, String> {
     let mesh = value.as_object().ok_or("Expected a mesh value.")?;
     if mesh.get("kind").and_then(Json::as_str) != Some("mesh")
-        || mesh.get("name").and_then(Json::as_str).is_none_or(|name| name.encode_utf16().count() > 120)
+        || mesh.get("name").and_then(Json::as_str).is_none_or(|name| name.chars().count() > 120)
     {
         return Err("Mesh requires kind and a name of at most 120 characters.".into());
     }
@@ -96,9 +97,9 @@ pub fn transform_mesh(mesh: &Json, translation: &[f64], rotation: &[f64], scale:
     let mut result = read_mesh(mesh)?;
     let mut positions = numbers(&result["positions"], MAX_VERTICES * 3, "Mesh positions")?;
     let mut normals = numbers(&result["normals"], MAX_VERTICES * 3, "Mesh normals")?;
-    let (ax, cx) = rotation[0].sin_cos();
-    let (ay, cy) = rotation[1].sin_cos();
-    let (az, cz) = rotation[2].sin_cos();
+    let (ax, cx) = deterministic::sin_cos(rotation[0]);
+    let (ay, cy) = deterministic::sin_cos(rotation[1]);
+    let (az, cz) = deterministic::sin_cos(rotation[2]);
     let rotate = |x: f64, y: f64, z: f64| {
         let y1 = y * cx - z * ax;
         let z1 = y * ax + z * cx;
@@ -110,7 +111,8 @@ pub fn transform_mesh(mesh: &Json, translation: &[f64], rotation: &[f64], scale:
     {
         let rotated_position = rotate(position[0] * scale[0], position[1] * scale[1], position[2] * scale[2]);
         let rotated_normal = rotate(normal[0] / scale[0], normal[1] / scale[1], normal[2] / scale[2]);
-        let length = rotated_normal[0].hypot(rotated_normal[1]).hypot(rotated_normal[2]);
+        let length =
+            deterministic::hypot(deterministic::hypot(rotated_normal[0], rotated_normal[1]), rotated_normal[2]);
         for axis in 0..3 {
             position[axis] = rotated_position[axis] + translation[axis];
             normal[axis] = if length > 0.0 { rotated_normal[axis] / length } else { 0.0 };

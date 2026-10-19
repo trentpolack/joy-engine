@@ -19,7 +19,7 @@ use super::built_in_component_schemas::built_in_component_schemas;
 use super::entity_definition::EntityDefinition;
 use super::error::ComponentSchemaError;
 use joy_core::JsonRecord;
-use joy_core::format::format_js_number;
+use joy_core::format::format_number;
 
 /// Value shapes a field can describe, serialized with the TypeScript `COMPONENT_FIELD_KIND` spellings. Authoring tools
 /// choose controls from these; validation checks authored JSON against them.
@@ -209,7 +209,8 @@ impl Default for ComponentSchemaCatalog {
 }
 
 impl ComponentSchemaCatalog {
-    /// A catalog holding the engine's built-in schemas.
+    /// A catalog holding this crate's simulation component schemas; `joy_scene::engine_component_catalog` adds the
+    /// presentation components.
     pub fn new() -> Self {
         let mut catalog = Self::empty();
         for schema in built_in_component_schemas() {
@@ -457,7 +458,7 @@ fn describe_out_of_range(field: &ComponentFieldSchema, values: &[f64]) -> Option
     if let Some(minimum) = field.min {
         let below = values.iter().any(|value| if field.min_exclusive { *value <= minimum } else { *value < minimum });
         if below {
-            let bound = format_js_number(minimum);
+            let bound = format_number(minimum);
             return Some(if field.min_exclusive {
                 format!("{channels}must be greater than {bound}.")
             } else {
@@ -468,7 +469,7 @@ fn describe_out_of_range(field: &ComponentFieldSchema, values: &[f64]) -> Option
     if let Some(maximum) = field.max
         && values.iter().any(|value| *value > maximum)
     {
-        return Some(format!("{channels}must be at most {}.", format_js_number(maximum)));
+        return Some(format!("{channels}must be at most {}.", format_number(maximum)));
     }
     None
 }

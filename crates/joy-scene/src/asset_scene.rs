@@ -21,6 +21,13 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
+use crate::components::{
+    ComponentError,
+    EFFECT_COMPONENT_DEFAULTS,
+    LightComponent,
+    RenderComponent,
+    RenderSource,
+};
 use indexmap::IndexMap;
 use joy_fx::{
     CompiledParticleEffect,
@@ -35,14 +42,9 @@ use joy_fx::{
 };
 use joy_gameplay::{
     AssetPathError,
-    ComponentError,
-    EFFECT_COMPONENT_DEFAULTS,
     EntityDefinition,
     LevelData,
-    LightComponent,
     ObjectError,
-    RenderComponent,
-    RenderSource,
     asset_path,
     component_type,
     resolve_level_objects,
@@ -568,14 +570,15 @@ impl AssetScene {
                 continue;
             };
             let enabled = settings.get("enabled") != Some(&Value::Bool(false));
+            // A disabled effect, or one with no asset assigned (absent, null, or empty), shows nothing.
             let path = match settings.get("asset") {
-                Some(value) if is_truthy(value) && enabled => match value {
-                    Value::String(path) => asset_path(path, &EFFECT_EXTENSIONS)
-                        .map_err(|error| component_error(ComponentError::AssetPath(error)))?
-                        .to_owned(),
-                    _ => return Err(component_error(ComponentError::AssetPath(AssetPathError::OutsideAssets))),
-                },
-                _ => continue,
+                _ if !enabled => continue,
+                None | Some(Value::Null) => continue,
+                Some(Value::String(path)) if path.is_empty() => continue,
+                Some(Value::String(path)) => asset_path(path, &EFFECT_EXTENSIONS)
+                    .map_err(|error| component_error(ComponentError::AssetPath(error)))?
+                    .to_owned(),
+                Some(_) => return Err(component_error(ComponentError::AssetPath(AssetPathError::OutsideAssets))),
             };
             let text = read_asset(&path)?;
             let definition = match effect_cache.get(&text).or_else(|| self.effect_cache.get(&text)) {
@@ -613,7 +616,7 @@ impl AssetScene {
     }
 }
 
-/// Create an effect from component settings and advance it one fixed step, as TypeScript does on sync.
+/// Create an effect from component settings and advance it one fixed step, so it shows on its first frame.
 fn start_effect(
     entity: &str,
     definition: &CompiledParticleEffect,
@@ -623,7 +626,7 @@ fn start_effect(
     let playback = |source| AssetSceneError::Playback { entity: entity.to_owned(), source };
     let seed = match settings.get("seed") {
         None => EFFECT_COMPONENT_DEFAULTS.seed,
-        Some(value) => particle_seed(javascript_number(value)).map_err(playback)?,
+        Some(value) => particle_seed(value.as_f64().unwrap_or(f64::NAN)).map_err(playback)?,
     };
     let parameters = match settings.get("parameters") {
         None => Vec::new(),
@@ -644,39 +647,6 @@ fn start_effect(
     effect.step().map_err(playback)?;
     let looping = settings.get("loop") == Some(&Value::Bool(true));
     Ok(EffectInstance { effect, key, looping })
-}
-
-/// JavaScript truthiness of an authored JSON value.
-fn is_truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::Number(number) => number.as_f64().is_some_and(|number| number != 0.0 && !number.is_nan()),
-        Value::String(text) => !text.is_empty(),
-        Value::Array(_) | Value::Object(_) => true,
-    }
-}
-
-/// `Number(value)` for the JSON values a seed may hold; arrays and objects become NaN.
-fn javascript_number(value: &Value) -> f64 {
-    match value {
-        Value::Null => 0.0,
-        Value::Bool(flag) => f64::from(u8::from(*flag)),
-        Value::Number(number) => number.as_f64().unwrap_or(f64::NAN),
-        Value::String(text) => {
-            let trimmed = text.trim();
-            match trimmed {
-                "" => 0.0,
-                "Infinity" | "+Infinity" => f64::INFINITY,
-                "-Infinity" => f64::NEG_INFINITY,
-                _ if trimmed.chars().all(|character| character.is_ascii_digit() || "+-.eE".contains(character)) => {
-                    trimmed.parse().unwrap_or(f64::NAN)
-                }
-                _ => f64::NAN,
-            }
-        }
-        Value::Array(_) | Value::Object(_) => f64::NAN,
-    }
 }
 
 /// The camera basis expressed in an entity's rotated frame, so attached particles stay camera-facing.
@@ -716,23 +686,5 @@ fn rotate(point: [f64; 3], angles: [f64; 3], inverse: bool) -> [f64; 3] {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rotation_inverts() {
-        let angles = [0.3, -1.1, 2.0];
-        let point = [1.0, 2.0, 3.0];
-        let back = rotate(rotate(point, angles, false), angles, true);
-        for axis in 0..3 {
-            assert!((back[axis] - point[axis]).abs() < 1e-12);
-        }
-    }
-
-    #[test]
-    fn seeds_coerce_like_javascript_numbers() {
-        assert_eq!(javascript_number(&Value::from("12")), 12.0);
-        assert_eq!(javascript_number(&Value::Null), 0.0);
-        assert!(javascript_number(&Value::from("seven")).is_nan());
-    }
-}
+#[path = "../tests/unit/asset_scene.rs"]
+mod tests;

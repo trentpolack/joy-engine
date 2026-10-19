@@ -2,6 +2,25 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-18-2026
+### Engine Organization
+- Breaking: renamed the shell contract from `Game` to `App` (`app.rs`, with `AppResult`, `AppError`, and `ShellError::App`), since games, tools, and examples all implement it, and moved `FixedStepLoop` from `joy-app` into `joy-core` (still in the prelude).
+- Replaced `architecture/layers.json` with layer names in each crate's `[package.metadata.joy]` and the layer order and backend ownership in `[workspace.metadata.joy]`; `npm run check` reads both through `cargo metadata`.
+- Moved FORM LAB and PARTICLE LAB from `editor/tools/` to a top-level `tools/` directory, and gave Joy Editor and FORM LAB the standard Cargo source layout (all modules under `src/`, with no `site/src/` or `#[path]` source modules). The terrain example's height data moved to `examples/terrain/assets/`.
+- Every package now keeps its tests in one `tests/` folder: a single Cargo-discovered `integration/` binary, `unit/` files that mirror the source modules they test (moved out of 79 inline `#[cfg(test)]` modules), `fixtures/`, and `tooling/` for Node and Python tests. See the [Rust coding standards](docs/rust-coding-standards.md#tests).
+
+### Math and Determinism
+- Breaking: `joy_engine::math` (`joy_core::math`) is the engine's one math path, re-exporting glam's `f32` types and `DVec2`/`DVec3` for `f64` simulation; only `joy-core` depends on glam, and the facade no longer re-exports `glam`. Retired `js_math`, `Vector2`, `Vector3`, `Velocity2`, `MovingBody`, `AffineTransform3D`, `GeometryBounds`, and the other JavaScript-compatibility helpers.
+- `math::deterministic` provides portable `f64` transcendental functions, and a workspace `clippy.toml` rejects the standard `f64` versions, so simulation matches between native and WebAssembly builds. Particle scripts, FORM, and the editors now follow Rust semantics (character columns and limits, authored key order, typed JSON, and Rust rounding) instead of emulating JavaScript.
+
+### Colors
+- Breaking: replaced `core::Color`, `Rgb`, `Rgba`, `parse_hex_color`, and `with_alpha` with `Color` (sRGB-encoded) and `LinearColor` (linear light, HDR-capable), both `f32` RGBA with straight alpha and exact sRGB conversions.
+- Fixed RGB clamping at one, which clipped glow and shifted hues: FORM `color()`, color attributes and parameters, FORM material emission, particle color parameters, and 2D mesh shading now keep HDR values (alpha stays 0–1), and FORM LAB exports HDR emission with `KHR_materials_emissive_strength`.
+
+### Post-Processing Volumes
+- Breaking: post-processing is now a `postProcess` entity component instead of a level-wide `postProcessing` profile, and levels that still have the profile fail to parse with a pointer to the component. Unbounded volumes apply everywhere; box and sphere volumes apply inside the entity's shape with a `blendDistance` fade, ordered by `priority` and scaled by `weight`. `PostProcessVolumes` in `joy-scene` resolves them at a view point each frame.
+- Moved post-processing settings from `joy-core` to `joy-renderer::post_process` (presets and versioned profiles were retired) and the presentation components (`render`, `light`, `effect`, and `postProcess`) to `joy-scene`. The development post-processing editor and Joy Editor's level viewport now edit and preview volumes.
+
 ## 10-17-2026
 ### Engine Crates
 - Split the first engine systems out of the single `joy-engine` crate into their own workspace crates under `crates/`: `joy-core` (foundation data, now also holding `scripting`), `joy-physics`, `joy-gameplay`, `joy-form`, `joy-dcc-gltf`, and `joy-project`. `joy-engine` re-exports each under its existing module name, so `joy_engine::physics`, the prelude, and every consumer path are unchanged; `core::format::format_bound` is now public, and `scripting` is also reachable as `core::scripting`.

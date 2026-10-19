@@ -74,12 +74,12 @@ pub struct Impact {
     /// Id of the chunk the ray entered.
     pub chunk_id: String,
     /// World-space entry point.
-    pub point: [f64; 3],
+    pub point: DVec3,
 }
 
 /// Copied diagnostics (TypeScript `snapshot()`); positions are meters and timings milliseconds.
 #[derive(Clone, Debug, PartialEq)]
-#[allow(dead_code, reason = "part of the capture and test API that test/rust drives")]
+#[allow(dead_code, reason = "part of the capture and test API that the integration tests drive")]
 pub struct DemoSnapshot {
     /// Chunks still part of the structure.
     pub active_chunks: usize,
@@ -137,7 +137,7 @@ pub struct FormDestructionDemo {
 
 impl FormDestructionDemo {
     /// The seeded structure in the integrity view, with static colliders, ground, and no debris.
-    pub fn new() -> GameResult<Self> {
+    pub fn new() -> AppResult<Self> {
         let mut scene = RenderScene::new();
         let structure = ChunkStructure::new(&generate_structure(DESTRUCTION.seed), Some(SUPPORT.options()))?;
         let mut debris = DestructionDebris::new(&mut scene)?;
@@ -186,7 +186,7 @@ impl FormDestructionDemo {
     }
 
     /// Restore chunk health and geometry, discard queued hits, and release all debris and markers.
-    pub fn reset(&mut self) -> GameResult {
+    pub fn reset(&mut self) -> AppResult {
         self.structure.reset();
         self.debris.reset(&mut self.scene);
         self.debris.synchronize_structure(self.structure.active_chunks())?;
@@ -203,13 +203,13 @@ impl FormDestructionDemo {
 
     /// Aim through a logical viewport point onto the nearest active chunk and queue damage there; the next simulation
     /// step commits it. Points over empty space change nothing but the notice.
-    pub fn impact_at(&mut self, point: Vec2, viewport: Viewport) -> GameResult {
+    pub fn impact_at(&mut self, point: Vec2, viewport: Viewport) -> AppResult {
         let frame = self.camera.camera_frame(viewport.aspect());
         let Some(ray) = screen_ray(point, frame.view_projection(), viewport.logical_size) else {
             return Ok(());
         };
-        let origin = ray.origin.to_array().map(f64::from);
-        let direction = ray.direction.to_array().map(f64::from);
+        let origin = ray.origin.as_dvec3();
+        let direction = ray.direction.as_dvec3();
         let stopwatch = Stopwatch::start();
         let hit = self.structure.raycast(origin, direction, DESTRUCTION.maximum_aim_distance)?;
         retain(&mut self.query_samples, stopwatch.elapsed_milliseconds());
@@ -231,7 +231,7 @@ impl FormDestructionDemo {
     }
 
     /// Show the structure in `view`, rebuilding its colors from committed state.
-    pub fn set_view(&mut self, view: StructureView) -> GameResult {
+    pub fn set_view(&mut self, view: StructureView) -> AppResult {
         self.view = view;
         self.rebuild_structure_geometry()?;
         self.reset_history = true;
@@ -251,7 +251,7 @@ impl FormDestructionDemo {
     }
 
     /// Copy diagnostics.
-    #[allow(dead_code, reason = "part of the capture and test API that test/rust drives")]
+    #[allow(dead_code, reason = "part of the capture and test API that the integration tests drive")]
     pub fn snapshot(&self) -> DemoSnapshot {
         DemoSnapshot {
             active_chunks: self.structure.active_chunk_count(),
@@ -270,7 +270,7 @@ impl FormDestructionDemo {
 
     /// Commit queued damage at the simulation boundary: remove broken and unsupported chunks from the structure and its
     /// colliders, release them as debris, and refresh geometry and the HUD.
-    fn commit_damage(&mut self) -> GameResult {
+    fn commit_damage(&mut self) -> AppResult {
         if !std::mem::take(&mut self.damage_pending) {
             return Ok(());
         }
@@ -314,7 +314,7 @@ impl FormDestructionDemo {
         Ok(())
     }
 
-    fn rebuild_structure_geometry(&mut self) -> GameResult {
+    fn rebuild_structure_geometry(&mut self) -> AppResult {
         if let Some(previous) = self.structure_mesh.take() {
             self.scene.remove(previous);
         }
@@ -386,7 +386,7 @@ impl FormDestructionDemo {
         };
     }
 
-    fn apply(&mut self, command: HudCommand) -> GameResult {
+    fn apply(&mut self, command: HudCommand) -> AppResult {
         match command {
             HudCommand::ToggleIntegrity => {
                 let view = if self.view == StructureView::Integrity {
@@ -412,7 +412,7 @@ impl FormDestructionDemo {
     }
 
     /// Track one press: small movements stay a click, larger ones orbit, and a release without dragging strikes.
-    fn handle_pointer(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn handle_pointer(&mut self, frame: &mut Frame<'_>) -> AppResult {
         let action = frame.input.action(IMPACT_ACTION);
         let pointer = frame.input.pointer();
         if action.pressed && self.gesture.is_none() && pointer.active {
@@ -446,13 +446,13 @@ impl FormDestructionDemo {
     }
 }
 
-impl Game for FormDestructionDemo {
-    fn start(&mut self, context: &mut StartContext<'_>) -> GameResult {
+impl App for FormDestructionDemo {
+    fn start(&mut self, context: &mut StartContext<'_>) -> AppResult {
         self.hud.backend = context.capabilities.backend.label().to_owned();
         Ok(())
     }
 
-    fn input(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn input(&mut self, frame: &mut Frame<'_>) -> AppResult {
         if frame.input.pressed(CANCEL_ACTION) {
             self.config_open = false;
             self.gesture = None;
@@ -463,7 +463,7 @@ impl Game for FormDestructionDemo {
         self.handle_pointer(frame)
     }
 
-    fn simulation(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn simulation(&mut self, frame: &mut Frame<'_>) -> AppResult {
         let elapsed = frame.time.elapsed_seconds.min(PRESENTATION.maximum_frame_seconds);
         self.commit_damage()?;
         self.debris.update(&mut self.scene, elapsed)?;
@@ -471,7 +471,7 @@ impl Game for FormDestructionDemo {
         Ok(())
     }
 
-    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> GameResult {
+    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
         if std::mem::take(&mut self.reset_history) {
             target.renderer().reset_history();
         }

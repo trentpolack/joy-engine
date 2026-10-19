@@ -19,5 +19,9 @@ publish = false
 serde.workspace = true
 serde_json.workspace = true
 
+# Shared test helpers; engine crates take this only as a dev-dependency.
+[package.metadata.joy]
+test-support = true
+
 [lints]
 workspace = true

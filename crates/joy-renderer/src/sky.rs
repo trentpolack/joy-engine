@@ -10,7 +10,7 @@
 //!
 //! [`EnvironmentLighting`]: crate::EnvironmentLighting
 
-use joy_core::format::format_bound;
+use joy_core::format::format_number;
 use serde::{
     Deserialize,
     Serialize,
@@ -150,7 +150,7 @@ impl SkyOptions {
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum SkyOptionsError {
     /// A value was non-finite or outside its inclusive range.
-    #[error("{name} must be finite and between {} and {}.", format_bound(*.minimum), format_bound(*.maximum))]
+    #[error("{name} must be finite and between {} and {}.", format_number(*.minimum), format_number(*.maximum))]
     OutOfRange {
         /// Serialized setting name.
         name: &'static str,
@@ -172,24 +172,5 @@ fn check_range(value: f64, minimum: f64, maximum: f64, name: &'static str) -> Re
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn partial_authored_records_keep_defaults_and_reject_invalid_values() {
-        let options = SkyOptions::from_json(&serde_json::json!({"clouds": {"coverage": 0.9}})).unwrap();
-        assert_eq!(options.clouds.coverage, 0.9);
-        assert_eq!(options.clouds.thickness, 700.0);
-        assert_eq!(options.atmosphere, AtmosphereOptions::default());
-
-        let unknown = SkyOptions::from_json(&serde_json::json!({"weather": "rain"})).unwrap_err();
-        assert!(unknown.to_string().contains("weather"), "{unknown}");
-        let nested = SkyOptions::from_json(&serde_json::json!({"clouds": {"coverage": 2}})).unwrap_err();
-        assert_eq!(nested.to_string(), "clouds.coverage must be finite and between 0 and 1.");
-        let positive = SkyOptions {
-            ambient_occlusion: AmbientOcclusionOptions { radius: 0.0, ..Default::default() },
-            ..Default::default()
-        };
-        assert!(positive.validate().unwrap_err().to_string().contains("ambientOcclusion.radius"));
-    }
-}
+#[path = "../tests/unit/sky.rs"]
+mod tests;

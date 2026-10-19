@@ -34,21 +34,5 @@ pub fn asset_path<'a>(path: &'a str, extensions: &[&str]) -> Result<&'a str, Ass
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rejects_paths_that_escape_the_asset_root() {
-        assert_eq!(asset_path("assets/props/crate.joyobject", &[".joyobject"]), Ok("assets/props/crate.joyobject"));
-        assert_eq!(asset_path("assets/Mesh.FORM", &[".form", ".formlab"]), Ok("assets/Mesh.FORM"));
-        for unsafe_path in
-            ["../outside.joyobject", "assets/../x", "assets//x", "assets/./x", "assets/a:b", "assets/a\u{1}"]
-        {
-            assert_eq!(asset_path(unsafe_path, &[]), Err(AssetPathError::OutsideAssets), "{unsafe_path:?}");
-        }
-        assert_eq!(
-            asset_path("assets/crate.form", &[".joyobject"]),
-            Err(AssetPathError::WrongExtension(".joyobject".to_owned()))
-        );
-    }
-}
+#[path = "../tests/unit/asset_path.rs"]
+mod tests;

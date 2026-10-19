@@ -19,8 +19,6 @@ Paths are relative to `crates/`.
 | `joy-fx/src/language_information.rs`, `joy-fx/src/scripting.rs` | `particle_language_catalog` and the editor-facing `particles::scripting` entry point. |
 | `joy-scene/src/asset_scene.rs` | `AssetScene`, `AssetSceneStage`, `EffectInstance`, `AssetSceneError`. |
 
-`joy-fx/src/math.rs` holds the portable numeric helpers described under Determinism.
-
 ## Using Effects
 Compile a document once and share the definition; each `ParticleEffect` owns its particles, seed, parameters, and clock:
 
@@ -56,9 +54,9 @@ For the frame, `particles` returns world-space colored triangles for `transparen
 ## Determinism
 Simulation and geometry use `f64`, perform arithmetic in the same order, and draw from the instance-owned `SeededRandom` stream in the same order (scripts evaluate left to right, arguments before `rand()`, lazily for `&&` and `||`). Geometry is generated and depth-sorted in `f64` and converted to single precision only for the renderer.
 
-Transcendental functions use portable `libm` implementations. Recorded reference fixtures compare simulation within explicit numerical tolerances, preserving particle counts, ordering, IDs, messages, geometry, and lights without maintaining another runtime.
+Transcendental functions go through `joy_core::math::deterministic` (portable `libm`), so native and WebAssembly builds agree bit for bit; `min`, `max`, `round` (halves away from zero), and `clamp` are Rust's own. Script conditions treat zero and NaN as false. Script lengths and diagnostic columns count characters. Recorded reference fixtures compare simulation within explicit numerical tolerances, preserving particle counts, ordering, IDs, messages, geometry, and lights without maintaining another runtime.
 
 ## Tests and Boundaries
-`crates/joy-renderer/test/rust/particles_parity.rs` validates normalized assets, fixed-step results, camera geometry, light selection, script diagnostics, and rejected documents against recorded fixtures. `joy-scene`'s `particles_asset_scene.rs` verifies staged level effects; behavior and headless rendering suites cover lifetime, ordering, textures, and occlusion.
+`crates/joy-renderer/tests/integration/particles_parity.rs` validates normalized assets, fixed-step results, camera geometry, light selection, script diagnostics, and rejected documents against recorded fixtures. `joy-scene`'s `particles_asset_scene.rs` verifies staged level effects; behavior and headless rendering suites cover lifetime, ordering, textures, and occlusion.
 
 Seeds use `i64` and counts use `usize`; authored JSON is validated before conversion. Texture decoding is synchronous and texture sets own CPU images while the renderer owns GPU copies. Effects support embedded PNG textures; particle geometry is converted to single precision only at the renderer boundary. `AssetScene::prepare` validates and stages all changes before `commit`; failures keep accepted presentation intact.

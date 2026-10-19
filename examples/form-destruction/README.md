@@ -18,4 +18,4 @@ Support propagates through face contacts from ground anchors, spending the confi
 Surviving chunks have static colliders. Released chunks become bounded-by-structure rigid debris; direct breakage shrinks pieces and adds impact, while detached pieces begin at rest. Debris persists until reset. Impact markers are bounded, temporary, depth-tested geometry.
 
 ## Verification
-`test/rust/example_form_destruction.rs` drives damage, breach, integrity/support views, misses, reset, undercut collapse, and orbit through the real application. Browser captures add canvas startup and image evidence. Native and browser rendering share shadows, display processing, and UI. CPU timing does not measure GPU execution.
+`tests/integration/example_form_destruction.rs` drives damage, breach, integrity/support views, misses, reset, undercut collapse, and orbit through the real application. Browser captures add canvas startup and image evidence. Native and browser rendering share shadows, display processing, and UI. CPU timing does not measure GPU execution.

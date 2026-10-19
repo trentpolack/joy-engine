@@ -18,11 +18,11 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+joy-core.workspace = true
 joy-devtools.workspace = true
 joy-input.workspace = true
 joy-renderer.workspace = true
 joy-ui.workspace = true
-glam.workspace = true
 thiserror.workspace = true
 log.workspace = true
 web-time.workspace = true
@@ -42,6 +42,10 @@ wasm-bindgen-futures.workspace = true
 web-sys.workspace = true
 console_error_panic_hook.workspace = true
 console_log.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "platform"
 
 [lints]
 workspace = true

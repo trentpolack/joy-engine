@@ -28,7 +28,7 @@
 //!
 //! # Budgets
 //!
-//! Sources are limited to 200,000 UTF-16 code units and 40,000 tokens. Evaluation allows
+//! Sources are limited to 200,000 characters and 40,000 tokens. Evaluation allows
 //! 2,000,000 operations, 150,000 emitted vertices, and 180,000 emitted triangles. Limit
 //! violations, malformed values, and unsupported functions return a [`Diagnostic`]; authored
 //! content never panics.
@@ -74,8 +74,7 @@ pub use primitives::{
     mesh_sphere,
 };
 
-/// Largest FORM LAB document, in bytes (and UTF-16 code units); capacity includes base64 texture expansion. Matches
-/// the TypeScript `DOCUMENT_LIMITS.fileBytes`.
+/// Largest FORM LAB document, in bytes; capacity includes base64 texture expansion.
 pub const DOCUMENT_FILE_BYTES: usize = 64_000_000;
 
 /// Largest embedded material texture, in decoded bytes (`DOCUMENT_LIMITS.textureBytes`).
@@ -98,7 +97,7 @@ pub struct CompiledScript {
 impl CompiledScript {
     /// Parse FORM source text.
     ///
-    /// Returns a [`Diagnostic`] with a one-based line and UTF-16 column when the source is
+    /// Returns a [`Diagnostic`] with a one-based line and character column when the source is
     /// malformed or exceeds the source, token, or nesting budgets. An empty source is valid.
     pub fn parse(source: &str) -> Result<Self, Diagnostic> {
         Ok(Self { statements: parser::parse(source)? })
@@ -190,27 +189,5 @@ pub fn project_name_tokens(source: &str) -> Result<Vec<SourceToken>, Diagnostic>
 }
 
 #[cfg(test)]
-mod api_tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn project_name_tokens_locate_the_quoted_name() {
-        let tokens = project_name_tokens("# x\nproject meta(info=\"A\", name=\"Old\")").unwrap();
-        assert_eq!(tokens, [SourceToken { text: "\"Old\"".into(), line: 2, column: 29 }]);
-        assert!(project_name_tokens("point(").is_err());
-        assert!(project_name_tokens("point(0,0,0)").unwrap().is_empty());
-    }
-
-    #[test]
-    fn parameter_values_validate_and_keep_integers() {
-        assert_eq!(read_parameter_value(&json!(2.0)).unwrap().to_string(), "2");
-        assert_eq!(read_parameter_value(&json!([1, 0.5, 0, 0.25])).unwrap(), json!([1, 0.5, 0, 0.25]));
-        for invalid in [json!("2"), json!([1, 2]), json!([1, 2, null]), json!({"kind": "mesh"})] {
-            assert!(read_parameter_value(&invalid).is_err(), "{invalid}");
-        }
-        let mesh = mesh_box_value(1.0, 1.0, 1.0).unwrap();
-        assert_eq!(read_parameter_value(&mesh).unwrap(), mesh);
-        assert_eq!(read_materials(None).unwrap(), vec![default_material()]);
-    }
-}
+#[path = "../tests/unit/lib.rs"]
+mod tests;

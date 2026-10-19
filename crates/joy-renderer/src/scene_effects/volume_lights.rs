@@ -4,7 +4,8 @@
 //! Clustered point lights for volumetric lighting: lights move
 //! into view space, then bin into screen tiles and exponential depth slices, uploaded as storage buffers.
 
-use glam::Mat4;
+use joy_core::math::Mat4;
+use joy_core::math::deterministic;
 
 use crate::PointLight;
 
@@ -107,9 +108,9 @@ impl VolumeLights {
                 view.y,
                 view.z,
                 light.range.max(f32::MIN_POSITIVE),
-                light.color[0].max(0.0),
-                light.color[1].max(0.0),
-                light.color[2].max(0.0),
+                light.color.red.max(0.0),
+                light.color.green.max(0.0),
+                light.color.blue.max(0.0),
                 1.0,
             ]);
         }
@@ -131,8 +132,10 @@ impl VolumeLights {
             let offset = light_index * LIGHT_FLOATS;
             let [x, y, z, radius] = [0, 1, 2, 3].map(|component| f64::from(self.light_data[offset + component]));
             for tile_z in 0..count_z {
-                let near = f64::from(camera.near) * depth_ratio.powf(f64::from(tile_z) / f64::from(count_z));
-                let far = f64::from(camera.near) * depth_ratio.powf(f64::from(tile_z + 1) / f64::from(count_z));
+                let near =
+                    f64::from(camera.near) * deterministic::powf(depth_ratio, f64::from(tile_z) / f64::from(count_z));
+                let far = f64::from(camera.near)
+                    * deterministic::powf(depth_ratio, f64::from(tile_z + 1) / f64::from(count_z));
                 if -z + radius < near || -z - radius > far {
                     continue;
                 }
@@ -226,8 +229,11 @@ fn tile_planes(projection: Mat4, count: u32, axis: usize) -> Vec<[f64; 8]> {
                     planes[side * 4 + component] = sign
                         * (f64::from(columns[component * 4 + axis]) - boundary * f64::from(columns[component * 4 + 3]));
                 }
-                let length =
-                    planes[side * 4].hypot(planes[side * 4 + 1]).hypot(planes[side * 4 + 2]).max(f64::MIN_POSITIVE);
+                let length = deterministic::hypot(
+                    deterministic::hypot(planes[side * 4], planes[side * 4 + 1]),
+                    planes[side * 4 + 2],
+                )
+                .max(f64::MIN_POSITIVE);
                 for component in 0..4 {
                     planes[side * 4 + component] /= length;
                 }
@@ -246,21 +252,5 @@ fn intersects_tile(planes: &[[f64; 8]], tile: usize, x: f64, y: f64, z: f64, rad
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::perspective;
-
-    #[test]
-    fn lights_bin_into_the_tiles_and_slices_they_touch() {
-        let projection = perspective(60_f32.to_radians(), 16.0 / 9.0, 0.1, 100.0);
-        let horizontal = tile_planes(projection, 4, 0);
-        // A light straight ahead touches the middle tiles but not the outermost ones.
-        let (x, y, z, radius) = (0.0, 0.0, -10.0, 0.5);
-        assert!(intersects_tile(&horizontal, 1, x, y, z, radius) && intersects_tile(&horizontal, 2, x, y, z, radius));
-        assert!(!intersects_tile(&horizontal, 0, x, y, z, radius) && !intersects_tile(&horizontal, 3, x, y, z, radius));
-        // A light toward the right edge (NDC x about 0.78) reaches only the right tile; one past the edge reaches none.
-        assert!(intersects_tile(&horizontal, 3, 8.0, 0.0, -10.0, 0.5));
-        assert!(!intersects_tile(&horizontal, 2, 8.0, 0.0, -10.0, 0.5));
-        assert!((0..4).all(|tile| !intersects_tile(&horizontal, tile, 14.0, 0.0, -10.0, 0.5)));
-    }
-}
+#[path = "../../tests/unit/scene_effects/volume_lights.rs"]
+mod tests;

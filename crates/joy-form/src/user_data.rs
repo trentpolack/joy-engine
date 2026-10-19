@@ -13,7 +13,7 @@ use serde_json::Value as Json;
 pub fn copy(value: &Json, budget: &SharedBudget) -> Result<Json, String> {
     fn reserve_text(text: &str, budget: &SharedBudget) -> Result<(), String> {
         let mut budget = budget.borrow_mut();
-        budget.user_data_bytes += text.encode_utf16().count();
+        budget.user_data_bytes += text.len();
         if budget.user_data_bytes > 2_000_000 {
             return Err("User data allocation limit exceeded (text).".into());
         }
@@ -66,8 +66,7 @@ pub fn data_record(value: &Value) -> Result<DataRef, String> {
     Err("userData expects a record or null.".into())
 }
 pub fn validate_key(name: &str) -> Result<(), String> {
-    if name.is_empty() || name.encode_utf16().count() > 64 || ["__proto__", "prototype", "constructor"].contains(&name)
-    {
+    if name.is_empty() || name.chars().count() > 64 || crate::parser::RESERVED_DATA_KEYS.contains(&name) {
         Err("Invalid user data field name (1–64 characters; prototype keys are reserved).".into())
     } else {
         Ok(())

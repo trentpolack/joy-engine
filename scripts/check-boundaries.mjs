@@ -6,205 +6,197 @@ import {readFileSync, readdirSync} from 'node:fs';
 import {dirname, extname, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+// The architecture policy lives in the Cargo manifests: the workspace manifest's `[workspace.metadata.joy]` orders the
+// layers and names the backend crates' owning layers, and every engine crate names its layer in
+// `[package.metadata.joy]`. Cargo already limits a crate to the dependencies it declares, so checking manifests covers
+// every path its source can name; only the facade's examples share its dependencies and need a source scan.
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const sourceRoot = resolve(packageRoot, 'src');
-const architecture = JSON.parse(readFileSync(resolve(packageRoot, 'architecture/layers.json'), 'utf8'));
-// Generated output and installed packages are not authored consumer source.
-const ignoredConsumerDirectories = new Set(['node_modules', 'dist', 'artifacts', 'target']);
-// The facade package re-exports the engine crates for games and tools; it is the composition root, not a layer.
+// The facade package re-exports the engine crates for apps; it is the composition root, not a layer.
 const FACADE_PACKAGE = 'joy-engine';
+const ENGINE_CRATE_DIRECTORY = 'crates/';
+// Generated output and installed packages are not authored source.
+const ignoredSourceDirectories = new Set(['node_modules', 'dist', 'artifacts', 'target']);
 
-const crateLayers = collectCrateLayers();
-const testSupportCrates = new Set(architecture.testSupportCrates ?? []);
-const backendOwners = new Map(Object.entries(architecture.rustBackendCrates).map(([name, ownership]) => [name, ownership.layers]));
-const workspacePackages = readCargoPackages();
+const workspace = readCargoWorkspace();
+const policy = readArchitecturePolicy(workspace.metadata);
+const enginePackages = classifyEnginePackages(workspace.packages, policy);
 
-checkRustLayerDirection();
-checkRustCrateManifests();
-checkRustConsumerBackendCrates();
+checkEngineCrateDependencies();
+checkAppManifests();
+checkExampleSources();
 
 /**
- * Enforce the layers of the facade package's own modules in `src/` (the modules that gather several engine crates), and
- * their backend ownership. A Rust module's layer comes from its top-level file or folder (`src/runtime.rs` and
- * `src/runtime/...` are platform); every `crate::<module>`
- * path it names, including grouped `use crate::{a, b}` imports and doc links, must point into its own layer or one it
- * may import. Engine crates it names (`joy_physics::...`) follow the same rule, and backend crates (`rustBackendCrates`)
- * may only be named from their owning layers. The crate root (`src/lib.rs`, the public API) and binaries (`src/bin/`,
- * which use that API) are exempt. Rust edges have no migration allowlist.
+ * Enforce the engine crates' layers through their manifests. An engine crate may depend only on engine crates in its
+ * own or an earlier layer, may name backend crates only from their owning layers, never depends on the facade or an
+ * app, and takes test support only as a dev-dependency.
  */
-function checkRustLayerDirection() {
-  const moduleLayers = new Map();
-  for(const [layer, definition] of Object.entries(architecture.layers)) {
-    for(const root of definition.roots) {
-      moduleLayers.set(root.replaceAll('-', '_'), layer);
+function checkEngineCrateDependencies() {
+  const violations = [];
+  for(const enginePackage of enginePackages.layered.values()) {
+    const layerIndex = policy.layers.indexOf(enginePackage.layer);
+    for(const dependency of enginePackage.record.dependencies) {
+      const name = dependency.name;
+      if(enginePackages.testSupport.has(name)) {
+        if(dependency.kind !== 'dev') {
+          violations.push(`${enginePackage.name} depends on test support ${name} outside [dev-dependencies]`);
+        }
+        continue;
+      }
+      if(name === FACADE_PACKAGE || enginePackages.apps.has(name)) {
+        violations.push(`${enginePackage.name} (${enginePackage.layer}) -> ${name} (engine crates never depend on the facade or apps)`);
+        continue;
+      }
+      const target = enginePackages.layered.get(name);
+      if(target && policy.layers.indexOf(target.layer) > layerIndex) {
+        violations.push(`${enginePackage.name} (${enginePackage.layer}) -> ${name} (${target.layer})`);
+      }
+      const owners = policy.backendCrates.get(name);
+      if(owners && !owners.includes(enginePackage.layer)) {
+        violations.push(`${enginePackage.name} (${enginePackage.layer}) -> backend crate ${name}`);
+      }
     }
   }
+  if(violations.length > 0) {
+    fail('Engine crate dependency layers were violated:', violations);
+  }
+  console.log(`Engine crate layers checked (${enginePackages.layered.size} crates).`);
+}
+
+/**
+ * Keep the workspace's apps (Joy Editor and the labs) on the public API: their manifests may name the facade but no
+ * engine crate or backend crate, so `joy_engine::physics` and `joy_engine::egui` are the only paths their source has.
+ */
+function checkAppManifests() {
+  const violations = [];
+  for(const app of enginePackages.apps.values()) {
+    for(const dependency of app.dependencies) {
+      if(enginePackages.layered.has(dependency.name)) {
+        violations.push(`${app.name} depends on ${dependency.name} (apps depend on ${FACADE_PACKAGE} only)`);
+      }
+      if(policy.backendCrates.has(dependency.name)) {
+        violations.push(`${app.name} depends on backend crate ${dependency.name} (use ${FACADE_PACKAGE}'s APIs and re-exports)`);
+      }
+    }
+  }
+  if(violations.length > 0) {
+    fail('Apps must reach the engine through joy-engine:', violations);
+  }
+  console.log(`App manifests checked (${enginePackages.apps.size} packages).`);
+}
+
+/**
+ * The facade's examples compile with the facade's own dependencies, so their source is scanned instead: they may not
+ * name an engine crate (`joy_physics` rather than `joy_engine::physics`) or a backend crate. egui is re-exported by the
+ * facade, so only direct `use egui` imports are rejected for it.
+ */
+function checkExampleSources() {
+  const facade = workspace.packages.find(workspacePackage => workspacePackage.name === FACADE_PACKAGE);
+  const exampleDirectories = new Set(facade.targets
+    .filter(target => target.kind.includes('example'))
+    .map(target => dirname(target.src_path)));
 
   const violations = [];
   let checkedFiles = 0;
-  for(const sourcePath of collectRustSources(sourceRoot)) {
-    const sourceModule = relative(packageRoot, sourcePath).replaceAll('\\', '/');
-    if(sourceModule === 'src/lib.rs' || sourceModule.startsWith('src/bin/')) {
-      continue;
-    }
-    const topModule = sourceModule.slice('src/'.length).split('/')[0].replace(/\.rs$/, '');
-    const sourceLayer = moduleLayers.get(topModule);
-    if(!sourceLayer) {
-      violations.push(`${sourceModule} is in no architecture layer (add src/${topModule} to a layer's roots)`);
-      continue;
-    }
-    checkedFiles++;
-    const source = stripRustComments(readFileSync(sourcePath, 'utf8'));
-    for(const target of collectRustCrateModules(source)) {
-      const targetLayer = moduleLayers.get(target);
-      if(!targetLayer) {
-        violations.push(`${sourceModule} -> crate::${target} (layers name modules, not crate-root items)`);
-      } else if(targetLayer !== sourceLayer && !architecture.layers[sourceLayer].mayImport.includes(targetLayer)) {
-        violations.push(`${sourceModule} (${sourceLayer}) -> crate::${target} (${targetLayer})`);
-      }
-    }
-    for(const [crateName, targetLayer] of crateLayers) {
-      const allowed = targetLayer === sourceLayer || architecture.layers[sourceLayer].mayImport.includes(targetLayer);
-      if(!allowed && namesRustCrate(source, rustIdentifier(crateName))) {
-        violations.push(`${sourceModule} (${sourceLayer}) -> ${crateName} (${targetLayer})`);
-      }
-    }
-    for(const [crateName, layers] of backendOwners) {
-      if(!layers.includes(sourceLayer) && namesRustCrate(source, rustIdentifier(crateName))) {
-        violations.push(`${sourceModule} (${sourceLayer}) -> backend crate ${crateName}`);
-      }
-    }
-  }
-  if(violations.length > 0) {
-    fail('Rust module dependency layers were violated:', violations);
-  }
-  console.log(`Rust module layers checked (${checkedFiles} files).`);
-}
-
-/**
- * Enforce the engine crates' layers through their manifests: Cargo already limits a crate to the dependencies it
- * declares, so checking `[dependencies]` covers every path its source can name. Each package in `crates/` belongs to
- * exactly one layer (or is test support); an engine crate may depend only on engine crates in its own or a lower
- * layer, may name backend crates only from their owning layers, never depends on the facade or a tool, and takes test
- * support only as a dev-dependency.
- */
-function checkRustCrateManifests() {
-  const packagesByName = new Map(workspacePackages.map(workspacePackage => [workspacePackage.name, workspacePackage]));
-  const violations = [];
-
-  for(const workspacePackage of workspacePackages) {
-    const manifest = relative(packageRoot, workspacePackage.manifest_path).replaceAll('\\', '/');
-    const inCrates = manifest.startsWith('crates/');
-    if(inCrates && !crateLayers.has(workspacePackage.name) && !testSupportCrates.has(workspacePackage.name)) {
-      violations.push(`${manifest} (${workspacePackage.name}) is in no architecture layer (add it to a layer's crates)`);
-    }
-  }
-
-  for(const [crateName, layer] of crateLayers) {
-    const enginePackage = packagesByName.get(crateName);
-    if(!enginePackage) {
-      violations.push(`${crateName} is listed in architecture/layers.json but is not a workspace package`);
-      continue;
-    }
-    for(const dependency of enginePackage.dependencies) {
-      const name = dependency.name;
-      if(testSupportCrates.has(name)) {
-        if(dependency.kind !== 'dev') {
-          violations.push(`${crateName} depends on test support ${name} outside [dev-dependencies]`);
-        }
-        continue;
-      }
-      if(name === FACADE_PACKAGE || isToolPackage(packagesByName.get(name))) {
-        violations.push(`${crateName} (${layer}) -> ${name} (engine crates never depend on the facade or tools)`);
-        continue;
-      }
-      const targetLayer = crateLayers.get(name);
-      if(targetLayer && targetLayer !== layer && !architecture.layers[layer].mayImport.includes(targetLayer)) {
-        violations.push(`${crateName} (${layer}) -> ${name} (${targetLayer})`);
-      }
-      const owners = backendOwners.get(name);
-      if(owners && !owners.includes(layer)) {
-        violations.push(`${crateName} (${layer}) -> backend crate ${name}`);
-      }
-    }
-  }
-  if(violations.length > 0) {
-    fail('Rust crate dependency layers were violated:', violations);
-  }
-  console.log(`Rust crate layers checked (${crateLayers.size} crates).`);
-}
-
-/**
- * Keep Rust examples and tools on the public API: they may not name wgpu, winit, rapier, or the egui integrations
- * directly, and they reach engine crates through `joy_engine` (`joy_engine::physics`, not `joy_physics`). egui itself
- * is re-exported by `joy_engine`, so only direct `use egui` imports are rejected. Tool manifests may not list engine
- * crates other than the facade.
- */
-function checkRustConsumerBackendCrates() {
-  const violations = [];
-  for(const root of architecture.consumerRoots) {
-    for(const sourcePath of collectRustSources(resolve(packageRoot, root))) {
+  for(const directory of exampleDirectories) {
+    for(const sourcePath of collectRustSources(directory)) {
+      checkedFiles++;
       const source = stripRustComments(readFileSync(sourcePath, 'utf8'));
-      const consumerModule = relative(packageRoot, sourcePath).replaceAll('\\', '/');
-      for(const crateName of Object.keys(architecture.rustBackendCrates).map(rustIdentifier)) {
-        const direct = crateName === 'egui' ? new RegExp(`^\\s*(?:pub\\s+)?use\\s+::?egui\\b`, 'm').test(source) : namesRustCrate(source, crateName);
+      const exampleModule = relative(packageRoot, sourcePath).replaceAll('\\', '/');
+      for(const crateName of policy.backendCrates.keys()) {
+        const identifier = rustIdentifier(crateName);
+        const direct = identifier === 'egui' ? /^\s*(?:pub\s+)?use\s+::?egui\b/m.test(source) : namesRustCrate(source, identifier);
         if(direct) {
-          violations.push(`${consumerModule} names ${crateName}`);
+          violations.push(`${exampleModule} names ${identifier}`);
         }
       }
-      for(const crateName of crateLayers.keys()) {
+      for(const crateName of enginePackages.layered.keys()) {
         if(namesRustCrate(source, rustIdentifier(crateName))) {
-          violations.push(`${consumerModule} names ${rustIdentifier(crateName)} (use joy_engine's re-export)`);
+          violations.push(`${exampleModule} names ${rustIdentifier(crateName)} (use joy_engine's re-export)`);
         }
-      }
-    }
-  }
-  for(const workspacePackage of workspacePackages.filter(isToolPackage)) {
-    for(const dependency of workspacePackage.dependencies) {
-      if(crateLayers.has(dependency.name)) {
-        violations.push(`${workspacePackage.name} depends on ${dependency.name} (tools depend on ${FACADE_PACKAGE} only)`);
       }
     }
   }
   if(violations.length > 0) {
-    fail('Rust examples must reach backend crates through joy_engine:', violations);
+    fail('Examples must reach the engine through joy_engine:', violations);
   }
+  console.log(`Example sources checked (${checkedFiles} files).`);
 }
 
 /**
- * Map every engine crate named in `architecture/layers.json` to its layer.
- * @returns {Map<string, string>} Crate package name (`joy-physics`) to layer name.
+ * Read the workspace's packages and metadata from Cargo, without resolving registry dependencies.
+ * @returns {{packages: object[], metadata: object}} `cargo metadata` package records and the workspace metadata table.
  */
-function collectCrateLayers() {
-  const layers = new Map();
-  for(const [layer, definition] of Object.entries(architecture.layers)) {
-    for(const crateName of definition.crates ?? []) {
-      layers.set(crateName, layer);
-    }
-  }
-  return layers;
-}
-
-/**
- * Read the workspace's packages from Cargo, without resolving registry dependencies.
- * @returns {object[]} `cargo metadata` package records (name, manifest_path, dependencies).
- */
-function readCargoPackages() {
+function readCargoWorkspace() {
   const manifestPath = resolve(packageRoot, 'Cargo.toml');
   const output = execFileSync('cargo', ['metadata', '--no-deps', '--format-version', '1', '--manifest-path', manifestPath], {encoding: 'utf8', maxBuffer: 64*1024*1024});
-  return JSON.parse(output).packages;
+  const metadata = JSON.parse(output);
+  return {packages: metadata.packages, metadata: metadata.metadata ?? {}};
 }
 
 /**
- * Whether a workspace package is a consumer tool (the editor or a lab) rather than the facade or an engine crate.
- * @param {object | undefined} workspacePackage A `cargo metadata` package record.
+ * Validate and normalize `[workspace.metadata.joy]`.
+ * @param {object} workspaceMetadata The workspace metadata table from `cargo metadata`.
+ * @returns {{layers: string[], backendCrates: Map<string, string[]>}} Ordered layers and backend owners.
  */
-function isToolPackage(workspacePackage) {
-  if(!workspacePackage) {
-    return false;
+function readArchitecturePolicy(workspaceMetadata) {
+  const definition = workspaceMetadata.joy;
+  if(!definition || !Array.isArray(definition.layers) || definition.layers.length === 0) {
+    fail('The workspace manifest needs [workspace.metadata.joy] with an ordered `layers` list.', []);
   }
-  const manifest = relative(packageRoot, workspacePackage.manifest_path).replaceAll('\\', '/');
-  return architecture.consumerRoots.some(root => manifest.startsWith(`${root}/`));
+
+  const backendCrates = new Map();
+  for(const [crateName, owners] of Object.entries(definition['backend-crates'] ?? {})) {
+    const unknown = owners.filter(owner => !definition.layers.includes(owner));
+    if(unknown.length > 0) {
+      fail(`Backend crate ${crateName} names unknown layers:`, unknown);
+    }
+    backendCrates.set(crateName, owners);
+  }
+  return {layers: definition.layers, backendCrates};
+}
+
+/**
+ * Sort workspace packages into layered engine crates, test support, and apps. Every package in `crates/` must name a
+ * known layer or mark itself test support; nothing outside `crates/` may claim a layer.
+ * @param {object[]} packages `cargo metadata` package records.
+ * @param {{layers: string[]}} architecture The validated policy.
+ */
+function classifyEnginePackages(packages, architecture) {
+  const layered = new Map();
+  const testSupport = new Set();
+  const apps = new Map();
+  const violations = [];
+
+  for(const workspacePackage of packages) {
+    const manifest = relative(packageRoot, workspacePackage.manifest_path).replaceAll('\\', '/');
+    const joy = workspacePackage.metadata?.joy ?? {};
+    const isEngineCrate = manifest.startsWith(ENGINE_CRATE_DIRECTORY);
+
+    if(!isEngineCrate) {
+      if(joy.layer !== undefined || joy['test-support'] !== undefined) {
+        violations.push(`${manifest} (${workspacePackage.name}) is outside ${ENGINE_CRATE_DIRECTORY} but declares an engine layer`);
+      }
+      if(workspacePackage.name !== FACADE_PACKAGE) {
+        apps.set(workspacePackage.name, workspacePackage);
+      }
+      continue;
+    }
+
+    if(joy['test-support'] === true) {
+      testSupport.add(workspacePackage.name);
+      continue;
+    }
+    if(!architecture.layers.includes(joy.layer)) {
+      violations.push(`${manifest} (${workspacePackage.name}) needs [package.metadata.joy] layer = one of ${architecture.layers.join(', ')}`);
+      continue;
+    }
+    layered.set(workspacePackage.name, {name: workspacePackage.name, layer: joy.layer, record: workspacePackage});
+  }
+
+  if(violations.length > 0) {
+    fail('Engine crates must declare their architecture layer:', violations);
+  }
+  return {layered, testSupport, apps};
 }
 
 /**
@@ -215,50 +207,16 @@ function rustIdentifier(packageName) {
   return packageName.replaceAll('-', '_');
 }
 
-/** Top-level module names referenced through `crate::`, expanding grouped imports such as `crate::{core::X, physics}`. */
-function collectRustCrateModules(source) {
-  const modules = new Set();
-  const pattern = /(?<![$\w])crate::/g;
-  for(const match of source.matchAll(pattern)) {
-    const start = match.index + match[0].length;
-    if(source[start] !== '{') {
-      const name = /^[A-Za-z_]\w*/.exec(source.slice(start));
-      if(name) {
-        modules.add(name[0]);
-      }
-      continue;
-    }
-    let depth = 0;
-    let partStart = start + 1;
-    for(let index = start; index < source.length; index++) {
-      const character = source[index];
-      if(character === '{') {
-        depth++;
-      } else if(character === '}' && --depth === 0) {
-        addLeadingName(source.slice(partStart, index), modules);
-        break;
-      } else if(character === ',' && depth === 1) {
-        addLeadingName(source.slice(partStart, index), modules);
-        partStart = index + 1;
-      }
-    }
-  }
-  return modules;
-}
-
-function addLeadingName(part, modules) {
-  const name = /^\s*([A-Za-z_]\w*)/.exec(part);
-  if(name && name[1] !== 'self') {
-    modules.add(name[1]);
-  }
-}
-
-/** Whether Rust source names an external crate as a path root (`wgpu::`), in a `use`, or with `extern crate`. */
+/**
+ * Whether Rust source names an external crate as a path root (`wgpu::`), in a `use`, or with `extern crate`.
+ */
 function namesRustCrate(source, crateName) {
   return new RegExp(`(?<![\\w:$])${crateName}::|^\\s*(?:pub\\s+)?use\\s+::?${crateName}\\b|extern\\s+crate\\s+${crateName}\\b`, 'm').test(source);
 }
 
-/** Remove ordinary comments, keeping doc comments (their links are real references) and string contents intact enough. */
+/**
+ * Remove ordinary comments, keeping doc comments (their links are real references).
+ */
 function stripRustComments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/(?![/!]).*$/gm, '');
 }
@@ -266,7 +224,7 @@ function stripRustComments(source) {
 function collectRustSources(directory) {
   const sources = [];
   for(const entry of readdirSync(directory, {withFileTypes: true})) {
-    if(entry.name.startsWith('.') || ignoredConsumerDirectories.has(entry.name)) {
+    if(entry.name.startsWith('.') || ignoredSourceDirectories.has(entry.name)) {
       continue;
     }
     const path = resolve(directory, entry.name);

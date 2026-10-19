@@ -19,6 +19,7 @@ use crate::{
         integer_range,
     },
 };
+use joy_core::math::deterministic;
 use serde_json::{
     Value as Json,
     json,
@@ -145,7 +146,11 @@ impl Builder {
                 let latitude = std::f64::consts::PI * row as f64 / rows as f64;
                 for column in 0..=segments {
                     let angle = std::f64::consts::PI * 2.0 * column as f64 / segments as f64;
-                    self.normal = vec![latitude.sin() * angle.cos(), latitude.cos(), latitude.sin() * angle.sin()];
+                    self.normal = vec![
+                        deterministic::sin(latitude) * deterministic::cos(angle),
+                        deterministic::cos(latitude),
+                        deterministic::sin(latitude) * deterministic::sin(angle),
+                    ];
                     self.uv = vec![column as f64 / segments as f64, row as f64 / rows as f64];
                     self.vertex(x + radius * self.normal[0], y + radius * self.normal[1], z + radius * self.normal[2])?;
                 }

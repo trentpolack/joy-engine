@@ -12,6 +12,7 @@ use crate::{
         integer_range,
     },
 };
+use joy_core::math::deterministic;
 use serde_json::{
     Value as Json,
     json,
@@ -317,11 +318,15 @@ pub fn transform(geometry: &mut Json, operation: &str, value: &[f64]) -> Result<
 pub fn rotate(value: &[f64], angles: &[f64]) -> Vec<f64> {
     let [x, y, z] = [value[0], value[1], value[2]];
     let [rx, ry, rz] = [angles[0], angles[1], angles[2]];
-    let y1 = y * rx.cos() - z * rx.sin();
-    let z1 = y * rx.sin() + z * rx.cos();
-    let x2 = x * ry.cos() + z1 * ry.sin();
-    let z2 = -x * ry.sin() + z1 * ry.cos();
-    vec![x2 * rz.cos() - y1 * rz.sin(), x2 * rz.sin() + y1 * rz.cos(), z2]
+    let y1 = y * deterministic::cos(rx) - z * deterministic::sin(rx);
+    let z1 = y * deterministic::sin(rx) + z * deterministic::cos(rx);
+    let x2 = x * deterministic::cos(ry) + z1 * deterministic::sin(ry);
+    let z2 = -x * deterministic::sin(ry) + z1 * deterministic::cos(ry);
+    vec![
+        x2 * deterministic::cos(rz) - y1 * deterministic::sin(rz),
+        x2 * deterministic::sin(rz) + y1 * deterministic::cos(rz),
+        z2,
+    ]
 }
 pub fn number(value: &Json) -> f64 {
     value.as_f64().expect("internally validated numeric geometry")
@@ -375,8 +380,16 @@ fn validate_attribute(domain: &str, name: &str, value: &Json) -> Result<(), Stri
     if name == "position" && values.iter().any(|v| number(v).abs() > 1e6) {
         return Err("Coordinates must be within ±1,000,000.".into());
     }
-    if name == "color" && values.iter().any(|v| !(0.0..=1.0).contains(&number(v))) {
-        return Err("Color attributes require components in 0–1.".into());
+    if name == "color" && !valid_color(&values) {
+        return Err("Color attributes require finite, nonnegative RGB and alpha in 0–1.".into());
     }
     Ok(())
+}
+
+/// Whether color attribute components are finite, nonnegative RGB (HDR allowed) with alpha, when present, in 0–1.
+fn valid_color(values: &[Json]) -> bool {
+    values.iter().enumerate().all(|(index, value)| {
+        let channel = number(value);
+        channel.is_finite() && channel >= 0.0 && (index != 3 || channel <= 1.0)
+    })
 }

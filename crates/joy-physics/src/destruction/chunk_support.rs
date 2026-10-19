@@ -14,7 +14,7 @@ use serde::{
 
 use super::DestructionError;
 use super::chunk_structure::DestructibleChunkDefinition;
-use joy_core::js_hypot;
+use joy_core::math::deterministic;
 
 /// Contact tolerance used when [`ChunkSupportOptions::contact_tolerance`] is omitted, in world units.
 pub const DEFAULT_CONTACT_TOLERANCE: f64 = 0.0001;
@@ -109,7 +109,7 @@ impl ChunkSupportGraph {
                     continue;
                 }
                 let horizontal_distance =
-                    js_hypot(&[target.center[0] - source.center[0], target.center[2] - source.center[2]]);
+                    deterministic::hypot(target.center[0] - source.center[0], target.center[2] - source.center[2]);
                 let vertical_gap = (target.center[VERTICAL_AXIS] - (target.size[VERTICAL_AXIS] / 2.0))
                     - (source.center[VERTICAL_AXIS] + (source.size[VERTICAL_AXIS] / 2.0));
 

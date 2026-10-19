@@ -4,13 +4,13 @@
 //! Scene effects lab configuration (TypeScript `config.ts`): effect notes, the per-quality effect tuning, and the
 //! view, lighting, bloom, and motion values the lab renders with. Distances are world units and times are seconds.
 
-use joy_engine::core::post_processing::{
+use joy_engine::development::EffectQuality;
+use joy_engine::prelude::*;
+use joy_engine::rendering::post_process::{
     AgxLook,
     BloomQuality,
     ToneMapper,
 };
-use joy_engine::development::EffectQuality;
-use joy_engine::prelude::*;
 use joy_engine::rendering::scene_effects::{
     AdaptiveExposureOptions,
     ClusteredLightingOptions,
@@ -62,7 +62,11 @@ pub fn quality_config(quality: EffectQuality) -> SceneEffectsOptions {
             step_count: pick(8.0, 8.0, 12.0),
             ..Default::default()
         }),
-        outlines: Some(OutlineOptions { color: [0.035, 0.04, 0.07, 1.0], thickness: 1.5, ..Default::default() }),
+        outlines: Some(OutlineOptions {
+            color: LinearColor::new(0.035, 0.04, 0.07, 1.0),
+            thickness: 1.5,
+            ..Default::default()
+        }),
         taa: Some(TaaOptions { history_weight: 0.9, reprojection: Reprojection::Velocity, ..Default::default() }),
         motion_blur: Some(MotionBlurOptions { strength: 1.5, sample_count: pick(6.0, 10.0, 16.0) }),
         ssr: Some(SsrOptions {
@@ -74,7 +78,7 @@ pub fn quality_config(quality: EffectQuality) -> SceneEffectsOptions {
         height_fog: Some(HeightFogOptions {
             density: 0.22,
             height_falloff: 3.0,
-            fog_color: [0.18, 0.34, 0.48, 0.6],
+            fog_color: LinearColor::new(0.18, 0.34, 0.48, 0.6),
             ..Default::default()
         }),
         clustered_lighting: Some(ClusteredLightingOptions {
@@ -94,8 +98,8 @@ pub fn quality_config(quality: EffectQuality) -> SceneEffectsOptions {
 
 /// Display settings: AgX neutral without antialiasing or bloom, so effects compare against a clean baseline. Bloom has
 /// threshold 1, so only real HDR radiance (the emissive strips) blooms when enabled.
-pub fn post_processing() -> PostProcessingConfig {
-    PostProcessingConfig {
+pub fn post_process_settings() -> PostProcessSettings {
+    PostProcessSettings {
         tone_mapper: ToneMapper::Agx,
         agx_look: AgxLook::Neutral,
         antialias_strength: 0.0,
@@ -104,7 +108,7 @@ pub fn post_processing() -> PostProcessingConfig {
         bloom_radius: 0.035,
         bloom_quality: BloomQuality::Medium,
         exposure: 1.0,
-        ..Default::default()
+        ..PostProcessSettings::DEFAULT
     }
 }
 
@@ -112,7 +116,7 @@ pub fn post_processing() -> PostProcessingConfig {
 /// `baselineConfig`), so the first frame is the comparison baseline.
 pub fn renderer_options() -> RendererOptions {
     RendererOptions {
-        post_processing: post_processing(),
+        post_process: post_process_settings(),
         scene_effects: Some(SceneEffectsOptions::default()),
         ..RendererOptions::default()
     }
@@ -147,7 +151,7 @@ pub const CAMERA_CUT_YAW: f32 = -0.42;
 /// Ambient irradiance and the linear background color.
 pub const AMBIENT: f32 = 0.18;
 /// Linear background color behind the open room.
-pub const CLEAR_COLOR: [f32; 4] = [0.045, 0.055, 0.08, 1.0];
+pub const CLEAR_COLOR: LinearColor = LinearColor::rgb(0.045, 0.055, 0.08);
 
 /// Simulation starts frozen here, while frames keep rendering to accumulate temporal history.
 pub const START_SECONDS: f64 = 2.0;

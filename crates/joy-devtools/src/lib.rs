@@ -3,7 +3,7 @@
 
 //! Joy Engine development tools: the development dock games and tools share (the standard CONFIG and JOY-EDITOR
 //! menus), the runtime statistics overlay ([`DevTools`]), config panels and [`LiveTuning`], the
-//! [`PostProcessingEditor`], and [`SceneEffectsControls`]. Production builds disable the overlay through the shell's
+//! [`PostProcessEditor`] for post-process volumes, and [`SceneEffectsControls`]. Production builds disable the overlay through the shell's
 //! development option and do not create editors.
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -15,11 +15,11 @@ pub mod dock;
 #[cfg(not(target_arch = "wasm32"))]
 mod files;
 mod live_tuning;
-mod post_processing_editor;
-mod post_processing_session;
-#[cfg(not(target_arch = "wasm32"))]
-mod profile_file;
+mod post_process_editor;
+mod post_process_session;
 mod scene_effects_controls;
+#[cfg(not(target_arch = "wasm32"))]
+mod volume_file;
 
 pub use config_panel::{
     ConfigEditor,
@@ -39,14 +39,15 @@ pub use live_tuning::{
     TuningError,
     TuningField,
 };
-pub use post_processing_editor::{
-    PostProcessingEditor,
-    PostProcessingEditorOptions,
+pub use post_process_editor::{
+    PostProcessEditor,
+    PostProcessEditorError,
+    PostProcessEditorOptions,
 };
-pub use post_processing_session::{
-    ControlValue,
-    PostProcessingSession,
-    ProfileConflict,
+pub use post_process_session::{
+    PostProcessConflict,
+    PostProcessSession,
+    PostProcessValue,
 };
 pub use scene_effects_controls::{
     EffectPreset,

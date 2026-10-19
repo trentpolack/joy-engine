@@ -12,7 +12,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use glam::Vec3;
+use joy_core::math::Vec3;
 use rapier3d::math::{
     Matrix,
     Real,

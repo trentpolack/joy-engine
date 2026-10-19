@@ -23,7 +23,7 @@ mod character;
 mod component;
 mod component_registry;
 mod component_schema;
-mod components;
+mod component_vocabulary;
 mod controller;
 mod entity;
 mod entity_definition;
@@ -60,16 +60,7 @@ pub use component_schema::{
     CreatedComponent,
     is_component_field_active,
 };
-pub use components::{
-    EFFECT_COMPONENT_DEFAULTS,
-    EffectComponentDefaults,
-    LIGHT_COMPONENT_DEFAULTS,
-    LightComponent,
-    LightComponentDefaults,
-    RENDER_COMPONENT_DEFAULTS,
-    RenderComponent,
-    RenderComponentDefaults,
-    RenderSource,
+pub use component_vocabulary::{
     component_asset_kind,
     component_category,
     component_preset,
@@ -88,6 +79,9 @@ pub use entity::{
 pub use entity_definition::{
     EntityDefinition,
     EntityTransform,
+    number_to_json,
+    read_vector,
+    vector_to_json,
 };
 pub use entity_registry::EntityRegistry;
 pub use entity_system::{
@@ -97,7 +91,6 @@ pub use entity_system::{
 pub use entity_world::EntityWorld;
 pub use error::{
     AssetPathError,
-    ComponentError,
     ComponentSchemaError,
     DefinitionError,
     GameplayError,

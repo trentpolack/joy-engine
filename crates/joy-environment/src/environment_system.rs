@@ -12,9 +12,10 @@
 
 use std::f64::consts::PI;
 
-use glam::Vec3;
+use joy_core::math::Vec3;
+use joy_core::math::deterministic;
 use joy_core::{
-    Rgb,
+    LinearColor,
     smoothstep,
 };
 use serde::{
@@ -22,7 +23,7 @@ use serde::{
     Serialize,
 };
 
-use joy_core::format::format_bound;
+use joy_core::format::format_number;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Constants
@@ -177,7 +178,7 @@ impl EnvironmentOptions {
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum EnvironmentError {
     /// A value was non-finite or outside its inclusive range.
-    #[error("{name} must be finite and between {} and {}.", format_bound(*.minimum), format_bound(*.maximum))]
+    #[error("{name} must be finite and between {} and {}.", format_number(*.minimum), format_number(*.maximum))]
     OutOfRange {
         /// Serialized option or argument name.
         name: &'static str,
@@ -215,8 +216,8 @@ pub struct AtmosphereLight {
     pub kind: CelestialBody,
     /// Unit vector from the world toward the body, in Y-up world space.
     pub direction: Vec3,
-    /// Linear RGB color (may exceed one near the horizon).
-    pub color: Rgb,
+    /// Linear light color (may exceed one near the horizon); alpha is unused.
+    pub color: LinearColor,
     /// Linear intensity multiplier.
     pub intensity: f32,
     /// Apparent disc radius in radians.
@@ -228,8 +229,8 @@ pub struct AtmosphereLight {
 /// Ambient sky contribution.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Skylight {
-    /// Linear RGB sky color.
-    pub color: Rgb,
+    /// Linear sky color; alpha is unused.
+    pub color: LinearColor,
     /// Linear intensity multiplier.
     pub intensity: f32,
 }
@@ -380,7 +381,7 @@ impl EnvironmentSystem {
             moon,
             primary_light,
             skylight: Skylight {
-                color: to_rgb(sky_color),
+                color: to_linear_color(sky_color),
                 intensity: (SKYLIGHT_NIGHT_INTENSITY + (daylight * SKYLIGHT_DAY_INTENSITY)) as f32,
             },
             wind: calculate_wind(self.elapsed_seconds, &self.options.wind),
@@ -397,22 +398,27 @@ fn calculate_sun_direction(time_of_day: f64, options: &EnvironmentOptions) -> [f
     // Operation order matches the TypeScript source so results agree to the last few bits.
     let latitude = options.latitude_degrees * PI / 180.0;
     let declination = options.axial_tilt_degrees * PI / 180.0
-        * ((2.0 * PI * (options.day_of_year - EQUINOX_DAY_OF_YEAR)) / DAYS_PER_YEAR).sin();
+        * deterministic::sin((2.0 * PI * (options.day_of_year - EQUINOX_DAY_OF_YEAR)) / DAYS_PER_YEAR);
     let hour_angle = (time_of_day - 0.5) * 2.0 * PI;
-    let elevation =
-        ((latitude.sin() * declination.sin()) + (latitude.cos() * declination.cos() * hour_angle.cos())).asin();
-    let azimuth = (-hour_angle.sin()).atan2((declination.tan() * latitude.cos()) - (latitude.sin() * hour_angle.cos()))
-        + options.north_radians;
-    let horizontal = elevation.cos();
-    [azimuth.sin() * horizontal, elevation.sin(), azimuth.cos() * horizontal]
+    let elevation = deterministic::asin(
+        (deterministic::sin(latitude) * deterministic::sin(declination))
+            + (deterministic::cos(latitude) * deterministic::cos(declination) * deterministic::cos(hour_angle)),
+    );
+    let azimuth = deterministic::atan2(
+        -deterministic::sin(hour_angle),
+        (deterministic::tan(declination) * deterministic::cos(latitude))
+            - (deterministic::sin(latitude) * deterministic::cos(hour_angle)),
+    ) + options.north_radians;
+    let horizontal = deterministic::cos(elevation);
+    [deterministic::sin(azimuth) * horizontal, deterministic::sin(elevation), deterministic::cos(azimuth) * horizontal]
 }
 
 /// Gusting wind for an accumulated time; two incommensurate sines keep gusts from looking periodic.
 fn calculate_wind(elapsed_seconds: f64, options: &WindOptions) -> WindFrame {
     let phase = elapsed_seconds / options.gust_period_seconds;
-    let gust = ((phase * 2.0 * PI).sin() + ((phase * PI * 0.73) + 1.7).sin() * 0.5) / 1.5;
+    let gust = (deterministic::sin(phase * 2.0 * PI) + deterministic::sin((phase * PI * 0.73) + 1.7) * 0.5) / 1.5;
     let speed = 0.0_f64.max(options.speed * (1.0 + (gust * options.gust_strength)));
-    let direction = [options.direction_radians.sin(), 0.0, options.direction_radians.cos()];
+    let direction = [deterministic::sin(options.direction_radians), 0.0, deterministic::cos(options.direction_radians)];
     let velocity = direction.map(|value| value * speed);
     WindFrame { direction: to_vec3(direction), velocity: to_vec3(velocity), speed: speed as f32 }
 }
@@ -428,7 +434,7 @@ fn create_light(
     AtmosphereLight {
         kind,
         direction: to_vec3(direction),
-        color: to_rgb(color),
+        color: to_linear_color(color),
         intensity: intensity as f32,
         angular_radius: angular_radius as f32,
         casts_shadow: true,
@@ -460,9 +466,9 @@ fn to_vec3(value: [f64; 3]) -> Vec3 {
     Vec3::new(value[0] as f32, value[1] as f32, value[2] as f32)
 }
 
-/// Narrow an `f64` triple to a stored color.
-fn to_rgb(value: [f64; 3]) -> Rgb {
-    [value[0] as f32, value[1] as f32, value[2] as f32]
+/// Narrow an `f64` linear RGB triple to an opaque stored color.
+fn to_linear_color(value: [f64; 3]) -> LinearColor {
+    LinearColor::rgb(value[0] as f32, value[1] as f32, value[2] as f32)
 }
 
 /// Reject non-finite or out-of-range values with the TypeScript message.
@@ -474,49 +480,5 @@ fn check_range(value: f64, minimum: f64, maximum: f64, name: &'static str) -> Re
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn partial_authored_records_keep_defaults_and_reject_unknown_fields() {
-        let options =
-            EnvironmentOptions::from_json(&serde_json::json!({"timeOfDay": 0.5, "wind": {"speed": 9}})).unwrap();
-        assert_eq!(options.time_of_day, 0.5);
-        assert_eq!(options.wind.speed, 9.0);
-        assert_eq!(options.wind.gust_period_seconds, 8.0);
-        assert_eq!(options.wind.gust_strength, 0.25);
-
-        let unknown = EnvironmentOptions::from_json(&serde_json::json!({"weather": "rain"})).unwrap_err();
-        assert!(unknown.to_string().contains("weather"), "{unknown}");
-        let nested = EnvironmentOptions::from_json(&serde_json::json!({"wind": {"gustStrength": 2}})).unwrap_err();
-        assert!(nested.to_string().contains("wind.gustStrength"), "{nested}");
-    }
-
-    #[test]
-    fn invalid_policy_and_steps_leave_state_unchanged() {
-        let options = EnvironmentOptions { time_of_day: 1.0, ..Default::default() };
-        assert_eq!(EnvironmentSystem::new(options).unwrap_err(), EnvironmentError::TimeOfDayNotBelowOne);
-        let gusts = EnvironmentOptions {
-            wind: WindOptions { gust_period_seconds: 0.0, ..Default::default() },
-            ..Default::default()
-        };
-        assert!(EnvironmentSystem::new(gusts).unwrap_err().to_string().contains("gustPeriodSeconds"));
-
-        let mut environment = EnvironmentSystem::new(EnvironmentOptions::default()).unwrap();
-        let before = environment.clone();
-        assert!(environment.step(-1.0).unwrap_err().to_string().contains("deltaSeconds"));
-        assert!(environment.step(f64::NAN).is_err());
-        assert_eq!(environment.set_time_of_day(1.0), Err(EnvironmentError::TimeOfDayNotBelowOne));
-        environment.set_elapsed_seconds(f64::INFINITY);
-        assert_eq!(environment, before);
-    }
-
-    #[test]
-    fn paused_day_still_advances_wind_time() {
-        let options = EnvironmentOptions { time_of_day: 0.5, day_length_seconds: 0.0, ..Default::default() };
-        let mut environment = EnvironmentSystem::new(options).unwrap();
-        let frame = environment.step(60.0).unwrap();
-        assert_eq!(frame.time_of_day, 0.5);
-        assert_eq!(frame.elapsed_seconds, 60.0);
-    }
-}
+#[path = "../tests/unit/environment_system.rs"]
+mod tests;

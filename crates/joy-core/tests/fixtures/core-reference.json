@@ -1,0 +1,419 @@
+{
+ "fields": [
+  {
+   "key": "gravity",
+   "label": "Gravity",
+   "group": "Movement",
+   "description": "Downward acceleration for frames and grenades.",
+   "defaultValue": 27,
+   "min": 8,
+   "max": 50,
+   "step": 0.5,
+   "units": "m/s²",
+   "applyMode": "live"
+  },
+  {
+   "key": "boostScale",
+   "label": "Boost Speed Scale",
+   "group": "Movement",
+   "description": "Multiplier on boost speeds.",
+   "defaultValue": 1,
+   "min": 0.5,
+   "max": 2,
+   "step": 0.05,
+   "units": "×",
+   "applyMode": "live"
+  },
+  {
+   "key": "debrisRigidBodies",
+   "label": "Rigid Debris Budget",
+   "group": "Destruction",
+   "description": "Maximum simultaneously simulated debris bodies.",
+   "defaultValue": 40,
+   "min": 0,
+   "max": 160,
+   "step": 1,
+   "units": "bodies",
+   "applyMode": "restart"
+  },
+  {
+   "key": "cameraShoulder",
+   "label": "Shoulder Offset",
+   "group": "Camera",
+   "description": "Sideways offset of the look target.",
+   "defaultValue": 2.4,
+   "min": -3,
+   "max": 3,
+   "step": 0.05,
+   "units": "m",
+   "applyMode": "next-spawn"
+  },
+  {
+   "key": "timeOfDay",
+   "label": "Solar Time",
+   "group": "Environment",
+   "description": "Local solar hour.",
+   "defaultValue": 17.6,
+   "min": 0,
+   "max": 23.99,
+   "step": 0.05,
+   "units": "hours",
+   "applyMode": "live"
+  },
+  {
+   "key": "tiny",
+   "label": "Tiny",
+   "group": "Edge",
+   "description": "Very small bounds.",
+   "defaultValue": 5e-7,
+   "min": 1e-7,
+   "max": 0.000001,
+   "step": 1e-8,
+   "units": "",
+   "applyMode": "live"
+  }
+ ],
+ "valueCases": [
+  {
+   "name": "defaults",
+   "overrides": {},
+   "result": {
+    "ok": {
+     "gravity": 27,
+     "boostScale": 1,
+     "debrisRigidBodies": 40,
+     "cameraShoulder": 2.4,
+     "timeOfDay": 17.6,
+     "tiny": 5e-7
+    }
+   }
+  },
+  {
+   "name": "overrides",
+   "overrides": {
+    "gravity": 31.5,
+    "debrisRigidBodies": 12,
+    "cameraShoulder": -2.95
+   },
+   "result": {
+    "ok": {
+     "gravity": 31.5,
+     "boostScale": 1,
+     "debrisRigidBodies": 12,
+     "cameraShoulder": -2.95,
+     "timeOfDay": 17.6,
+     "tiny": 5e-7
+    }
+   }
+  },
+  {
+   "name": "unknown",
+   "overrides": {
+    "gravity": 30,
+    "fov": 70
+   },
+   "result": {
+    "error": "Unknown config key \"fov\"."
+   }
+  },
+  {
+   "name": "below",
+   "overrides": {
+    "timeOfDay": -0.5
+   },
+   "result": {
+    "error": "Config value \"timeOfDay\" is below its minimum of 0."
+   }
+  },
+  {
+   "name": "above",
+   "overrides": {
+    "boostScale": 2.05
+   },
+   "result": {
+    "error": "Config value \"boostScale\" exceeds its maximum of 2."
+   }
+  },
+  {
+   "name": "integer",
+   "overrides": {
+    "debrisRigidBodies": 12.5
+   },
+   "result": {
+    "error": "Config value \"debrisRigidBodies\" must be an integer."
+   }
+  },
+  {
+   "name": "nonFinite",
+   "overrides": {
+    "gravity": null
+   },
+   "result": {
+    "error": "Config value \"gravity\" must be finite."
+   }
+  },
+  {
+   "name": "tinyBelow",
+   "overrides": {
+    "tiny": 1e-8
+   },
+   "result": {
+    "error": "Config value \"tiny\" is below its minimum of 1e-7."
+   }
+  }
+ ],
+ "documentCases": [
+  {
+   "name": "valid",
+   "document": {
+    "$schema": "./tuning.schema.json",
+    "version": 1,
+    "values": {
+     "gravity": 20
+    }
+   },
+   "result": {
+    "ok": {
+     "gravity": 20,
+     "boostScale": 1,
+     "debrisRigidBodies": 40,
+     "cameraShoulder": 2.4,
+     "timeOfDay": 17.6,
+     "tiny": 5e-7
+    }
+   }
+  },
+  {
+   "name": "stringValue",
+   "document": {
+    "version": 1,
+    "values": {
+     "gravity": "20"
+    }
+   },
+   "result": {
+    "error": "Config value \"gravity\" must be finite."
+   }
+  },
+  {
+   "name": "notObject",
+   "document": [
+    1
+   ],
+   "result": {
+    "error": "Config document must be an object."
+   }
+  },
+  {
+   "name": "extraKey",
+   "document": {
+    "version": 1,
+    "values": {},
+    "comment": "x"
+   },
+   "result": {
+    "error": "Unknown config document key \"comment\"."
+   }
+  },
+  {
+   "name": "version",
+   "document": {
+    "version": 2,
+    "values": {}
+   },
+   "result": {
+    "error": "Config document version must be 1."
+   }
+  },
+  {
+   "name": "schemaType",
+   "document": {
+    "$schema": 3,
+    "version": 1,
+    "values": {}
+   },
+   "result": {
+    "error": "Config document $schema must be a string."
+   }
+  },
+  {
+   "name": "valuesType",
+   "document": {
+    "version": 1,
+    "values": []
+   },
+   "result": {
+    "error": "Config document values must be an object."
+   }
+  },
+  {
+   "name": "unknownThenInvalid",
+   "document": {
+    "version": 1,
+    "values": {
+     "gravity": "x",
+     "zoom": 3
+    }
+   },
+   "result": {
+    "error": "Unknown config key \"zoom\"."
+   }
+  }
+ ],
+ "fieldCases": [
+  {
+   "name": "emptyKey",
+   "fields": [
+    {
+     "key": "",
+     "label": "Gravity",
+     "group": "Movement",
+     "description": "Downward acceleration for frames and grenades.",
+     "defaultValue": 27,
+     "min": 8,
+     "max": 50,
+     "step": 0.5,
+     "units": "m/s²",
+     "applyMode": "live"
+    }
+   ],
+   "result": {
+    "error": "Every config field requires a non-empty key."
+   }
+  },
+  {
+   "name": "duplicate",
+   "fields": [
+    {
+     "key": "gravity",
+     "label": "Gravity",
+     "group": "Movement",
+     "description": "Downward acceleration for frames and grenades.",
+     "defaultValue": 27,
+     "min": 8,
+     "max": 50,
+     "step": 0.5,
+     "units": "m/s²",
+     "applyMode": "live"
+    },
+    {
+     "key": "gravity",
+     "label": "Gravity",
+     "group": "Movement",
+     "description": "Downward acceleration for frames and grenades.",
+     "defaultValue": 27,
+     "min": 8,
+     "max": 50,
+     "step": 0.5,
+     "units": "m/s²",
+     "applyMode": "live"
+    }
+   ],
+   "result": {
+    "error": "Duplicate config key \"gravity\"."
+   }
+  },
+  {
+   "name": "nonFiniteMetadata",
+   "fields": [
+    {
+     "key": "gravity",
+     "label": "Gravity",
+     "group": "Movement",
+     "description": "Downward acceleration for frames and grenades.",
+     "defaultValue": 27,
+     "min": 8,
+     "max": null,
+     "step": 0.5,
+     "units": "m/s²",
+     "applyMode": "live"
+    }
+   ],
+   "result": {
+    "error": "Config field \"gravity\" numeric metadata must be finite."
+   }
+  },
+  {
+   "name": "bounds",
+   "fields": [
+    {
+     "key": "gravity",
+     "label": "Gravity",
+     "group": "Movement",
+     "description": "Downward acceleration for frames and grenades.",
+     "defaultValue": 27,
+     "min": 60,
+     "max": 50,
+     "step": 0.5,
+     "units": "m/s²",
+     "applyMode": "live"
+    }
+   ],
+   "result": {
+    "error": "Config field \"gravity\" requires min <= max and a positive step."
+   }
+  },
+  {
+   "name": "step",
+   "fields": [
+    {
+     "key": "gravity",
+     "label": "Gravity",
+     "group": "Movement",
+     "description": "Downward acceleration for frames and grenades.",
+     "defaultValue": 27,
+     "min": 8,
+     "max": 50,
+     "step": 0,
+     "units": "m/s²",
+     "applyMode": "live"
+    }
+   ],
+   "result": {
+    "error": "Config field \"gravity\" requires min <= max and a positive step."
+   }
+  },
+  {
+   "name": "defaultOutOfRange",
+   "fields": [
+    {
+     "key": "gravity",
+     "label": "Gravity",
+     "group": "Movement",
+     "description": "Downward acceleration for frames and grenades.",
+     "defaultValue": 51,
+     "min": 8,
+     "max": 50,
+     "step": 0.5,
+     "units": "m/s²",
+     "applyMode": "live"
+    }
+   ],
+   "result": {
+    "error": "Config value \"gravity\" exceeds its maximum of 50."
+   }
+  },
+  {
+   "name": "defaultInteger",
+   "fields": [
+    {
+     "key": "gravity",
+     "label": "Gravity",
+     "group": "Movement",
+     "description": "Downward acceleration for frames and grenades.",
+     "defaultValue": 27.5,
+     "min": 8,
+     "max": 50,
+     "step": 1,
+     "units": "m/s²",
+     "applyMode": "live"
+    }
+   ],
+   "result": {
+    "error": "Config value \"gravity\" must be an integer."
+   }
+  }
+ ],
+ "schemaText": "{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"required\": [\n    \"version\",\n    \"values\"\n  ],\n  \"properties\": {\n    \"$schema\": {\n      \"type\": \"string\"\n    },\n    \"version\": {\n      \"const\": 1\n    },\n    \"values\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"gravity\": {\n          \"type\": \"number\",\n          \"minimum\": 8,\n          \"maximum\": 50,\n          \"description\": \"Downward acceleration for frames and grenades.\"\n        },\n        \"boostScale\": {\n          \"type\": \"number\",\n          \"minimum\": 0.5,\n          \"maximum\": 2,\n          \"description\": \"Multiplier on boost speeds.\"\n        },\n        \"debrisRigidBodies\": {\n          \"type\": \"integer\",\n          \"minimum\": 0,\n          \"maximum\": 160,\n          \"description\": \"Maximum simultaneously simulated debris bodies.\"\n        },\n        \"cameraShoulder\": {\n          \"type\": \"number\",\n          \"minimum\": -3,\n          \"maximum\": 3,\n          \"description\": \"Sideways offset of the look target.\"\n        },\n        \"timeOfDay\": {\n          \"type\": \"number\",\n          \"minimum\": 0,\n          \"maximum\": 23.99,\n          \"description\": \"Local solar hour.\"\n        },\n        \"tiny\": {\n          \"type\": \"number\",\n          \"minimum\": 1e-7,\n          \"maximum\": 0.000001,\n          \"description\": \"Very small bounds.\"\n        }\n      }\n    }\n  }\n}",
+ "ordinarySchemaText": "{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \"type\": \"object\",\n  \"additionalProperties\": false,\n  \"required\": [\n    \"version\",\n    \"values\"\n  ],\n  \"properties\": {\n    \"$schema\": {\n      \"type\": \"string\"\n    },\n    \"version\": {\n      \"const\": 1\n    },\n    \"values\": {\n      \"type\": \"object\",\n      \"additionalProperties\": false,\n      \"properties\": {\n        \"gravity\": {\n          \"type\": \"number\",\n          \"minimum\": 8,\n          \"maximum\": 50,\n          \"description\": \"Downward acceleration for frames and grenades.\"\n        },\n        \"boostScale\": {\n          \"type\": \"number\",\n          \"minimum\": 0.5,\n          \"maximum\": 2,\n          \"description\": \"Multiplier on boost speeds.\"\n        },\n        \"debrisRigidBodies\": {\n          \"type\": \"integer\",\n          \"minimum\": 0,\n          \"maximum\": 160,\n          \"description\": \"Maximum simultaneously simulated debris bodies.\"\n        },\n        \"cameraShoulder\": {\n          \"type\": \"number\",\n          \"minimum\": -3,\n          \"maximum\": 3,\n          \"description\": \"Sideways offset of the look target.\"\n        },\n        \"timeOfDay\": {\n          \"type\": \"number\",\n          \"minimum\": 0,\n          \"maximum\": 23.99,\n          \"description\": \"Local solar hour.\"\n        }\n      }\n    }\n  }\n}"
+}

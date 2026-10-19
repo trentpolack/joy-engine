@@ -27,7 +27,7 @@ fn options() -> ShellOptions {
 
 fn start() {
     let result = BuildingExample::new(BuildingExample::launch_mode())
-        .map_err(|error| ShellError::Game(error.to_string()))
+        .map_err(|error| ShellError::App(error.to_string()))
         .and_then(|example| run(options(), example));
     if let Err(error) = result {
         joy_engine::log::error!("{error}");

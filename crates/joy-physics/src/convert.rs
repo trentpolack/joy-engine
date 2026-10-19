@@ -10,7 +10,7 @@
 //! and scalar (non-SIMD) arithmetic, so native and WebAssembly builds create bit-identical bodies. Values reported back
 //! to callers use the engine's foundation helpers.
 
-use glam::{
+use joy_core::math::{
     Quat,
     Vec3,
 };
@@ -68,16 +68,5 @@ pub(super) fn finite_vector(value: Vec3, name: &'static str) -> Result<Vec3, Phy
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn solver_rotations_match_the_engine_euler_convention() {
-        for rotation in [Vec3::new(0.3, -0.7, 1.1), Vec3::new(-1.2, 2.2, -2.8), Vec3::new(0.6, 1.5707964, -0.3)] {
-            let solver = solver_rotation_from_euler(rotation);
-            let engine = joy_core::quat_from_euler(rotation);
-            let difference = Quat::from_xyzw(solver.x, solver.y, solver.z, solver.w).dot(engine).abs();
-            assert!((difference - 1.0).abs() < 1e-6, "{rotation}");
-        }
-    }
-}
+#[path = "../tests/unit/convert.rs"]
+mod tests;

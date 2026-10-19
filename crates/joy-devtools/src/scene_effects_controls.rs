@@ -5,15 +5,20 @@
 //! HDR bloom. Settings are temporary and never saved.
 //!
 //! Games draw [`ui`](SceneEffectsControls::ui) inside a HUD panel during the UI phase and call
-//! [`apply`](SceneEffectsControls::apply) with the renderer during the render phase, which commits any change.
+//! [`apply`](SceneEffectsControls::apply) with the renderer during the render phase, which commits any change. The bloom
+//! toggle adjusts post-processing, which games set every frame, so they pass their settings through
+//! [`post_process`](SceneEffectsControls::post_process) before handing them to the renderer.
 //! Labs that compare effects on purpose-built scenes supply their own per-quality settings with
 //! [`with_tuning`](SceneEffectsControls::with_tuning).
 
 use egui::RichText;
 
 use crate::dock;
-use joy_core::post_processing::BloomQuality;
 use joy_renderer::Renderer;
+use joy_renderer::post_process::{
+    BloomQuality,
+    PostProcessSettings,
+};
 use joy_renderer::scene_effects::{
     ClusteredLightingOptions,
     GtaoOptions,
@@ -106,6 +111,8 @@ pub struct SceneEffectsControls {
     quality: EffectQuality,
     bloom: bool,
     bloom_strength: f32,
+    /// Whether the author has chosen bloom or its quality here; until then post-processing passes through unchanged.
+    bloom_chosen: bool,
     tuning: Option<EffectTuning>,
     default_open: bool,
     pending: Pending,
@@ -122,6 +129,7 @@ impl Default for SceneEffectsControls {
             quality: EffectQuality::Medium,
             bloom: false,
             bloom_strength: 0.5,
+            bloom_chosen: false,
             tuning: None,
             default_open: false,
             pending: Pending::default(),
@@ -303,7 +311,7 @@ impl SceneEffectsControls {
     pub fn apply(&mut self, renderer: &mut Renderer) {
         if !self.synced {
             // Preserve the renderer's display settings until the user opts in.
-            let display = renderer.post_processing();
+            let display = renderer.post_process();
             self.bloom = display.bloom_strength > 0.0;
             if self.bloom {
                 self.bloom_strength = display.bloom_strength;
@@ -326,22 +334,24 @@ impl SceneEffectsControls {
             self.error = true;
             return;
         }
-        if pending.bloom || pending.quality {
-            let mut display = renderer.post_processing().clone();
-            if pending.bloom {
-                display.bloom_strength = if self.bloom { self.bloom_strength } else { 0.0 };
-            }
-            if pending.quality {
-                display.bloom_quality = match self.quality {
-                    EffectQuality::Low => BloomQuality::Low,
-                    EffectQuality::Medium => BloomQuality::Medium,
-                    EffectQuality::High => BloomQuality::High,
-                };
-            }
-            renderer.set_post_processing(display);
-        }
+        self.bloom_chosen |= pending.bloom || pending.quality;
         renderer.reset_history();
         self.update_status(renderer);
+    }
+
+    /// `settings` with the bloom choice made here applied: the HDR bloom toggle's strength and the selected quality.
+    /// Settings pass through unchanged until the author changes bloom or quality.
+    pub fn with_bloom_choice(&self, mut settings: PostProcessSettings) -> PostProcessSettings {
+        if !self.bloom_chosen {
+            return settings;
+        }
+        settings.bloom_strength = if self.bloom { self.bloom_strength } else { 0.0 };
+        settings.bloom_quality = match self.quality {
+            EffectQuality::Low => BloomQuality::Low,
+            EffectQuality::Medium => BloomQuality::Medium,
+            EffectQuality::High => BloomQuality::High,
+        };
+        settings
     }
 
     fn update_status(&mut self, renderer: &Renderer) {
@@ -363,47 +373,5 @@ impl SceneEffectsControls {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn presets_and_toggles_build_typescript_configurations() {
-        let mut controls = SceneEffectsControls::new();
-        controls.select_preset(EffectPreset::Combined);
-        let config = controls.configuration();
-        assert!(config.gtao.is_some() && config.ssgi.is_some() && config.taa.is_some() && config.ssr.is_some());
-        assert_eq!(config.ssgi.unwrap().ray_count, 7.0);
-        assert_eq!(config.ssr.unwrap().resolution_scale, 0.5);
-        assert!(controls.bloom);
-        config.validate().unwrap();
-
-        // Ambient-occlusion choices replace each other; manual changes become a custom selection.
-        controls.toggle("ssao", true);
-        assert!(controls.configuration().gtao.is_none() && controls.configuration().ssao.is_some());
-        assert_eq!(controls.preset, EffectPreset::Custom);
-        controls.quality = EffectQuality::High;
-        assert_eq!(controls.configuration().ssao.unwrap().resolution_scale, 1.0);
-        controls.select_preset(EffectPreset::Off);
-        assert!(!controls.configuration().any_enabled() && !controls.bloom);
-    }
-
-    #[test]
-    fn tuning_supplies_enabled_effects_settings_per_quality() {
-        fn tuning(quality: EffectQuality) -> SceneEffectsOptions {
-            let scale = if quality == EffectQuality::High { 1.0 } else { 0.5 };
-            SceneEffectsOptions {
-                gtao: Some(GtaoOptions { radius: 2.2, resolution_scale: scale, ..Default::default() }),
-                ..Default::default()
-            }
-        }
-        let mut controls = SceneEffectsControls::new().with_tuning(tuning).with_bloom_strength(0.65);
-        controls.select_preset(EffectPreset::Combined);
-        let config = controls.configuration();
-        assert_eq!(config.gtao.unwrap().radius, 2.2, "tuned entries replace the defaults");
-        assert_eq!(config.ssgi.unwrap().ray_count, 7.0, "untuned entries keep the quality defaults");
-        assert!(config.outlines.is_none(), "tuning never enables effects");
-        controls.quality = EffectQuality::High;
-        assert_eq!(controls.configuration().gtao.unwrap().resolution_scale, 1.0);
-        assert_eq!(controls.bloom_strength, 0.65);
-    }
-}
+#[path = "../tests/unit/scene_effects_controls.rs"]
+mod tests;

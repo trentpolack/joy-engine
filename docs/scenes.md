@@ -11,6 +11,6 @@ Positions use Y-up world coordinates. Rotations are XYZ Euler radians applied X,
 ## Frame Inputs
 The renderer uses one camera and frame state for culling, shadows, lighting, scene attachments, and display processing. Lit, PBR, and Unlit materials remain separate. Transparent geometry uses depth testing without depth writes and sorts back to front. `FrameInputs` can also borrow transient colored triangles, ordered textured draws, environment state, lights, and image lighting.
 
-`LevelScene` translates authored render and light records into presentation. `AssetScene` adds FORM assets and colored/textured JOYFX effects; its staged `prepare` and `commit` retain accepted presentation on failure. See [particles](rust-particles.md).
+`LevelScene` translates authored render and light records into presentation, and `PostProcessVolumes` resolves `postProcess` volumes at the view point (see [postprocessing](postprocessing.md)). `AssetScene` adds FORM assets and colored/textured JOYFX effects; its staged `prepare` and `commit` retain accepted presentation on failure. See [particles](rust-particles.md).
 
-Use the rendering integration tests in `test/rust/` and browser captures for the affected projects. Inspect shadows, transparency, scene effects, and high-density scaling on every supported backend affected by the change.
+Use the rendering integration tests in `tests/integration/` and browser captures for the affected projects. Inspect shadows, transparency, scene effects, and high-density scaling on every supported backend affected by the change.

@@ -7,10 +7,10 @@ use crate::{
     MAX_POINT_LIGHTS,
     PointLight,
 };
-use glam::Vec3;
+use joy_core::LinearColor;
+use joy_core::math::Vec3;
 
 use joy_fx::ParticleEffect;
-use joy_fx::math;
 
 /// A particle light in effect space (the effect's world units).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -45,7 +45,7 @@ impl ParticlePointLight {
     pub fn point_light(&self) -> PointLight {
         PointLight {
             position: Vec3::new(self.x as f32, self.y as f32, self.z as f32),
-            color: [self.r as f32, self.g as f32, self.b as f32],
+            color: LinearColor::rgb(self.r as f32, self.g as f32, self.b as f32),
             range: self.range as f32,
             casts_shadow: false,
         }
@@ -103,10 +103,10 @@ pub fn collect_particle_lights(effect: &ParticleEffect, max_lights: usize) -> Pa
         if !values.iter().all(|value| value.is_finite()) {
             continue;
         }
-        let strength = particle.light_intensity * math::min(1.0, particle.alpha);
-        let r = math::max(0.0, particle.r) * strength;
-        let g = math::max(0.0, particle.g) * strength;
-        let b = math::max(0.0, particle.b) * strength;
+        let strength = particle.light_intensity * f64::min(1.0, particle.alpha);
+        let r = f64::max(0.0, particle.r) * strength;
+        let g = f64::max(0.0, particle.g) * strength;
+        let b = f64::max(0.0, particle.b) * strength;
         if r + g + b <= 0.0 {
             continue;
         }

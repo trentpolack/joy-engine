@@ -3,7 +3,7 @@
 
 //! Windowless frame runner for tests, deterministic captures, and tooling.
 //!
-//! Runs the same phases as the windowed shell with a fixed elapsed time per frame and an offscreen target, so game
+//! Runs the same phases as the windowed shell with a fixed elapsed time per frame and an offscreen target, so app
 //! behavior and rendering can be verified without a display. [`HeadlessShell::step`] skips the UI phase;
 //! [`HeadlessShell::step_with_ui`] runs it with synthetic egui input (pointer, keys, text) and paints the UI over the
 //! capture, so tools can be driven and screenshotted through their real interface. Native only.
@@ -23,15 +23,15 @@ use joy_renderer::{
 };
 use joy_ui::Viewport;
 
-use crate::clock::FrameClock;
-use crate::game::{
+use crate::app::{
+    App,
+    AppResult,
     Frame,
-    Game,
-    GameResult,
     RenderTarget,
     ShellRequests,
     StartContext,
 };
+use crate::clock::FrameClock;
 use crate::shell::ShellError;
 
 /// Headless runner configuration.
@@ -64,7 +64,7 @@ impl Default for HeadlessOptions {
     }
 }
 
-/// A windowless shell that steps a game one frame at a time and reads back its pixels.
+/// A windowless shell that steps an app one frame at a time and reads back its pixels.
 pub struct HeadlessShell {
     renderer: Renderer,
     target: OffscreenTarget,
@@ -105,12 +105,12 @@ impl HeadlessShell {
         })
     }
 
-    /// Call the game's start hook with this shell's renderer.
-    pub fn start(&mut self, game: &mut impl Game) -> GameResult {
+    /// Call the app's start hook with this shell's renderer.
+    pub fn start(&mut self, app: &mut impl App) -> AppResult {
         let viewport = self.viewport();
         let mut context =
             StartContext { capabilities: self.gpu.capabilities(), renderer: &mut self.renderer, viewport };
-        game.start(&mut context)
+        app.start(&mut context)
     }
 
     /// Player input; set keys or virtual buttons before calling [`step`](Self::step).
@@ -124,15 +124,15 @@ impl HeadlessShell {
     }
 
     /// Run one frame's phases and render it offscreen. The UI phase is skipped.
-    pub fn step(&mut self, game: &mut impl Game) -> GameResult {
-        self.run_frame(game, None).map(|_| ())
+    pub fn step(&mut self, app: &mut impl App) -> AppResult {
+        self.run_frame(app, None).map(|_| ())
     }
 
     /// Run one frame including the UI phase with synthetic `input` (logical points; a missing `screen_rect` covers
     /// the whole target) and paint the UI over the capture, as the windowed shell does. Returns egui's platform output
     /// (copied text, cursor, opened URLs). UI text entry suspends gameplay input, as in the windowed shell.
-    pub fn step_with_ui(&mut self, game: &mut impl Game, input: egui::RawInput) -> GameResult<egui::PlatformOutput> {
-        self.run_frame(game, Some(input)).map(Option::unwrap_or_default)
+    pub fn step_with_ui(&mut self, app: &mut impl App, input: egui::RawInput) -> AppResult<egui::PlatformOutput> {
+        self.run_frame(app, Some(input)).map(Option::unwrap_or_default)
     }
 
     /// The UI context [`step_with_ui`](Self::step_with_ui) runs (created on first use with the engine theme), for
@@ -157,9 +157,9 @@ impl HeadlessShell {
 
     fn run_frame(
         &mut self,
-        game: &mut impl Game,
+        app: &mut impl App,
         ui_input: Option<egui::RawInput>,
-    ) -> GameResult<Option<egui::PlatformOutput>> {
+    ) -> AppResult<Option<egui::PlatformOutput>> {
         if ui_input.is_some() {
             self.ensure_ui();
         }
@@ -178,9 +178,9 @@ impl HeadlessShell {
             requests: &mut self.requests,
         };
 
-        game.input(&mut frame)?;
-        game.simulation(&mut frame)?;
-        game.presentation(&mut frame)?;
+        app.input(&mut frame)?;
+        app.simulation(&mut frame)?;
+        app.presentation(&mut frame)?;
 
         let mut encoder = self.gpu.device().create_command_encoder(&Default::default());
         let mut target = RenderTarget {
@@ -189,7 +189,7 @@ impl HeadlessShell {
             output: self.target.view(),
             drawn: false,
         };
-        game.render(&mut frame, &mut target)?;
+        app.render(&mut frame, &mut target)?;
 
         let mut platform_output = None;
         if let (Some(mut input), Some(ui)) = (ui_input, self.ui.as_mut()) {
@@ -199,7 +199,7 @@ impl HeadlessShell {
                 .get_or_insert(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(width as f32, height as f32)));
             input.time.get_or_insert(time.time_seconds);
             input.predicted_dt = time.elapsed_seconds.max(1.0 / 60.0);
-            let mut full_output = ui.context.run_ui(input, |root| game.ui(root.ctx(), &mut frame));
+            let mut full_output = ui.context.run_ui(input, |root| app.ui(root.ctx(), &mut frame));
             platform_output = Some(std::mem::take(&mut full_output.platform_output));
             joy_ui::paint_output(
                 &mut ui.painter,
@@ -212,14 +212,14 @@ impl HeadlessShell {
             );
         }
         self.gpu.queue().submit([encoder.finish()]);
-        game.after_frame(&mut frame)?;
+        app.after_frame(&mut frame)?;
         Ok(platform_output)
     }
 
     /// Run `count` frames.
-    pub fn run_frames(&mut self, game: &mut impl Game, count: u32) -> GameResult {
+    pub fn run_frames(&mut self, app: &mut impl App, count: u32) -> AppResult {
         for _ in 0..count {
-            self.step(game)?;
+            self.step(app)?;
         }
         Ok(())
     }

@@ -65,12 +65,13 @@ pub struct FormMaterialTextures {
     pub ao: Option<String>,
 }
 
-/// A typed FORM PBR material, matching the TypeScript `Material` record.
+/// A typed FORM PBR material.
 ///
-/// Color factors are linear RGB(A) in 0–1; `metallic`, `roughness`, and `alpha_cutoff` are
-/// normalized factors in 0–1. The serialized form uses the TypeScript camelCase field names, so
-/// `serde_json::to_value` produces a record FORM palettes accept. [`Default`] is the TypeScript
-/// `defaultMaterial()`. Values are owned copies; editing one does not affect its geometry.
+/// Factors are linear: the base color is RGBA in 0–1 (it is a reflectance), emission is
+/// nonnegative RGB that may exceed one for HDR glow, and `metallic`, `roughness`, and
+/// `alpha_cutoff` are normalized factors in 0–1. The serialized form uses camelCase field names,
+/// so `serde_json::to_value` produces a record FORM palettes accept. [`Default`] is FORM's default
+/// material. Values are owned copies; editing one does not affect its geometry.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct FormMaterial {
@@ -82,7 +83,7 @@ pub struct FormMaterial {
     pub metallic: f64,
     /// Perceptual roughness factor.
     pub roughness: f64,
-    /// Linear RGB emissive factor.
+    /// Linear RGB emissive factor; nonnegative, and above one for HDR glow.
     pub emissive: [f64; 3],
     /// Alpha handling for this material.
     pub alpha_mode: AlphaMode,
@@ -111,7 +112,7 @@ impl FormMaterial {
     /// Convert a serialized material record without failing.
     ///
     /// Each field that is missing or invalid (a non-string name, a tuple of the wrong length,
-    /// a factor outside 0–1, or an unknown alpha mode) takes its `defaultMaterial()` value, and
+    /// a factor outside its range, or an unknown alpha mode) takes its `defaultMaterial()` value, and
     /// a texture slot that is not a string is `None`. Records produced by evaluation are already
     /// validated and convert exactly. The input is only borrowed.
     pub fn from_json(value: &Json) -> Self {
@@ -123,7 +124,7 @@ impl FormMaterial {
             base_color: unit_tuple(&value["baseColor"]).unwrap_or(defaults.base_color),
             metallic: unit_factor(&value["metallic"]).unwrap_or(defaults.metallic),
             roughness: unit_factor(&value["roughness"]).unwrap_or(defaults.roughness),
-            emissive: unit_tuple(&value["emissive"]).unwrap_or(defaults.emissive),
+            emissive: emissive_tuple(&value["emissive"]).unwrap_or(defaults.emissive),
             alpha_mode: AlphaMode::deserialize(&value["alphaMode"]).unwrap_or(defaults.alpha_mode),
             alpha_cutoff: unit_factor(&value["alphaCutoff"]).unwrap_or(defaults.alpha_cutoff),
             textures: FormMaterialTextures {
@@ -190,8 +191,7 @@ fn read_material(value: &Json, index: usize) -> Result<Json, String> {
     let record = value.as_object().ok_or_else(|| format!("Material {index} must be an object."))?;
     for field in record.keys() {
         if !MATERIAL_FIELDS.contains(&field.as_str()) {
-            let name =
-                record.get("name").filter(|name| !name.is_null()).map(js_string).unwrap_or_else(|| index.to_string());
+            let name = record.get("name").and_then(Json::as_str).map_or_else(|| index.to_string(), str::to_owned);
             return Err(format!("Material '{name}' has unsupported field '{field}'."));
         }
     }
@@ -207,12 +207,12 @@ fn read_material(value: &Json, index: usize) -> Result<Json, String> {
         })
         .ok_or_else(|| format!("Material {index} name must be an ASCII identifier of at most 64 characters."))?;
     let base_color = read_tuple(&value["baseColor"], 4, &format!("{name}.baseColor"))?;
-    let emissive = read_tuple(&value["emissive"], 3, &format!("{name}.emissive"))?;
+    let emissive = read_emissive(&value["emissive"], &format!("{name}.emissive"))?;
     let metallic = read_unit_number(&value["metallic"], &format!("{name}.metallic"))?;
     let roughness = read_unit_number(&value["roughness"], &format!("{name}.roughness"))?;
     let alpha_cutoff = read_unit_number(&value["alphaCutoff"], &format!("{name}.alphaCutoff"))?;
     let textures = read_textures(record.get("textures"), name)?;
-    if !["OPAQUE", "MASK", "BLEND"].contains(&js_string(&value["alphaMode"]).as_str()) {
+    if !value["alphaMode"].as_str().is_some_and(|mode| ["OPAQUE", "MASK", "BLEND"].contains(&mode)) {
         return Err(format!("{name}.alphaMode must be OPAQUE, MASK, or BLEND."));
     }
     Ok(json!({"name":name, "baseColor":base_color, "metallic":metallic,
@@ -263,7 +263,7 @@ fn read_textures(value: Option<&Json>, name: &str) -> Result<Json, String> {
 fn texture_byte_length(source: &str) -> usize {
     let payload = source.split_once(',').map_or(source, |(_, payload)| payload);
     let padding = if source.ends_with("==") { 2 } else { usize::from(source.ends_with('=')) };
-    (payload.encode_utf16().count() * 3 / 4).saturating_sub(padding)
+    (payload.len() * 3 / 4).saturating_sub(padding)
 }
 
 fn read_tuple(value: &Json, length: usize, label: &str) -> Result<Vec<f64>, String> {
@@ -274,6 +274,13 @@ fn read_tuple(value: &Json, length: usize, label: &str) -> Result<Vec<f64>, Stri
     values.iter().map(|component| read_unit_number(component, label)).collect()
 }
 
+/// Emission is linear light: finite and nonnegative, and above one for HDR glow.
+fn read_emissive(value: &Json, label: &str) -> Result<Vec<f64>, String> {
+    emissive_tuple(value)
+        .map(|emissive| emissive.to_vec())
+        .ok_or_else(|| format!("{label} must contain exactly 3 finite, nonnegative numbers."))
+}
+
 fn read_unit_number(value: &Json, label: &str) -> Result<f64, String> {
     value
         .as_f64()
@@ -281,24 +288,19 @@ fn read_unit_number(value: &Json, label: &str) -> Result<f64, String> {
         .ok_or_else(|| format!("{label} must be a finite number from 0 to 1."))
 }
 
-// JavaScript string coercion is part of the serialized validator's alphaMode check.
-fn js_string(value: &Json) -> String {
-    match value {
-        Json::String(text) => text.clone(),
-        Json::Array(values) => values
-            .iter()
-            .map(|value| if value.is_null() { String::new() } else { js_string(value) })
-            .collect::<Vec<_>>()
-            .join(","),
-        Json::Object(_) => "[object Object]".into(),
-        _ => value.to_string(),
-    }
-}
-
 // Typed-view helpers accept exactly what the serialized validator accepts and report the rest
 // as absent, so a malformed field falls back to its default instead of failing.
 fn unit_factor(value: &Json) -> Option<f64> {
     value.as_f64().filter(|factor| factor.is_finite() && (0.0..=1.0).contains(factor))
+}
+
+fn emissive_tuple(value: &Json) -> Option<[f64; 3]> {
+    let components = value.as_array().filter(|components| components.len() == 3)?;
+    let mut tuple = [0.0; 3];
+    for (slot, component) in tuple.iter_mut().zip(components) {
+        *slot = component.as_f64().filter(|channel| channel.is_finite() && *channel >= 0.0)?;
+    }
+    Some(tuple)
 }
 
 fn unit_tuple<const LENGTH: usize>(value: &Json) -> Option<[f64; LENGTH]> {

@@ -8,6 +8,7 @@ use joy_engine::core::{
     RandomSource,
     SeededRandom,
 };
+use joy_engine::math::DVec3;
 use joy_engine::physics::DestructibleChunkDefinition;
 
 use super::config::destruction_config::DESTRUCTION;
@@ -30,8 +31,12 @@ pub fn generate_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
             let material = if random.next_unit() > INTERIOR_CHANCE { "masonry" } else { "interior" };
             chunks.push(DestructibleChunkDefinition {
                 id: format!("front:{column}:{row}"),
-                center: [(f64::from(column) - half_columns) * width, (f64::from(row) * height) + (height / 2.0), 0.0],
-                size: [width, height, depth],
+                center: DVec3::new(
+                    (f64::from(column) - half_columns) * width,
+                    (f64::from(row) * height) + (height / 2.0),
+                    0.0,
+                ),
+                size: DVec3::new(width, height, depth),
                 material: material.to_owned(),
                 hit_points: DESTRUCTION.hit_points,
             });
@@ -44,12 +49,12 @@ pub fn generate_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
             for side in [-1, 1] {
                 chunks.push(DestructibleChunkDefinition {
                     id: format!("side:{side}:{depth_index}:{row}"),
-                    center: [
+                    center: DVec3::new(
                         f64::from(side) * (half_columns * width),
                         (f64::from(row) * height) + (height / 2.0),
                         -f64::from(depth_index) * depth,
-                    ],
-                    size: [depth, height, depth],
+                    ),
+                    size: DVec3::new(depth, height, depth),
                     material: "frame".to_owned(),
                     hit_points: DESTRUCTION.frame_hit_points,
                 });

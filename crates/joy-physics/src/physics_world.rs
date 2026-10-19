@@ -10,8 +10,8 @@ use std::sync::atomic::{
     Ordering,
 };
 
-use glam::Vec3;
 use indexmap::IndexMap;
+use joy_core::math::Vec3;
 use rapier3d::control::DynamicRayCastVehicleController;
 use rapier3d::dynamics::RigidBodyHandle;
 use rapier3d::geometry::{

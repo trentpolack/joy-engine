@@ -10,8 +10,8 @@
 //!
 //! Backends apply mutations and step synchronously. Owned resources are released through `Drop`.
 
-use glam::Vec3;
 use indexmap::IndexSet;
+use joy_core::math::Vec3;
 use serde::{
     Deserialize,
     Serialize,
@@ -22,10 +22,8 @@ use super::{
     PhysicsError,
     PhysicsWorld,
 };
-use joy_core::{
-    PrimitiveShape,
-    Vector3,
-};
+use joy_core::PrimitiveShape;
+use joy_core::math::DVec3;
 
 /// Where a backend keeps simulation state, serialized as `cpu` or `gpu`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -44,9 +42,9 @@ pub struct PhysicsCollisionShape {
     /// Stable, nonempty shape id.
     pub id: String,
     /// Box center in world units.
-    pub center: Vector3,
+    pub center: DVec3,
     /// Box half extents in world units; positive.
-    pub half_extents: Vector3,
+    pub half_extents: DVec3,
 }
 
 /// Shape changes that take effect together at one simulation boundary. Removals apply before additions, so a batch can
@@ -76,7 +74,7 @@ pub struct PhysicsQueryHit {
     /// World distance from the query origin.
     pub distance: f64,
     /// World-space hit point.
-    pub point: Vector3,
+    pub point: DVec3,
 }
 
 /// Synchronization boundary for resident bodies, transforms, velocities, and shapes.
@@ -94,7 +92,7 @@ pub trait PhysicsBackend {
     fn step(&mut self, elapsed_seconds: f64) -> Result<(), PhysicsError>;
 
     /// Nearest resident shape hit by a world-space ray within `maximum_distance` world units, or `None`.
-    fn query(&self, origin: Vector3, direction: Vector3, maximum_distance: f64) -> Option<PhysicsQueryHit>;
+    fn query(&self, origin: DVec3, direction: DVec3, maximum_distance: f64) -> Option<PhysicsQueryHit>;
 }
 
 /// Create a contact-invalidating batch for chunk removals at one simulation boundary.
@@ -179,9 +177,9 @@ impl PhysicsBackend for PhysicsWorld {
 
     /// Cast against resident shapes only. The direction is normalized; shapes containing the origin are skipped, like
     /// [`PhysicsWorld::raycast`]. Non-finite input, a zero direction, or a non-positive distance returns `None`.
-    fn query(&self, origin: Vector3, direction: Vector3, maximum_distance: f64) -> Option<PhysicsQueryHit> {
-        let from = Vec3::from_array(origin.map(|value| value as f32));
-        let direction = Vec3::from_array(direction.map(|value| value as f32)).normalize_or_zero();
+    fn query(&self, origin: DVec3, direction: DVec3, maximum_distance: f64) -> Option<PhysicsQueryHit> {
+        let from = origin.as_vec3();
+        let direction = direction.as_vec3().normalize_or_zero();
         let maximum_distance = maximum_distance as f32;
         if direction == Vec3::ZERO || !maximum_distance.is_finite() || maximum_distance <= 0.0 {
             return None;
@@ -191,11 +189,7 @@ impl PhysicsBackend for PhysicsWorld {
         let resident = self.resident_shapes.values().filter(|body| body.world == self.world_id).map(|body| body.raw);
         let hit = self.raycast_bodies(from, to, resident)?;
         let shape_id = self.resident_shapes.iter().find(|(_, body)| **body == hit.body).map(|(id, _)| id.clone())?;
-        Some(PhysicsQueryHit {
-            shape_id,
-            distance: f64::from(hit.distance),
-            point: hit.point.to_array().map(f64::from),
-        })
+        Some(PhysicsQueryHit { shape_id, distance: f64::from(hit.distance), point: hit.point.as_dvec3() })
     }
 }
 
@@ -221,8 +215,8 @@ impl PhysicsWorld {
 
 /// Validated static box options for a collision shape.
 fn static_box_options(shape: &PhysicsCollisionShape) -> Result<BodyOptions, PhysicsError> {
-    let center = Vec3::from_array(shape.center.map(|value| value as f32));
-    let half_extents = Vec3::from_array(shape.half_extents.map(|value| value as f32));
+    let center = shape.center.as_vec3();
+    let half_extents = shape.half_extents.as_vec3();
     if !center.is_finite() || !half_extents.is_finite() || half_extents.min_element() <= 0.0 {
         return Err(PhysicsError::InvalidShape(shape.id.clone()));
     }

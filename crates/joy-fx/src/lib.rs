@@ -44,10 +44,6 @@
 mod asset;
 mod constants;
 mod language_information;
-// JavaScript-compatible math shared with the renderer's particle geometry, which must round identically to the
-// simulation; an engine contract between the two crates rather than game-facing API.
-#[doc(hidden)]
-pub mod math;
 mod particle_effect;
 mod profile;
 mod script;

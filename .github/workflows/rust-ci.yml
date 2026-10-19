@@ -39,7 +39,7 @@ jobs:
         run: npm ci
 
       - name: Check engine architecture and tooling syntax
-        run: node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts test editor/tooling editor/test editor/tools/form-lab/test
+        run: node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts tests/tooling editor/tooling editor/tests/tooling tools/form-lab/tests/tooling
 
       - name: Test retained Node tooling
         run: npm run test:tooling
