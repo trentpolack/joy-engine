@@ -171,3 +171,7 @@ impl LinearComposite {
         InterfaceTarget { size, view, bind_group }
     }
 }
+
+#[cfg(test)]
+#[path = "linear_composite.test.rs"]
+mod tests;

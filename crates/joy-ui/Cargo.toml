@@ -27,6 +27,10 @@ winit.workspace = true
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egui-winit.workspace = true
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+# The scRGB UI composite test waits on a headless device and its readback.
+pollster.workspace = true
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true
 web-sys.workspace = true

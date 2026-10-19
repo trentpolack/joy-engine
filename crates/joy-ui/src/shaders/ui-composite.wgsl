@@ -25,6 +25,6 @@ struct Composite {
  * One UI pixel, read texel for texel (the intermediate matches the presentation size).
  */
 @fragment fn fragmentMain(@builtin(position) position: vec4f) -> @location(0) vec4f {
-  let interface = textureLoad(interfaceTexture, vec2i(position.xy), 0);
-  return vec4f(interface.rgb*composite.white.x, interface.a);
+  let overlay = textureLoad(interfaceTexture, vec2i(position.xy), 0);
+  return vec4f(overlay.rgb*composite.white.x, overlay.a);
 }

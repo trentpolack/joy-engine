@@ -1709,6 +1709,7 @@ dependencies = [
  "egui-winit",
  "joy-core",
  "joy-renderer",
+ "pollster",
  "wasm-bindgen",
  "web-sys",
  "web-time",
