@@ -21,8 +21,8 @@ use super::error::ComponentSchemaError;
 use joy_core::JsonRecord;
 use joy_core::format::format_number;
 
-/// Value shapes a field can describe, serialized with the TypeScript `COMPONENT_FIELD_KIND` spellings. Authoring tools
-/// choose controls from these; validation checks authored JSON against them.
+/// Value shapes a field can describe, serialized with lowercase document spellings. Authoring tools choose controls
+/// from these; validation checks authored JSON against them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ComponentFieldKind {
@@ -220,7 +220,7 @@ impl ComponentSchemaCatalog {
         catalog
     }
 
-    /// A catalog without the built-in schemas (TypeScript `{builtIns: false}`).
+    /// A catalog without the built-in schemas.
     pub fn empty() -> Self {
         Self { schemas: IndexMap::new(), preset_owners: IndexMap::new() }
     }

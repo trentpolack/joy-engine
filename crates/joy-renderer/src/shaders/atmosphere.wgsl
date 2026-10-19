@@ -2,7 +2,8 @@
 // Licensed under the MIT License.
 
 // Procedural sky for the environment frame: Rayleigh/Mie approximations, sun and moon discs, wind-advected clouds, and
-// a forward-scattering halo. Ported from the TypeScript engine's atmosphere program with the same packed uniform block.
+// a forward-scattering halo. The packed uniform block mirrors `AtmosphereUniforms` (materials/mod.rs), and
+// `EnvironmentLighting::pack` fills its `environment` slots.
 
 struct Atmosphere {
   inverseViewProjection: mat4x4f,

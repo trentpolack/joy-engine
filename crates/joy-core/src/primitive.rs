@@ -8,7 +8,7 @@ use serde::{
     Serialize,
 };
 
-/// Primitive shapes recognized by `render` and `physics` components. Serialized spellings match the TypeScript engine.
+/// Primitive shapes recognized by `render` and `physics` components, serialized as `box`, `sphere`, or `plane`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PrimitiveShape {

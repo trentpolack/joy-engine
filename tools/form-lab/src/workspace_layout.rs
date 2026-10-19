@@ -18,7 +18,7 @@ use joy_engine::egui::{
 };
 use joy_engine::runtime::Storage;
 
-/// Storage key of the pane widths and visibility, shared with the TypeScript tool.
+/// Storage key of the pane widths and visibility; stable so saved layouts keep loading.
 pub const PANEL_STORAGE_KEY: &str = "joy-editor-panels-form-v2";
 
 /// The workbench layout: Script (320 points by default), Preview, and Inspector (260).

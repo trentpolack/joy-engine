@@ -20,8 +20,7 @@ pub type ComponentFactory = dyn Fn(&JsonRecord, &EntityState) -> Box<dyn EntityC
 
 /// Maps authored component types to runtime component factories.
 ///
-/// Registries start empty; authored component types without a factory stay plain data. Duplicate and blank types
-/// fail, as in the TypeScript engine.
+/// Registries start empty; authored component types without a factory stay plain data. Duplicate and blank types fail.
 #[derive(Default)]
 pub struct ComponentRegistry {
     factories: IndexMap<String, Box<ComponentFactory>>,

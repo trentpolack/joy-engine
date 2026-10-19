@@ -228,7 +228,7 @@ fn outlines_darken_silhouettes_only() {
         &gpu,
         Some(SceneEffectsOptions {
             // Reconstructed normals are nearly flat at this distance and raw depth differs by less than the default
-            // threshold, so silhouettes come from the normal attachment, as in the TypeScript engine.
+            // threshold, so silhouettes come from the normal attachment.
             outlines: Some(OutlineOptions { normal_source: NormalSource::NormalTexture, ..Default::default() }),
             ..Default::default()
         }),

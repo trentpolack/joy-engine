@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 //! Immediate-mode geometry builder: vertices, faces, boxes, spheres, instances, and material binding.
-//! Ported from `src/form/geometry.ts`.
 
 use crate::{
     GeometryData,

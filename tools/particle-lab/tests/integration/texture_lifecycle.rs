@@ -1,10 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The TypeScript `test/texture-lifecycle.test.js`, adapted to synchronous decoding: renders before an effect's images
-//! are ready never draw textured particles; a failed decode keeps the active images; and replacing or releasing a
-//! definition drops images it no longer uses. The browser's asynchronous supersede and dispose races have no
-//! counterpart, because Rust decodes during prepare.
+//! Texture lifecycle with synchronous decoding: renders before an effect's images are ready never draw textured
+//! particles; a failed decode keeps the active images; and replacing or releasing a definition drops images it no
+//! longer uses. Images decode during prepare, so there are no asynchronous supersede or dispose races to cover.
 
 use joy_engine::particles::{
     DEFAULT_PARTICLE_TEXTURE,

@@ -90,7 +90,7 @@ pub fn quat_from_euler(rotation: Vec3) -> Quat {
 
 /// Decompose a rotation into XYZ Euler radians applied X, then Y, then Z.
 ///
-/// At gimbal lock the equivalent canonical rotation fixes X to zero, matching the TypeScript physics adapter.
+/// At gimbal lock X and Z are not independent, so the result is the equivalent rotation with X fixed to zero.
 pub fn euler_from_quat(rotation: Quat) -> Vec3 {
     let (x, y, z, w) = (rotation.x, rotation.y, rotation.z, rotation.w);
     let (x_squared, y_squared, z_squared) = (x.powi(2), y.powi(2), z.powi(2));

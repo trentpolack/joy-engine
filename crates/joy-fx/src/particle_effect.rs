@@ -3,11 +3,11 @@
 
 //! One particle effect instance: fixed-step simulation, seeded cosmetic randomness, emission, and particle state.
 //!
-//! The simulation follows the TypeScript `ParticleEffect` step for step so the same seed and inputs produce the same
-//! particles: real time accumulates into [`PARTICLE_STEP_SECONDS`] ticks; each tick ages and updates survivors (update
-//! script, then integration), queues trail and death children, retires expired particles, spawns the queued children,
-//! and finally emits root emitters for the elapsed interval. Random numbers are drawn in the same order, from the same
-//! `SeededRandom` stream, as the TypeScript runtime.
+//! The simulation runs in a fixed step order so the same seed and inputs produce the same particles: real time
+//! accumulates into [`PARTICLE_STEP_SECONDS`] ticks; each tick ages and updates survivors (update script, then
+//! integration), queues trail and death children, retires expired particles, spawns the queued children, and finally
+//! emits root emitters for the elapsed interval. Random numbers are drawn from one `SeededRandom` stream in a fixed
+//! order, so seeded runs reproduce exactly on every target and match the golden recordings within their tolerances.
 //!
 //! Coordinates are XYZ world units; velocities and accelerations are per second; drag is an exponential damping
 //! coefficient per second. Emission is cosmetic: keep effects off gameplay random streams.
@@ -54,7 +54,7 @@ const MAXIMUM_STEP_OPERATIONS: i64 = 2_000_000;
 /// Largest magnitude of particle fields and positions.
 const MAXIMUM_POSITION: f64 = 1e6;
 
-/// Tolerance used by every time comparison, as in TypeScript.
+/// Tolerance used by every time comparison.
 const TIME_EPSILON: f64 = 1e-10;
 
 /// One live particle. Script-visible fields come first; the rest is private simulation bookkeeping.
@@ -229,10 +229,10 @@ pub enum ParticleFault {
     PropertyOutOfRange,
 }
 
-/// A particle effect could not be created or advanced. Messages match the TypeScript runtime's.
+/// A particle effect could not be created or advanced. Messages are stable diagnostics.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum ParticleEffectError {
-    /// A seed given as a JavaScript number was not a finite integer (see [`particle_seed`]).
+    /// A seed given as a JSON number was not a finite integer (see [`particle_seed`]).
     #[error("Particle seed must be a finite integer.")]
     InvalidSeed,
     /// The origin had a non-finite component or one beyond ±1 million.
@@ -263,14 +263,15 @@ pub enum ParticleEffectError {
         /// What failed.
         fault: ParticleFault,
     },
-    /// Integration produced an invalid particle (reported without emitter context, as in TypeScript).
+    /// Integration produced an invalid particle (reported without emitter context).
     #[error(transparent)]
     Simulation(ParticleFault),
 }
 
 /// Options for [`ParticleEffect::new`].
 pub struct ParticleEffectOptions {
-    /// Seed for the owned cosmetic stream, normalized like JavaScript's `seed >>> 0`. Ignored when `random` is set.
+    /// Seed for the owned cosmetic stream, wrapped modulo 2^32 to an unsigned 32-bit value. Ignored when `random` is
+    /// set.
     pub seed: i64,
     /// A game-owned random stream; reset and seek continue it instead of rewinding.
     pub random: Option<Box<dyn RandomSource>>,
@@ -574,9 +575,9 @@ impl ParticleEffect {
         result
     }
 
-    /// Turn CPU profiling on or off without restarting the simulation (the TypeScript lab toggles `profile.enabled`
-    /// directly). Enabling starts fresh totals (steps, timings, spawn and drop counts, operations) with live counts
-    /// taken from the current particles; disabling keeps the last totals.
+    /// Turn CPU profiling on or off without restarting the simulation. Enabling starts fresh totals (steps, timings,
+    /// spawn and drop counts, operations) with live counts taken from the current particles; disabling keeps the last
+    /// totals.
     pub fn set_profiling(&mut self, enabled: bool) {
         if self.profile.enabled == enabled {
             return;
@@ -746,7 +747,7 @@ impl ParticleEffect {
             }
         }
 
-        // Retire expired particles only after every update succeeded, as TypeScript replaces its array then.
+        // Retire expired particles only after every update succeeded; a failed update leaves them in the list.
         let mut flags = alive.into_iter();
         self.particles.retain(|_| flags.next().unwrap_or(false));
         if !self.stopped {

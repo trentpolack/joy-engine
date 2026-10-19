@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 //! Realizes editable geometry and instance collections into the output builder.
-//! Ported from `src/form/procedural-output.ts`.
 
 use super::store::{
     count,

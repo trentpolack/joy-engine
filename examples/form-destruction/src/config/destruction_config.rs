@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! FORM destruction tuning (TypeScript `config/destruction-config.ts`). Dimensions are meters, gravity meters per
-//! second squared, launch velocities meters per second, impulses newton-seconds, angles radians, times seconds, and
-//! drag distances logical pixels. Colors are linear RGB.
+//! FORM destruction tuning. Dimensions are meters, gravity meters per second squared, launch velocities meters per
+//! second, impulses newton-seconds, angles radians, times seconds, and drag distances logical pixels. Colors are linear
+//! RGB.
 
 use joy_engine::physics::ChunkSupportOptions;
 use joy_engine::prelude::*;

@@ -5,9 +5,10 @@
 //!
 //! Parsing validates and copies the manifest: required text is trimmed, paths are normalized to forward slashes and
 //! must stay inside the selected project folder, capability ids are unique kebab-case, extensions are lowercase dot
-//! notation, and feature flags become booleans by JavaScript truthiness. Paths stay relative to the project directory;
-//! consumers must still enforce that boundary when reading. The optional `$schema` reference is preserved for
-//! authoring tools and never fetched. Diagnostics preserve the established manifest contract.
+//! notation, and feature flags become booleans by truthiness (`null`, `false`, `0`, and `""` turn a flag off). Paths
+//! stay relative to the project directory; consumers must still enforce that boundary when reading. The optional
+//! `$schema` reference is preserved for authoring tools and never fetched. Diagnostics preserve the established
+//! manifest contract.
 
 use indexmap::IndexMap;
 use serde::{
@@ -52,7 +53,7 @@ pub struct ProjectCapability {
     pub features: IndexMap<String, bool>,
 }
 
-/// A validated project manifest. Serializes in the TypeScript key order.
+/// A validated project manifest. Serializes in a fixed key order so saved manifests stay byte-stable.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectManifest {
@@ -69,7 +70,7 @@ pub struct ProjectManifest {
     pub capabilities: Vec<ProjectCapability>,
 }
 
-/// A manifest failed validation. Messages match the TypeScript engine.
+/// A manifest failed validation. Messages are stable diagnostics.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ProjectManifestError {
     /// The text was not valid JSON.
@@ -215,12 +216,13 @@ fn is_identifier(value: &str) -> bool {
         && characters.all(|character| character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-')
 }
 
-/// Feature flags by JavaScript truthiness, in authored order.
+/// Feature flags by truthiness (see [`is_truthy`]), in authored order.
 fn read_features(features: &Map<String, Value>) -> IndexMap<String, bool> {
     features.iter().map(|(feature, enabled)| (feature.clone(), is_truthy(enabled))).collect()
 }
 
-/// JavaScript `Boolean(value)` for JSON values.
+/// Truthiness of a JSON feature flag: `null`, `false`, zero, and the empty string are false; every other value,
+/// including empty arrays and objects, is true.
 fn is_truthy(value: &Value) -> bool {
     match value {
         Value::Null => false,

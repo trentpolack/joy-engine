@@ -6,7 +6,7 @@
 use super::*;
 
 #[test]
-fn catalog_matches_the_typescript_records() {
+fn catalog_matches_the_recorded_symbols() {
     let catalog = form_language_catalog();
     assert_eq!(catalog.id, "form");
     assert_eq!(catalog.symbols.len(), 10 + FORM_COMMANDS.len(), "userData is listed once, as a command");

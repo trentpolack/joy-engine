@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The level editor's document logic (TypeScript `level.test.mjs` and the level browser workflow): transactions with
-//! undo, primitives, transforms in degrees, schema-driven properties with linked-object overrides, invalid input that
-//! blocks saving, reusable objects, picking, and the region camera.
+//! The level editor's document logic: transactions with undo, primitives, transforms in degrees, schema-driven
+//! properties with linked-object overrides, invalid input that blocks saving, reusable objects, picking, and the region
+//! camera.
 
 use std::collections::HashMap;
 

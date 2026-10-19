@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Evaluator edge cases recorded from the TypeScript reference.
+//! Evaluator edge cases with recorded expectations: signed zero through rounding, and the diagnostic and location for
+//! scalar parameter overrides of the wrong type.
 
 use joy_form::compile;
 use serde_json::json;
@@ -14,7 +15,7 @@ fn rounding_preserves_negative_zero_for_downstream_signed_math() {
 }
 
 #[test]
-fn scalar_override_primitives_keep_typescript_diagnostics_and_location() {
+fn scalar_override_primitives_keep_stable_diagnostics_and_location() {
     for supplied in [json!("3"), json!(true)] {
         let error =
             compile("\nparam amount=2,0,4,1 point(amount,0,0)", &json!({"amount": supplied}), None).unwrap_err();

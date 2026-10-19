@@ -19,6 +19,10 @@
 //!    transparency draws at the end of the scene pass.
 //! 5. Post-process into the caller's presentation view.
 //!
+//! Steps 3 and 4 draw at the render size: the drawing-buffer size times the render scale. The post chain upscales that
+//! scene into the output, so a scale below one trades sharpness for scene, effect, and bloom work while antialiasing,
+//! grain, and any UI drawn afterwards keep the full output resolution.
+//!
 //! Materials define shading; the renderer defines frame-wide invariants and submission order. Temporal antialiasing
 //! jitters the raster projection by a Halton sequence; history resets on camera cuts, presentation-clock jumps, and
 //! projection changes.
@@ -55,6 +59,7 @@ use crate::culling::{
     sphere_touches_bounds,
     world_bounds,
 };
+use crate::display_output::DisplayOutput;
 use crate::environment::{
     EnvironmentMap,
     EnvironmentMapOptions,
@@ -149,6 +154,12 @@ const JITTER_SAMPLE_COUNT: u32 = 8;
 /// A presentation-clock gap longer than this, in seconds, restarts temporal history.
 const HISTORY_TIME_JUMP_SECONDS: f64 = 0.25;
 
+/// Smallest main-scene render scale; below a quarter of the output resolution the upscaled image is too soft to read.
+pub const MIN_RENDER_SCALE: f32 = 0.25;
+
+/// Largest main-scene render scale: the scene renders at the output resolution.
+pub const MAX_RENDER_SCALE: f32 = 1.0;
+
 /// Renderer construction settings. The renderer copies them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RendererOptions {
@@ -162,6 +173,11 @@ pub struct RendererOptions {
     pub depth_prepass: bool,
     /// Post-processing settings; replace later with [`Renderer::set_post_process`].
     pub post_process: PostProcessSettings,
+    /// Fraction of the drawing-buffer resolution the scene renders at along each axis, from [`MIN_RENDER_SCALE`] to
+    /// [`MAX_RENDER_SCALE`]; replace later with [`Renderer::set_render_scale`]. Below one, the scene, its effects,
+    /// bloom, and blurs run at the reduced size and the post chain upscales the result, while antialiasing, grain, and
+    /// any UI drawn afterwards keep the full output resolution.
+    pub render_scale: f32,
     /// Scene effects (ambient occlusion, reflections, antialiasing, ...); replace later with
     /// [`Renderer::set_scene_effects`]. Ignored on backends without scene effects (WebGL 2).
     pub scene_effects: Option<SceneEffectsOptions>,
@@ -174,6 +190,7 @@ impl Default for RendererOptions {
             atmosphere: true,
             depth_prepass: true,
             post_process: PostProcessSettings::DEFAULT,
+            render_scale: MAX_RENDER_SCALE,
             scene_effects: None,
         }
     }
@@ -188,6 +205,10 @@ pub struct RendererDiagnostics {
     pub adapter: String,
     /// Whether the scene target preserves HDR highlights.
     pub hdr: bool,
+    /// The presentation target's encoding and the HDR headroom the frame tone mapped into.
+    pub display: DisplayOutput,
+    /// Size in physical pixels the scene rendered at this frame: the drawing-buffer size times the render scale.
+    pub render_size: (u32, u32),
     /// Instances (meshes and terrain) drawn by the camera.
     pub visible: usize,
     /// Instances skipped by frustum culling.
@@ -465,7 +486,8 @@ impl Renderer {
     ///
     /// Lighting and blending happen in linear light and the presentation pass delivers sRGB-encoded display values in
     /// either kind of format: a non-sRGB view stores them as written, and an sRGB view receives decoded values that its
-    /// hardware encoding turns back into the same bytes.
+    /// hardware encoding turns back into the same bytes. The output starts as standard dynamic range; hosts presenting
+    /// to an HDR surface call [`Renderer::set_display_output`].
     pub fn new(gpu: &GpuContext, output_format: wgpu::TextureFormat, options: RendererOptions) -> Self {
         let device = gpu.device();
         let capabilities = gpu.capabilities();
@@ -518,6 +540,7 @@ impl Renderer {
             backend: capabilities.backend.label(),
             adapter: capabilities.adapter_name.clone(),
             hdr: capabilities.hdr,
+            display: DisplayOutput::STANDARD,
             ..Default::default()
         };
 
@@ -543,7 +566,7 @@ impl Renderer {
             effects: None,
             terrain: SceneTerrain::new(bias),
             meshes: HashMap::new(),
-            options: options.clone(),
+            options: RendererOptions { render_scale: sanitized_render_scale(options.render_scale), ..options.clone() },
             physical_size: (0, 0),
             scale_factor: 1.0,
             presentation_time: PresentationTime::default(),
@@ -660,6 +683,43 @@ impl Renderer {
     /// Drawing-buffer size in physical pixels.
     pub fn physical_size(&self) -> (u32, u32) {
         self.physical_size
+    }
+
+    /// The fraction of the drawing-buffer resolution the scene renders at ([`RendererOptions::render_scale`]).
+    pub fn render_scale(&self) -> f32 {
+        self.options.render_scale
+    }
+
+    /// Render the scene at `scale` times the drawing-buffer resolution from the next frame, clamped to
+    /// [`MIN_RENDER_SCALE`]..=[`MAX_RENDER_SCALE`] (non-finite values mean full resolution). Lowering the scale trades
+    /// sharpness for scene, effect, and bloom work, which falls with the pixel count; a change restarts temporal effect
+    /// history and reallocates the scene targets on the next frame.
+    pub fn set_render_scale(&mut self, scale: f32) {
+        let scale = sanitized_render_scale(scale);
+        if scale != self.options.render_scale {
+            self.options.render_scale = scale;
+            self.reset_history();
+        }
+    }
+
+    /// Size in physical pixels the scene renders at: each axis of the drawing buffer times the render scale, rounded,
+    /// and at least one pixel while the drawing buffer has area. Screen-space queries ([`Renderer::screen_ray`],
+    /// [`Renderer::project`]) stay in logical pixels and do not depend on it.
+    pub fn render_size(&self) -> (u32, u32) {
+        scaled_render_size(self.physical_size, self.options.render_scale)
+    }
+
+    /// The presentation target's encoding and HDR headroom.
+    pub fn display_output(&self) -> DisplayOutput {
+        self.post.display_output()
+    }
+
+    /// Write for `display` from the next frame. The shell sets it when it configures the surface and whenever the
+    /// display's headroom changes, so it must describe the views passed to [`Renderer::encode`]. Standard output (the
+    /// default) clamps to SDR white; extended output keeps SDR white at one and tone maps highlights into the headroom.
+    pub fn set_display_output(&mut self, display: DisplayOutput) {
+        self.post.set_display_output(self.gpu.device(), display);
+        self.diagnostics.display = self.post.display_output();
     }
 
     /// Viewport size in logical (CSS) pixels.
@@ -816,7 +876,9 @@ impl Renderer {
         camera_frame: CameraFrame,
         mut effects: Option<&mut EffectsState>,
     ) -> Result<(), RenderError> {
-        let (width, height) = self.physical_size;
+        // The scene and its effects draw at the render size; the post chain upscales into the output size.
+        let output_size = self.physical_size;
+        let render_size = self.render_size();
 
         // Cameras. Effects may jitter the raster projection; everything that decides what to draw uses the stable one.
         let cameras = match effects.as_deref_mut() {
@@ -829,7 +891,7 @@ impl Renderer {
                 jitter_delta: [0.0; 2],
             },
         };
-        let logical_height = height as f32 / self.scale_factor;
+        let logical_height = output_size.1 as f32 / self.scale_factor;
         let terrain =
             self.terrain.prepare(&self.gpu, &self.pipelines, encoder, scene, &camera_frame, logical_height)?;
 
@@ -895,14 +957,15 @@ impl Renderer {
         // Transparency joins the scene pass unless lighting effects must run between opaque surfaces and transparency.
         let device = self.gpu.device().clone();
         let targets = match effects.as_deref_mut() {
-            Some(state) => state.prepare_attachments(&device, (width, height)),
+            Some(state) => state.prepare_attachments(&device, render_size),
             None => SceneTargets::Color,
         };
         self.pipelines.ensure_opaque(&device, targets);
         self.terrain.ensure_lit(&device, targets);
         let lighting_effects = effects.as_deref().is_some_and(|state| state.runtime.has_lighting_effects());
         let transparency_in_scene = targets == SceneTargets::Color && !lighting_effects;
-        self.post.prepare(&device, self.gpu.queue(), width, height, self.presentation_time.time_seconds as f32);
+        let time_seconds = self.presentation_time.time_seconds as f32;
+        self.post.prepare(&device, self.gpu.queue(), render_size, output_size, time_seconds);
 
         let draws = FrameDraws {
             opaque: &opaque,
@@ -948,6 +1011,7 @@ impl Renderer {
         self.diagnostics.shadow_point_lights = shadows.point_lights;
         self.diagnostics.point_lights = lighting.points.len();
         self.diagnostics.point_lights_omitted = selected.omitted;
+        self.diagnostics.render_size = render_size;
         Ok(())
     }
 
@@ -1218,7 +1282,7 @@ impl Renderer {
             }
         }
         let jitter = if effects.runtime.options().taa.is_some() {
-            let (width, height) = self.physical_size;
+            let (width, height) = self.render_size();
             scene_camera_jitter(effects.runtime.frame_index(), width, height)
         } else {
             [0.0; 2]
@@ -1248,7 +1312,7 @@ impl Renderer {
     ) -> Result<(usize, usize), RenderError> {
         let device = self.gpu.device();
         let queue = self.gpu.queue();
-        let size = self.physical_size;
+        let size = self.render_size();
         let scene_format = self.gpu.capabilities().scene_format;
         let camera = &cameras.stable;
         let view_projection = camera.view_projection();
@@ -1554,7 +1618,7 @@ impl Renderer {
         let Some(environment) = inputs.environment else {
             return;
         };
-        let (width, height) = self.physical_size;
+        let (width, height) = self.render_size();
         let uniforms = AtmosphereUniforms {
             inverse_view_projection: camera.view_projection().inverse().to_cols_array_2d(),
             camera_position: camera.eye.extend(0.0).to_array(),
@@ -1686,7 +1750,7 @@ fn queue_instance(
         raw,
     };
     if transparent {
-        // Transparent instances are unlit, matching the TypeScript scene path; PBR keeps its own blending.
+        // Transparent instances are unlit; PBR keeps its own blending.
         let pipeline = if instance.shading == Shading::Pbr { BlendPipeline::Pbr } else { BlendPipeline::Unlit };
         items.blends.extend(instance.asset.submeshes().iter().map(|submesh| blend(pipeline, submesh)));
         return;
@@ -1754,7 +1818,21 @@ fn scene_order(batches: &[Batch], depth_prepass: bool) -> Vec<&Batch> {
     order
 }
 
-/// Sub-pixel jitter for one frame: a Halton (2, 3) sequence of eight samples, in UV units of the backing size.
+/// The scene's size for a drawing-buffer `size` and render `scale`: each axis rounded, at least one pixel unless the
+/// drawing buffer has no area.
+fn scaled_render_size(size: (u32, u32), scale: f32) -> (u32, u32) {
+    let scale_axis = |extent: u32| {
+        if extent == 0 { 0 } else { ((extent as f32 * scale).round() as u32).clamp(1, extent) }
+    };
+    (scale_axis(size.0), scale_axis(size.1))
+}
+
+/// A render scale within [`MIN_RENDER_SCALE`]..=[`MAX_RENDER_SCALE`]; non-finite values mean full resolution.
+fn sanitized_render_scale(scale: f32) -> f32 {
+    if scale.is_finite() { scale.clamp(MIN_RENDER_SCALE, MAX_RENDER_SCALE) } else { MAX_RENDER_SCALE }
+}
+
+/// Sub-pixel jitter for one frame: a Halton (2, 3) sequence of eight samples, in UV units of the render size.
 fn scene_camera_jitter(frame_index: u32, width: u32, height: u32) -> [f32; 2] {
     let sample = (frame_index % JITTER_SAMPLE_COUNT) + 1;
     [(halton(sample, 2) - 0.5) / width.max(1) as f32, (halton(sample, 3) - 0.5) / height.max(1) as f32]

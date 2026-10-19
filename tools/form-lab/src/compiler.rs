@@ -17,7 +17,7 @@ use joy_engine::form::{
 use joy_engine::runtime::Stopwatch;
 use joy_engine::serde_json::Value as Json;
 
-/// Budget for a job to begin evaluating (the TypeScript worker's module-loading window), in milliseconds.
+/// Budget for a job to begin evaluating, in milliseconds.
 pub const STARTUP_TIMEOUT_MILLISECONDS: f64 = 10_000.0;
 
 /// Budget for evaluating one script, in milliseconds.
@@ -55,7 +55,7 @@ pub enum CompileOutcome {
 }
 
 impl CompileOutcome {
-    /// The status line the TypeScript tool shows for an unsuccessful outcome (successes return `None`).
+    /// The status line FORM LAB shows for an unsuccessful outcome (successes return `None`).
     pub fn failure_message(&self) -> Option<String> {
         match self {
             Self::Built { .. } => None,

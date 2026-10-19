@@ -6,7 +6,7 @@
 /// Storage application folder for editor preferences (`runtime::Storage`).
 pub const STORAGE_APPLICATION: &str = "joy-editor";
 
-/// Storage key of the restored session (TypeScript `joy-editor-workspace-v1`).
+/// Storage key of the restored session.
 pub const SESSION_STORAGE_KEY: &str = "joy-editor.workspace.v1";
 
 /// Seconds between disk revision checks of open documents.

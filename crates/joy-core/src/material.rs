@@ -8,7 +8,7 @@ use serde::{
     Serialize,
 };
 
-/// glTF-compatible material alpha modes, serialized with the TypeScript `MATERIAL_ALPHA_MODE` spellings.
+/// glTF-compatible material alpha modes, serialized as `OPAQUE`, `MASK`, or `BLEND`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum MaterialAlphaMode {

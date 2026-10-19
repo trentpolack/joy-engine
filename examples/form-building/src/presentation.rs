@@ -1,10 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Building presentation (TypeScript `presentation.ts`). The TypeScript scene renderer ignores asset materials, so that
-//! adapter splits triangles by material into tinted instances. The Rust renderer's PBR pass reads the metallic,
-//! roughness, emission, and alpha factors baked into the asset, so one PBR instance draws every material group and the
-//! canonical asset stays untouched.
+//! Building presentation. The renderer's PBR pass reads the metallic, roughness, emission, and alpha factors baked into
+//! the asset, so one PBR instance draws every material group and the canonical asset stays untouched.
 
 use joy_engine::prelude::*;
 

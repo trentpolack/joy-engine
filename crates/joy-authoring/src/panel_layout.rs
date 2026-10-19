@@ -38,7 +38,7 @@ use serde::{
 use joy_storage::Storage;
 use joy_ui::theme::tokens;
 
-/// Divider hit width in points (the TypeScript 10 px handle).
+/// Divider hit width in points.
 pub const DIVIDER_WIDTH: f32 = 10.0;
 
 /// Width change per arrow-key press on a focused divider.
@@ -91,15 +91,15 @@ impl PaneSide {
 pub struct PanelLayoutOptions {
     /// Storage key for the persisted preferences, such as `joy-editor-panels-particles-v2`.
     pub storage_key: String,
-    /// Left panel limits (TypeScript: 280 default, 160 to 600).
+    /// Left panel limits (default: 280 wide, 160 to 600).
     pub left: PaneLimits,
-    /// Right panel limits (TypeScript: 260 default, 220 to 480).
+    /// Right panel limits (default: 260 wide, 220 to 480).
     pub right: PaneLimits,
-    /// The left panel never takes more than this fraction of the layout width (TypeScript: 0.36).
+    /// The left panel never takes more than this fraction of the layout width (default 0.36).
     pub left_fraction: f32,
-    /// Width kept for the center when clamping the right panel (TypeScript: 280).
+    /// Width kept for the center when clamping the right panel (default 280).
     pub center_minimum: f32,
-    /// Whether the center can be hidden (TypeScript: when a visibility host is given).
+    /// Whether the center can be hidden; off by default.
     pub center_collapsible: bool,
     /// Labels for the visibility toggles: left, center, right.
     pub labels: [&'static str; 3],
@@ -133,7 +133,7 @@ pub struct PanelRects {
     pub right: Option<Rect>,
 }
 
-/// Persisted preferences, in the TypeScript JSON shape.
+/// Persisted preferences: camelCase JSON, kept stable so saved layouts keep loading.
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SavedLayout {
@@ -380,7 +380,8 @@ impl PanelLayout {
                 ui.input(|input| (input.num_presses(Key::ArrowLeft), input.num_presses(Key::ArrowRight)));
             let steps = right_presses as f32 - left_presses as f32;
             if steps != 0.0 {
-                // Keyboard steps start from the displayed width, as the TypeScript divider reads the panel's width.
+                // Keyboard steps start from the displayed width (which clamping to the available space may have
+                // narrowed), not the stored preference.
                 let delta = steps * DIVIDER_KEY_STEP;
                 next = Some(if side == PaneSide::Left { displayed + delta } else { displayed - delta });
                 finished = true;
@@ -479,7 +480,7 @@ mod tests {
         assert!(reopened.is_collapsed(PaneSide::Left) && reopened.is_collapsed(PaneSide::Right));
         assert_eq!(reopened.panes(area(1000.0)).center, Some(area(1000.0)));
         let saved = storage.load("joy-editor-panels-test-v2").unwrap().unwrap();
-        assert!(saved.contains("\"leftCollapsed\":true"), "TypeScript key names: {saved}");
+        assert!(saved.contains("\"leftCollapsed\":true"), "camelCase document key names: {saved}");
 
         let collapsible = PanelLayoutOptions { center_collapsible: true, ..options.clone() };
         let mut layout = PanelLayout::new(collapsible, None);

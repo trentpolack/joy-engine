@@ -65,8 +65,8 @@ pub fn read_particle_texture_source(source: &str) -> Result<ParticleTextureDimen
     read_png_header(&bytes)
 }
 
-/// Embed PNG file bytes as a particle texture source (`data:image/png;base64,…`), the counterpart of a browser's
-/// `FileReader.readAsDataURL` in PARTICLE LAB's texture upload. Fails with the same checks as
+/// Embed PNG file bytes as a particle texture source (`data:image/png;base64,…`, the data URL a browser's
+/// `FileReader.readAsDataURL` produces); PARTICLE LAB's texture upload uses it. Fails with the same checks as
 /// [`read_particle_texture_source`]: at most 1 MiB, a PNG signature and IHDR header, and 1–2048 pixels per axis.
 pub fn encode_particle_texture_source(png: &[u8]) -> Result<String, ParticleTextureError> {
     if png.len() > MAXIMUM_PNG_BYTES {

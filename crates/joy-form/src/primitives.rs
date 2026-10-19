@@ -15,13 +15,12 @@ use crate::{
     value::Budget,
 };
 
-/// Longitudinal segment count the TypeScript `meshSphere(radius)` uses when none is given.
+/// Longitudinal segment count to pass to [`mesh_sphere`] when a caller has no preference.
 pub const DEFAULT_SPHERE_SEGMENTS: u32 = 20;
 
 /// Build a box centered on the origin with full extents in script units.
 ///
-/// The result matches the TypeScript `meshBox(width, height, depth)` vertex and index data,
-/// and equals evaluating `box(0, 0, 0, width, height, depth)` without a palette: 8 shared
+/// The result equals evaluating `box(0, 0, 0, width, height, depth)` without a palette: 8 shared
 /// corner vertices with zero (flat-shaded) normals and UVs, 12 triangles, FORM's default vertex
 /// tint, and one Default material used by every triangle. The caller owns the returned data.
 ///
@@ -36,8 +35,7 @@ pub fn mesh_box(width: f64, height: f64, depth: f64) -> Result<GeometryData, Dia
 /// Build a UV sphere centered on the origin with a radius in script units.
 ///
 /// `segments` is the longitudinal division count (3–96; see [`DEFAULT_SPHERE_SEGMENTS`]); the
-/// sphere has `ceil(segments / 2)` latitude rows. The result matches the TypeScript
-/// `meshSphere(radius, segments)` vertex and index data, and equals evaluating
+/// sphere has `ceil(segments / 2)` latitude rows. The result equals evaluating
 /// `sphere(0, 0, 0, radius, segments)` without a palette: seam-duplicated vertices with unit
 /// radial normals and UVs, FORM's default vertex tint, and one Default material. The caller owns
 /// the returned data.

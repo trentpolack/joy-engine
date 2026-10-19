@@ -17,9 +17,9 @@ type BehaviorFactory = Box<dyn Fn(&EntityDefinition) -> Box<dyn EntityBehavior>>
 
 /// Maps entity types to behavior factories.
 ///
-/// Like the TypeScript `EntityRegistry`, every registry starts with the built-in `entity`, `character`, and
-/// `player-character` types (plain entities without behavior), duplicate registration fails, and spawning an
-/// unregistered type fails with [`GameplayError::UnknownEntityType`].
+/// Every registry starts with the built-in `entity`, `character`, and `player-character` types (plain entities
+/// without behavior), duplicate registration fails, and spawning an unregistered type fails with
+/// [`GameplayError::UnknownEntityType`].
 pub struct EntityRegistry {
     // `None` marks a type that spawns a plain entity without behavior.
     factories: IndexMap<String, Option<BehaviorFactory>>,

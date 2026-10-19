@@ -77,11 +77,10 @@ pub use primitives::{
 /// Largest FORM LAB document, in bytes; capacity includes base64 texture expansion.
 pub const DOCUMENT_FILE_BYTES: usize = 64_000_000;
 
-/// Largest embedded material texture, in decoded bytes (`DOCUMENT_LIMITS.textureBytes`).
+/// Largest embedded material texture, in decoded bytes.
 pub const DOCUMENT_TEXTURE_BYTES: usize = materials::MAX_TEXTURE_BYTES;
 
-/// Largest combined embedded texture size of one material palette, in decoded bytes
-/// (`DOCUMENT_LIMITS.totalTextureBytes`).
+/// Largest combined embedded texture size of one material palette, in decoded bytes.
 pub const DOCUMENT_TOTAL_TEXTURE_BYTES: usize = materials::MAX_TOTAL_TEXTURE_BYTES;
 
 /// A parsed FORM script that can be evaluated any number of times.
@@ -126,12 +125,12 @@ pub fn compile(source: &str, overrides: &Json, materials: Option<&Json>) -> Resu
     CompiledScript::parse(source)?.evaluate(overrides, materials)
 }
 
-/// The editable FORM default material record (`defaultMaterial()`): white, fully rough, opaque, without textures.
+/// The editable FORM default material record: white, fully rough, opaque, without textures.
 pub fn default_material() -> Json {
     materials::default_material()
 }
 
-/// Validate a serialized material palette and return an owned copy with the Default material first (`readMaterials`).
+/// Validate a serialized material palette and return an owned copy with the Default material first.
 ///
 /// `None` yields the Default material alone. Names must be unique ASCII identifiers; factors lie in 0–1; textures are
 /// embedded PNG, JPEG, or WebP data URLs within [`DOCUMENT_TEXTURE_BYTES`] each and
@@ -140,9 +139,9 @@ pub fn read_materials(materials: Option<&Json>) -> Result<Vec<Json>, FormValueEr
     materials::read_materials(materials).map_err(FormValueError)
 }
 
-/// Validate one parameter override and return an owned copy (`readParameterValue`): a finite scalar, an XYZ vector,
-/// an RGBA color, a mesh resource, or a material resource. Numbers are written as JavaScript writes them, so integral
-/// values stay JSON integers.
+/// Validate one parameter override and return an owned copy: a finite scalar, an XYZ vector, an RGBA color, a mesh
+/// resource, or a material resource. Numbers use the document number spelling, so integral values stay JSON
+/// integers.
 pub fn read_parameter_value(value: &Json) -> Result<Json, FormValueError> {
     let parsed = parameters::read_json(value).map_err(FormValueError)?;
     Ok(match parsed {
@@ -152,13 +151,13 @@ pub fn read_parameter_value(value: &Json) -> Result<Json, FormValueError> {
     })
 }
 
-/// Validate a serialized mesh resource (`readMesh`): complete XYZ vertices within ±1,000,000, matching normals and
+/// Validate a serialized mesh resource: complete XYZ vertices within ±1,000,000, matching normals and
 /// UVs, and complete triangles with valid indices.
 pub fn read_mesh(value: &Json) -> Result<Json, FormValueError> {
     resources::read_mesh(value).map_err(FormValueError)
 }
 
-/// Validate a serialized material resource (`{"kind": "material", "material": …}`, `readMaterialValue`).
+/// Validate a serialized material resource (`{"kind": "material", "material": …}`).
 pub fn read_material_value(value: &Json) -> Result<Json, FormValueError> {
     resources::read_material_value(value).map_err(FormValueError)
 }

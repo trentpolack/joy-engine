@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Physics behavior the TypeScript suite protects: resting contact, bounded fixed stepping, ownership, raycast
-//! vehicles, transform conventions, and determinism, plus signed distance field colliders.
+//! Physics behavior worth protecting: resting contact, bounded fixed stepping, ownership, raycast vehicles, transform
+//! conventions, and determinism, plus signed distance field colliders.
 
 use joy_core::math::Vec3;
 use joy_core::{
@@ -44,7 +44,7 @@ fn ground(world: &mut PhysicsWorld) -> BodyHandle {
         .unwrap()
 }
 
-/// The TypeScript suite's chassis: a 180 kg box one meter above the ground.
+/// The test chassis: a 180 kg box one meter above the ground.
 fn chassis_options() -> BodyOptions {
     BodyOptions {
         mass: 180.0,
@@ -54,7 +54,7 @@ fn chassis_options() -> BodyOptions {
     }
 }
 
-/// The TypeScript suite's four-wheel test vehicle: front wheels steer, every wheel drives and brakes.
+/// The four-wheel test vehicle: front wheels steer, every wheel drives and brakes.
 fn make_vehicle(world: &mut PhysicsWorld) -> BodyHandle {
     let mut wheels = Vec::new();
     for z in [1.0, -1.0] {

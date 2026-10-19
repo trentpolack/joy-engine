@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The FORM DESTRUCTION example (`examples/form-destruction`), ported from its Node tests and browser capture: seeded
-//! structures and reset, persistent debris that lands and settles, bounded impact markers, support-released chunks
-//! caught by surviving colliders, and the demo driven by real pointer and key input through cumulative damage, a
-//! breach, the debug views, a miss, a reset, a broad undercut, and an orbit that applies no damage.
+//! The FORM DESTRUCTION example (`examples/form-destruction`): seeded structures and reset, persistent debris that
+//! lands and settles, bounded impact markers, support-released chunks caught by surviving colliders, and the demo
+//! driven by real pointer and key input through cumulative damage, a breach, the debug views, a miss, a reset, a broad
+//! undercut, and an orbit that applies no damage.
 //!
 //! The demo test needs a GPU adapter (llvmpipe or SwiftShader is enough); without one it prints a note and returns.
 //! Set `JOY_RENDER_CAPTURE_DIR` to keep PNG captures. Native only.

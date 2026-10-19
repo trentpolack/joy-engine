@@ -36,7 +36,7 @@ pub(crate) use maps::{
 pub(crate) const MAX_CASCADES: usize = 4;
 /// Faces rendered per shadowed point light.
 pub(crate) const POINT_FACES: usize = 6;
-/// Point-light maps are allocated in groups of this many lights, like the TypeScript light batches.
+/// Point-light maps are allocated in groups of this many lights.
 pub(crate) const SHADOW_LIGHTS_PER_BATCH: usize = 4;
 /// Cascade split blend between uniform (0) and logarithmic (1) distribution.
 const CASCADE_SPLIT_LAMBDA: f32 = 0.5;
@@ -52,10 +52,10 @@ pub(crate) const CASCADE_TEXEL_BIAS: f32 = 1.5;
 /// Near plane of every cascade's orthographic projection.
 const CASCADE_NEAR: f32 = 0.01;
 
-/// Shadow sampling quality preset, matching the TypeScript names and the luma.gl quality table.
+/// Shadow sampling quality preset, following the luma.gl quality table.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ShadowQuality {
-    /// Three cascades, 1024-pixel directional and 256-pixel point maps (the TypeScript default).
+    /// Three cascades, 1024-pixel directional and 256-pixel point maps (the default).
     #[default]
     Low,
     /// Four cascades, 1536-pixel directional and 512-pixel point maps.
@@ -130,7 +130,7 @@ pub struct ShadowOptions {
 }
 
 impl Default for ShadowOptions {
-    /// Defaults match the TypeScript `DEFAULT_SHADOW_OPTIONS`.
+    /// Low quality with the preset map sizes; directional shadows reach 100 world units from the camera.
     fn default() -> Self {
         Self {
             quality: ShadowQuality::Low,
@@ -237,7 +237,7 @@ pub(crate) const POINT_FACE_ORIENTATIONS: [(Vec3, Vec3); POINT_FACES] = [
     (Vec3::NEG_Z, Vec3::NEG_Y),
 ];
 
-/// Near plane of a point light's face projections, as the TypeScript `SceneShadows` sets it.
+/// Near plane of a point light's face projections: one hundredth of its range, at most 0.1 world units.
 pub(crate) fn point_near_plane(range: f32) -> f32 {
     0.1_f32.min(range * 0.01)
 }

@@ -3,8 +3,8 @@
 
 // HDR multiscale bloom with lens starburst streaks: the fragment path of luma.gl 9.4.2's
 // `createBloomShaderPassPipeline` (@luma.gl/effects src/passes/postprocessing/image-blur-filters/
-// bloom-shader-pass-pipeline.ts and bloom-lens-effects.ts), which the TypeScript engine runs. Ported from luma.gl,
-// Copyright (c) vis.gl contributors, MIT License; see src/rendering/scene_effects/LICENSE-luma.gl.
+// bloom-shader-pass-pipeline.ts and bloom-lens-effects.ts). Ported from luma.gl,
+// Copyright (c) vis.gl contributors, MIT License; see crates/joy-renderer/src/scene_effects/LICENSE-luma.gl.
 //
 // Each pyramid level is extracted (first level) or downsampled with a footprint-adaptive tent, then blurred by two
 // separable Gaussians. Reconstruction runs from the widest level inward: a four-fetch bicubic B-spline of the wider glow

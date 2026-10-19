@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The FORM building shell (TypeScript `site/src/main.ts`): one FORM source generates cottage, warehouse, and apartment
-//! exteriors from parameter snapshots, drawn by the engine renderer with their PBR materials.
+//! The FORM building shell: one FORM source generates cottage, warehouse, and apartment exteriors from parameter
+//! snapshots, drawn by the engine renderer with their PBR materials.
 //!
 //! The source parses once; each change evaluates a complete parameter snapshot and replaces the drawn building only
 //! after the new asset is ready, so a failed evaluation leaves the previous building visible. Baked mode
@@ -87,12 +87,12 @@ const LIGHT: PointLight = PointLight {
 /// Render timing samples kept for the statistics.
 const TIMING_SAMPLES: usize = 120;
 
-/// Sidebar width in logical pixels, and on viewports at most [`NARROW_VIEWPORT`] wide (TypeScript CSS).
+/// Sidebar width in logical pixels, and on viewports at most [`NARROW_VIEWPORT`] wide.
 const SIDEBAR_WIDTH: f32 = 330.0;
 const SIDEBAR_WIDTH_NARROW: f32 = 260.0;
 const NARROW_VIEWPORT: f32 = 760.0;
 
-// The example's palette (TypeScript `style.css`).
+// The example's palette.
 const SIDEBAR_FILL: Color32 = Color32::from_rgb(0x17, 0x24, 0x31);
 const TITLE: Color32 = Color32::from_rgb(0xf9, 0xb2, 0x5e);
 const TEXT: Color32 = Color32::from_rgb(0xe4, 0xed, 0xf4);
@@ -289,8 +289,8 @@ impl BuildingExample {
         serde_json::to_value(mesh_data_from_evaluation(geometry)).ok()
     }
 
-    /// Copied diagnostics (TypeScript `snapshot()`): mode, evaluation counts and CPU timings in milliseconds, geometry
-    /// sizes, scene instances, bounds in meters, and render encoding timings.
+    /// Copied diagnostics: mode, evaluation counts and CPU timings in milliseconds, geometry sizes, scene instances,
+    /// bounds in meters, and render encoding timings.
     pub fn snapshot(&self) -> Value {
         let geometry = self.geometry.as_ref();
         let bounds = self.asset.as_ref().map(MeshAsset::bounds);

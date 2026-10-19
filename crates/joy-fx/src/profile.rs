@@ -39,7 +39,7 @@ pub struct ParticleProfile {
     pub simulation_ms: f64,
 }
 
-/// Create zeroed metrics for `definition`; the TypeScript `createParticleProfile`.
+/// Create zeroed metrics for `definition`.
 pub fn create_particle_profile(definition: &CompiledParticleEffect, enabled: bool) -> ParticleProfile {
     ParticleProfile {
         enabled,

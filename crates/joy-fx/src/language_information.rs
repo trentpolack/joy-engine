@@ -19,7 +19,7 @@ use joy_core::scripting::{
 /// Language keywords.
 const KEYWORDS: [&str; 3] = ["let", "if", "else"];
 
-/// Build the particle language catalog; the TypeScript `PARTICLE_LANGUAGE_CATALOG`.
+/// Build the particle language catalog.
 pub fn particle_language_catalog() -> ScriptLanguageCatalog {
     let keywords = KEYWORDS.iter().map(|name| ScriptLanguageSymbol {
         name: (*name).to_owned(),

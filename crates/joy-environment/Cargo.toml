@@ -23,6 +23,9 @@ serde_json.workspace = true
 thiserror.workspace = true
 log.workspace = true
 
+[dev-dependencies]
+joy-test-support.workspace = true
+
 # Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
 [package.metadata.joy]
 layer = "simulation"

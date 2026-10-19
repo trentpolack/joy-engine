@@ -62,7 +62,7 @@ pub enum TerrainDiagnostic {
 }
 
 impl TerrainDiagnostic {
-    /// The shader's numeric mode (0, 1, or 2), matching the TypeScript `diagnostic` values.
+    /// The terrain shader's numeric diagnostic mode (0, 1, or 2).
     pub fn mode(self) -> f32 {
         match self {
             Self::Material => 0.0,
@@ -83,7 +83,7 @@ pub enum TerrainTriangleCount {
 }
 
 impl TerrainTriangleCount {
-    /// Label used by overlays, matching the TypeScript text.
+    /// Label used by overlays; stable display text.
     pub fn label(self) -> &'static str {
         match self {
             Self::UpperBound => "upper bound (no readback)",
@@ -617,8 +617,8 @@ mod tests {
         bytes
     }
 
-    /// The compute path writes the same records and draw ranges as CPU selection (the TypeScript browser parity check,
-    /// whose largest descriptor difference was about 2e-6).
+    /// The compute path writes the same records and draw ranges as CPU selection; its `f32` descriptors stay within
+    /// 1e-3 of the `f64` CPU values.
     #[test]
     fn compute_selection_matches_cpu_selection() {
         let gpu = match pollster::block_on(GpuContext::headless(BackendPreference::Auto)) {

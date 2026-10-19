@@ -3,9 +3,10 @@
 
 //! Camera-facing particle geometry for the renderer's transparent queue.
 //!
-//! Geometry is generated in `f64` exactly as the TypeScript `src/particles/rendering.ts` builds it (same polygon
-//! shapes, vertex order, and arithmetic order), sorted back to front in `f64`, and only then converted to the
-//! renderer's single-precision vertices. Building geometry never advances the simulation or consumes randomness.
+//! Geometry is generated in `f64` with fixed polygon shapes, vertex order, and arithmetic order, so it reproduces on
+//! every target and matches the golden geometry recordings within their tolerances; it is sorted back to front in
+//! `f64` and only then converted to the renderer's single-precision vertices. Building geometry never advances the
+//! simulation or consumes randomness.
 //!
 //! Coordinates and sizes are world units; colors are linear HDR with straight alpha (negative channels clamp to zero and
 //! alpha to at most one). Textured and flipbook sprites carry top-left-origin UVs inset by half a texel so linear
@@ -125,7 +126,7 @@ pub struct ParticleRenderMetrics {
     pub sort_ms: f64,
 }
 
-/// Create zeroed metrics for `definition`; the TypeScript `createParticleRenderMetrics`.
+/// Create zeroed metrics for `definition`, one row per emitter.
 pub fn create_particle_render_metrics(definition: &CompiledParticleEffect) -> ParticleRenderMetrics {
     ParticleRenderMetrics {
         emitters: definition
@@ -245,7 +246,8 @@ pub struct ParticleTriangle {
 }
 
 impl ParticleTriangle {
-    /// Sum of the corners' projections on `backward` (three times the centroid depth), accumulated as in TypeScript.
+    /// Sum of the corners' projections on `backward` (three times the centroid depth), accumulated corner by corner in
+    /// a fixed order so recorded back-to-front sorts reproduce exactly.
     pub fn depth(&self, backward: &[f64; 3]) -> f64 {
         let mut depth = 0.0;
         for corner in &self.corners {
@@ -541,7 +543,7 @@ fn append_textured_particle(
     }
 }
 
-/// An irregular solid triangle fan (the TypeScript `addRadialPolygon`).
+/// An irregular solid triangle fan.
 #[allow(clippy::too_many_arguments)]
 fn add_radial_polygon(
     vertices: &mut Vec<f64>,
@@ -556,7 +558,7 @@ fn add_radial_polygon(
     add_gradient_radial_polygon(vertices, x, y, radius, color, color, shape, rotation, z);
 }
 
-/// An irregular triangle fan with independent center and edge colors (the TypeScript `addGradientRadialPolygon`).
+/// An irregular triangle fan with independent center and edge colors.
 #[allow(clippy::too_many_arguments)]
 fn add_gradient_radial_polygon(
     vertices: &mut Vec<f64>,
@@ -588,7 +590,7 @@ fn add_gradient_radial_polygon(
     }
 }
 
-/// An annulus of two triangles per segment; `width` is the half thickness (the TypeScript `addRing`).
+/// An annulus of two triangles per segment; `width` is the half thickness.
 #[allow(clippy::too_many_arguments)]
 fn add_ring(
     vertices: &mut Vec<f64>,

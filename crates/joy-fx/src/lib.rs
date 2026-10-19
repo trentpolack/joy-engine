@@ -31,10 +31,10 @@
 //!
 //! # Determinism
 //!
-//! Simulation uses `f64`, consumes the seeded cosmetic stream ([`joy_core::SeededRandom`])
-//! in the same order, and computes transcendental functions with the portable `libm` crate, so native and WebAssembly
-//! builds agree exactly. Parity tests compare against values recorded from the retired TypeScript engine; V8's `sin`, `cos`,
-//! `log`, and `pow` occasionally differ in the last bit (see `docs/rust-particles.md`).
+//! Simulation uses `f64`, consumes the seeded cosmetic stream ([`joy_core::SeededRandom`]) in a fixed order, and
+//! computes transcendental functions with the portable `libm` crate, so native and WebAssembly builds agree exactly.
+//! Golden recordings are compared within explicit numerical tolerances because some recorded `sin`, `cos`, `log`, and
+//! `pow` results differ from `libm` in the last bit (see `docs/rust-particles.md`).
 //!
 //! # Ownership
 //!

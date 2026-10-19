@@ -1,9 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The preview keeps its displayed geometry paired with the accepted mesh, ported from
-//! `test/viewport-material-commit.test.js`: a newer build whose material map fails to decode leaves the previous mesh,
-//! markers, and framing in place.
+//! The preview keeps its displayed geometry paired with the accepted mesh: a newer build whose material map fails to
+//! decode leaves the previous mesh, markers, and framing in place.
 
 use form_lab::rendering::viewport::Viewport;
 use joy_engine::form::{

@@ -37,7 +37,7 @@ pub const PRESS_THRESHOLD: f32 = 0.15;
 /// Default analog dead zone, rescaled so values leave it at zero.
 pub const DEFAULT_DEAD_ZONE: f32 = 0.15;
 
-/// Common DOM key codes, matching the TypeScript `KEY_CODE` constants.
+/// Common key codes, spelled as DOM `KeyboardEvent.code` names.
 pub mod key {
     /// The escape key.
     pub const ESCAPE: &str = "Escape";
@@ -205,13 +205,13 @@ pub mod gamepad {
 /// One way to trigger an action.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum InputBinding {
-    /// A keyboard key by DOM code name (TypeScript `{key}`).
+    /// A keyboard key by DOM code name.
     Key(String),
-    /// A mouse button: 0 primary, 1 middle, 2 secondary (TypeScript `{pointer}`). Touches hold the primary button.
+    /// A mouse button: 0 primary, 1 middle, 2 secondary. Touches hold the primary button.
     MouseButton(u16),
-    /// A gamepad button in the standard mapping, from any connected pad (TypeScript `{button}`); see [`gamepad`].
+    /// A gamepad button in the standard mapping, from any connected pad; see [`gamepad`].
     GamepadButton(u16),
-    /// A named on-screen button driven by the game's UI (TypeScript `{virtual}`).
+    /// A named on-screen button driven by the game's UI.
     Virtual(String),
 }
 

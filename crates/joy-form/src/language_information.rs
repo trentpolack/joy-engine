@@ -10,11 +10,11 @@ use joy_core::scripting::{
     ScriptSymbolKind,
 };
 
-/// FORM language keywords in TypeScript `FORM_KEYWORD` order (`userData` is also a command and is listed there).
+/// FORM language keywords in their stable catalog order (`userData` is also a command and is listed there).
 pub const FORM_KEYWORDS: [&str; 11] =
     ["project", "userData", "wrangle", "in", "as", "if", "let", "repeat", "with", "param", "meta"];
 
-/// FORM built-in commands in TypeScript `FORM_COMMAND` order.
+/// FORM built-in commands in their stable catalog order.
 pub const FORM_COMMANDS: [&str; 49] = [
     "grid",
     "noise",
@@ -86,8 +86,7 @@ const FORM_FUNCTION_SIGNATURES: [(&str, &str); 12] = [
     ("inspect", "inspect(name, value)"),
 ];
 
-/// Build the FORM language catalog: keywords that are not also commands, then every command as a function; the
-/// TypeScript `FORM_LANGUAGE_CATALOG`.
+/// Build the FORM language catalog: keywords that are not also commands, then every command as a function.
 pub fn form_language_catalog() -> ScriptLanguageCatalog {
     let keywords = FORM_KEYWORDS.iter().filter(|name| !FORM_COMMANDS.contains(name)).map(|name| ScriptLanguageSymbol {
         name: (*name).to_owned(),

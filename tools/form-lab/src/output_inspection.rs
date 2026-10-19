@@ -290,7 +290,7 @@ impl OutputInspection {
                             sum[axis] += position[axis];
                         }
                     }
-                    // TypeScript divides by three, the corner count of every FORM face.
+                    // Every FORM face is a triangle, so the centroid divides by its three corners.
                     sum.map(|value| value / 3.0)
                 })
                 .collect(),
@@ -491,7 +491,7 @@ impl OutputInspection {
     }
 }
 
-/// A table cell: four decimals, printed as JavaScript prints the rounded number.
+/// A table cell: rounded to four decimals, printed in shortest form without trailing zeros.
 pub fn format_cell(value: f64) -> String {
     let rounded: f64 = format!("{value:.4}").parse().unwrap_or(value);
     format_number(rounded)
@@ -505,7 +505,7 @@ fn output_record<'a>(data: &'a GeometryData, name: &str) -> Option<&'a Json> {
     data.outputs.iter().flatten().find(|output| output["name"] == name)
 }
 
-/// The full build as inspected geometry (`generatedGeometry`): point positions, normals, RGBA colors, and UVs.
+/// The full build as inspected geometry: point positions, normals, RGBA colors, and UVs.
 fn generated_geometry(data: &GeometryData) -> InspectedGeometry {
     let vertex_count = data.positions.len() / 3;
     let colors: Vec<f64> = (0..vertex_count)

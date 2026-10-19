@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 //! Scalar and vector arithmetic, built-in math functions, and deterministic noise.
-//! Ported from `src/form/compiler.ts` and `src/form/procedural-math.ts`.
 
 use crate::value::{
     Value,

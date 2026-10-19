@@ -32,7 +32,7 @@ fn defaults_validate_and_report_requirements() {
 }
 
 #[test]
-fn invalid_settings_report_typescript_messages() {
+fn invalid_settings_report_stable_messages() {
     let both =
         SceneEffectsOptions { ssao: Some(Default::default()), gtao: Some(Default::default()), ..Default::default() };
     assert_eq!(both.validate(), Err(SceneEffectsError::ExclusiveOcclusion));
@@ -55,7 +55,7 @@ fn invalid_settings_report_typescript_messages() {
 }
 
 #[test]
-fn options_read_typescript_json_spellings() {
+fn options_read_camel_case_json_spellings() {
     let options: SceneEffectsOptions = serde_json::from_str(
         r#"{"ssao": {"normalSource": "normal-texture"}, "taa": {"reprojection": "camera"}, "colorFormat": "rgba8unorm"}"#,
     )

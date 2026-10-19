@@ -32,7 +32,7 @@ pub use chunk_support::{
     DEFAULT_CONTACT_TOLERANCE,
 };
 
-/// Invalid chunk definitions, damage, queries, or support options. Messages match the TypeScript engine.
+/// Invalid chunk definitions, damage, queries, or support options. Messages are stable diagnostics.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum DestructionError {
     /// A chunk had an empty id or material.

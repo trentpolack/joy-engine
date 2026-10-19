@@ -1,14 +1,15 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-// Display resolve: composes bloom (glow plus starburst streaks) and the vignette edge blur into the linear HDR scene,
-// applies exposure and the selected tone mapper, encodes the result as sRGB, then applies the grade (saturation,
-// brightness/contrast, vibrance) and vignette to the encoded display values. The operators and their order match the
-// TypeScript engine's post-processing chain. When a blur follows bloom, the bloom composite runs earlier (see
+// Display resolve: upscales the scene when it renders below the output size, composes bloom (glow plus starburst
+// streaks) and the vignette edge blur into the linear HDR scene, applies exposure and the selected tone mapper, extends
+// highlights into any HDR headroom, encodes the result as sRGB, then applies the grade (saturation, brightness/contrast,
+// vibrance) and vignette to the encoded display values. When a blur follows bloom, the bloom composite runs earlier (see
 // `compositeMain` in post-bloom.wgsl) and the bloom strength here is zero.
 //
-// The display target holds sRGB-encoded values: 8-bit encoded storage keeps dark gradients from banding, and the grade,
-// antialiasing, and grain work on the perceptual values a viewer sees (they were tuned on them).
+// The display target holds sRGB-encoded values: 8-bit encoded storage keeps dark gradients from banding on standard
+// displays, a float target carries encoded values above SDR white on HDR displays, and the grade, antialiasing, and
+// grain work on the perceptual values a viewer sees (they were tuned on them).
 
 struct Resolve {
   // X exposure, Y tone mapper (0 none, 1 ACES, 2 AgX), Z AgX look (0 neutral, 1 punchy), W bloom strength (zero when
@@ -18,8 +19,13 @@ struct Resolve {
   grade: vec4f,
   // X vignette radius, Y vignette strength, Z vignette blur amount, W unused.
   vignette: vec4f,
-  // XY target size in pixels, Z time in seconds, W unused.
+  // XY output size in pixels, Z time in seconds, W unused.
   viewport: vec4f,
+  // X display headroom (multiple of SDR white, 1 for standard output), Y its sRGB-encoded value (the largest value the
+  // display chain keeps), Z 1 when the scene renders below the output size and is upscaled, W unused.
+  output: vec4f,
+  // XY scene size in pixels, ZW its reciprocal.
+  scene: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> resolve: Resolve;
@@ -44,6 +50,63 @@ struct ResolveOutput {
   output.position = vec4f((position*2.0) - 1.0, 0.0, 1.0);
   output.coordinate = vec2f(position.x, 1.0 - position.y);
   return output;
+}
+
+/**
+ * Scene color at a display coordinate. A scene rendered below the output size is upscaled with a Catmull-Rom bicubic
+ * filter, which keeps edges and texture detail sharper than bilinear filtering; nine bilinear fetches cover its sixteen
+ * taps. The result is clamped to the four nearest texels so the filter's negative lobes cannot ring around bright
+ * highlights.
+ */
+fn sampleScene(coordinate: vec2f) -> vec3f {
+  if(resolve.output.z < 0.5) {
+    return textureSampleLevel(sceneTexture, linearSampler, coordinate, 0.0).rgb;
+  }
+
+  let size = resolve.scene.xy;
+  let texel = resolve.scene.zw;
+  let position = (coordinate*size) - vec2f(0.5);
+  let origin = floor(position);
+  let fraction = position - origin;
+
+  // Catmull-Rom weights for the taps one before, at, after, and two after the origin texel along each axis.
+  let weight0 = fraction*(-0.5 + (fraction*(1.0 - (0.5*fraction))));
+  let weight1 = 1.0 + ((fraction*fraction)*((1.5*fraction) - 2.5));
+  let weight2 = fraction*(0.5 + (fraction*(2.0 - (1.5*fraction))));
+  let weight3 = (fraction*fraction)*((0.5*fraction) - 0.5);
+
+  // The middle two taps share one bilinear fetch placed between their texel centers by their weights.
+  let weightMiddle = weight1 + weight2;
+  let coordinateBefore = (origin - vec2f(0.5))*texel;
+  let coordinateMiddle = (origin + vec2f(0.5) + (weight2/weightMiddle))*texel;
+  let coordinateAfter = (origin + vec2f(2.5))*texel;
+
+  let rows = array<f32, 3>(coordinateBefore.y, coordinateMiddle.y, coordinateAfter.y);
+  let rowWeights = array<f32, 3>(weight0.y, weightMiddle.y, weight3.y);
+  let columns = array<f32, 3>(coordinateBefore.x, coordinateMiddle.x, coordinateAfter.x);
+  let columnWeights = array<f32, 3>(weight0.x, weightMiddle.x, weight3.x);
+  var color = vec3f(0.0);
+  var totalWeight = 0.0;
+  for(var row = 0u; row < 3u; row++) {
+    for(var column = 0u; column < 3u; column++) {
+      let weight = rowWeights[row]*columnWeights[column];
+      let tap = vec2f(columns[column], rows[row]);
+      color+= textureSampleLevel(sceneTexture, linearSampler, tap, 0.0).rgb*weight;
+      totalWeight+= weight;
+    }
+  }
+  color = color/totalWeight;
+
+  // Neighborhood clamp against the four texels surrounding the sample point.
+  let lastTexel = vec2i(size) - vec2i(1);
+  let nearest = vec2i(origin);
+  let topLeft = textureLoad(sceneTexture, clamp(nearest, vec2i(0), lastTexel), 0).rgb;
+  let topRight = textureLoad(sceneTexture, clamp(nearest + vec2i(1, 0), vec2i(0), lastTexel), 0).rgb;
+  let bottomLeft = textureLoad(sceneTexture, clamp(nearest + vec2i(0, 1), vec2i(0), lastTexel), 0).rgb;
+  let bottomRight = textureLoad(sceneTexture, clamp(nearest + vec2i(1, 1), vec2i(0), lastTexel), 0).rgb;
+  let minimum = min(min(topLeft, topRight), min(bottomLeft, bottomRight));
+  let maximum = max(max(topLeft, topRight), max(bottomLeft, bottomRight));
+  return clamp(color, minimum, maximum);
 }
 
 /**
@@ -94,6 +157,20 @@ fn acesToneMap(color: vec3f, exposure: f32) -> vec3f {
 }
 
 /**
+ * Extend tone-mapped highlights into the display's HDR headroom. The tone mappers end at SDR white, so on an HDR display
+ * the brightest part of their shoulder is stretched toward the headroom: colors scale by a factor that stays at one up
+ * to half of SDR white luminance and rises smoothly to the headroom at SDR white. Normally lit content, and therefore
+ * the look tuned on standard displays, is unchanged; highlights keep their hue because every channel scales together.
+ * With one (no) headroom this returns the color unchanged.
+ */
+fn extendHighlights(color: vec3f, headroom: f32) -> vec3f {
+  let luminance = dot(color, vec3f(0.2126, 0.7152, 0.0722));
+  let shoulder = smoothstep(0.5, 1.0, luminance);
+  let extended = color*(1.0 + ((headroom - 1.0)*(shoulder*shoulder)));
+  return min(extended, vec3f(headroom));
+}
+
+/**
  * Encode linear light with the exact IEC 61966-2-1 sRGB curve (`joy_core::linear_to_srgb`); values above one continue
  * the curve and negative values mirror it, so the grade can still pull them back before the final clamp.
  */
@@ -140,7 +217,7 @@ fn adjustVibrance(color: vec3f, amount: f32) -> vec3f {
  * Compose, tone map, grade, and vignette one display pixel.
  */
 @fragment fn fragmentMain(input: ResolveOutput) -> @location(0) vec4f {
-  var color = textureSampleLevel(sceneTexture, linearSampler, input.coordinate, 0.0).rgb;
+  var color = sampleScene(input.coordinate);
 
   // Bloom: reconstructed glow plus starburst streaks, scaled by strength.
   if(resolve.display.w > 0.0) {
@@ -161,14 +238,15 @@ fn adjustVibrance(color: vec3f, amount: f32) -> vec3f {
     color = mix(color, blurred, edgeWeight);
   }
 
-  // Display transform.
+  // Display transform. Without a tone mapper, scene light shows as it is up to the display's peak.
   let exposure = resolve.display.x;
+  let headroom = resolve.output.x;
   if(resolve.display.y > 1.5) {
-    color = agxToneMap(color, exposure, resolve.display.z);
+    color = extendHighlights(agxToneMap(color, exposure, resolve.display.z), headroom);
   } else if(resolve.display.y > 0.5) {
-    color = acesToneMap(color, exposure);
+    color = extendHighlights(acesToneMap(color, exposure), headroom);
   } else {
-    color = max(color*exposure, vec3f(0.0));
+    color = min(max(color*exposure, vec3f(0.0)), vec3f(headroom));
   }
 
   // Encode for display; everything after this works on the values the viewer sees.
@@ -186,5 +264,5 @@ fn adjustVibrance(color: vec3f, amount: f32) -> vec3f {
     color = color*ratio;
   }
 
-  return vec4f(clamp(color, vec3f(0.0), vec3f(1.0)), 1.0);
+  return vec4f(clamp(color, vec3f(0.0), vec3f(resolve.output.y)), 1.0);
 }

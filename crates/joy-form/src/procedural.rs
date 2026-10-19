@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 //! Procedural geometry commands, wrangles, retained instances, and named outputs.
-//! Ported from `src/form/procedural-runtime.ts`.
 
 mod output;
 mod scatter;

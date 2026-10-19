@@ -42,7 +42,7 @@ fn edges_and_axes_follow_held_controls() {
     assert!(input.action("forward").released);
     assert_eq!(input.axis("throttle"), -1.0);
 
-    // Opposing digital directions cancel, as in TypeScript.
+    // Opposing digital directions cancel.
     input.handle_key(key::KEY_W, true);
     input.update();
     assert_eq!(input.axis("throttle"), 0.0);

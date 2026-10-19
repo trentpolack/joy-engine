@@ -75,16 +75,16 @@ const SIDE_FRICTION_STIFFNESS: f32 = 1.0;
 /// Largest accepted steering angle in radians.
 const MAX_STEER_LIMIT: f64 = std::f64::consts::FRAC_PI_2;
 
-/// Smallest accepted wheel radius (JavaScript `Number.EPSILON`), compared in `f64`.
+/// Smallest accepted wheel radius, compared in `f64`.
 const MIN_WHEEL_RADIUS: f64 = f64::EPSILON;
 
-/// Values a vehicle assumes for omitted options, matching the TypeScript `PHYSICS_VEHICLE_DEFAULTS`. Forces are
-/// newtons and steering is radians. Wheel `friction_slip` defaults to the vehicle's own value.
+/// Values a vehicle assumes for omitted options. Forces are newtons and steering is radians. Wheel `friction_slip`
+/// defaults to the vehicle's own value.
 pub const VEHICLE_DEFAULTS: VehicleOptions =
     VehicleOptions { wheels: Vec::new(), engine_force: 400.0, max_steer: 0.45, brake_force: 20.0, friction_slip: 5.0 };
 
-/// Values a wheel assumes for omitted options, matching the TypeScript `PHYSICS_WHEEL_DEFAULTS`. Lengths are
-/// chassis-local meters. The position is a placeholder (the chassis origin); see [`WheelOptions::new`].
+/// Values a wheel assumes for omitted options. Lengths are chassis-local meters. The position is a placeholder (the
+/// chassis origin); see [`WheelOptions::new`].
 pub const WHEEL_DEFAULTS: WheelOptions = WheelOptions {
     position: Vec3::ZERO,
     radius: 0.35,
@@ -170,8 +170,7 @@ impl Default for VehicleOptions {
     }
 }
 
-/// Drive limits a running vehicle can retune, with the same bounds as [`VehicleOptions`]. Matches the writable
-/// `engineForce`, `maxSteer`, and `brakeForce` properties of the TypeScript `PhysicsVehicle`.
+/// Drive limits a running vehicle can retune, with the same bounds as [`VehicleOptions`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct VehicleTuning {
     /// Drive force per driven wheel at full throttle, in newtons; nonnegative.
@@ -210,7 +209,7 @@ impl PhysicsWorld {
         chassis: BodyOptions,
         options: VehicleOptions,
     ) -> Result<BodyHandle, PhysicsError> {
-        // Body validation first (the TypeScript order: the chassis exists before the vehicle is configured).
+        // Body validation first: the chassis must be valid before the vehicle is configured.
         let validated = ValidatedBody::new(&chassis)?;
         let shape = create_shape(&chassis)?;
         if validated.mass <= 0.0 {
@@ -276,8 +275,7 @@ impl PhysicsWorld {
 
         let (engine_force, max_steer, brake_force) = (record.engine_force, record.max_steer, record.brake_force);
         for (wheel, options) in record.controller.wheels_mut().iter_mut().zip(&record.wheels) {
-            // Rapier's tire forward tangent is +Z for this axle, so positive throttle drives forward directly
-            // (cannon's tangent was -Z, which is why the TypeScript adapter negated it).
+            // Rapier's tire forward tangent is +Z for this axle, so positive throttle drives forward directly.
             wheel.engine_force = if options.driven { throttle * engine_force } else { 0.0 };
             wheel.steering = if options.steering { steer * max_steer } else { 0.0 };
             wheel.brake = if options.brake { brake * brake_force } else { 0.0 };
@@ -377,8 +375,8 @@ fn wheel_poses(record: &VehicleRecord, pose: Pose) -> Vec<PhysicsTransform> {
             let direction = pose.rotation * wheel.direction_cs;
             let position = hard_point + (direction * wheel.raycast_info().suspension_length);
 
-            // Cannon composes chassis * steer(up) * spin(axle). Rapier accumulates spin with the opposite sign for this
-            // axle, so it is negated to keep wheels visibly rolling forward like the TypeScript engine.
+            // Wheels compose chassis * steer(up) * spin(axle), as in cannon. Rapier accumulates spin with the opposite
+            // sign for this axle, so it is negated to keep wheels visibly rolling forward.
             let up = -wheel.direction_cs.normalize_or_zero();
             let axle = wheel.axle_cs.normalize_or_zero();
             let steer = Rotation::from_axis_angle(up, wheel.steering);

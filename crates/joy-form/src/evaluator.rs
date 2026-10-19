@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Statement and expression evaluation for one script run. Ported from `src/form/compiler.ts`.
+//! Statement and expression evaluation for one script run.
 
 use crate::{
     Diagnostic,

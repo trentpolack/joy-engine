@@ -128,7 +128,7 @@ impl ChunkSupportGraph {
     /// Resolve the shortest permitted sideways travel from active ground anchors.
     ///
     /// `active` is indexed in generation order. Nonnegative edge costs and a visited set bound the search to one visit
-    /// per active chunk. Ties resolve to the earliest chunk in generation order, exactly like the TypeScript search.
+    /// per active chunk. Ties resolve to the earliest chunk in generation order, so results are deterministic.
     pub(crate) fn evaluate(&self, active: &[bool]) -> Vec<ChunkSupportState> {
         let active_count = active.iter().filter(|flag| **flag).count();
         let mut distances: Vec<f64> = (0..self.ids.len())

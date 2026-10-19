@@ -2,8 +2,7 @@
 // Licensed under the MIT License.
 
 //! Particle geometry and materials: camera-facing billboards, streak depth, textured and flipbook UVs, global depth
-//! order across materials, read-only rendering, and texture-set staging. Ported from the TypeScript
-//! `test/particle-materials.test.mjs` and `test/particle-3d.test.mjs`.
+//! order across materials, read-only rendering, and texture-set staging.
 
 use joy_fx::{
     DEFAULT_PARTICLE_TEXTURE,

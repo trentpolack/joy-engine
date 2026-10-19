@@ -115,7 +115,7 @@ pub enum ObjectError {
     },
 }
 
-/// A component schema could not be registered, or a preset was unknown. Messages match the TypeScript engine.
+/// A component schema could not be registered, or a preset was unknown. Messages are stable diagnostics.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ComponentSchemaError {
     /// The schema's type was blank.

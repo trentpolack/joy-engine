@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 //
 // Portions ported from luma.gl 9.4.2 `pbrEnvironmentFilter` (MIT License, Copyright (c) vis.gl contributors); see
-// src/rendering/scene_effects/LICENSE-luma.gl.
+// crates/joy-renderer/src/scene_effects/LICENSE-luma.gl.
 
 // Image-based lighting integration: one draw per destination face and mip. Mode 0 prefilters specular radiance with
 // GGX importance sampling at the draw's roughness, mode 1 integrates cosine-weighted diffuse irradiance, and mode 2

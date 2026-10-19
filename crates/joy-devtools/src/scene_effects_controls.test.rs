@@ -6,7 +6,7 @@
 use super::*;
 
 #[test]
-fn presets_and_toggles_build_typescript_configurations() {
+fn presets_and_toggles_build_their_configurations() {
     let mut controls = SceneEffectsControls::new();
     controls.select_preset(EffectPreset::Combined);
     let config = controls.configuration();

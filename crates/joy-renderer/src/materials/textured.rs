@@ -114,7 +114,7 @@ impl TexturedPass {
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: scene_format,
-                    // Color: src-alpha / one-minus-src-alpha; alpha: one / one-minus-src-alpha, as in TypeScript.
+                    // Color: src-alpha / one-minus-src-alpha; alpha: one / one-minus-src-alpha.
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],

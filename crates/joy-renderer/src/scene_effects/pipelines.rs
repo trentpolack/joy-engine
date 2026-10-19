@@ -2,9 +2,8 @@
 // Licensed under the MIT License.
 
 //! Effect pipelines: luma.gl's `create*ShaderPassPipeline` factories (MIT License, Copyright (c) vis.gl contributors)
-//! with the Joy engine's overrides from `scene-effect-pipelines.ts`: unspecified target formats use the chain's color
-//! format, targets sample linearly with clamped edges, and raw depth histories use 32-bit floats read with nearest
-//! sampling.
+//! with the Joy engine's overrides: unspecified target formats use the chain's color format, targets sample linearly
+//! with clamped edges, and raw depth histories use 32-bit floats read with nearest sampling.
 
 use crate::scene_effects::config::{
     ClusteredLightingOptions,
@@ -84,7 +83,7 @@ pub(crate) struct PipelineSpec {
     pub(crate) steps: Vec<StepSpec>,
 }
 
-/// Effect pipelines grouped like the TypeScript renderer: lighting, temporal antialiasing, then finishing.
+/// Effect pipelines grouped by the stage that runs them: lighting, temporal antialiasing, then finishing.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct PipelineGroups {
     pub(crate) lighting: Vec<PipelineSpec>,
@@ -433,7 +432,7 @@ fn finish(
     PipelineSpec { name, targets, steps }
 }
 
-/// Build the enabled effects' pipelines in the TypeScript order.
+/// Build the enabled effects' pipelines in the fixed order they run within each group.
 pub(crate) fn scene_effect_pipelines(options: &SceneEffectsOptions, color: wgpu::TextureFormat) -> PipelineGroups {
     let mut groups = PipelineGroups::default();
     if let Some(ssao_options) = &options.ssao {

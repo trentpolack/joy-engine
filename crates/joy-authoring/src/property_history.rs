@@ -52,7 +52,7 @@ impl<Snapshot: Clone + PartialEq> PropertyHistory<Snapshot> {
     }
 
     /// Forget every entry and start again from `snapshot`, for a newly opened document or an edit that property undo
-    /// must not cross (TypeScript clears property history when a script changes).
+    /// must not cross, such as a script change.
     pub fn reset(&mut self, snapshot: Snapshot) {
         self.baseline = Some(snapshot);
         self.past.clear();

@@ -2,7 +2,8 @@
 // Licensed under the MIT License.
 
 //! Level and object document round trips, rejection of invalid authored data, and the editor's `LevelDocument`
-//! history replayed against the TypeScript engine.
+//! history checked against the golden recording in `tests/fixtures/gameplay-reference.json`. Re-record its
+//! `levelDocument.history` section with `JOY_UPDATE_FIXTURES=1` when document history changes on purpose.
 
 use joy_core::math::Vec3;
 use joy_gameplay::{
@@ -21,15 +22,16 @@ use joy_gameplay::{
     serialize_level,
     serialize_object,
 };
+use joy_test_support::{
+    Tolerance,
+    golden_file,
+};
 use serde_json::{
     Value,
     json,
 };
 
-/// LevelDocument operations recorded from the TypeScript engine.
-const GAMEPLAY_REFERENCE: &str = include_str!("../fixtures/gameplay-reference.json");
-
-/// Engine-owned fixture written by the TypeScript `serializeLevel`, so it is in canonical form.
+/// Engine-owned level fixture, stored in the canonical form `serialize_level` writes.
 const TEST_YARD: &str = include_str!("../fixtures/test-yard.joylevel");
 
 #[test]
@@ -100,7 +102,7 @@ fn invalid_levels_are_rejected() {
     assert!(level.validate().is_err());
 }
 
-/// The TypeScript suite's reusable object source.
+/// The reusable object source the object document tests share.
 fn vessel() -> Value {
     json!({
         "version": 1,
@@ -251,23 +253,34 @@ fn apply_document_operation(document: &mut LevelDocument, operation: &str) -> Va
     }
 }
 
+/// One replayed history step as the recording spells it: the operation, its result, and the document state after it.
+fn history_step_record(operation: &str, result: Value, document: &LevelDocument) -> Value {
+    json!({
+        "operation": operation,
+        "result": result,
+        "canUndo": document.can_undo(),
+        "canRedo": document.can_redo(),
+        "selectedId": document.selected_id(),
+        "text": serialize_level(&document.snapshot()),
+    })
+}
+
 #[test]
-fn level_document_history_replays_the_typescript_edit_undo_redo_sequence() {
-    let reference: Value = serde_json::from_str(GAMEPLAY_REFERENCE).unwrap();
-    let recorded = &reference["levelDocument"];
+fn level_document_history_replays_the_recorded_edit_undo_redo_sequence() {
+    let golden = golden_file!("gameplay-reference.json");
+    let recorded = &golden.recording()["levelDocument"];
     let base = LevelData::from_json(&recorded["base"]).unwrap();
     let mut document = LevelDocument::new(&base).unwrap();
     assert!(!document.can_undo() && !document.can_redo());
 
+    // Replay the recorded operations in order; each step records the document state it leaves behind.
+    let mut history = Vec::new();
     for step in recorded["history"].as_array().unwrap() {
         let operation = step["operation"].as_str().unwrap();
         let result = apply_document_operation(&mut document, operation);
-        assert_eq!(result, step["result"], "{operation}: result");
-        assert_eq!(document.can_undo(), step["canUndo"].as_bool().unwrap(), "{operation}: canUndo");
-        assert_eq!(document.can_redo(), step["canRedo"].as_bool().unwrap(), "{operation}: canRedo");
-        assert_eq!(document.selected_id(), step["selectedId"].as_str(), "{operation}: selection");
-        assert_eq!(serialize_level(&document.snapshot()), step["text"].as_str().unwrap(), "{operation}: level text");
+        history.push(history_step_record(operation, result, &document));
     }
+    golden.assert_section_matches("/levelDocument/history", &Value::Array(history), &Tolerance::exact());
     assert_eq!(LEVEL_HISTORY_LIMIT, 80);
 
     // Snapshots are isolated copies.

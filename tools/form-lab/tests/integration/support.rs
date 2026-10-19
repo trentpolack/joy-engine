@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Shared fixtures: the TypeScript tests' sample geometry, GLB readers, and compile helpers.
+//! Shared fixtures: sample geometry, GLB readers, and compile helpers.
 
 use joy_engine::form::{
     GeometryData,
@@ -12,13 +12,13 @@ use joy_engine::serde_json::{
     json,
 };
 
-/// The `Glass` material of the TypeScript GLB and material tests.
+/// The `Glass` material of the GLB and material tests.
 pub fn glass() -> Json {
     json!({"name": "Glass", "baseColor": [0.2, 0.3, 0.4, 0.6], "metallic": 0.7, "roughness": 0.1,
         "emissive": [0.05, 0.1, 0.15], "alphaMode": "MASK", "alphaCutoff": 0.4})
 }
 
-/// `sampleGeometry()` from `export-glb.test.js`: one Glass triangle and one Default point, without normals or UVs.
+/// Sample geometry: one Glass triangle and one Default point, without normals or UVs.
 pub fn sample_geometry() -> GeometryData {
     GeometryData {
         positions: vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 2.0, 3.0, 4.0],
@@ -73,7 +73,7 @@ pub fn read_accessor(parsed: &ParsedGlb, accessor: &Json) -> Vec<f32> {
         .collect()
 }
 
-/// The text of a fixture written by the TypeScript tool (`tests/fixtures/`).
+/// The contents of a recorded reference file in `tests/fixtures/`.
 pub fn fixture(name: &str) -> Vec<u8> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name);
     std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))

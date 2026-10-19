@@ -129,7 +129,7 @@ impl ControlIntent {
         self.values.iter().map(|(name, value)| (name.as_str(), *value))
     }
 
-    /// Fail if any numeric action is not finite, matching the TypeScript `receiveControl` check.
+    /// Fail if any numeric action is not finite.
     pub fn validate(&self) -> Result<(), GameplayError> {
         let finite = self.values.values().all(|value| match value {
             ControlValue::Number(number) => number.is_finite(),
@@ -141,7 +141,8 @@ impl ControlIntent {
         Ok(())
     }
 
-    /// Copy an untrusted intent record (for example a replay or editor preview message), like `receiveControl`.
+    /// Copy an untrusted intent record (for example a replay or editor preview message) to pass to
+    /// [`EntityWorld::receive_control`](super::EntityWorld::receive_control).
     ///
     /// The value must be a JSON object whose values are all numbers or booleans; key order is preserved. Fails with
     /// [`GameplayError::InvalidIntentRecord`] for a non-object and [`GameplayError::NonFiniteIntent`] for any other
@@ -162,7 +163,7 @@ impl ControlIntent {
         Ok(intent)
     }
 
-    /// The intent as a JSON record in insertion order, numbers written as JavaScript would.
+    /// The intent as a JSON record in insertion order, with integral numbers written without a decimal point.
     pub fn to_json(&self) -> Value {
         let record: Map<String, Value> = self
             .values

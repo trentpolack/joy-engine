@@ -27,7 +27,7 @@ impl TextChange {
     }
 }
 
-/// Return a minimal edit that makes the script own the document name (`projectNameChange`).
+/// Return a minimal edit that makes the script own the document name.
 ///
 /// Existing metadata formatting and other fields remain untouched; scripts without metadata get a declaration on their
 /// first line. Invalid syntax, an invalid name, or more than one declaration fails, so the source is never guessed at.

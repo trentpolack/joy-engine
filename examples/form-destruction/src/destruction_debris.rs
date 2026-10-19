@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Persistent rigid debris for released chunks (TypeScript `destruction-debris.ts`): the ground slab, one engine physics
-//! body and mesh per released chunk, and static colliders that keep the surviving structure solid.
+//! Persistent rigid debris for released chunks: the ground slab, one engine physics body and mesh per released chunk,
+//! and static colliders that keep the surviving structure solid.
 //!
 //! Physics uses meters, seconds, and Y-up world space. Debris persists until reset: no expiry or eviction, and one body
 //! per chunk id bounds the example to its 126 generated chunks. Scenes are borrowed per call, never held.

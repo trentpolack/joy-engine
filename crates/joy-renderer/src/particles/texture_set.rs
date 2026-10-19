@@ -7,7 +7,7 @@
 //! uploads each on first draw and releases the GPU copy when the asset is dropped, so the set never borrows a device.
 //! Decoding is synchronous, so a prepare cannot be superseded mid-flight; the prepare/activate split remains so a new
 //! definition's images are ready before it replaces the displayed one, and a failed decode leaves the set unchanged.
-//! The textured shader is `src/rendering/shaders/textured.wgsl`, drawn through
+//! The textured shader is `shaders/textured.wgsl`, drawn through
 //! [`FrameInputs::transparent_draws`](crate::FrameInputs).
 
 use std::collections::{
@@ -75,7 +75,7 @@ impl ParticleTextureSet {
         self.textures.is_empty()
     }
 
-    /// Release every image (the TypeScript `destroy`); GPU copies are released after the renderer's next frame.
+    /// Release every image; GPU copies are released after the renderer's next frame.
     pub fn clear(&mut self) {
         self.textures.clear();
         self.active.clear();

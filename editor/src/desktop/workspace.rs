@@ -68,7 +68,7 @@ pub fn locate_workspace(
         })
 }
 
-/// The nearest folder at or above `start` that contains `joy.joyconfig` (the TypeScript `findWorkspaceRoot`).
+/// The nearest folder at or above `start` that contains `joy.joyconfig`.
 pub fn find_workspace_root(start: &Path) -> Option<PathBuf> {
     let start = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
     start.ancestors().find(|folder| folder.join(WORKSPACE_CONFIG).is_file()).map(Path::to_path_buf)

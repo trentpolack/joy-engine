@@ -118,8 +118,8 @@ pub enum GlbError {
 /// Decode one indexed triangle mesh from binary (GLB) or JSON glTF 2.0 bytes.
 ///
 /// `mesh_name` selects a mesh by exact name, so exporters that retain other scene objects still work; `None` (or an
-/// empty name, like the TypeScript loader) selects the first mesh. Returns copied model-space data owned by the caller;
-/// float positions and normals widen to `f64` exactly.
+/// empty name) selects the first mesh. Returns copied model-space data owned by the caller; float positions and
+/// normals widen to `f64` exactly.
 pub fn parse_glb_mesh(bytes: &[u8], mesh_name: Option<&str>) -> Result<IndexedMesh3D, GlbError> {
     let asset = GltfAsset::parse(bytes)?;
     asset.check_requirements()?;

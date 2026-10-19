@@ -262,7 +262,7 @@ pub struct CompletionItem {
 }
 
 /// Completion entries for every catalog symbol, in catalog order; functions insert a call with the cursor between the
-/// parentheses (the TypeScript `snippetCompletion(name + '(${})')`).
+/// parentheses.
 pub fn completion_items(catalog: &ScriptLanguageCatalog) -> Vec<CompletionItem> {
     catalog
         .symbols

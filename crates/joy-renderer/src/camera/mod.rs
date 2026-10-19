@@ -68,7 +68,7 @@ pub struct CameraBasis {
     pub eye: Vec3,
 }
 
-/// Y-up orbit camera matching the TypeScript `OrbitCamera`. Distances are world units; angles are radians.
+/// Y-up orbit camera. Distances are world units; angles are radians.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct OrbitCamera {
     /// Point the camera orbits and looks at.
@@ -252,7 +252,7 @@ impl<C: Camera> Camera for RegionCamera<'_, C> {
     }
 }
 
-/// Right-handed perspective projection with zero-to-one depth, matching the TypeScript camera's WebGPU matrix.
+/// Right-handed perspective projection with WebGPU's zero-to-one depth range.
 pub fn perspective(vertical_fov_radians: f32, aspect: f32, near: f32, far: f32) -> Mat4 {
     let scale = 1.0 / (vertical_fov_radians * 0.5).tan();
     let depth = far / (near - far);

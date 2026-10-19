@@ -24,7 +24,7 @@ use joy_renderer::{
 };
 
 /// A shader in the shape SPACE SCUFFLES and BLAST GARDEN author: an 80-byte block (camera matrix plus frame values) and
-/// the TypeScript post-processing markers.
+/// the engine's post-processing markers.
 const SHADER: &str = r#"
 struct Uniforms {
   viewProjection: mat4x4f,

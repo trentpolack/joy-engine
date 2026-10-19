@@ -55,7 +55,7 @@ use crate::terrain::{
     terrain_geometry_source,
 };
 
-/// Terrain surfaces are fully rough for screen-space reflections, as in TypeScript.
+/// Terrain surfaces are fully rough for screen-space reflections.
 const TERRAIN_ROUGHNESS: f32 = 1.0;
 /// The terrain group in the lit pipelines, after the scene pass's frame, shadow, and image-lighting groups.
 const LIT_GROUP: u32 = 3;
@@ -436,7 +436,7 @@ fn local_view(model: Mat4, view: &TerrainView, instance: &TerrainInstance) -> Te
     }
 }
 
-/// Gauss-Jordan inverse with partial pivoting, matching the TypeScript `invertMatrix` singularity threshold.
+/// Gauss-Jordan inverse with partial pivoting; `None` when a pivot is nonfinite or below 1e-15 in magnitude.
 fn invert_matrix(matrix: DMat4) -> Option<DMat4> {
     let columns = matrix.to_cols_array();
     let mut rows = [[0.0_f64; 8]; 4];

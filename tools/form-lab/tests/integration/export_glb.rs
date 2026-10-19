@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! GLB export, ported from `test/export-glb.test.js`, plus byte-for-byte comparisons with GLBs the TypeScript exporter
-//! wrote for the same inputs (`tests/fixtures/*.glb`).
+//! GLB export, plus byte-for-byte comparisons with recorded reference GLBs for the same inputs
+//! (`tests/fixtures/*.glb`).
 
 use form_lab::export_glb::export_glb;
 use joy_engine::form::default_material;
@@ -190,9 +190,10 @@ fn glb_declares_the_required_webp_extension_without_inventing_a_core_fallback() 
     assert_eq!(png["textures"][0], json!({"source": 0}));
 }
 
-/// The TypeScript exporter's bytes for the same inputs: JSON key order, number formatting, padding, and binary layout.
+/// The recorded reference GLBs for the same inputs, byte for byte: JSON key order, number formatting, padding, and
+/// binary layout.
 #[test]
-fn glb_bytes_match_the_typescript_exporter() {
+fn glb_bytes_match_the_recorded_export() {
     let palette = json!([default_material(), glass()]);
     let mut third = sample_geometry();
     third.positions[3] = 1.0 / 3.0;
@@ -223,16 +224,16 @@ fn glb_bytes_match_the_typescript_exporter() {
         if exported != reference {
             let ours = parse_glb(&exported).json.to_string();
             let theirs = parse_glb(&reference).json.to_string();
-            panic!("{name} differs from the TypeScript export:\n{ours}\n{theirs}");
+            panic!("{name} differs from the reference export:\n{ours}\n{theirs}");
         }
     }
 }
 
-/// The Material studio build exports the same GLB as the TypeScript tool (set `FORM_LAB_TYPESCRIPT_EXPORTS`).
+/// The Material studio build exports the same GLB as the reference exports (set `FORM_LAB_REFERENCE_EXPORTS`).
 #[test]
-fn material_studio_glb_matches_the_typescript_tool() {
-    let Ok(reference) = std::env::var("FORM_LAB_TYPESCRIPT_EXPORTS") else {
-        eprintln!("skipping: set FORM_LAB_TYPESCRIPT_EXPORTS to a folder of TypeScript material-studio exports");
+fn material_studio_glb_matches_the_reference_exports() {
+    let Ok(reference) = std::env::var("FORM_LAB_REFERENCE_EXPORTS") else {
+        eprintln!("skipping: set FORM_LAB_REFERENCE_EXPORTS to a folder of reference material-studio exports");
         return;
     };
     let source = std::fs::read_to_string(
@@ -244,7 +245,8 @@ fn material_studio_glb_matches_the_typescript_tool() {
     assert_eq!(exported.len(), expected.len());
     let differing = exported.iter().zip(&expected).filter(|(left, right)| left != right).count();
     assert_eq!(parse_glb(&exported).json, parse_glb(&expected).json);
-    // FORM's transcendental results may differ from V8 in the last bit, which can flip a float32 rounding.
+    // FORM's transcendental results may differ from the reference exporter's in the last bit, which can flip a float32
+    // rounding.
     assert!(differing * 1000 < exported.len(), "{differing} of {} bytes differ", exported.len());
     eprintln!("material studio GLB: {differing} of {} bytes differ", exported.len());
 }

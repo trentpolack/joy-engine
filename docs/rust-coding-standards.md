@@ -55,10 +55,17 @@ Every package (engine crates, the facade, Joy Editor, the tools, and games) keep
 
 - Unit tests that need private items live beside their module as `<file>.test.rs` (`src/scene/mesh.rs` → `src/scene/mesh.test.rs`; `src/scene/mod.rs` → `src/scene/mod.test.rs`), so a module and its tests sort together and move together. The module declares them last, as `#[cfg(test)] #[path = "mesh.test.rs"] mod tests;` (the `#[path]` always names a file in the same folder), and the test file reaches the module's items through `use super::*;`. Binaries in src/bin/ have no .test.rs; test them from tests/integration/ by running them (env!("CARGO_BIN_EXE_<name>")), and move logic that needs unit tests into the library. Prefer an integration test when the public API can express the behavior.
 - `tests/integration/main.rs` and its modules: the package's integration tests, built as one binary that Cargo discovers on its own, so manifests list no test targets.
-- `tests/fixtures/`: recorded references and sample documents, read with `include_str!("../fixtures/…")` or from `CARGO_MANIFEST_DIR`.
+- `tests/fixtures/`: golden recordings and sample documents, read with `include_str!("../fixtures/…")`, from `CARGO_MANIFEST_DIR`, or (for golden recordings) with `golden_file!`.
 - `tests/tooling/`: Node or Python tests for the package's own scripts.
 
-Follow the repository's [unit test scope](../AGENTS.md#unit-test-scope). Prefer behavior tests that protect a player, author, or engine consumer. Preserve useful recorded-reference tests for seeded randomness, environment frames, transforms, FORM output, and other compatibility contracts. GPU tests must skip with a clear message when no adapter is available instead of failing.
+Follow the repository's [unit test scope](../AGENTS.md#unit-test-scope). Prefer behavior tests that protect a player, author, or engine consumer. Preserve useful golden recordings for seeded randomness, environment frames, transforms, FORM output, and other compatibility contracts. GPU tests must skip with a clear message when no adapter is available instead of failing.
+
+### Golden Recordings
+A golden recording is a JSON fixture holding the inputs a test replays and the outputs the code produced when it was last recorded on purpose. `joy-test-support` (a dev-dependency for engine crates; `joy_engine::testing` for games, through the facade's `test-support` feature in their `[dev-dependencies]`) checks them:
+
+- Open the fixture with `golden_file!("name.json")`, rebuild the recording from the current code (usually by cloning `recording()` and replacing each case's outputs with records in the same schema), and check it with `assert_matches`, or `assert_section_matches` when tests share one file.
+- Numbers agree within a `Tolerance` relative to the larger of one and the recorded magnitude; strings, booleans, array lengths, and object keys must match exactly, so a record that stops producing a field, or starts producing a new one, fails until it is re-recorded.
+- When behavior changes on purpose, re-record with `JOY_UPDATE_FIXTURES=1 cargo test -p <package>` and review the fixture diff with the code change. Re-recording keeps every number that still agrees within the tolerance, the file's layout, and its number spelling, so the diff shows only what changed. Never re-record to make an unexplained difference go away.
 
 ## Review Checklist
 - Does each module name only its own and lower layers, and do consumers use only `joy_engine` exports?

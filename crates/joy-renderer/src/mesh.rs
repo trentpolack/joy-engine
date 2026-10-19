@@ -232,7 +232,7 @@ pub struct MeshData {
     pub indices: Vec<u32>,
 }
 
-/// Plain channel arrays accepted by [`MeshAsset::from_channels`], mirroring the TypeScript `MeshAssetData`.
+/// Plain channel arrays accepted by [`MeshAsset::from_channels`].
 #[derive(Clone, Debug, Default)]
 pub struct MeshChannels<'a> {
     /// Packed XYZ positions.
@@ -324,13 +324,13 @@ impl MeshAsset {
         Ok(Self::assemble(MeshData { vertices: data.vertices, indices: opaque }, submeshes, has_vertex_alpha))
     }
 
-    /// Build an asset from a TypeScript `PbrMesh` document, resolving texture sources through `resolve`.
+    /// Build an asset from a `PbrMesh` document, resolving texture sources through `resolve`.
     ///
-    /// Matches the TypeScript material pass: every triangle gets its own three vertices, authored normals are
-    /// normalized (zero normals use the triangle's face normal), material factors multiply vertex colors and texture
-    /// samples, and triangles group by material with blended materials last. Alpha is governed by the materials, so the
-    /// asset reports no vertex alpha. Fails for misaligned channels, invalid indices or material references,
-    /// out-of-range material values, or a texture source that does not resolve.
+    /// Every triangle gets its own three vertices, authored normals are normalized (zero normals use the triangle's
+    /// face normal), material factors multiply vertex colors and texture samples, and triangles group by material with
+    /// blended materials last. Alpha is governed by the materials, so the asset reports no vertex alpha. Fails for
+    /// misaligned channels, invalid indices or material references, out-of-range material values, or a texture source
+    /// that does not resolve.
     pub fn from_pbr_mesh(
         mesh: &PbrMesh,
         mut resolve: impl FnMut(&str) -> Option<TextureAsset>,
@@ -484,8 +484,8 @@ impl MeshAsset {
         Self::new(MeshData { vertices, indices: channels.indices.to_vec() })
     }
 
-    /// Build an asset from the shared [`MeshAssetData`] record (the TypeScript `new MeshAsset(data)`), such as
-    /// destructible chunk geometry, with default (fully rough, opaque) material factors.
+    /// Build an asset from the shared [`MeshAssetData`] record, such as destructible chunk geometry, with default
+    /// (fully rough, opaque) material factors.
     ///
     /// Positions, indices, normals, colors, and alphas convert as in [`MeshAsset::from_channels`]; UVs, materials,
     /// triangle materials, and metadata are not interpreted (FORM geometry with materials converts through
@@ -553,7 +553,7 @@ struct ResolvedMaterial {
     textures: Option<MaterialTextures>,
 }
 
-/// Validate a material like the TypeScript `validateMaterial` and resolve its texture sources.
+/// Validate a material's colors and factor ranges, then resolve its texture sources.
 fn resolve_material(
     material: &PbrMaterial,
     resolve: &mut impl FnMut(&str) -> Option<TextureAsset>,

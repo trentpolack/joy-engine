@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Authored user-data records and their allocation budget. Ported from `src/form/user-data.ts`.
+//! Authored user-data records and their allocation budget.
 
 use crate::value::{
     DataRef,

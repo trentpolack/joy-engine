@@ -172,7 +172,7 @@ impl EntityWorld {
             component.on_detach(&mut entity.state, context);
         }
 
-        // The body listed for the entity (and the vehicle a chassis carries) is entity-owned (TypeScript `entity.own`).
+        // The body listed for the entity (and the vehicle a chassis carries) is entity-owned.
         if let Some(body) = context.body(id) {
             context.physics.remove_body(body);
         }
@@ -316,7 +316,7 @@ impl EntityWorld {
 
     /// Live entities carrying every listed runtime component type, in insertion order (a stable snapshot).
     ///
-    /// Authored records without a runtime component do not match, as in the TypeScript `query`.
+    /// Authored records without a runtime component do not match.
     pub fn query(&self, component_types: &[&str]) -> Vec<&Entity> {
         self.entities.values().filter(|entity| has_components(entity, component_types)).collect()
     }
@@ -353,8 +353,7 @@ impl EntityWorld {
         true
     }
 
-    /// Remove every system in reverse order, running each `on_remove`, as the TypeScript world does before releasing
-    /// entities.
+    /// Remove every system in reverse order, running each `on_remove`; the world does this before releasing entities.
     pub fn clear_systems(&mut self) {
         while let Some((_, mut system)) = self.systems.pop() {
             system.on_remove();
@@ -442,7 +441,7 @@ impl EntityWorld {
         self.controllers.shift_remove(&controller);
     }
 
-    /// Replace an entity's control intent, as the TypeScript `receiveControl` does.
+    /// Replace an entity's control intent.
     ///
     /// The previous intent is cleared and `reset_control` runs first; a non-finite numeric action then fails and leaves
     /// the intent empty.

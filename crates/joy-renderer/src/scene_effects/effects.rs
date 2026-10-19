@@ -59,7 +59,7 @@ pub(crate) struct EffectsFrame<'a> {
 /// Whether each requested effect can run, and why not.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SceneEffectCapability {
-    /// Effect name in TypeScript spelling.
+    /// Effect name in its camelCase options spelling, such as `depthAwareBlur`.
     pub name: &'static str,
     /// The options enable it.
     pub requested: bool,
@@ -80,7 +80,7 @@ pub struct SceneEffectsCapabilities {
     pub effects: Vec<SceneEffectCapability>,
 }
 
-/// The reason reported for every effect on backends without scene effects, matching TypeScript.
+/// The reason reported for every effect on backends without scene effects; a stable diagnostic.
 const BACKEND_REQUIRED: &str = "Requires the WebGPU backend.";
 
 /// Which effects one [`SceneEffectsRuntime::encode`] call runs.
@@ -181,7 +181,7 @@ impl SceneEffectsRuntime {
         let later = ExternalBindings { velocity: frame.taa_velocity.or(frame.velocity), ..base };
 
         // Each chain reads the scene texture and its result is copied back, so the next chain (and transparency) sees
-        // it as the scene: the TypeScript chains pass each result on as the next one's source the same way.
+        // it as the scene.
         let Self { lighting, temporal, finishing, resources, .. } = self;
         let chains = match stage {
             EffectStage::Lighting => [(lighting.as_mut(), base), (None, base)],
@@ -201,7 +201,7 @@ impl SceneEffectsRuntime {
         Ok(())
     }
 
-    /// Uniforms for every pass this frame, keyed by pass name; ported from `createRenderOptions`.
+    /// Uniforms for every pass this frame, keyed by pass name.
     fn frame_uniforms(
         &self,
         frame: &EffectsFrame<'_>,

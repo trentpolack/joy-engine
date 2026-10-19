@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! Self-contained glTF 2.0 binary (GLB) export of an accepted build with its authored materials and embedded maps.
-//! Output matches reference files from the retired TypeScript exporter byte for byte.
+//! Output matches the recorded reference files in `tests/fixtures/` byte for byte.
 //!
 //! Triangles group into one primitive per material, in first-use order, with every triangle's three corners written
 //! out so hard edges keep their own normals; points become `POINTS` primitives. Positions carry exact float32 bounds,
@@ -39,7 +39,7 @@ const TRIANGLES: u32 = 4;
 /// Point primitive mode.
 const POINTS: u32 = 0;
 
-/// Why geometry could not become a GLB. Messages match the TypeScript exporter.
+/// Why geometry could not become a GLB. Messages are stable diagnostics.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GlbExportError(pub String);
 
@@ -51,7 +51,7 @@ impl std::fmt::Display for GlbExportError {
 
 impl std::error::Error for GlbExportError {}
 
-/// Export authored triangle and point geometry as a self-contained glTF 2.0 binary (`exportGlb`).
+/// Export authored triangle and point geometry as a self-contained glTF 2.0 binary.
 ///
 /// Empty `normals` or `uvs` mean the geometry has none. Fails for empty or inconsistent geometry, values that do not
 /// fit float32, colors outside 0–1, invalid indices or material assignments, degenerate triangles, a palette that does

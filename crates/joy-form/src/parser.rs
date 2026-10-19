@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Tokenizer and recursive-descent parser for FORM source. Ported from `src/form/parser.ts`.
+//! Tokenizer and recursive-descent parser for FORM source.
 
 use crate::Diagnostic;
 use crate::ast::{

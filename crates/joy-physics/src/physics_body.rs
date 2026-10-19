@@ -3,7 +3,7 @@
 
 //! Rigid body creation, queries, and mutation.
 //!
-//! Material and damping semantics follow cannon-es (the TypeScript backend):
+//! Material and damping semantics follow cannon-es conventions:
 //! - Friction and restitution of two touching bodies combine by multiplication.
 //! - Damping is a per-second velocity fraction `d` in `[0, 1]`: cannon applies `v *= (1 - d)^dt`. Rapier applies
 //!   `v *= 1 / (1 + dt * c)`, so each body uses `c = -ln(1 - d)`, which matches cannon to first order in `dt`. A
@@ -47,15 +47,15 @@ use super::{
     SdfShape,
 };
 
-/// Smallest accepted sphere radius (JavaScript `Number.EPSILON`), compared in `f64`.
+/// Smallest accepted sphere radius, compared in `f64`.
 const MIN_SPHERE_RADIUS: f64 = f64::EPSILON;
 
 /// Rapier damping coefficient used for a cannon damping of one; large enough to remove nearly all velocity per step.
 const MAX_DAMPING_COEFFICIENT: f32 = 1.0e6;
 
-/// Values a body assumes for omitted options, matching the TypeScript `PHYSICS_BODY_DEFAULTS`. Lengths are meters, mass
-/// is kilograms, and damping is a per-second velocity fraction in `[0, 1]`. The shape, position, and rotation are
-/// placeholders (a box at the origin) for use with struct update syntax; see [`BodyOptions::new`].
+/// Values a body assumes for omitted options. Lengths are meters, mass is kilograms, and damping is a per-second
+/// velocity fraction in `[0, 1]`. The shape, position, and rotation are placeholders (a box at the origin) for use with
+/// struct update syntax; see [`BodyOptions::new`].
 pub const BODY_DEFAULTS: BodyOptions = BodyOptions {
     shape: PrimitiveShape::Box,
     mass: 0.0,
@@ -110,8 +110,9 @@ impl Default for BodyOptions {
 impl PhysicsWorld {
     /// Create a world-owned rigid body and return its handle.
     ///
-    /// Options are validated in the TypeScript engine's order (mass, friction, restitution, position, rotation,
-    /// damping, shape dimensions, static planes); invalid configuration leaves the world unchanged.
+    /// Options are validated in a fixed order (mass, friction, restitution, position, rotation, damping, shape
+    /// dimensions, static planes), so the first failure reported is stable; invalid configuration leaves the world
+    /// unchanged.
     pub fn create_body(&mut self, options: BodyOptions) -> Result<BodyHandle, PhysicsError> {
         let validated = ValidatedBody::new(&options)?;
         let shape = create_shape(&options)?;
@@ -331,7 +332,7 @@ pub(super) struct ValidatedBody {
 }
 
 impl ValidatedBody {
-    /// Validate in the TypeScript engine's order: mass, friction, restitution, position, rotation, then damping.
+    /// Validate in a fixed order: mass, friction, restitution, position, rotation, then damping.
     pub(super) fn new(options: &BodyOptions) -> Result<Self, PhysicsError> {
         Ok(Self {
             mass: finite_number(options.mass, "mass", 0.0, f64::INFINITY)?,

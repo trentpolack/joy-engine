@@ -5,8 +5,8 @@
 //! shafts, and ambient occlusion. Presentation only; the sun, moon, skylight, and wind that light the sky come from the
 //! environment simulation (`joy-environment`), and `joy-scene` combines both into [`EnvironmentLighting`].
 //!
-//! Serialized names, defaults, validation ranges, and messages match the TypeScript engine's environment options, so
-//! authored values written for those options read the same way here.
+//! Serialized names are the authored camelCase environment document fields, and the defaults, validation ranges, and
+//! messages are stable, so existing authored values keep reading and validating the same way.
 //!
 //! [`EnvironmentLighting`]: crate::EnvironmentLighting
 
@@ -16,7 +16,7 @@ use serde::{
     Serialize,
 };
 
-/// The smallest positive `f64`; strictly positive ranges start here, matching the TypeScript `Number.MIN_VALUE`.
+/// The smallest positive `f64`; strictly positive ranges start here, so zero fails and every positive value passes.
 const MIN_POSITIVE_VALUE: f64 = 5e-324;
 
 /// Atmospheric scattering scales. All values are nonnegative multipliers except `fog_density` (per meter).
@@ -122,7 +122,7 @@ impl SkyOptions {
         Ok(options)
     }
 
-    /// Check every setting against the TypeScript engine's ranges, in the same order.
+    /// Check every setting against its range in a fixed order, so the first failure reported is stable.
     pub fn validate(&self) -> Result<(), SkyOptionsError> {
         let atmosphere = &self.atmosphere;
         check_range(atmosphere.rayleigh, 0.0, f64::INFINITY, "atmosphere.rayleigh")?;
@@ -146,7 +146,7 @@ impl SkyOptions {
     }
 }
 
-/// Sky settings validation failure. Messages match the TypeScript engine.
+/// Sky settings validation failure. Messages are stable diagnostics that name the serialized setting.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum SkyOptionsError {
     /// A value was non-finite or outside its inclusive range.

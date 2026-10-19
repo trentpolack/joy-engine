@@ -119,7 +119,7 @@ pub fn editor(workspace: &Path, storage: Option<&Path>, tools: ToolRegistry, pro
     })
 }
 
-/// Logical size of headless UI tests: the TypeScript captures' laptop size.
+/// Logical width of headless UI tests: a common laptop size.
 pub const WIDTH: u32 = 1440;
 /// Height of headless UI tests.
 pub const HEIGHT: u32 = 900;

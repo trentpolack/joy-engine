@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Project file access (TypeScript `workspace.test.mjs` and the file half of `level.test.mjs`): discovery, the path
-//! policy, revision-checked saves with recovery copies, lifecycle operations, and opened folders.
+//! Project file access: discovery, the path policy, revision-checked saves with recovery copies, lifecycle operations,
+//! and opened folders.
 
 use std::cell::Cell;
 use std::rc::Rc;

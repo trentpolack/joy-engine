@@ -46,7 +46,7 @@ pub fn panel_frame() -> egui::Frame {
 }
 
 /// The shared Joy design tokens (JoyGames `joy-tokens.json`, mirrored by `editor/src/joy-tokens.css`) and the script
-/// editor palette from the TypeScript lab editor. Sizes are logical pixels.
+/// editor palette. Sizes are logical pixels.
 pub mod tokens {
     use egui::Color32;
 
@@ -128,7 +128,7 @@ pub mod tokens {
     /// Accent bars (selected list rows, panel headings).
     pub const BORDER_ACCENT: f32 = 4.0;
 
-    /// Minimum height of interactive controls (the TypeScript labs' 30 px fields and buttons).
+    /// Minimum height of interactive controls such as fields and buttons.
     pub const CONTROL_HEIGHT: f32 = 30.0;
 }
 

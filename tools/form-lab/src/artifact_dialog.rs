@@ -206,7 +206,7 @@ impl ArtifactDialog {
     }
 }
 
-/// Replace a known artifact extension (or append one) for a newly chosen format (`updateFormat`).
+/// Replace a known artifact extension (or append one) for a newly chosen format.
 fn with_extension(name: &str, extension: &str) -> String {
     let lower = name.to_lowercase();
     let stem = [".formlab", ".form", ".glb", ".obj", ".ply", ".json"]

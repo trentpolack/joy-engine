@@ -16,7 +16,7 @@ use crate::{
 use joy_renderer::RendererDiagnostics;
 use joy_ui::Viewport;
 
-/// Viewports at most this wide show only the launcher's label, like the TypeScript widget.
+/// Viewports at most this wide show only the launcher's label.
 const COMPACT_WIDTH: f32 = 448.0;
 
 /// Number of frame intervals averaged for the frame-rate readout.
@@ -147,7 +147,13 @@ impl DevTools {
                             viewport.logical_size.x, viewport.logical_size.y, viewport.scale_factor
                         ),
                     ),
+                    ("display output".to_owned(), diagnostics.display.to_string()),
                 ];
+                // Scene frames report the size they rendered at; below the drawing buffer when the render scale is.
+                let (render_width, render_height) = diagnostics.render_size;
+                if render_width > 0 && render_height > 0 {
+                    values.push(("scene render size".to_owned(), format!("{render_width} × {render_height}")));
+                }
                 values.extend(self.values.iter().map(|(key, value)| (key.clone(), value.clone())));
                 rows(ui, "joy-dev-runtime", values);
             });

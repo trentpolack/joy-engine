@@ -311,7 +311,7 @@ impl Interface {
     }
 
     /// Document shortcuts: Ctrl/Cmd+Enter applies; Space toggles playback and R restarts outside text fields (a focused
-    /// viewport, button, or slider still takes them, as in the TypeScript page).
+    /// viewport, button, or slider still takes them).
     fn shortcuts(&mut self, context: &egui::Context, lab: &mut ParticleLab) {
         let editing = context.text_edit_focused();
         let (apply, space, restart) = context.input_mut(|input| {
@@ -1089,7 +1089,7 @@ fn group_thousands(value: u64) -> String {
     grouped
 }
 
-/// The Script Reference dialog's contents (the TypeScript `#reference-dialog`).
+/// The Script Reference dialog's contents.
 fn reference_contents(ui: &mut Ui) {
     let code = |text: &str| RichText::new(text).monospace().color(tokens::SCRIPT_FUNCTION);
     ui.label(RichText::new("BOUNDED PARTICLE LANGUAGE").monospace().color(tokens::ACCENT).size(tokens::TYPE_XS));

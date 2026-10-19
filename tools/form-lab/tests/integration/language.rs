@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The language as FORM LAB uses it and the geometry exports, ported from `test/language.test.js`. OBJ and PLY text is
-//! also compared with the TypeScript tool's output for the same build.
+//! The language as FORM LAB uses it and the geometry exports. OBJ and PLY text is also compared with reference exports
+//! of the same build when a folder of them is configured.
 
 use form_lab::export::{
     export_geometry_json,
@@ -108,18 +108,18 @@ fn ply_carries_per_vertex_colors_and_faces() {
     let text = export_ply(&compile("color(1,0.5,0)\nbox(0,0,0,2,2,2)", json!({}), None));
     assert!(text.contains("element vertex 8\n"));
     assert!(text.contains("element face 12\n"));
-    assert!(text.contains(" 255 128 0 255\n"), "JavaScript rounds half up");
+    assert!(text.contains(" 255 128 0 255\n"), "PLY colors round half up");
 }
 
 #[test]
-fn generated_json_lists_metadata_then_geometry_with_javascript_numbers() {
+fn generated_json_lists_metadata_then_geometry_with_integral_numbers_as_integers() {
     let data = compile("project meta(name=\"A\")\npoint(1,2,3)", json!({}), None);
     let text = export_geometry_json(&data).unwrap();
     assert!(text.starts_with("{\n  \"format\": \"form-lab-geometry\",\n  \"version\": 1,\n  \"upAxis\": \"Y\",\n"));
     let value: Json = serde_json::from_str(&text).unwrap();
     assert_eq!(value["positions"], json!([1, 2, 3]));
     assert_eq!(value["project"]["name"], "A");
-    assert!(!text.contains("1.0"), "integral numbers print as JavaScript integers");
+    assert!(!text.contains("1.0"), "integral numbers print without a decimal point");
 }
 
 #[test]
@@ -215,12 +215,12 @@ fn integral(value: &Json) -> Json {
     form_lab::export::integral_numbers_as_integers(value.clone())
 }
 
-/// OBJ and PLY text for the Material studio build matches what the TypeScript tool writes, except where FORM's
-/// transcendental results differ in the last bits (positions are then compared within 1e-9).
+/// OBJ and PLY text for the Material studio build matches the reference exports, except where FORM's transcendental
+/// results differ in the last bits (positions are then compared within 1e-9).
 #[test]
-fn material_studio_obj_and_ply_match_the_typescript_tool() {
-    let Ok(reference) = std::env::var("FORM_LAB_TYPESCRIPT_EXPORTS") else {
-        eprintln!("skipping: set FORM_LAB_TYPESCRIPT_EXPORTS to a folder of TypeScript material-studio exports");
+fn material_studio_obj_and_ply_match_the_reference_exports() {
+    let Ok(reference) = std::env::var("FORM_LAB_REFERENCE_EXPORTS") else {
+        eprintln!("skipping: set FORM_LAB_REFERENCE_EXPORTS to a folder of reference material-studio exports");
         return;
     };
     let source = std::fs::read_to_string(

@@ -1,8 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Component schema catalog parity: built-in schemas, presets, validation issue paths and messages, conditional fields,
-//! nested field lookup, and registration errors, compared exactly against the TypeScript engine.
+//! Component schema catalog checked against `tests/fixtures/gameplay-reference.json`, a golden recording of the
+//! built-in schemas and presets, validation issue paths and messages, conditional fields, nested field lookup, and
+//! registration errors. Comparisons are exact, and each test checks and re-records only its own sections of the shared
+//! file. Re-record with `JOY_UPDATE_FIXTURES=1` when the catalog changes on purpose.
 
 use joy_gameplay::{
     ComponentSchema,
@@ -19,88 +21,107 @@ use joy_gameplay::{
     parse_level,
     serialize_level,
 };
+use joy_test_support::{
+    GoldenFile,
+    Tolerance,
+    golden_file,
+};
 use serde_json::{
     Value,
     json,
 };
 
-use joy_test_support::assert_matches_recording;
+/// The golden recording these tests share with the level document history test.
+fn golden() -> GoldenFile {
+    golden_file!("gameplay-reference.json")
+}
 
-const REFERENCE: &str = include_str!("../fixtures/gameplay-reference.json");
+/// A result as the recording spells it: `{"ok": value}` or `{"error": message}`.
+fn outcome_record<T: serde::Serialize, E: std::fmt::Display>(result: Result<T, E>) -> Value {
+    match result {
+        Ok(value) => json!({"ok": value}),
+        Err(error) => json!({"error": error.to_string()}),
+    }
+}
 
-fn reference() -> Value {
-    serde_json::from_str(REFERENCE).expect("the gameplay reference is valid JSON")
+/// Replay the recorded cases at `pointer`: `record_outputs` replaces each case's outputs with what the code produces
+/// now, and the section is checked exactly (or re-recorded).
+fn check_cases(golden: &GoldenFile, pointer: &str, record_outputs: impl Fn(&mut Value)) {
+    let mut cases = golden.recording().pointer(pointer).unwrap_or_else(|| panic!("no recorded {pointer}")).clone();
+    for case in cases.as_array_mut().unwrap() {
+        record_outputs(case);
+    }
+    golden.assert_section_matches(pointer, &cases, &Tolerance::exact());
 }
 
 #[test]
-fn built_in_schemas_and_presets_match_typescript() {
-    let reference = reference();
-    assert_matches_recording(&built_in_component_schemas(), &reference["builtIns"], "built-in schemas");
-
+fn built_in_schemas_and_presets_match_the_recording() {
+    let golden = golden();
     let catalog = ComponentSchemaCatalog::new();
-    let preset_ids: Vec<&str> =
-        catalog.list().flat_map(|schema| schema.presets.iter().map(|preset| preset.id.as_str())).collect();
-    let recorded: Vec<&str> =
-        reference["presets"].as_array().unwrap().iter().map(|preset| preset["id"].as_str().unwrap()).collect();
-    assert_eq!(preset_ids, recorded);
-    for preset in reference["presets"].as_array().unwrap() {
-        let created = catalog.create_component(preset["id"].as_str().unwrap()).unwrap();
-        assert_matches_recording(&created, &preset["created"], preset["id"].as_str().unwrap());
-    }
-    let unknown = catalog.create_component("physics.nothing").unwrap_err();
-    assert_eq!(unknown.to_string(), reference["unknownPreset"]["error"].as_str().unwrap());
+    golden.assert_section_matches("/builtIns", &json!(built_in_component_schemas()), &Tolerance::exact());
+
+    // Every catalog preset, in display order, with the component record it creates.
+    let presets: Vec<Value> = catalog
+        .list()
+        .flat_map(|schema| &schema.presets)
+        .map(|preset| json!({"id": preset.id, "created": catalog.create_component(&preset.id).unwrap()}))
+        .collect();
+    golden.assert_section_matches("/presets", &Value::Array(presets), &Tolerance::exact());
+
+    let unknown = outcome_record(catalog.create_component("physics.nothing"));
+    golden.assert_section_matches("/unknownPreset", &unknown, &Tolerance::exact());
 }
 
 #[test]
-fn validation_reports_typescript_paths_and_messages() {
-    let reference = reference();
+fn validation_reports_the_recorded_paths_and_messages() {
+    let golden = golden();
     let catalog = ComponentSchemaCatalog::new();
-    for case in reference["validationCases"].as_array().unwrap() {
-        let issues = catalog.validate(case["type"].as_str().unwrap(), &case["data"]);
-        assert_matches_recording(&issues, &case["issues"], &case["data"].to_string());
-    }
-    for case in reference["entityCases"].as_array().unwrap() {
+    check_cases(&golden, "/validationCases", |case| {
+        case["issues"] = json!(catalog.validate(case["type"].as_str().unwrap(), &case["data"]));
+    });
+    check_cases(&golden, "/entityCases", |case| {
         let entity = EntityDefinition::from_json(&case["entity"]).unwrap();
-        assert_matches_recording(&catalog.validate_entity(&entity), &case["issues"], &entity.id);
-    }
+        case["issues"] = json!(catalog.validate_entity(&entity));
+    });
 }
 
 #[test]
-fn field_lookup_and_conditional_activity_match_typescript() {
-    let reference = reference();
+fn field_lookup_and_conditional_activity_match_the_recording() {
+    let golden = golden();
     let catalog = ComponentSchemaCatalog::new();
-    for case in reference["fieldCases"].as_array().unwrap() {
+    check_cases(&golden, "/fieldCases", |case| {
         let path: Vec<&str> =
             case["path"].as_array().unwrap().iter().map(|segment| segment.as_str().unwrap()).collect();
         let field = catalog.field(case["type"].as_str().unwrap(), &path);
-        let actual =
-            json!({"name": field.map(|field| &field.name), "unit": field.and_then(|field| field.unit.as_ref())});
-        assert_matches_recording(&actual, &json!({"name": case["field"], "unit": case["unit"]}), &case.to_string());
-    }
+        case["field"] = json!(field.map(|field| &field.name));
+        case["unit"] = json!(field.and_then(|field| field.unit.as_ref()));
+    });
 
     let physics = catalog.get(component_type::PHYSICS).unwrap();
-    for case in reference["activeCases"].as_array().unwrap() {
+    check_cases(&golden, "/activeCases", |case| {
         let record = case["record"].as_object().unwrap();
         let active: Vec<bool> = physics.fields.iter().map(|field| is_component_field_active(field, record)).collect();
-        assert_matches_recording(&active, &case["active"], &case["record"].to_string());
-    }
+        case["active"] = json!(active);
+    });
 }
 
 #[test]
 fn invalid_project_schemas_fail_registration_without_changing_the_catalog() {
-    let reference = reference();
-    for case in reference["registrationCases"].as_array().unwrap() {
+    let golden = golden();
+    check_cases(&golden, "/registrationCases", |case| {
         let schema: ComponentSchema = serde_json::from_value(case["schema"].clone()).unwrap();
         let mut catalog = ComponentSchemaCatalog::new();
-        let error = catalog.register(schema.clone()).map(|_| ()).unwrap_err();
-        assert_eq!(error.to_string(), case["result"]["error"].as_str().unwrap(), "{}", case["name"]);
-        assert_eq!(
-            catalog,
-            ComponentSchemaCatalog::new(),
-            "{}: rejected schemas leave the catalog unchanged",
-            case["name"]
-        );
-    }
+        let registered = catalog.register(schema).map(|_| true);
+        if registered.is_err() {
+            assert_eq!(
+                catalog,
+                ComponentSchemaCatalog::new(),
+                "{}: rejected schemas leave the catalog unchanged",
+                case["name"]
+            );
+        }
+        case["result"] = outcome_record(registered);
+    });
 
     // Project schemas register beside built-ins; catalogs are independent and resolve nested fields.
     let mut project = ComponentSchemaCatalog::new();

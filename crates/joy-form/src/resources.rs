@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Reusable mesh and material resource values. Ported from `src/form/resources.ts`.
+//! Reusable mesh and material resource values.
 
 use crate::{
     builder::Builder,

@@ -2,8 +2,9 @@
 // Licensed under the MIT License.
 
 //! Terrain assets, LOD selection, and the morphed reference surface, plus selection and sampling on the Dragon Pit
-//! example asset compared with recorded values (collision samples exactly, LOD details within rounding)
-//! (`tests/fixtures/terrain-reference.json`, four camera views, collision samples, and morphed heights).
+//! example asset checked against the golden recording `tests/fixtures/terrain-reference.json` (four camera views,
+//! collision samples, and morphed heights). Re-record with `JOY_UPDATE_FIXTURES=1` when terrain selection or sampling
+//! changes on purpose.
 
 use joy_core::math::DVec3;
 use joy_core::math::deterministic;
@@ -22,13 +23,29 @@ use joy_renderer::terrain::{
     sample_terrain,
     select_terrain,
 };
-use serde_json::Value;
+use joy_test_support::{
+    Tolerance,
+    golden_file,
+};
+use serde_json::{
+    Value,
+    json,
+};
 
-const REFERENCE: &str = include_str!("../fixtures/terrain-reference.json");
 const DRAGON_PIT_MANIFEST: &str = include_str!("../../../../examples/terrain/assets/dragon-pit/terrain.json");
 const DRAGON_PIT_HEIGHTS: &[u8] = include_bytes!("../../../../examples/terrain/assets/dragon-pit/height.bin");
 
-/// The TypeScript fixture: 17 x 17 samples of `x^2 + z^2`, two by two 8-cell patches, one world unit per sample.
+/// Agreement required for LOD details, edges, and morphed heights: some recorded values predate the portable libm
+/// functions and differ from them in the last bit. Collision samples must match exactly.
+const SELECTION_TOLERANCE: f64 = 1e-12;
+
+/// The Dragon Pit overview focus sits this far above the terrain at the world origin, in world units.
+const FOCUS_HEIGHT_OFFSET: f64 = 12.0;
+
+/// Leading patches of the near-ground view whose full descriptors are recorded.
+const NEAR_GROUND_RECORDED_PATCHES: usize = 40;
+
+/// The synthetic test terrain: 17 x 17 samples of `x^2 + z^2`, two by two 8-cell patches, one world unit per sample.
 fn fixture_manifest() -> (TerrainManifest, Vec<u8>) {
     let size = 17;
     let mut binary = Vec::new();
@@ -196,63 +213,56 @@ fn removed_vertices_converge_to_stitched_parent_triangles_beside_coarser_edges()
     }
 }
 
+/// A recorded camera view: its eye, target, projection scale, tolerance, and stable-detail radius.
+fn recorded_view(recorded: &Value) -> TerrainView {
+    let number = |value: &Value| value.as_f64().expect("recorded numbers");
+    let vector = |value: &Value| DVec3::new(number(&value[0]), number(&value[1]), number(&value[2]));
+    TerrainView {
+        eye: vector(&recorded["eye"]),
+        projection_scale: number(&recorded["projectionScale"]),
+        tolerance: number(&recorded["tolerance"]),
+        target: vector(&recorded["target"]),
+        target_radius: number(&recorded["targetRadius"]),
+    }
+}
+
+/// One selected patch: fractional detail, drawn LOD, and reconciled edge details.
+fn patch_record(patch: &TerrainSelection) -> Value {
+    json!({"detail": patch.detail, "lod": patch.lod, "edges": patch.edges})
+}
+
 #[test]
-fn dragon_pit_selection_and_sampling_match_the_recorded_reference() {
-    // Within rounding: distances use the portable libm functions, so the last bit may differ from older recordings.
-    let close = |actual: f64, expected: f64| (actual - expected).abs() <= 1e-12 * expected.abs().max(1.0);
+fn dragon_pit_selection_and_sampling_match_the_recording() {
     let asset = parse_terrain(DRAGON_PIT_MANIFEST, DRAGON_PIT_HEIGHTS).expect("the example asset is valid");
     assert_eq!(asset.patches().len(), 256);
     assert_eq!(asset.max_lod(), 6);
-    let reference: Value = serde_json::from_str(REFERENCE).unwrap();
-    let number = |value: &Value| value.as_f64().expect("recorded numbers");
-    let vector = |value: &Value| DVec3::new(number(&value[0]), number(&value[1]), number(&value[2]));
+    let golden = golden_file!("terrain-reference.json");
+    let mut produced = golden.recording().clone();
+    let coordinate = |sample: &Value, axis: &str| sample[axis].as_f64().expect("recorded coordinates");
 
-    for recorded in reference["views"].as_array().unwrap() {
-        let view = TerrainView {
-            eye: vector(&recorded["eye"]),
-            projection_scale: number(&recorded["projectionScale"]),
-            tolerance: number(&recorded["tolerance"]),
-            target: vector(&recorded["target"]),
-            target_radius: number(&recorded["targetRadius"]),
-        };
-        let selection = select_terrain(&asset, &view).unwrap();
-        let name = recorded["name"].as_str().unwrap();
-        for (index, (patch, expected)) in selection.iter().zip(recorded["details"].as_array().unwrap()).enumerate() {
-            assert!(
-                close(patch.detail, number(expected)),
-                "{name} view, patch {index}: {} vs {}",
-                patch.detail,
-                number(expected)
-            );
-        }
+    // The overview and near-ground views look at this focus.
+    produced["focusHeight"] = json!(sample_terrain(&asset, 0.0, 0.0) + FOCUS_HEIGHT_OFFSET);
+
+    // Views replay their recorded cameras; the per-patch details are produced.
+    for view in produced["views"].as_array_mut().unwrap() {
+        let selection = select_terrain(&asset, &recorded_view(view)).unwrap();
+        view["details"] = json!(selection.iter().map(|patch| patch.detail).collect::<Vec<_>>());
     }
 
-    for sample in reference["samples"].as_array().unwrap() {
-        let height = sample_terrain(&asset, number(&sample["x"]), number(&sample["z"]));
-        assert_eq!(height, number(&sample["height"]), "collision sample {sample}");
+    // Collision samples replay their recorded positions.
+    for sample in produced["samples"].as_array_mut().unwrap() {
+        sample["height"] = json!(sample_terrain(&asset, coordinate(sample, "x"), coordinate(sample, "z")));
     }
 
     // Full near-ground descriptors (detail, LOD, and reconciled edges) and the morphed surface under them.
-    let near = &reference["views"][1];
-    let view = TerrainView {
-        eye: vector(&near["eye"]),
-        projection_scale: number(&near["projectionScale"]),
-        tolerance: number(&near["tolerance"]),
-        target: vector(&near["target"]),
-        target_radius: number(&near["targetRadius"]),
-    };
-    let selection = select_terrain(&asset, &view).unwrap();
-    for (index, expected) in reference["nearGroundSelection"].as_array().unwrap().iter().enumerate() {
-        let patch = selection[index];
-        assert!(close(patch.detail, number(&expected["detail"])), "patch {index} detail");
-        assert_eq!(patch.lod as f64, number(&expected["lod"]));
-        let edges: Vec<f64> = expected["edges"].as_array().unwrap().iter().map(number).collect();
-        let edges_match = patch.edges.iter().zip(&edges).all(|(actual, expected)| close(*actual, *expected));
-        assert!(edges_match, "patch {index} edges: {:?} vs {edges:?}", patch.edges);
-    }
-    for sample in reference["morphed"].as_array().unwrap() {
+    let near_ground = produced["views"].as_array().unwrap().iter().find(|view| view["name"] == "near-ground").unwrap();
+    let selection = select_terrain(&asset, &recorded_view(near_ground)).unwrap();
+    produced["nearGroundSelection"] = selection[..NEAR_GROUND_RECORDED_PATCHES].iter().map(patch_record).collect();
+    for sample in produced["morphed"].as_array_mut().unwrap() {
         let patch = sample["patch"].as_u64().unwrap() as usize;
-        let height = morphed(&asset, patch, number(&sample["x"]), number(&sample["z"]), &selection[patch]);
-        assert!(close(height, number(&sample["height"])), "morphed sample {sample}: {height}");
+        let height = morphed(&asset, patch, coordinate(sample, "x"), coordinate(sample, "z"), &selection[patch]);
+        sample["height"] = json!(height);
     }
+
+    golden.assert_matches(&produced, &Tolerance::relative(SELECTION_TOLERANCE).with_key("samples", 0.0));
 }

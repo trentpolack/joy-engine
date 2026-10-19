@@ -135,8 +135,8 @@ fn faceEye(normal: vec3f, worldPosition: vec3f) -> vec3f {
   return normal;
 }
 
-// Shadow sampling, ported from the luma.gl 9.4.2 shadow module with the TypeScript engine's WebGPU-depth point-light
-// adapter. Point lights keep their six faces in a 2D array, so the receiver selects and projects faces itself.
+// Shadow sampling, ported from the luma.gl 9.4.2 shadow module with the engine's WebGPU-depth point-light adapter.
+// Point lights keep their six faces in a 2D array, so the receiver selects and projects faces itself.
 
 // SHADOW_COMPARE_BEGIN: the GL backend replaces this block with shadow-compare-gl.wgsl.
 fn compareDirectionalShadow(coordinate: vec2f, layer: i32, reference: f32) -> f32 {
@@ -409,8 +409,7 @@ fn skylightIrradiance(normal: vec3f) -> vec3f {
 
 /**
  * The engine's standard flat lighting: ambient plus the sky-and-ground skylight, a double-sided primary light, and
- * point lights. Matches the TypeScript scene path; diffuse terms use |n.l| without a 1/pi factor so existing scenes
- * keep their authored brightness.
+ * point lights. Diffuse terms use |n.l| without a 1/pi factor so existing scenes keep their authored brightness.
  */
 fn standardLighting(worldPosition: vec3f, color: vec3f, normal: vec3f, receivesShadow: f32) -> vec3f {
   var irradiance = vec3f(frame.lighting.y) + skylightIrradiance(normal);
@@ -441,7 +440,7 @@ fn standardLighting(worldPosition: vec3f, color: vec3f, normal: vec3f, receivesS
 
 /**
  * Metallic-roughness response to one light: GGX specular with energy-conserving Lambertian diffuse.
- * Matches the TypeScript PBR material pass; the caller applies light color, attenuation, and visibility.
+ * The caller applies light color, attenuation, and visibility.
  */
 fn pbrDirect(base: vec3f, metallic: f32, roughness: f32, n: vec3f, v: vec3f, l: vec3f) -> vec3f {
   let halfDirection = v + l;

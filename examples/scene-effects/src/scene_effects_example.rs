@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The scene effects lab (TypeScript `site/src/main.ts`): one deterministic room drawn by the engine renderer, the
-//! engine's scene effects preview controls with the lab's tuning, temporal tests (motion, a frozen or stepped clock,
-//! camera cuts, scene replacement, and history resets), and CPU timing readouts.
+//! The scene effects lab: one deterministic room drawn by the engine renderer, the engine's scene effects preview
+//! controls with the lab's tuning, temporal tests (motion, a frozen or stepped clock, camera cuts, scene replacement,
+//! and history resets), and CPU timing readouts.
 //!
 //! Simulation starts frozen at two seconds while frames keep rendering, so temporal effects accumulate history on a
 //! still image. The sidebar covers the right of the canvas; a lens shift keeps the room centered in the rest. Scene
@@ -79,7 +79,7 @@ const SHEET_FRACTION: f32 = 0.4;
 /// Overlay text inset from the viewport edges.
 const OVERLAY_MARGIN: UiVec2 = UiVec2::new(30.0, 24.0);
 
-// The lab's palette (TypeScript `style.css`).
+// The lab's palette.
 const SIDEBAR_FILL: Color32 = Color32::from_rgb(0x19, 0x1e, 0x29);
 const SIDEBAR_LINE: Color32 = Color32::from_rgb(0x2b, 0x33, 0x43);
 const TEXT: Color32 = Color32::from_rgb(0xe8, 0xed, 0xf5);
@@ -111,8 +111,7 @@ struct Layout {
 }
 
 impl Layout {
-    /// The TypeScript page's responsive layout: a 310-pixel sidebar, 260 pixels at medium widths, and a stacked sheet on
-    /// phones.
+    /// The responsive layout: a 310-pixel sidebar, 260 pixels at medium widths, and a stacked sheet on phones.
     fn for_viewport(size: Vec2) -> Self {
         if size.x < NARROW_VIEWPORT {
             Self { right: 0.0, bottom: (size.y * SHEET_FRACTION).round() }
@@ -124,8 +123,7 @@ impl Layout {
     }
 }
 
-/// Copied lab state (TypeScript `snapshot()`): settings, camera heading, room counts, and the latest renderer
-/// statistics. Times are seconds.
+/// Copied lab state: settings, camera heading, room counts, and the latest renderer statistics. Times are seconds.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(dead_code, reason = "part of the capture API that the integration tests drive")]
 pub struct LabSnapshot {
@@ -475,7 +473,7 @@ impl SceneEffectsExample {
     }
 
     /// Replace the room with a shadow fixture: a high block outside the camera's view casts onto the visible floor from
-    /// five lights (TypeScript `shadowFixture`).
+    /// five lights.
     pub fn shadow_fixture(&mut self, enabled: bool) {
         self.replace_scene();
         if !enabled {
@@ -501,7 +499,7 @@ impl SceneEffectsExample {
         ];
     }
 
-    /// Opt one light in or out of shadow casting while keeping its light (TypeScript `setLightCasting`).
+    /// Opt one light in or out of shadow casting while keeping its light.
     pub fn set_light_casting(&mut self, index: usize, enabled: bool) -> AppResult {
         let light = self.room.lights.get_mut(index).ok_or("Light index is outside the room.")?;
         light.casts_shadow = enabled;
@@ -509,7 +507,7 @@ impl SceneEffectsExample {
         Ok(())
     }
 
-    /// Recolor one light with finite nonnegative linear RGB (TypeScript `setLightColor`).
+    /// Recolor one light with finite nonnegative linear RGB.
     pub fn set_light_color(&mut self, index: usize, color: [f32; 3]) -> AppResult {
         if !color.iter().all(|value| value.is_finite() && *value >= 0.0) {
             return Err("Expected finite nonnegative RGB.".into());

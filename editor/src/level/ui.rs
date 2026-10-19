@@ -109,7 +109,7 @@ const TOOLBAR_HEIGHT: f32 = 46.0;
 const STATUS_HEIGHT: f32 = 26.0;
 /// Height of one inspector row of controls.
 const ROW_HEIGHT: f32 = 30.0;
-/// Storage key of the level editor's panel widths (the TypeScript key).
+/// Storage key of the level editor's panel widths; stable so saved layouts keep loading.
 const PANEL_STORAGE_KEY: &str = "joy-editor-panels-level-v2";
 
 /// An inspector edit collected while drawing and applied afterwards.
@@ -600,7 +600,7 @@ impl LevelUi {
                     });
             },
         );
-        // Scene effect previews, below the panel toggles (the TypeScript EFFECTS popover).
+        // Scene effect previews in a panel below the panel toggles.
         let effects =
             Rect::from_min_size(pos2(bar.max.x - 230.0, bar.max.y + 6.0), vec2(230.0, (rect.height() - 90.0).max(0.0)));
         ui.scope_builder(egui::UiBuilder::new().max_rect(effects).layout(egui::Layout::top_down(Align::LEFT)), |ui| {

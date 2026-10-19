@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The level editor driven through its real UI (the TypeScript level browser workflow): toolbar edits, viewport
-//! selection, ground moves and gizmo drags with snapping, inspector typing, invalid input that blocks saving, undo and
-//! redo, camera controls, and a rendered viewport with the editor grid.
+//! The level editor driven through its real UI: toolbar edits, viewport selection, ground moves and gizmo drags with
+//! snapping, inspector typing, invalid input that blocks saving, undo and redo, camera controls, and a rendered
+//! viewport with the editor grid.
 
 use joy_editor::level::constants::LevelTool;
 use joy_editor::workspace::main::TabContent;

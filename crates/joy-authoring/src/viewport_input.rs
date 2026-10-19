@@ -61,7 +61,7 @@ pub struct ViewportActions {
     pub response: Response,
     /// The captured drag's mode and this frame's movement in logical pixels.
     pub drag: Option<(ViewportGesture, Vec2)>,
-    /// Wheel movement in page pixels; positive when scrolling toward the author (TypeScript `deltaY`, zooming out).
+    /// Wheel movement in page pixels; positive (the DOM `deltaY` sign) when scrolling toward the author, zooming out.
     pub zoom: f32,
     /// Shortcuts pressed this frame.
     pub shortcuts: Vec<ViewportShortcut>,

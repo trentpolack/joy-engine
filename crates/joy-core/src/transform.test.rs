@@ -9,11 +9,11 @@ fn close(left: Vec3, right: Vec3) -> bool {
     (left - right).abs().max_element() < 1e-5
 }
 
-/// Reference columns from the TypeScript `meshTransform` for the same input.
+/// Golden matrix columns for this position, XYZ Euler rotation, and scale.
 #[test]
-// The reference values are copied verbatim from the TypeScript output so they stay traceable.
+// The reference values keep their full recorded precision so they stay traceable.
 #[allow(clippy::excessive_precision)]
-fn matrix_matches_typescript_mesh_transform() {
+fn matrix_matches_recorded_columns() {
     let transform = Transform::new(Vec3::new(1.0, 2.0, 3.0), Vec3::new(0.3, -0.7, 1.1), Vec3::new(2.0, 0.5, 1.5));
     let matrix = transform.matrix();
     let expected = [

@@ -3,10 +3,10 @@
 
 //! Deterministic world environment: a solar clock, celestial lights, a sky-and-ground skylight, and a gusting wind field.
 //!
-//! This is a port of the TypeScript `EnvironmentSystem`. Options, defaults, validation ranges, and the frame math are
-//! identical; every quantity is computed in `f64` in the same order as the TypeScript source and only then stored as
-//! `f32` in the frame. Time values are seconds, `time_of_day` is the normalized local solar time in `[0, 1)`,
-//! directions are unit vectors in Y-up world space pointing *toward* the light, and colors are linear RGB.
+//! Every quantity is computed in `f64` in a fixed operation order and only then stored as `f32` in the frame, so frames
+//! reproduce exactly on every build and target; golden recordings check them within single-precision tolerance. Time
+//! values are seconds, `time_of_day` is the normalized local solar time in `[0, 1)`, directions are unit vectors in
+//! Y-up world space pointing *toward* the light, and colors are linear RGB.
 //!
 //! The system owns only its clock; frames are independent snapshots, so callers may keep or mutate them freely.
 
@@ -31,8 +31,8 @@ use joy_core::format::format_number;
 // Constants
 // ---------------------------------------------------------------------------------------------------------------------
 
-/// Smallest positive `f64` (JavaScript `Number.MIN_VALUE`); used as the exclusive-zero lower bound of strictly
-/// positive options.
+/// Smallest positive `f64` (the subnormal `5e-324`, below `f64::MIN_POSITIVE`); used as the exclusive-zero lower bound
+/// of strictly positive options.
 const MIN_POSITIVE_VALUE: f64 = 5e-324;
 
 /// Sun angular radius in radians.
@@ -111,8 +111,8 @@ impl Default for WindOptions {
     }
 }
 
-/// Environment simulation policy. Serialized names match the TypeScript engine; omitted fields (including fields of
-/// nested records) take the TypeScript `DEFAULT_OPTIONS` values, and unknown fields are rejected.
+/// Environment simulation policy. Fields serialize with camelCase document names; omitted fields (including fields of
+/// nested records) take their [`Default`] values, and unknown fields are rejected.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct EnvironmentOptions {
@@ -159,7 +159,7 @@ impl EnvironmentOptions {
         Ok(options)
     }
 
-    /// Check every option against the TypeScript engine's ranges, in the same order.
+    /// Check every option against its range in a fixed order, so the first failure reported is a stable diagnostic.
     pub fn validate(&self) -> Result<(), EnvironmentError> {
         check_range(self.time_of_day, 0.0, 1.0, "timeOfDay")?;
         if self.time_of_day == 1.0 {
@@ -180,7 +180,7 @@ impl EnvironmentOptions {
     }
 }
 
-/// Environment validation failure. Messages match the TypeScript engine.
+/// Environment validation failure. Messages are stable diagnostics.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum EnvironmentError {
     /// A value was non-finite or outside its inclusive range.
@@ -279,7 +279,7 @@ pub struct EnvironmentSystem {
 impl EnvironmentSystem {
     /// Validate and copy environment policy into an independently owned simulation.
     ///
-    /// Fails with the first out-of-range option, checked in the TypeScript engine's order.
+    /// Fails with the first out-of-range option, checked in [`EnvironmentOptions::validate`] order.
     pub fn new(options: EnvironmentOptions) -> Result<Self, EnvironmentError> {
         options.validate()?;
         Ok(Self { options, elapsed_seconds: 0.0, time_of_day: wrap_day(options.time_of_day) })
@@ -391,7 +391,7 @@ impl EnvironmentSystem {
 
 /// Unit direction toward the sun for a normalized solar time, using a declination approximation.
 fn calculate_sun_direction(time_of_day: f64, options: &EnvironmentOptions) -> [f64; 3] {
-    // Operation order matches the TypeScript source so results agree to the last few bits.
+    // Operation order is fixed so results reproduce exactly on every build and target.
     let latitude = options.latitude_degrees * PI / 180.0;
     let declination = options.axial_tilt_degrees * PI / 180.0
         * deterministic::sin((2.0 * PI * (options.day_of_year - EQUINOX_DAY_OF_YEAR)) / DAYS_PER_YEAR);
@@ -471,7 +471,7 @@ fn scale_color(color: [f64; 3], scale: f64) -> [f64; 3] {
     [color[0] * scale, color[1] * scale, color[2] * scale]
 }
 
-/// Wrap a day fraction into `[0, 1)` exactly like the TypeScript `((value % 1) + 1) % 1`.
+/// Wrap a day fraction into `[0, 1)`; negative fractions wrap forward from the end of the day.
 fn wrap_day(value: f64) -> f64 {
     ((value % 1.0) + 1.0) % 1.0
 }
@@ -486,7 +486,7 @@ fn to_linear_color(value: [f64; 3]) -> LinearColor {
     LinearColor::rgb(value[0] as f32, value[1] as f32, value[2] as f32)
 }
 
-/// Reject non-finite or out-of-range values with the TypeScript message.
+/// Reject non-finite or out-of-range values with the stable range diagnostic.
 fn check_range(value: f64, minimum: f64, maximum: f64, name: &'static str) -> Result<(), EnvironmentError> {
     if !value.is_finite() || value < minimum || value > maximum {
         return Err(EnvironmentError::OutOfRange { name, minimum, maximum });

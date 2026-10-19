@@ -41,7 +41,7 @@ pub const MAXIMUM_VARIANT_NAME_LENGTH: usize = 64;
 /// mesh or material resources as FORM serializes them.
 pub type Overrides = Map<String, Json>;
 
-/// Why a document was rejected. Messages match the TypeScript tool.
+/// Why a document was rejected. Messages are stable diagnostics.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DocumentError {
     /// The text exceeds [`DOCUMENT_FILE_BYTES`].
@@ -103,7 +103,7 @@ impl FormDocument {
         Self { name: name.to_owned(), source: source.to_owned(), ..Self::default() }
     }
 
-    /// The document as the JSON value `serializeDocument` writes, in the TypeScript key order.
+    /// The document as the JSON value [`serialize_document`] writes, with keys in the stable document order.
     pub fn to_json(&self) -> Json {
         let mut object = Map::new();
         object.insert("version".into(), Json::from(DOCUMENT_VERSION));
@@ -129,7 +129,7 @@ impl FormDocument {
     }
 }
 
-/// Validate saved document text before it reaches the editor or compiler (`readDocument`).
+/// Validate saved document text before it reaches the editor or compiler.
 pub fn read_document(text: &str) -> Result<FormDocument, DocumentError> {
     if text.len() > DOCUMENT_FILE_BYTES {
         return Err(DocumentError::TooLarge);
@@ -159,7 +159,7 @@ pub fn read_document_value(value: &Json) -> Result<FormDocument, DocumentError> 
     Ok(FormDocument { name: name.to_owned(), source: source.to_owned(), overrides, materials, variants })
 }
 
-/// Copy and validate overrides at document and variant ownership boundaries (`readOverrides`).
+/// Copy and validate overrides at document and variant ownership boundaries.
 pub fn read_overrides(value: &Json) -> Result<Overrides, DocumentError> {
     let Json::Object(entries) = value else {
         return Err(DocumentError::Overrides(
@@ -176,7 +176,7 @@ pub fn read_overrides(value: &Json) -> Result<Overrides, DocumentError> {
         .collect()
 }
 
-/// Validate a variant list: at most 16 entries with trimmed, unique, 1–64 character names (`readVariants`).
+/// Validate a variant list: at most 16 entries with trimmed, unique, 1–64 character names.
 pub fn read_variants(value: &Json) -> Result<Vec<ParameterVariant>, DocumentError> {
     let Some(entries) = value.as_array().filter(|entries| entries.len() <= MAXIMUM_VARIANTS) else {
         return Err(DocumentError::Variants("A document supports up to 16 parameter variants.".into()));
@@ -200,16 +200,15 @@ pub fn read_variants(value: &Json) -> Result<Vec<ParameterVariant>, DocumentErro
         .collect()
 }
 
-/// Serialize a document that reopens; compact JSON avoids whitespace amplification of mesh data
-/// (`serializeDocument`). Fails when the result would not read back, for example beyond the 64 MB budget.
+/// Serialize a document that reopens; compact JSON avoids whitespace amplification of mesh data. Fails when the result
+/// would not read back, for example beyond the 64 MB budget.
 pub fn serialize_document(document: &FormDocument) -> Result<String, DocumentError> {
     let text = document.to_json().to_string();
     read_document(&text)?;
     Ok(text)
 }
 
-/// A file-name stem from a document name: lowercase ASCII letters and digits joined by hyphens, or `form-study`
-/// (`fileStem`).
+/// A file-name stem from a document name: lowercase ASCII letters and digits joined by hyphens, or `form-study`.
 pub fn file_stem(name: &str) -> String {
     let mut stem = String::new();
     let mut separated = false;

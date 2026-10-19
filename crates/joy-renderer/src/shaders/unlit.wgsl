@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 // Unlit material: emits tinted vertex color unchanged. Transparent instances and transient effect triangles use it,
-// matching the TypeScript scene path where transparency is unlit. Prepended at load time by scene-common.wgsl.
+// since the scene path draws transparency unlit. Prepended at load time by scene-common.wgsl.
 
 struct UnlitOutput {
   // Invariant so the depth pre-pass and every scene pipeline rasterize identical depth.

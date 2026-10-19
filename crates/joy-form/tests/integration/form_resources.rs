@@ -145,7 +145,7 @@ fn vertex_metadata_snapshots_preserve_null_gaps_and_clear_state() {
 }
 
 #[test]
-fn material_palette_converts_to_typed_records_with_typescript_spelling_and_defaults() {
+fn material_palette_converts_to_typed_records_with_document_spelling_and_defaults() {
     let mut paint = material("Paint");
     paint["baseColor"] = json!([0.3, 0.4, 0.5, 0.6]);
     paint["alphaMode"] = json!("MASK");
@@ -177,7 +177,7 @@ fn material_palette_converts_to_typed_records_with_typescript_spelling_and_defau
         assert_eq!(&serde_json::to_value(typed).unwrap(), record);
     }
 
-    // Hand-edited records keep valid fields and fall back to defaultMaterial() for the rest.
+    // Hand-edited records keep valid fields and fall back to `FormMaterial::default()` for the rest.
     let edited = FormMaterial::from_json(
         &json!({"name": "Edited", "metallic": 0.5, "roughness": 3, "alphaMode": "opaque", "emissive": [1, 0]}),
     );
@@ -185,8 +185,8 @@ fn material_palette_converts_to_typed_records_with_typescript_spelling_and_defau
 }
 
 #[test]
-fn primitive_helpers_match_typescript_mesh_box_and_mesh_sphere() {
-    // Recorded from `meshBox(2,3,4)` and `compile("box(0,0,0,2,3,4)")` in src/form/resources.ts.
+fn primitive_helpers_match_the_recorded_mesh_box_and_mesh_sphere() {
+    // Recorded expectations for `mesh_box(2, 3, 4)`, which the script `box(0,0,0,2,3,4)` also produces.
     let cube = mesh_box(2.0, 3.0, 4.0).unwrap();
     assert_eq!(
         cube.positions,
@@ -209,7 +209,8 @@ fn primitive_helpers_match_typescript_mesh_box_and_mesh_sphere() {
     );
     assert_eq!(cube, evaluate("box(0,0,0,2,3,4)"));
 
-    // Recorded from `meshSphere(1.5,6)`: 4 rows of 7 seam-duplicated vertices, pole rows emit one triangle per column.
+    // Recorded expectations for `mesh_sphere(1.5, 6)`: 4 rows of 7 seam-duplicated vertices, pole rows emit one triangle
+    // per column.
     let sphere = mesh_sphere(1.5, 6).unwrap();
     assert_eq!((sphere.positions.len() / 3, sphere.triangles.len() / 3), (28, 24));
     assert_eq!(&sphere.positions[..3], &[0.0, 1.5, 0.0]);
@@ -223,7 +224,7 @@ fn primitive_helpers_match_typescript_mesh_box_and_mesh_sphere() {
     assert_close(&sphere.normals[81..], &[1.2246467991473532e-16, -1.0, -2.999519565323715e-32]);
     assert_eq!(&sphere.uvs[54..], &[1.0, 1.0]);
 
-    // Recorded from `meshSphere(1)`, which uses 20 segments.
+    // Recorded expectations for a unit sphere at the default 20 segments.
     let sphere = mesh_sphere(1.0, DEFAULT_SPHERE_SEGMENTS).unwrap();
     assert_eq!((sphere.positions.len() / 3, sphere.triangles.len() / 3), (231, 360));
     assert_close(&sphere.normals[75..78], &[0.09549150281252629, 0.9510565162951535, 0.2938926261462365]);
@@ -239,7 +240,7 @@ fn primitive_helpers_match_typescript_mesh_box_and_mesh_sphere() {
     }
 }
 
-// Trigonometric results may differ from V8 by platform rounding; arithmetic results are exact.
+// Trigonometric values allow 1e-12 for last-bit differences in older recordings; arithmetic results are exact.
 fn assert_close(actual: &[f64], expected: &[f64]) {
     assert_eq!(actual.len(), expected.len());
     for (actual, expected) in actual.iter().zip(expected) {

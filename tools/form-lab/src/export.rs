@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 //! Geometry interchange exports of an accepted build: Wavefront OBJ, ASCII PLY, and generated JSON. Number formatting
-//! preserves byte compatibility with the retired TypeScript exporter's reference output. None of these formats
-//! carries the procedural recipe.
+//! is part of each format's contract, so exports stay byte-compatible with recorded reference output. None of these
+//! formats carries the procedural recipe.
 
 use joy_engine::core::{
     format_number,
@@ -16,7 +16,7 @@ use joy_engine::serde_json::{
     Value as Json,
 };
 
-/// Indexed faces and independent points in Wavefront OBJ, Y-up in script units (`exportObj`).
+/// Indexed faces and independent points in Wavefront OBJ, Y-up in script units.
 pub fn export_obj(data: &GeometryData) -> String {
     let mut lines = vec!["# FORM LAB — Y-up, script units".to_owned(), "o FormLab".to_owned()];
     for position in data.positions.chunks(3) {
@@ -32,7 +32,7 @@ pub fn export_obj(data: &GeometryData) -> String {
     lines.join("\n") + "\n"
 }
 
-/// ASCII PLY with RGBA vertices and faces; vertices no face references remain point samples (`exportPly`).
+/// ASCII PLY with RGBA vertices and faces; vertices no face references remain point samples.
 pub fn export_ply(data: &GeometryData) -> String {
     let vertex_count = data.positions.len() / 3;
     let mut lines: Vec<String> = [

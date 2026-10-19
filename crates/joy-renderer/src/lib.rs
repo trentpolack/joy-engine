@@ -26,6 +26,7 @@ mod camera;
 mod capture;
 mod culling;
 mod display;
+mod display_output;
 mod editor_grid;
 mod environment;
 mod error;
@@ -74,6 +75,11 @@ pub use capture::{
 pub use display::{
     BackingLimits,
     backing_pixel_ratio,
+};
+pub use display_output::{
+    DisplayOutput,
+    MAX_DISPLAY_HEADROOM,
+    OutputEncoding,
 };
 pub use editor_grid::{
     EditorGrid,
@@ -141,6 +147,8 @@ pub use post_process::{
     PostProcessSettings,
 };
 pub use renderer::{
+    MAX_RENDER_SCALE,
+    MIN_RENDER_SCALE,
     Renderer,
     RendererDiagnostics,
     RendererOptions,

@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! New workspace assets (TypeScript `asset-authoring.test.mjs`): every format opens in its own editor with content the
-//! runtime readers accept, and names follow the naming rule.
+//! New workspace assets: every format opens in its own editor with content the runtime readers accept, and names follow
+//! the naming rule.
 
 use joy_editor::workspace::asset_types::{
     AssetEditor,

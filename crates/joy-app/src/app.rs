@@ -122,6 +122,9 @@ impl RenderTarget<'_> {
             triangles.resize(width, height, scale);
         }
         triangles.set_presentation_time(self.renderer.presentation_time());
+        if triangles.display_output() != self.renderer.display_output() {
+            triangles.set_display_output(self.renderer.display_output());
+        }
         triangles.encode(self.encoder, self.output, frame)?;
         self.drawn = true;
         Ok(())

@@ -272,9 +272,9 @@ fn pbr_surfaces_flip_normals_only_on_back_faces() {
     let Some(gpu) = gpu() else {
         return;
     };
-    // Seen from above and lit only from above. The TypeScript pass flips the authored normal on back faces alone, so a
-    // front face whose smooth-shaded normal points away from the eye keeps it (and stays dark here), while a back face
-    // flips its upward normal down.
+    // Seen from above and lit only from above. The PBR pass flips the authored normal on back faces alone, so a front
+    // face whose smooth-shaded normal points away from the eye keeps it (and stays dark here), while a back face flips
+    // its upward normal down.
     let upward = quad(0.0, material(PbrMaterialTextures::default()));
     let away = PbrMesh { normals: [0.0, -1.0, 0.0].repeat(4), ..upward.clone() };
     let back_facing = PbrMesh { triangles: vec![0, 1, 2, 0, 2, 3], ..upward.clone() };

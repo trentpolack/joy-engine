@@ -56,7 +56,7 @@ const RECEIVER_HALF_SIZE: f32 = 500.0;
 /// The receiver's matte linear color.
 const RECEIVER_COLOR: [f32; 4] = [0.075, 0.085, 0.105, 1.0];
 
-/// Ambient light on the receiver (the TypeScript point-light uniforms' 0.7).
+/// Ambient light on the receiver.
 const PREVIEW_AMBIENT: f32 = 0.7;
 
 /// Editor backgrounds (linear) in menu order.
@@ -281,7 +281,7 @@ impl ParticleViewport {
         self.textures_ready = true;
     }
 
-    /// Release every image (the TypeScript `destroy`).
+    /// Release every image.
     pub fn release_textures(&mut self) {
         self.textures.clear();
         self.textures_ready = false;

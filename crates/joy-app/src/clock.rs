@@ -10,15 +10,15 @@ pub const DEFAULT_MAXIMUM_FRAME_SECONDS: f32 = 0.1;
 
 /// Wall-clock milliseconds since the Unix epoch (JavaScript's `Date.now()`), on native targets and in browsers.
 ///
-/// Games seed unrepeatable sessions with it (the TypeScript `createSeededRandom(Date.now())`); seeded tests and
-/// captures pass fixed seeds instead. Returns zero if the clock reads before the epoch.
+/// Games seed unrepeatable sessions with it; seeded tests and captures pass fixed seeds instead. Returns zero if the
+/// clock reads before the epoch.
 pub fn unix_time_milliseconds() -> f64 {
     web_time::SystemTime::now()
         .duration_since(web_time::SystemTime::UNIX_EPOCH)
         .map_or(0.0, |elapsed| (elapsed.as_secs_f64() * 1000.0).floor())
 }
 
-/// A monotonic stopwatch for CPU timings, the TypeScript `performance.now()` difference, natively and in browsers.
+/// A monotonic stopwatch for CPU timings, natively and in browsers.
 ///
 /// Readings measure wall time on the calling thread (including waits), never GPU execution.
 #[derive(Clone, Copy, Debug)]

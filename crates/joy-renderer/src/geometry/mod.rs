@@ -90,7 +90,7 @@ pub fn add_circle(
 /// Append a flat-shaded mesh scaled, rotated about Z, and offset to `(x, y, z)`. Each triangle's shade multiplies the
 /// color's RGB, which may exceed one in the HDR scene (clipping channels separately would shift hue); alpha is
 /// unchanged.
-#[allow(clippy::too_many_arguments)] // Mirrors the TypeScript signature that games call with positional values.
+#[allow(clippy::too_many_arguments)] // Games call every builder with positional shape values.
 pub fn add_mesh(
     vertices: &mut Vec<ColorVertex>,
     mesh: &ShadedMesh3D,
@@ -122,7 +122,7 @@ pub fn add_mesh(
 }
 
 /// Append a regular polygon with `sides` equal radial samples.
-#[allow(clippy::too_many_arguments)] // Mirrors the TypeScript signature that games call with positional values.
+#[allow(clippy::too_many_arguments)] // Games call every builder with positional shape values.
 pub fn add_polygon(
     vertices: &mut Vec<ColorVertex>,
     x: f32,
@@ -137,7 +137,7 @@ pub fn add_polygon(
 }
 
 /// Append a triangle fan from evenly spaced radial multipliers; a sample of 1 lies at `radius`.
-#[allow(clippy::too_many_arguments)] // Mirrors the TypeScript signature that games call with positional values.
+#[allow(clippy::too_many_arguments)] // Games call every builder with positional shape values.
 pub fn add_radial_polygon(
     vertices: &mut Vec<ColorVertex>,
     x: f32,
@@ -152,7 +152,7 @@ pub fn add_radial_polygon(
 }
 
 /// Append an irregular triangle fan whose center and edge colors interpolate into a soft radial falloff.
-#[allow(clippy::too_many_arguments)] // Mirrors the TypeScript signature that games call with positional values.
+#[allow(clippy::too_many_arguments)] // Games call every builder with positional shape values.
 pub fn add_gradient_radial_polygon(
     vertices: &mut Vec<ColorVertex>,
     x: f32,
@@ -191,7 +191,7 @@ pub fn add_gradient_radial_polygon(
 }
 
 /// Append an annulus as two triangles per segment. `width` is the half thickness; the inner radius clamps to zero.
-#[allow(clippy::too_many_arguments)] // Mirrors the TypeScript signature that games call with positional values.
+#[allow(clippy::too_many_arguments)] // Games call every builder with positional shape values.
 pub fn add_ring(
     vertices: &mut Vec<ColorVertex>,
     x: f32,
@@ -223,7 +223,7 @@ pub fn add_ring(
 }
 
 /// Append a butt-ended segment from `a` to `b` as two triangles; `width` is the full thickness.
-#[allow(clippy::too_many_arguments)] // Mirrors the TypeScript signature that games call with positional values.
+#[allow(clippy::too_many_arguments)] // Games call every builder with positional shape values.
 pub fn add_line(
     vertices: &mut Vec<ColorVertex>,
     ax: f32,

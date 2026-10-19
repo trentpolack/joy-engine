@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Tab documents (TypeScript `workspace.test.mjs`): edits made during a save, external changes, and conflict
-//! resolution never lose unsaved text.
+//! Tab documents: edits made during a save, external changes, and conflict resolution never lose unsaved text.
 
 use joy_editor::server::DiskDocument;
 use joy_editor::workspace::documents::WorkspaceDocument;

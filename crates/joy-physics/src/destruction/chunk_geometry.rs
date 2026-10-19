@@ -32,7 +32,8 @@ const CHUNK_COUNT_KEY: &str = "chunkCount";
 /// Metadata key marking that every box is closed, so removed neighbors reveal interior faces.
 const CLOSED_INTERIOR_SURFACES_KEY: &str = "closedInteriorSurfaces";
 
-/// Box corners per face as unit offsets, wound like the TypeScript faces (-Z, +Z, -X, +X, -Y, +Y).
+/// Box corners per face as unit offsets, in a fixed face order (-Z, +Z, -X, +X, -Y, +Y) and corner winding so
+/// generated vertex order stays stable.
 const FACE_CORNERS: [[[f64; 3]; 4]; 6] = [
     [[-1.0, -1.0, -1.0], [1.0, -1.0, -1.0], [1.0, 1.0, -1.0], [-1.0, 1.0, -1.0]],
     [[-1.0, -1.0, 1.0], [-1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, -1.0, 1.0]],

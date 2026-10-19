@@ -38,7 +38,7 @@ use joy_physics::{
     WHEEL_DEFAULTS,
 };
 
-/// Largest authored steering angle in radians (`Math.PI / 2`).
+/// Largest authored steering angle in radians (π/2).
 const MAX_STEER_RADIANS: f64 = std::f64::consts::FRAC_PI_2;
 
 /// The simulation components' schemas in authoring display order: physics, then vehicle.

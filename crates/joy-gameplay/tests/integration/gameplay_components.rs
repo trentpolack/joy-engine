@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Runtime components, system lifetimes, and controller failure paths protected by the TypeScript suite
-//! (`gameplay.test.mjs`): lifecycle order, rollback of failed attachments, and intent clearing.
+//! Runtime components, system lifetimes, and controller failure paths: lifecycle order, rollback of failed
+//! attachments, and intent clearing.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -49,7 +49,7 @@ fn definition(value: Value) -> EntityDefinition {
     EntityDefinition::from_json(&value).unwrap()
 }
 
-/// A resource owned by a component; dropping it is the Rust form of the TypeScript `own(...).destroy()`.
+/// A resource owned by a component; dropping it is how the component releases what it owns.
 struct Resource {
     name: &'static str,
     events: Events,

@@ -118,7 +118,7 @@ pub fn parse_level(text: &str) -> Result<LevelData, LevelError> {
     LevelData::from_json(&value)
 }
 
-/// Serialize a level as pretty JSON with a trailing newline, byte-compatible with the TypeScript `serializeLevel`.
+/// Serialize a level as pretty JSON with a trailing newline; the layout is fixed so saved levels stay byte-stable.
 ///
 /// The level is written as-is; call [`LevelData::validate`] first when it was assembled from untrusted edits.
 pub fn serialize_level(level: &LevelData) -> String {
@@ -127,8 +127,8 @@ pub fn serialize_level(level: &LevelData) -> String {
     text
 }
 
-/// Owns authored level state, the editor selection, and up to [`LEVEL_HISTORY_LIMIT`] undo transactions (TypeScript
-/// `LevelDocument`, used by Joy Editor).
+/// Owns authored level state, the editor selection, and up to [`LEVEL_HISTORY_LIMIT`] undo transactions (used by Joy
+/// Editor).
 ///
 /// Every stored snapshot is validated and canonical (as produced by [`LevelData::from_json`]). Edits run on isolated
 /// drafts and commit atomically; simulation and rendering must work from [`LevelDocument::snapshot`] copies.
@@ -251,12 +251,12 @@ impl LevelDocument {
     }
 }
 
-/// Validate a level and return its canonical copy (the TypeScript `copyLevel`).
+/// Validate a level and return its canonical copy.
 fn canonical_level(level: &LevelData) -> Result<LevelData, LevelError> {
     LevelData::from_json(&level.to_json())
 }
 
-/// Order-sensitive serialized form, compared like the TypeScript `JSON.stringify` check.
+/// Order-sensitive serialized form used to detect no-op edits; a change in key or entity order counts as an edit.
 fn level_fingerprint(level: &LevelData) -> String {
     level.to_json().to_string()
 }

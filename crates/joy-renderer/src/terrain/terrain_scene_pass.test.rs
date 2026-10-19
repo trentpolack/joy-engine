@@ -7,7 +7,7 @@ use super::*;
 
 #[test]
 fn local_views_keep_screen_error_invariant_under_uniform_scale() {
-    // The TypeScript adapter test: scale 2, translation (8, 4, -6), eye (10, 8, -4).
+    // A uniformly scaled model: scale 2, translation (8, 4, -6), eye (10, 8, -4).
     let model =
         Mat4::from_cols_array(&[2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 8.0, 4.0, -6.0, 1.0]);
     let inverse = invert_matrix(model.as_dmat4()).expect("invertible");

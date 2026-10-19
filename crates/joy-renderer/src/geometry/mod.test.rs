@@ -21,9 +21,8 @@ fn builders_emit_whole_triangles_at_their_depth() {
 }
 
 #[test]
-fn geometry_matches_typescript_values() {
-    // Recorded from the TypeScript helpers: addQuad(v, 10, 20, 2, c) (default rotation π/4) and
-    // addLine(v, 0, 0, 3, 4, 2, c, 0).
+fn geometry_matches_recorded_values() {
+    // Recorded reference corners: a size 2 quad at (10, 20) rotated π/4, and a width 2 line from (0, 0) to (3, 4).
     let mut quad = Vec::new();
     add_quad(&mut quad, 10.0, 20.0, 2.0, WHITE, std::f32::consts::FRAC_PI_4, 0.0);
     let expected_quad = [[11.414_213, 21.414_213], [8.585_787, 21.414_213], [8.585_787, 18.585_787]];

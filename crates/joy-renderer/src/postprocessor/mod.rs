@@ -4,8 +4,17 @@
 //! Scene-to-display pipeline: HDR scene targets, bloom, blurs, the display resolve, and the final presentation pass.
 //!
 //! The pass order is bloom, optional full-image blur and vignette edge blur, exposure and tone mapping, sRGB encoding,
-//! grade, vignette, antialiasing, then film grain. Presentation targets receive sRGB-encoded display values whatever
-//! their format: non-sRGB views store them directly and sRGB views encode on write.
+//! grade, vignette, antialiasing, then film grain. Presentation targets receive what their [`DisplayOutput`] expects:
+//! sRGB-encoded values for standard output (non-sRGB views store them directly and sRGB views encode on write), the same
+//! encoding continued above SDR white for extended sRGB, or linear light for extended linear (scRGB) surfaces.
+//!
+//! The scene targets (color, depth, bloom, and blurs) are the scene size, which the renderer's render scale can set below
+//! the output size; the resolve upscales the scene into the output-sized display target with a bicubic filter, so the
+//! grade, antialiasing, grain, and any UI drawn afterwards keep full output resolution.
+//!
+//! With HDR headroom, the resolve keeps the tone mapper's image up to its shoulder and extends only its brightest
+//! highlights into the headroom (see `extendHighlights` in `post-resolve.wgsl`), so normally lit content looks the same
+//! as on a standard display.
 //!
 //! Bloom is the fragment path of luma.gl's `createBloomShaderPassPipeline` with Joy Engine's authored options (MIT
 //! License, Copyright (c) vis.gl contributors; see `post-bloom.wgsl` and `scene_effects/LICENSE-luma.gl`): a
@@ -25,11 +34,16 @@ use bytemuck::{
     Zeroable,
 };
 
+use crate::display_output::{
+    DisplayOutput,
+    OutputEncoding,
+};
 use crate::materials::{
     BLOOM_SOURCE,
     BLUR_SOURCE,
     DEPTH_FORMAT,
     DISPLAY_FORMAT,
+    EXTENDED_DISPLAY_FORMAT,
     FINAL_SOURCE,
     RESOLVE_SOURCE,
     fullscreen_pipeline,
@@ -38,10 +52,10 @@ use crate::materials::{
     uniform_entry,
 };
 
-/// Maps the authored bloom radius to the TypeScript renderer's kernel scale: 0.025 at 720 pixels is eight texels.
+/// Maps the authored bloom radius (a fraction of the shortest axis) to texels: 0.025 at 720 pixels is eight texels.
 const BLOOM_RADIUS_SCALE: f32 = 8.0 / (720.0 * 0.025);
 
-/// Upper bound on the bloom kernel in texels, matching the TypeScript renderer.
+/// Upper bound on the bloom kernel in texels.
 const MAX_BLOOM_RADIUS: f32 = 24.0;
 
 /// luma.gl's `MAX_BLOOM_BLUR_RADIUS`: the anamorphic stretch keeps each axis within it.
@@ -50,8 +64,7 @@ const MAX_BLOOM_BLUR_RADIUS: f32 = 24.0;
 /// Pyramid level sizes relative to the drawing buffer, widest first (luma.gl's `BLOOM_PYRAMID_LEVELS`).
 const BLOOM_LEVEL_SCALES: [f64; 5] = [0.5, 0.25, 0.125, 0.0625, 0.03125];
 
-/// Starburst ray length in half-resolution texels per bloom radius per shortest-axis pixel, as the TypeScript renderer
-/// requests it.
+/// Starburst ray length in half-resolution texels per bloom radius per shortest-axis pixel.
 const STARBURST_LENGTH_SCALE: f32 = 4.0;
 
 /// luma.gl's longest starburst ray in half-resolution texels.
@@ -60,7 +73,7 @@ const MAX_STARBURST_LENGTH: f32 = 256.0;
 /// Upper bound on the full-image Gaussian radius in texels.
 const MAX_BLUR_RADIUS: f32 = 32.0;
 
-/// Edge-blur radius in half-resolution texels, matching the TypeScript vignette blur.
+/// Vignette edge-blur radius in half-resolution texels.
 const EDGE_BLUR_RADIUS: f32 = 6.0;
 
 /// One bloom draw's uniforms (`Bloom` in `post-bloom.wgsl`); each stage reads the fields it needs.
@@ -87,6 +100,7 @@ struct BlurUniforms {
     padding: f32,
 }
 
+/// `Resolve` in `post-resolve.wgsl`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 struct ResolveUniforms {
@@ -94,8 +108,11 @@ struct ResolveUniforms {
     grade: [f32; 4],
     vignette: [f32; 4],
     viewport: [f32; 4],
+    output: [f32; 4],
+    scene: [f32; 4],
 }
 
+/// `Presentation` in `post-final.wgsl`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 struct PresentationUniforms {
@@ -134,12 +151,18 @@ impl Target {
     }
 }
 
-/// Shape of the effect graph; a change rebuilds targets and bind groups. Every field derives from the drawing size or
-/// a value the TypeScript `effectPipelineKey` includes.
+/// Shape of the effect graph; a change rebuilds targets and bind groups. Every field derives from the scene and output
+/// sizes, the display encoding, or a setting that adds or removes passes, so uniform-only changes keep the graph.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct GraphKey {
+    /// Scene target size in pixels: the drawing size times the render scale.
     width: u32,
     height: u32,
+    /// Display and presentation size in pixels.
+    output_width: u32,
+    output_height: u32,
+    /// Whether the display target holds extended-range values.
+    extended_display: bool,
     bloom_levels: usize,
     lens_flare: bool,
     full_blur: bool,
@@ -147,16 +170,24 @@ struct GraphKey {
 }
 
 impl GraphKey {
-    fn new(config: &PostProcessSettings, width: u32, height: u32) -> Self {
+    fn new(config: &PostProcessSettings, scene: (u32, u32), output: (u32, u32), extended_display: bool) -> Self {
         let bloom = config.bloom_strength > 0.0;
         Self {
-            width,
-            height,
+            width: scene.0,
+            height: scene.1,
+            output_width: output.0,
+            output_height: output.1,
+            extended_display,
             bloom_levels: if bloom { config.bloom_quality.levels() } else { 0 },
             lens_flare: bloom && config.bloom_lens_flare > 0.0,
             full_blur: config.blur_radius > 0.0,
             edge_blur: config.vignette_blur > 0.0,
         }
+    }
+
+    /// Whether the resolve upscales a scene rendered below the output size.
+    fn upscales(&self) -> bool {
+        self.width < self.output_width || self.height < self.output_height
     }
 
     /// Whether a blur reads the bloomed scene, so the bloom composite must run before it rather than in the resolve.
@@ -249,9 +280,10 @@ pub(crate) struct PostProcessor {
     linear_sampler: wgpu::Sampler,
     black: Target,
 
-    // Configuration. The presentation pass writes sRGB-encoded values; an sRGB output view encodes them itself.
+    // Configuration. The presentation pass writes the display output's signal; an sRGB output view encodes it itself.
     scene_format: wgpu::TextureFormat,
-    output_encodes_srgb: bool,
+    output_format: wgpu::TextureFormat,
+    display: DisplayOutput,
     config: PostProcessSettings,
 
     // Size-dependent resources; `None` until the first resize.
@@ -301,8 +333,7 @@ impl PostProcessor {
         let composite_pipeline = bloom("bloom-composite", "compositeMain");
         let blur_pipeline =
             fullscreen_pipeline(device, "blur", BLUR_SOURCE, "fragmentMain", &blur_layout, scene_format);
-        let resolve_pipeline =
-            fullscreen_pipeline(device, "resolve", RESOLVE_SOURCE, "fragmentMain", &resolve_layout, DISPLAY_FORMAT);
+        let resolve_pipeline = resolve_pipeline(device, &resolve_layout, DisplayOutput::STANDARD);
         let presentation_pipeline = fullscreen_pipeline(
             device,
             "presentation",
@@ -339,10 +370,26 @@ impl PostProcessor {
             linear_sampler,
             black,
             scene_format,
-            output_encodes_srgb: output_format.is_srgb(),
+            output_format,
+            display: DisplayOutput::STANDARD,
             config,
             graph: None,
         }
+    }
+
+    /// The display output the presentation pass writes for.
+    pub fn display_output(&self) -> DisplayOutput {
+        self.display
+    }
+
+    /// Write for `display` from the next frame. Switching between standard and extended encodings recompiles the resolve
+    /// pass and rebuilds the targets; headroom changes are uniforms only.
+    pub fn set_display_output(&mut self, device: &wgpu::Device, display: DisplayOutput) {
+        if display.encoding.is_extended() != self.display.encoding.is_extended() {
+            self.resolve_pipeline = resolve_pipeline(device, &self.resolve_layout, display);
+            self.graph = None;
+        }
+        self.display = display;
     }
 
     /// Current post-processing settings.
@@ -365,9 +412,17 @@ impl PostProcessor {
         &self.graph.as_ref().expect("prepare runs before the scene pass").depth.view
     }
 
-    /// Ensure targets match the drawing size and effect graph, then upload this frame's uniforms.
-    pub fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32, time_seconds: f32) {
-        let key = GraphKey::new(&self.config, width, height);
+    /// Ensure targets match the scene and output sizes (in pixels) and the effect graph, then upload this frame's
+    /// uniforms.
+    pub fn prepare(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        scene: (u32, u32),
+        output: (u32, u32),
+        time_seconds: f32,
+    ) {
+        let key = GraphKey::new(&self.config, scene, output, self.display.encoding.is_extended());
         if self.graph.as_ref().map(|graph| graph.key) != Some(key) {
             self.graph = Some(self.build_graph(device, key));
         }
@@ -412,7 +467,8 @@ impl PostProcessor {
         let format = self.scene_format;
         let scene = Target::new(device, "scene color", key.width, key.height, format);
         let depth = Target::new(device, "scene depth", key.width, key.height, DEPTH_FORMAT);
-        let display = Target::new(device, "display", key.width, key.height, DISPLAY_FORMAT);
+        let display_format = if key.extended_display { EXTENDED_DISPLAY_FORMAT } else { DISPLAY_FORMAT };
+        let display = Target::new(device, "display", key.output_width, key.output_height, display_format);
 
         // Bloom targets: each level's extraction, Gaussian scratch, and blur, then the streaks and the early composite.
         // Reconstruction writes each level's extraction again once it is no longer read, as luma.gl aliases them.
@@ -486,8 +542,7 @@ impl PostProcessor {
             )
         });
 
-        // Later passes read the chain so far, as the TypeScript `previous` texture: the bloomed scene when bloom
-        // composed early, then the full-image blur.
+        // Later passes read the chain so far: the bloomed scene when bloom composed early, then the full-image blur.
         let mut chain = composite.map_or(&scene.view, |composite| &bloom_targets[composite].view);
         let blur_passes = match &blur_targets {
             Some((horizontal, vertical)) => {
@@ -530,7 +585,7 @@ impl PostProcessor {
         let config = &self.config;
         let shortest_axis = graph.key.width.min(graph.key.height) as f32;
 
-        // Bloom: the TypeScript renderer's construction options and per-frame `createEffectUniforms` values.
+        // Bloom: the configured settings, with blur radii and starburst length scaled by the shortest axis.
         let (horizontal_radius, vertical_radius) = bloom_blur_radii(config, shortest_axis);
         let bloom = BloomUniforms {
             threshold: config.bloom_threshold,
@@ -572,7 +627,7 @@ impl PostProcessor {
             }
         }
 
-        // Grade adjustments use the same conversions as the TypeScript effect uniforms.
+        // Grade adjustments: contrast, saturation, and brightness multipliers (one is neutral) become signed offsets.
         let contrast = if config.contrast > 1.0 { 1.0 - (1.0 / config.contrast) } else { config.contrast - 1.0 };
         let saturation =
             if config.saturation > 1.0 { 1.001 - (1.0 / config.saturation) } else { config.saturation - 1.0 };
@@ -584,24 +639,27 @@ impl PostProcessor {
         let look = if config.agx_look == AgxLook::Punchy { 1.0 } else { 0.0 };
         let resolve_bloom = graph.key.bloom_levels > 0 && !graph.key.composes_bloom_early();
         let bloom_strength = if resolve_bloom { config.bloom_strength } else { 0.0 };
+        let (output_width, output_height) = (graph.key.output_width as f32, graph.key.output_height as f32);
+        let (scene_width, scene_height) = (graph.key.width as f32, graph.key.height as f32);
+        let headroom = self.display.effective_headroom();
+        let encoded_peak = encoded_peak(headroom);
         let resolve = ResolveUniforms {
             display: [config.exposure, tone_mapper, look, bloom_strength],
             grade: [saturation, config.brightness - 1.0, contrast, config.vibrance],
             vignette: [config.vignette_radius, config.vignette_strength, config.vignette_blur, 0.0],
-            viewport: [graph.key.width as f32, graph.key.height as f32, time_seconds, 0.0],
+            viewport: [output_width, output_height, time_seconds, 0.0],
+            output: [headroom, encoded_peak, if graph.key.upscales() { 1.0 } else { 0.0 }, 0.0],
+            scene: [scene_width, scene_height, 1.0 / scene_width, 1.0 / scene_height],
         };
         queue.write_buffer(&graph.resolve.uniforms, 0, bytemuck::bytes_of(&resolve));
 
         let decorrelated = if config.film_grain_noise == FilmGrainNoise::Decorrelated { 1.0 } else { 0.0 };
+        // Linear outputs (sRGB-format views and extended linear surfaces) receive decoded values.
+        let decodes = self.output_format.is_srgb() || self.display.encoding == OutputEncoding::ExtendedLinear;
         let presentation = PresentationUniforms {
-            frame: [
-                1.0 / graph.key.width as f32,
-                1.0 / graph.key.height as f32,
-                config.antialias_strength,
-                config.film_grain,
-            ],
+            frame: [1.0 / output_width, 1.0 / output_height, config.antialias_strength, config.film_grain],
             grain: [config.film_grain_size, config.film_grain_speed, decorrelated, time_seconds],
-            output: [if self.output_encodes_srgb { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0],
+            output: [if decodes { 1.0 } else { 0.0 }, encoded_peak, self.display.effective_sdr_white_level(), 0.0],
         };
         queue.write_buffer(&graph.presentation.uniforms, 0, bytemuck::bytes_of(&presentation));
     }
@@ -691,6 +749,21 @@ impl PostProcessor {
     }
 }
 
+/// The resolve pipeline writing the display target for `display`'s encoding.
+fn resolve_pipeline(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    display: DisplayOutput,
+) -> wgpu::RenderPipeline {
+    let format = if display.encoding.is_extended() { EXTENDED_DISPLAY_FORMAT } else { DISPLAY_FORMAT };
+    fullscreen_pipeline(device, "resolve", RESOLVE_SOURCE, "fragmentMain", layout, format)
+}
+
+/// The sRGB-encoded value of `headroom` times SDR white: the largest encoded value the display chain keeps.
+fn encoded_peak(headroom: f32) -> f32 {
+    joy_core::color::linear_to_srgb(f64::from(headroom)) as f32
+}
+
 /// A pyramid level's extent along one axis: luma.gl rounds each scale of the drawing buffer half up, at least one.
 fn level_size(size: u32, scale: f64) -> u32 {
     ((f64::from(size) * scale).round() as u32).max(1)
@@ -707,8 +780,8 @@ fn texture_scale(source: (u32, u32), output: (u32, u32)) -> [f32; 2] {
     }
 }
 
-/// Horizontal and vertical Gaussian radii in level texels: the TypeScript kernel scale, then luma.gl's anamorphic
-/// stretch, which lengthens one axis while keeping it within the blur limit.
+/// Horizontal and vertical Gaussian radii in level texels: the authored radius scaled to the shortest axis and capped,
+/// then luma.gl's anamorphic stretch, which lengthens one axis while keeping it within the blur limit.
 fn bloom_blur_radii(config: &PostProcessSettings, shortest_axis: f32) -> (f32, f32) {
     let radius = (config.bloom_radius * shortest_axis * BLOOM_RADIUS_SCALE).min(MAX_BLOOM_RADIUS);
     let ratio = config.bloom_anamorphic.clamp(-1.0, 1.0);

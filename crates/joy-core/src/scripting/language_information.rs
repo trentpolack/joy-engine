@@ -26,7 +26,7 @@ pub enum ScriptSymbolKind {
 }
 
 impl ScriptSymbolKind {
-    /// The TypeScript spelling (`"keyword"`, `"function"`, `"variable"`, `"property"`).
+    /// The serialized spelling (`"keyword"`, `"function"`, `"variable"`, `"property"`).
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Keyword => "keyword",

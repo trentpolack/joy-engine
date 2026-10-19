@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! All five parameter types, resource overrides, compiled-script snapshots, and the geometry-only GLB mesh import,
-//! ported from `test/runtime-parameters.test.js`.
+//! All five parameter types, resource overrides, compiled-script snapshots, and the geometry-only GLB mesh import.
 
 use form_lab::document::read_document;
 use form_lab::export_glb::export_glb;

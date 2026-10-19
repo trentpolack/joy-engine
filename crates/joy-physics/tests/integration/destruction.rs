@@ -2,12 +2,14 @@
 // Licensed under the MIT License.
 
 //! Destructible chunk structures: damage boundaries, support collapse, cascading structural failure, static queries,
-//! mesh data, and the physics backend contract, against values recorded from the TypeScript engine.
+//! mesh data, and the physics backend contract, checked against the golden recording
+//! `tests/fixtures/destruction-reference.json`.
 //!
 //! The recorded cases are the FORM DESTRUCTION example's seeded wall (`examples/form-destruction`) driven by aimed
 //! hits, and a FRAMEBREAK-style building that applies the game's collapse rule (failing every ground anchor once
-//! integrity drops below a threshold). Every number must match exactly: the port keeps the TypeScript `f64` arithmetic
-//! and evaluation order, including V8's `Math.hypot`.
+//! integrity drops below a threshold). Every number must match exactly: destruction keeps a fixed `f64` operation order
+//! (including its deterministic `hypot`), so seeded runs reproduce bit for bit. Re-record with `JOY_UPDATE_FIXTURES=1`
+//! when destruction changes on purpose.
 
 use joy_core::math::{
     DVec3,
@@ -20,6 +22,8 @@ use joy_core::{
 use joy_physics::destruction::DEFAULT_CONTACT_TOLERANCE;
 use joy_physics::{
     BodyOptions,
+    ChunkChangeSet,
+    ChunkRaycastHit,
     ChunkStructure,
     ChunkSupportOptions,
     DestructibleChunkDefinition,
@@ -35,14 +39,15 @@ use joy_physics::{
     create_chunk_mesh_data,
     create_removal_mutation_batch,
 };
+use joy_test_support::{
+    GoldenFile,
+    Tolerance,
+    golden_file,
+};
 use serde_json::{
     Value,
     json,
 };
-
-use joy_test_support::assert_matches_recording;
-
-const REFERENCE: &str = include_str!("../fixtures/destruction-reference.json");
 
 /// Maximum aim distance used by the FORM DESTRUCTION example, in meters.
 const AIM_DISTANCE: f64 = 60.0;
@@ -50,8 +55,14 @@ const AIM_DISTANCE: f64 = 60.0;
 /// FRAMEBREAK's collapse rule: remaining-chunk fraction below which every ground anchor fails.
 const COLLAPSE_INTEGRITY: f64 = 0.55;
 
-fn reference() -> Value {
-    serde_json::from_str(REFERENCE).expect("the destruction reference is valid JSON")
+/// Leading position and color values recorded in the mesh summary.
+const MESH_LEADING_VALUES: usize = 36;
+
+/// Trailing indices recorded in the mesh summary.
+const MESH_TRAILING_INDICES: usize = 12;
+
+fn golden() -> GoldenFile {
+    golden_file!("destruction-reference.json")
 }
 
 fn definitions(value: &Value) -> Vec<DestructibleChunkDefinition> {
@@ -62,7 +73,12 @@ fn vector(value: &Value) -> DVec3 {
     serde_json::from_value(value.clone()).expect("recorded vectors deserialize")
 }
 
-/// The TypeScript suite's 5×3 wall of 1×1×0.5 masonry chunks.
+/// A serializable engine value as recorded JSON.
+fn to_record(value: &impl serde::Serialize) -> Value {
+    serde_json::to_value(value).expect("destruction records serialize")
+}
+
+/// A 5×3 test wall of 1×1×0.5 masonry chunks.
 fn wall() -> Vec<DestructibleChunkDefinition> {
     let mut chunks = Vec::new();
     for row in 0..3 {
@@ -87,8 +103,12 @@ fn ids<'a>(chunks: impl IntoIterator<Item = &'a DestructibleChunkDefinition>) ->
     chunks.into_iter().map(|chunk| chunk.id.as_str()).collect()
 }
 
-/// Compact per-chunk state in the recording's layout.
-fn snapshot(structure: &ChunkStructure) -> Value {
+// ---------------------------------------------------------------------------------------------------------------------
+// Records
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// Compact per-chunk state, in definition order: hit points and lateral distances as arrays, flags as `0`/`1` masks.
+fn state_record(structure: &ChunkStructure) -> Value {
     let damage = structure.damage_state();
     let support = structure.support_state();
     let mask = |flags: Vec<bool>| flags.into_iter().map(|flag| if flag { '1' } else { '0' }).collect::<String>();
@@ -101,7 +121,8 @@ fn snapshot(structure: &ChunkStructure) -> Value {
     })
 }
 
-fn change_summary(change: &joy_physics::ChunkChangeSet) -> Value {
+/// One commit or reset: its revision, the chunk ids it removed and detached, and the chunks left active.
+fn change_record(change: &ChunkChangeSet) -> Value {
     json!({
         "revision": change.revision,
         "removed": ids(&change.removed),
@@ -110,19 +131,39 @@ fn change_summary(change: &joy_physics::ChunkChangeSet) -> Value {
     })
 }
 
-fn assert_state(structure: &ChunkStructure, expected: &Value, context: &str) {
-    let expected = json!({
-        "remaining": expected["remaining"],
-        "active": expected["active"],
-        "anchored": expected["anchored"],
-        "supported": expected["supported"],
-        "lateral": expected["lateral"],
-    });
-    assert_matches_recording(&snapshot(structure), &expected, context);
+/// The chunk an aimed ray hits, or `null` when it misses.
+fn ray_record(hit: Option<&ChunkRaycastHit>) -> Value {
+    hit.map_or(Value::Null, |hit| json!({"chunk": hit.chunk.id, "distance": hit.distance, "point": hit.point}))
+}
+
+/// Sizes, sums, and leading and trailing values of the active chunks' mesh data.
+fn mesh_summary_record(structure: &ChunkStructure) -> Value {
+    let mesh = create_chunk_mesh_data(structure.active_chunks());
+    let colors = mesh.colors.as_deref().expect("chunk meshes carry colors");
+    json!({
+        "positionsLength": mesh.positions.len(),
+        "indicesLength": mesh.indices.len(),
+        "metadata": mesh.metadata,
+        "positionSum": mesh.positions.iter().sum::<f64>(),
+        "colorSum": colors.iter().sum::<f64>(),
+        "firstPositions": &mesh.positions[..MESH_LEADING_VALUES],
+        "firstColors": &colors[..MESH_LEADING_VALUES],
+        "lastIndices": &mesh.indices[mesh.indices.len() - MESH_TRAILING_INDICES..],
+    })
+}
+
+/// Write each field of `record` into the step object `step`, for steps that hold a record's fields beside their own.
+fn write_fields(step: &mut Value, record: Value) {
+    let Value::Object(fields) = record else {
+        panic!("step records are objects");
+    };
+    for (key, value) in fields {
+        step[key.as_str()] = value;
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// TypeScript suite scenarios
+// Damage, support, and query scenarios
 // ---------------------------------------------------------------------------------------------------------------------
 
 #[test]
@@ -245,7 +286,7 @@ fn support_excludes_corner_contacts_and_climbing_does_not_regain_reach() {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Recorded parity
+// Golden recordings
 // ---------------------------------------------------------------------------------------------------------------------
 
 /// The FORM DESTRUCTION example's generator: a seeded 13×6 front wall plus a U-shaped return shell.
@@ -292,64 +333,47 @@ fn form_destruction_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
 }
 
 #[test]
-fn form_destruction_wall_matches_the_typescript_example_hit_for_hit() {
-    let reference = reference();
-    let case = &reference["cases"][0];
+fn form_destruction_wall_matches_the_recording_hit_for_hit() {
+    let golden = golden();
+    let mut case = golden.recording()["cases"][0].clone();
     assert_eq!(case["name"], "form-destruction");
 
-    // The seeded generator is reproduced exactly from the shared random stream.
-    let generated = form_destruction_structure(7319);
-    assert_eq!(generated, definitions(&case["definitions"]));
+    // The seeded generator's chunks are recorded too, so a change to the shared random stream shows in the recording.
+    let generated = form_destruction_structure(case["seed"].as_i64().unwrap());
+    case["definitions"] = to_record(&generated);
     let support: ChunkSupportOptions = serde_json::from_value(case["support"].clone()).unwrap();
     let mut structure = ChunkStructure::new(&generated, Some(support)).unwrap();
 
-    for (index, step) in case["steps"].as_array().unwrap().iter().enumerate() {
-        let context = format!("step {index} ({})", step["kind"]);
-        match step["kind"].as_str().unwrap() {
-            "initial" => assert_state(&structure, step, &context),
+    // Hits replay their recorded aim, radius, and damage; everything else is produced.
+    for step in case["steps"].as_array_mut().unwrap() {
+        let kind = step["kind"].as_str().unwrap().to_owned();
+        match kind.as_str() {
+            "initial" => write_fields(step, state_record(&structure)),
             "hit" => {
                 let ray = structure.raycast(vector(&step["origin"]), vector(&step["direction"]), AIM_DISTANCE).unwrap();
-                let recorded =
-                    ray.map(|hit| json!({"chunk": hit.chunk.id, "distance": hit.distance, "point": hit.point}));
-                assert_matches_recording(&recorded, &step["ray"], &context);
+                step["ray"] = ray_record(ray.as_ref());
                 if let Some(hit) = ray {
-                    let point = hit.point;
-                    let amount = damage(point, step["radius"].as_f64().unwrap(), step["damage"].as_f64().unwrap());
+                    let amount = damage(hit.point, step["radius"].as_f64().unwrap(), step["damage"].as_f64().unwrap());
                     structure.queue_damage(amount).unwrap();
                 }
-                assert_matches_recording(&change_summary(&structure.commit()), &step["change"], &context);
-                assert_state(&structure, &step["state"], &context);
+                step["change"] = change_record(&structure.commit());
+                step["state"] = state_record(&structure);
             }
-            "mesh" => {
-                let mesh = create_chunk_mesh_data(structure.active_chunks());
-                let colors = mesh.colors.as_deref().unwrap();
-                let summary = json!({
-                    "positionsLength": mesh.positions.len(),
-                    "indicesLength": mesh.indices.len(),
-                    "metadata": mesh.metadata,
-                    "positionSum": mesh.positions.iter().sum::<f64>(),
-                    "colorSum": colors.iter().sum::<f64>(),
-                    "firstPositions": &mesh.positions[..36],
-                    "firstColors": &colors[..36],
-                    "lastIndices": &mesh.indices[mesh.indices.len() - 12..],
-                });
-                let mut expected = step.clone();
-                expected.as_object_mut().unwrap().remove("kind");
-                assert_matches_recording(&summary, &expected, &context);
-            }
+            "mesh" => write_fields(step, mesh_summary_record(&structure)),
             "reset" => {
-                assert_matches_recording(&change_summary(&structure.reset()), &step["change"], &context);
-                assert_state(&structure, &step["state"], &context);
+                step["change"] = change_record(&structure.reset());
+                step["state"] = state_record(&structure);
             }
             other => panic!("unexpected step {other}"),
         }
     }
+    golden.assert_section_matches("/cases/0", &case, &Tolerance::exact());
 }
 
 #[test]
 fn framebreak_building_cascades_through_support_loss_and_the_collapse_rule() {
-    let reference = reference();
-    let case = &reference["cases"][1];
+    let golden = golden();
+    let mut case = golden.recording()["cases"][1].clone();
     assert_eq!(case["name"], "framebreak-tower");
     let definitions = definitions(&case["definitions"]);
     let support: ChunkSupportOptions = serde_json::from_value(case["support"].clone()).unwrap();
@@ -358,24 +382,21 @@ fn framebreak_building_cascades_through_support_loss_and_the_collapse_rule() {
     let initial_count = definitions.len() as f64;
     let mut collapsed = false;
 
-    for (index, step) in case["steps"].as_array().unwrap().iter().enumerate() {
-        let context = format!("step {index}");
+    // Blasts replay their recorded center, radius, and damage; everything else is produced.
+    for step in case["steps"].as_array_mut().unwrap() {
         if step["kind"] == "initial" {
-            assert_state(&structure, step, &context);
+            write_fields(step, state_record(&structure));
             continue;
         }
         let blast = &step["blast"];
-        structure
-            .queue_damage(damage(
-                vector(&blast["center"]),
-                blast["radius"].as_f64().unwrap(),
-                blast["damage"].as_f64().unwrap(),
-            ))
-            .unwrap();
+        let blast =
+            damage(vector(&blast["center"]), blast["radius"].as_f64().unwrap(), blast["damage"].as_f64().unwrap());
+        structure.queue_damage(blast).unwrap();
         let first = structure.commit();
-        assert_matches_recording(&change_summary(&first), &step["change"], &context);
+        step["change"] = change_record(&first);
 
-        // The game's structural-failure rule runs a second commit at the same boundary.
+        // The game's structural-failure rule runs a second commit at the same boundary; steps where it does not fire
+        // record no collapse.
         let integrity = first.active_chunk_count as f64 / initial_count;
         if !collapsed && first.active_chunk_count > 0 && integrity < COLLAPSE_INTEGRITY {
             collapsed = true;
@@ -384,85 +405,102 @@ fn framebreak_building_cascades_through_support_loss_and_the_collapse_rule() {
                 .filter(|chunk| chunk.center[1] - (chunk.size[1] / 2.0) <= 0.001)
                 .cloned()
                 .collect();
-            assert_matches_recording(&ids(&anchors), &step["collapseAnchors"], &context);
+            step["collapseAnchors"] = json!(ids(&anchors));
             for anchor in &anchors {
                 structure.queue_damage(damage(anchor.center, 0.01, anchor.hit_points * 100.0)).unwrap();
             }
-            assert_matches_recording(&change_summary(&structure.commit()), &step["collapse"], &context);
+            step["collapse"] = change_record(&structure.commit());
         } else {
-            assert!(step.get("collapse").is_none(), "{context}: the collapse rule fired in TypeScript only");
+            let fields = step.as_object_mut().unwrap();
+            fields.shift_remove("collapseAnchors");
+            fields.shift_remove("collapse");
         }
-        assert_state(&structure, &step["state"], &context);
+        step["state"] = state_record(&structure);
 
         let occupancy: Vec<bool> =
             [DVec3::new(40.0, 1.0, -12.0), DVec3::new(36.25, 1.0, -14.5), DVec3::new(46.25, 14.4, -12.0)]
                 .into_iter()
                 .map(|center| structure.can_occupy(center, DVec3::new(0.6, 0.9, 0.6)).unwrap())
                 .collect();
-        assert_matches_recording(&occupancy, &step["occupancy"], &context);
+        step["occupancy"] = json!(occupancy);
     }
     assert!(collapsed);
+    golden.assert_section_matches("/cases/1", &case, &Tolerance::exact());
 }
 
 #[test]
-fn contact_tolerance_and_corner_rules_match_recorded_support() {
-    let reference = reference();
-    let case = &reference["cases"][2];
+fn contact_tolerance_and_corner_rules_match_the_recorded_support() {
+    let golden = golden();
+    let mut case = golden.recording()["cases"][2].clone();
+    assert_eq!(case["name"], "support-contacts");
     let support: ChunkSupportOptions = serde_json::from_value(case["support"].clone()).unwrap();
     assert_ne!(support.contact_tolerance, Some(DEFAULT_CONTACT_TOLERANCE));
     let mut structure = ChunkStructure::new(&definitions(&case["definitions"]), Some(support)).unwrap();
-    assert_state(&structure, &case["steps"][0], "initial");
-    assert_matches_recording(&change_summary(&structure.commit()), &case["steps"][1]["change"], "commit");
-    assert_state(&structure, &case["steps"][1]["state"], "commit");
+
+    // One initial state, then one commit that releases the unsupported chunks.
+    let steps = case["steps"].as_array_mut().unwrap();
+    write_fields(&mut steps[0], state_record(&structure));
+    steps[1]["change"] = change_record(&structure.commit());
+    steps[1]["state"] = state_record(&structure);
+    golden.assert_section_matches("/cases/2", &case, &Tolerance::exact());
 }
 
 #[test]
-fn chunk_mesh_data_and_removal_batches_match_typescript_records() {
-    let reference = reference();
-    let wall_definitions = definitions(&reference["wall"]["definitions"]);
+fn chunk_mesh_data_and_removal_batches_match_the_recording() {
+    let golden = golden();
+    let recording = golden.recording();
+    let wall_definitions = definitions(&recording["wall"]["definitions"]);
     let mesh = create_chunk_mesh_data(&wall_definitions);
-    assert_matches_recording(&mesh, &reference["wall"]["mesh"], "wall mesh");
+    golden.assert_section_matches("/wall/mesh", &to_record(&mesh), &Tolerance::exact());
 
     let removed = vec!["wall:1:0".to_owned(), "wall:2:0".to_owned()];
-    assert_matches_recording(&create_removal_mutation_batch(4, &removed).unwrap(), &reference["batch"], "batch");
-    assert_matches_recording(&create_removal_mutation_batch(0, &[]).unwrap(), &reference["emptyBatch"], "empty batch");
+    let batch = create_removal_mutation_batch(4, &removed).unwrap();
+    golden.assert_section_matches("/batch", &to_record(&batch), &Tolerance::exact());
+    let empty_batch = create_removal_mutation_batch(0, &[]).unwrap();
+    golden.assert_section_matches("/emptyBatch", &to_record(&empty_batch), &Tolerance::exact());
     let error = create_removal_mutation_batch(1, &["ok".to_owned(), String::new()]).unwrap_err();
-    assert_eq!(error.to_string(), reference["batchError"].as_str().unwrap());
+    golden.assert_section_matches("/batchError", &json!(error.to_string()), &Tolerance::exact());
 }
 
 #[test]
-fn invalid_definitions_damage_and_queries_report_typescript_messages() {
-    let reference = reference();
-    let errors = &reference["errors"];
+fn invalid_definitions_damage_and_queries_report_the_recorded_messages() {
     let message = |error: DestructionError| error.to_string();
     let chunks = wall();
     let mut invalid = chunks[0].clone();
 
     let duplicate = ChunkStructure::new(&[chunks[0].clone(), chunks[0].clone()], None).unwrap_err();
-    assert_eq!(message(duplicate), errors["duplicate"].as_str().unwrap());
     invalid.material.clear();
-    assert_eq!(message(ChunkStructure::new(&[invalid], None).unwrap_err()), errors["identity"].as_str().unwrap());
+    let identity = ChunkStructure::new(&[invalid], None).unwrap_err();
     let mut flat = chunks[0].clone();
     flat.size[1] = 0.0;
-    assert_eq!(message(ChunkStructure::new(&[flat], None).unwrap_err()), errors["dimensions"].as_str().unwrap());
+    let dimensions = ChunkStructure::new(&[flat], None).unwrap_err();
     let support =
         ChunkSupportOptions { ground_height: 0.0, maximum_cantilever_distance: -1.0, contact_tolerance: None };
-    assert_eq!(message(ChunkStructure::new(&chunks, Some(support)).unwrap_err()), errors["support"].as_str().unwrap());
+    let support = ChunkStructure::new(&chunks, Some(support)).unwrap_err();
 
     let mut structure = ChunkStructure::new(&chunks, None).unwrap();
-    let center_error = structure.queue_damage(damage(DVec3::new(0.0, f64::NAN, 0.0), 1.0, 1.0)).unwrap_err();
-    assert_eq!(message(center_error), errors["damageCenter"].as_str().unwrap());
-    let amount_error = structure.queue_damage(damage(DVec3::splat(0.0), 0.0, 1.0)).unwrap_err();
-    assert_eq!(message(amount_error), errors["damageAmount"].as_str().unwrap());
-    let ray_error = structure.raycast(DVec3::splat(0.0), DVec3::new(0.0, 0.0, 1.0), 0.0).unwrap_err();
-    assert_eq!(message(ray_error), errors["raycast"].as_str().unwrap());
+    let damage_center = structure.queue_damage(damage(DVec3::new(0.0, f64::NAN, 0.0), 1.0, 1.0)).unwrap_err();
+    let damage_amount = structure.queue_damage(damage(DVec3::splat(0.0), 0.0, 1.0)).unwrap_err();
+    let raycast = structure.raycast(DVec3::splat(0.0), DVec3::new(0.0, 0.0, 1.0), 0.0).unwrap_err();
     assert_eq!(
         structure.raycast(DVec3::new(f64::NAN, 0.0, 0.0), DVec3::new(0.0, 0.0, 1.0), 1.0),
         Err(DestructionError::InvalidRaycast)
     );
-    let occupancy_error = structure.can_occupy(DVec3::splat(0.0), DVec3::new(1.0, 0.0, 1.0)).unwrap_err();
-    assert_eq!(message(occupancy_error), errors["occupancy"].as_str().unwrap());
+    let occupancy = structure.can_occupy(DVec3::splat(0.0), DVec3::new(1.0, 0.0, 1.0)).unwrap_err();
     assert_eq!(structure.commit().revision, 0, "rejected damage never reaches the structure");
+
+    // The messages are stable diagnostics, recorded by the kind of input they reject.
+    let errors = json!({
+        "duplicate": message(duplicate),
+        "identity": message(identity),
+        "dimensions": message(dimensions),
+        "support": message(support),
+        "damageCenter": message(damage_center),
+        "damageAmount": message(damage_amount),
+        "raycast": message(raycast),
+        "occupancy": message(occupancy),
+    });
+    golden().assert_section_matches("/errors", &errors, &Tolerance::exact());
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

@@ -1430,6 +1430,7 @@ dependencies = [
  "joy-input",
  "joy-renderer",
  "joy-ui",
+ "js-sys",
  "log",
  "pollster",
  "thiserror 2.0.21",
@@ -1548,6 +1549,7 @@ dependencies = [
  "joy-renderer",
  "joy-scene",
  "joy-storage",
+ "joy-test-support",
  "joy-ui",
  "log",
  "pollster",
@@ -1560,6 +1562,7 @@ name = "joy-environment"
 version = "1.0.0"
 dependencies = [
  "joy-core",
+ "joy-test-support",
  "log",
  "serde",
  "serde_json",
@@ -1649,6 +1652,7 @@ dependencies = [
  "indexmap",
  "joy-core",
  "joy-fx",
+ "joy-test-support",
  "log",
  "naga",
  "png",

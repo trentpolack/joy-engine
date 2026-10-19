@@ -116,10 +116,10 @@ impl LevelRuntime {
 
     /// Advance one frame of `seconds` (finite, nonnegative).
     ///
-    /// Exactly like the TypeScript runtime: entities update with `min(seconds, 0.1)`, physics steps with the full
-    /// `seconds` (bounded by its own catch-up limit), and then every live body's position and rotation are copied into
-    /// its entity's transform. Handles of removed entities or bodies are dropped. Update controllers before calling
-    /// this. Authored level data is never modified.
+    /// Entities update with `min(seconds, 0.1)`, physics steps with the full `seconds` (bounded by its own catch-up
+    /// limit), and then every live body's position and rotation are copied into its entity's transform; this order is
+    /// fixed, because changing it changes simulation results. Handles of removed entities or bodies are dropped.
+    /// Update controllers before calling this. Authored level data is never modified.
     pub fn step(&mut self, seconds: f32) -> Result<(), GameplayError> {
         if !seconds.is_finite() || seconds < 0.0 {
             return Err(GameplayError::InvalidDelta(RUNTIME_DELTA));
@@ -248,7 +248,7 @@ fn body_options(
         .ok_or(PhysicsComponentError::InvalidShape)?;
     let mut options = BodyOptions { shape, position, rotation, ..BODY_DEFAULTS };
 
-    // Shape dimensions are checked before material values, in the TypeScript order.
+    // Shape dimensions are checked before material values, so the first failure reported is stable.
     match shape {
         PrimitiveShape::Box => {
             let extents = match present(config, "halfExtents") {
@@ -290,7 +290,7 @@ fn vehicle_options(config: &JsonRecord, scale: f32) -> Result<VehicleOptions, Ph
         return Err(PhysicsComponentError::InvalidWheels);
     };
 
-    // Geometry first (the TypeScript `scaleVehicle` pass), then tuning and flags.
+    // Scaled tire geometry for every wheel first, then tuning and flags, so geometry errors are reported first.
     let mut wheels = Vec::with_capacity(authored_wheels.len());
     for value in authored_wheels {
         let Value::Object(wheel) = value else {
@@ -340,7 +340,7 @@ fn vehicle_options(config: &JsonRecord, scale: f32) -> Result<VehicleOptions, Ph
     Ok(options)
 }
 
-/// A field that is present and not `null` (JavaScript `??` treats both as omitted).
+/// A field that is present and not `null`; authored documents treat a `null` field as omitted.
 fn present<'a>(record: &'a JsonRecord, key: &str) -> Option<&'a Value> {
     record.get(key).filter(|value| !value.is_null())
 }
@@ -370,7 +370,7 @@ fn wheel_dimension(wheel: &JsonRecord, key: &str, fallback: f32) -> Result<f32, 
     }
 }
 
-/// Read an optional wheel flag; a present non-boolean (including `null`) is invalid, as in the TypeScript engine.
+/// Read an optional wheel flag; a present non-boolean (including `null`) is invalid.
 fn wheel_flag(wheel: &JsonRecord, key: &'static str, fallback: bool) -> Result<bool, PhysicsComponentError> {
     match wheel.get(key) {
         None => Ok(fallback),

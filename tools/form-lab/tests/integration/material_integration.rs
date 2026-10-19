@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Materials through the language, documents, and point markers, ported from `test/material-integration.test.js`.
+//! Materials through the language, documents, and point markers.
 
 use form_lab::document::read_document;
 use form_lab::rendering::batches::{

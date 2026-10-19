@@ -17,9 +17,9 @@ pub struct SystemId(pub(crate) u64);
 ///
 /// Systems run before entity behaviors in every update, in the order they were added, and receive a stable
 /// insertion-order list of the frame's surviving entities that carry every required runtime component (attached by the
-/// world's [`ComponentRegistry`](super::ComponentRegistry) or [`EntityWorld::add_component`]). Lifetime hooks follow
-/// the TypeScript engine: [`EntitySystem::on_add`] runs when the world takes ownership and [`EntitySystem::on_remove`]
-/// exactly once when the system is removed or the world shuts down.
+/// world's [`ComponentRegistry`](super::ComponentRegistry) or [`EntityWorld::add_component`]). [`EntitySystem::on_add`]
+/// runs when the world takes ownership, and [`EntitySystem::on_remove`] runs exactly once when the system is removed or
+/// the world shuts down.
 ///
 /// [`EntityWorld::add_component`]: super::EntityWorld::add_component
 pub trait EntitySystem {

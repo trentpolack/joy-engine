@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! FORM evaluations as renderable assets and portable records (TypeScript `asset.ts`): the PBR mesh the scene draws,
-//! the baked `.mesh.json` record, and the reverse conversion that lets baked mode draw without evaluating FORM.
+//! FORM evaluations as renderable assets and portable records: the PBR mesh the scene draws, the baked `.mesh.json`
+//! record, and the reverse conversion that lets baked mode draw without evaluating FORM.
 
 use joy_engine::core::{
     JsonRecord,
@@ -16,7 +16,7 @@ use joy_engine::rendering::{
 };
 use joy_engine::serde_json::Value;
 
-/// Metadata keys of a baked record, matching the TypeScript `{project, userData}`.
+/// Metadata keys of a baked `.mesh.json` record.
 const PROJECT_KEY: &str = "project";
 const USER_DATA_KEY: &str = "userData";
 
@@ -26,8 +26,8 @@ pub fn asset_from_evaluation(geometry: &GeometryData) -> Result<MeshAsset, Rende
     form_mesh_asset(geometry, Shading::Pbr)
 }
 
-/// The engine-local baked record of an evaluation (TypeScript `asset.geometry`): every channel, the material palette
-/// and assignments, and the project and per-vertex user data as metadata.
+/// The engine-local baked record of an evaluation: every channel, the material palette and assignments, and the project
+/// and per-vertex user data as metadata.
 pub fn mesh_data_from_evaluation(geometry: &GeometryData) -> MeshAssetData {
     let mut metadata = JsonRecord::new();
     metadata.insert(PROJECT_KEY.to_owned(), geometry.project.clone().unwrap_or(Value::Null));

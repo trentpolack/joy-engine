@@ -55,7 +55,7 @@ fn formlab_documents_round_trip_their_materials_meshes_and_variants() {
     let original: joy_engine::serde_json::Value = joy_engine::serde_json::from_str(&text).unwrap();
     let round_trip: joy_engine::serde_json::Value = joy_engine::serde_json::from_str(&saved).unwrap();
     assert_eq!(round_trip, original, "nothing is lost or reformatted in meaning");
-    assert_eq!(saved, text, "compact JSON in the TypeScript key order");
+    assert_eq!(saved, text, "compact JSON in the authored key order");
     assert!(lab.open_document(ToolDocument { name: "broken.formlab".into(), contents: "{".into() }).is_err());
     assert_eq!(lab.session().name, "Variant study", "a rejected document leaves the current one in place");
     assert!(!lab.session().recovers(), "hosted tabs never write browser recovery");

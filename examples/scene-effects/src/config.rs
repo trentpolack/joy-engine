@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Scene effects lab configuration (TypeScript `config.ts`): effect notes, the per-quality effect tuning, and the
-//! view, lighting, bloom, and motion values the lab renders with. Distances are world units and times are seconds.
+//! Scene effects lab configuration: effect notes, the per-quality effect tuning, and the view, lighting, bloom, and
+//! motion values the lab renders with. Distances are world units and times are seconds.
 
 use joy_engine::development::EffectQuality;
 use joy_engine::prelude::*;
@@ -43,8 +43,8 @@ pub const EFFECT_NOTES: [(&str, &str); 12] = [
     ("HDR bloom", "Bright ceiling strip exceeds linear intensity 1."),
 ];
 
-/// Quality changes bounded sample counts and effect resolution; it never enables effects (TypeScript
-/// `qualityConfig`). Every entry is complete, so the controls select whole presets per enabled effect.
+/// Quality changes bounded sample counts and effect resolution; it never enables effects. Every entry is complete, so
+/// the controls select whole presets per enabled effect.
 pub fn quality_config(quality: EffectQuality) -> SceneEffectsOptions {
     let resolution_scale = if quality == EffectQuality::High { 1.0 } else { 0.5 };
     let pick = |low: f32, medium: f32, high: f32| match quality {
@@ -112,8 +112,8 @@ pub fn post_process_settings() -> PostProcessSettings {
     }
 }
 
-/// Renderer settings: the display baseline above, default shadows, and scene effects created off (TypeScript
-/// `baselineConfig`), so the first frame is the comparison baseline.
+/// Renderer settings: the display baseline above, default shadows, and scene effects created off, so the first frame is
+/// the comparison baseline.
 pub fn renderer_options() -> RendererOptions {
     RendererOptions {
         post_process: post_process_settings(),

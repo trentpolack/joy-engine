@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 // Lit material: flat, double-sided vertex-color lighting. This is the engine's standard look for primitives and FORM
-// meshes; normals come from screen-space derivatives so faceted geometry reads the same as the TypeScript scene path.
-// Prepended at load time by scene-common.wgsl.
+// meshes; normals come from screen-space derivatives so faceted geometry shades flat per triangle. Prepended at load
+// time by scene-common.wgsl.
 
 struct LitOutput {
   // Invariant so the depth pre-pass and every scene pipeline rasterize identical depth.

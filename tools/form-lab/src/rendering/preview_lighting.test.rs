@@ -6,7 +6,7 @@
 use super::*;
 
 #[test]
-fn settings_validate_like_the_typescript_tool() {
+fn settings_validate_their_ranges() {
     assert!(DEFAULT_PREVIEW_LIGHTING.validate().is_ok());
     let error = DEFAULT_PREVIEW_LIGHTING.with(LightingKey::Intensity, 13.0).validate().unwrap_err();
     assert_eq!(error, "Direct intensity must be between 0 and 12.");

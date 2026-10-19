@@ -62,14 +62,13 @@ pub enum EmitterPreset {
     Smoke,
 }
 
-/// Recovery key for the working draft; the TypeScript `joy-games:particle-lab:v1` with periods, because storage keys
-/// are portable file names.
+/// Recovery key for the working draft, spelled with periods because storage keys are portable file names.
 pub const STORAGE_KEY: &str = "joy-games.particle-lab.v1";
 
 /// Folder name for native storage.
 pub const STORAGE_APPLICATION: &str = "particle-lab";
 
-/// Panel layout preference key (shared spelling with the TypeScript lab).
+/// Panel layout preference key; stable so saved layouts keep loading.
 pub const PANEL_LAYOUT_KEY: &str = "joy-editor-panels-particles-v2";
 
 /// Seconds after the last edit before Live applies it.

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Syntax tree produced by the parser and walked by the evaluator. Ported from `src/form/parser.ts`.
+//! Syntax tree produced by the parser and walked by the evaluator.
 
 #[derive(Clone, Debug)]
 pub struct Token {

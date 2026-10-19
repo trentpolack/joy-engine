@@ -33,6 +33,10 @@ zune-jpeg.workspace = true
 image-webp.workspace = true
 wgpu.workspace = true
 
+[dev-dependencies]
+# Terrain and particle golden recordings check and re-record through the shared fixture helpers.
+joy-test-support.workspace = true
+
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 # Native shader tests translate WGSL to WebGL GLSL even on Metal-only hosts.
 naga.workspace = true

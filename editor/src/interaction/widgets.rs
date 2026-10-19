@@ -46,7 +46,7 @@ use joy_engine::development::lab_values::StepScale;
 
 use super::numeric_controls::Draft;
 
-/// Editor colors: the authoring kit's Joy tokens plus the TypeScript workspace's layered surfaces.
+/// Editor colors: the authoring kit's Joy tokens plus the workspace's layered surfaces.
 pub mod palette {
     use joy_engine::egui::Color32;
     use joy_engine::theme::tokens;
@@ -59,7 +59,7 @@ pub mod palette {
     pub const MUTED: Color32 = tokens::MUTED;
     /// Panel fill (Content Browser, outliner, inspector).
     pub const PANEL: Color32 = tokens::PANEL;
-    /// Separators between regions (TypeScript `--line`).
+    /// Separators between regions.
     pub const LINE: Color32 = Color32::from_rgb(0x2c, 0x39, 0x4b);
     /// Control borders.
     pub const BORDER: Color32 = tokens::BORDER;
@@ -85,8 +85,7 @@ pub mod palette {
     pub const ON_ACCENT: Color32 = tokens::CANVAS;
 }
 
-/// Named control rectangles from the latest frame, so tests (and accessibility tooling) can find controls the way the
-/// TypeScript browser tests used element ids.
+/// Named control rectangles from the latest frame, so tests (and accessibility tooling) can find controls by name.
 #[derive(Clone, Debug, Default)]
 pub struct ControlMap {
     rects: HashMap<String, Rect>,
@@ -123,7 +122,7 @@ impl ControlMap {
     }
 }
 
-/// Painted icons; egui's bundled fonts lack several of the symbols the TypeScript workspace used.
+/// Painted icons; egui's bundled fonts lack several of the symbols the workspace needs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Icon {
     /// A circular arrow.

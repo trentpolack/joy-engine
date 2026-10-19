@@ -95,7 +95,7 @@ fn invalid_script_drafts_never_replace_the_accepted_preview() {
     assert_eq!(spawn.len(), 1);
     assert_eq!(spawn[0].line, 1);
     assert!(update.is_empty());
-    assert!(lab.export_text().is_ok(), "drafts with script errors still export, as in TypeScript");
+    assert!(lab.export_text().is_ok(), "drafts with script errors still export");
 
     lab.asset_mut().emitters[0].spawn = "size = 4;".to_owned();
     lab.script_changed();

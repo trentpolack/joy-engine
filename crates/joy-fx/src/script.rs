@@ -146,8 +146,8 @@ pub struct ParticleScript {
     parameter_slots: Vec<usize>,
 }
 
-/// Compile a script with read-only scalar `parameters` and named read-only `containers`; the TypeScript
-/// `compileParticleScript`. See [`ParticleScript::compile`].
+/// Compile a script with read-only scalar `parameters` and named read-only `containers`. See
+/// [`ParticleScript::compile`].
 pub fn compile_particle_script(
     source: &str,
     parameters: &[&str],
@@ -174,11 +174,11 @@ impl ParticleScript {
         Ok(Self { statements, slot_names: parser.slot_names, parameter_slots })
     }
 
-    /// Run against a named numeric record, as the TypeScript `runParticleScript` does with its `values` object.
+    /// Run against a named numeric record, `values`.
     ///
-    /// Names absent from `values` read as NaN (TypeScript's `undefined`), which fails at the first expression that
-    /// observes them. Fields, inputs, and locals written by the script are stored back into `values`, including writes
-    /// made before a failure. `random` supplies `rand()`; `budget` is decremented by the instructions evaluated.
+    /// Names absent from `values` read as NaN, which fails at the first expression that observes them. Fields, inputs,
+    /// and locals written by the script are stored back into `values`, including writes made before a failure. `random`
+    /// supplies `rand()`; `budget` is decremented by the instructions evaluated.
     pub fn run(
         &self,
         values: &mut IndexMap<String, f64>,
@@ -503,8 +503,8 @@ fn tokenize(source: &str) -> Result<Vec<Token<'_>>, ParticleScriptError> {
     Ok(tokens)
 }
 
-/// Byte length of the token at the start of `rest`, following the TypeScript pattern's alternation order: numbers,
-/// identifiers, two-character operators, then single-character punctuation.
+/// Byte length of the token at the start of `rest`, trying numbers, identifiers, two-character operators, then
+/// single-character punctuation, in that order.
 fn match_token(rest: &[u8]) -> Option<usize> {
     let digits = |from: usize| rest[from..].iter().take_while(|byte| byte.is_ascii_digit()).count();
     let first = *rest.first()?;
@@ -544,7 +544,7 @@ fn match_token(rest: &[u8]) -> Option<usize> {
     b"+-*/%^=<>!().,{};".contains(&first).then_some(1)
 }
 
-/// Parse a numeric token; trailing-dot forms such as `1.` and `1.e3` are valid, as in JavaScript's `Number()`.
+/// Parse a numeric token; trailing-dot forms such as `1.` and `1.e3` are valid script numbers.
 fn parse_number(text: &str) -> f64 {
     let normalized = match text.find('.') {
         Some(dot) if !text[dot + 1..].starts_with(|character: char| character.is_ascii_digit()) => {
@@ -562,13 +562,13 @@ fn parse_number(text: &str) -> f64 {
 struct Parser<'a> {
     tokens: Vec<Token<'a>>,
     cursor: usize,
-    // Blocks and expression levels share one depth counter, as in TypeScript.
+    // Blocks and expression levels share one depth counter.
     depth: u32,
     // Compile-time names in scope; locals leave scope at the end of their block.
     references: HashMap<String, Reference>,
     // Built-in container names a `let` may still shadow in this scope.
     shadowable: HashSet<String>,
-    // Storage keys (the TypeScript `values` record keys) mapped to slots; never scoped.
+    // Storage keys (the keys of the `values` record that `ParticleScript::run` receives) mapped to slots; never scoped.
     slots: HashMap<String, usize>,
     slot_names: Vec<String>,
 }
@@ -795,7 +795,7 @@ impl<'a> Parser<'a> {
         }
         let token = self.current();
         if token.is_end() {
-            // TypeScript fails here with a host TypeError; Rust reports a located script error instead.
+            // A script that ends mid-expression reports a located error.
             return Err(error("Unexpected end of script", &token));
         }
         self.cursor += 1;

@@ -46,10 +46,10 @@ pub enum FormMeshError {
     Render(#[from] RenderError),
 }
 
-/// Sphere segments used for level primitives, matching the TypeScript `LevelScene` sphere asset.
+/// Sphere segments used for level primitives.
 const PRIMITIVE_SPHERE_SEGMENTS: u32 = 16;
 
-/// Compile FORM source and convert the result for `shading`; the TypeScript `createFormMeshAsset` equivalent.
+/// Compile FORM source and convert the result for `shading`.
 ///
 /// `overrides` is a JSON object of parameter values and `materials` an optional palette, both as accepted by
 /// [`joy_form::CompiledScript::evaluate`].
@@ -63,8 +63,8 @@ pub fn compile_form_mesh(
     Ok(form_mesh_asset(&geometry, shading)?)
 }
 
-/// Compiled FORM assets for levels and tools, cached by path, source text, parameters, and shading; the mesh half of the
-/// TypeScript `AssetScene`.
+/// Compiled FORM assets for levels and tools, cached by path, source text, parameters, and shading; the mesh half of
+/// [`AssetScene`](crate::AssetScene).
 ///
 /// `.form` files are FORM source; `.formlab` files are FORM LAB documents (`{"version": 1, "source", "overrides",
 /// "materials"}`) whose overrides the component's parameters extend. Callers read files themselves (from disk, a
@@ -180,9 +180,8 @@ impl FormTextureCache {
 ///
 /// Triangles are de-indexed only as far as materials require: a vertex shared by triangles with different materials is
 /// duplicated per material, so per-vertex material factors stay exact. PBR geometry whose palette carries maps instead
-/// gives every triangle its own vertices with texture coordinates, like the TypeScript material pass. Fails for empty or
-/// malformed geometry and for maps that do not decode. Use [`form_mesh_asset_with_textures`] to reuse decoded maps
-/// across rebuilds.
+/// gives every triangle its own vertices with texture coordinates. Fails for empty or malformed geometry and for maps
+/// that do not decode. Use [`form_mesh_asset_with_textures`] to reuse decoded maps across rebuilds.
 pub fn form_mesh_asset(geometry: &GeometryData, shading: Shading) -> Result<MeshAsset, RenderError> {
     form_mesh_asset_with_textures(geometry, shading, &mut FormTextureCache::new())
 }
@@ -304,7 +303,7 @@ pub fn primitive_sphere() -> MeshAsset {
     primitive_asset(&geometry)
 }
 
-/// Build a white, default-material asset from primitive geometry (the TypeScript primitives carry no colors).
+/// Build a white, default-material asset from primitive geometry; instances supply the color.
 fn primitive_asset(geometry: &GeometryData) -> MeshAsset {
     let vertices = (0..geometry.positions.len() / 3)
         .map(|index| {
@@ -332,7 +331,7 @@ fn form_vertex(geometry: &GeometryData, index: usize, material: Option<&FormMate
     let alpha = geometry.alphas.get(index).copied().unwrap_or(1.0) as f32;
 
     let Some(material) = material else {
-        // Lit and Unlit assets ignore materials; vertex alpha alone selects transparency, as in TypeScript.
+        // Lit and Unlit assets ignore materials; vertex alpha alone selects transparency.
         let vertex_material = VertexMaterial {
             alpha_mode: if alpha < 1.0 { AlphaMode::Blend } else { AlphaMode::Opaque },
             ..VertexMaterial::default()

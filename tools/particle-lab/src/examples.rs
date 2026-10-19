@@ -22,7 +22,7 @@ use crate::constants::{
 };
 use crate::document::read_asset;
 
-/// The orbiting point-light example, shared with the TypeScript lab.
+/// The orbiting point-light example.
 const ORBITING_LIGHTS_SOURCE: &str = include_str!("../assets/joyfx/orbiting-lights.joyfx");
 
 /// The textured and flipbook example with its embedded original PNGs.

@@ -226,6 +226,60 @@ fn shadow_views_draw_only_the_casters_inside_them() {
     );
 }
 
+/// A reduced render scale draws the scene at fewer pixels and upscales it into the unchanged output: the frame keeps
+/// its size and view, screen-space queries do not move, and the image stays close to the full-resolution one.
+#[test]
+fn reduced_render_scale_upscales_into_the_full_output() {
+    let Some(gpu) = gpu() else {
+        return;
+    };
+    let mut scene = RenderScene::new();
+    scene.insert(MeshInstance::new(unit_cube([0.31, 0.38, 0.39])).with_transform(Transform::new(
+        Vec3::new(0.0, -0.25, 0.0),
+        Vec3::ZERO,
+        Vec3::new(30.0, 0.5, 30.0),
+    )));
+    scene.insert(MeshInstance::new(unit_cube([0.95, 0.36, 0.12])).with_transform(Transform::new(
+        Vec3::new(0.0, 1.0, 0.0),
+        Vec3::ZERO,
+        Vec3::splat(2.0),
+    )));
+    let camera = OrbitCamera { distance: 14.0, pitch: 0.55, ..OrbitCamera::default() };
+    let environment = noon();
+    let inputs = FrameInputs { environment: Some(&environment), ..FrameInputs::default() };
+    let crate_center = Vec3::new(0.0, 1.0, 0.0);
+
+    let target = OffscreenTarget::new(&gpu, WIDTH, HEIGHT).expect("capture target");
+    let mut renderer = Renderer::new(&gpu, joy_renderer::CAPTURE_FORMAT, RendererOptions::default());
+    renderer.resize(WIDTH, HEIGHT, 1.0);
+    renderer.render(&scene, &camera, &inputs, target.view()).expect("full-scale frame renders");
+    let full = target.read_rgba(&gpu).expect("readback");
+    let full_projection = renderer.project(&camera, crate_center);
+    assert_eq!(renderer.diagnostics().render_size, (WIDTH, HEIGHT));
+
+    renderer.set_render_scale(0.5);
+    renderer.render(&scene, &camera, &inputs, target.view()).expect("half-scale frame renders");
+    let half = target.read_rgba(&gpu).expect("readback");
+    assert_eq!(renderer.diagnostics().render_size, (WIDTH / 2, HEIGHT / 2));
+    assert_eq!(renderer.physical_size(), (WIDTH, HEIGHT));
+    assert_eq!(renderer.project(&camera, crate_center), full_projection);
+
+    // Mean channel difference over the frame, in 8-bit steps: only edges and fine shading soften.
+    let difference: f64 =
+        full.iter().zip(&half).map(|(full, half)| f64::from(full.abs_diff(*half))).sum::<f64>() / full.len() as f64;
+    assert!(difference < 1.5, "half-scale frame differs by {difference:.2} steps on average");
+    let crate_pixel = full_projection.expect("the crate is in view");
+    let (x, y) = (crate_pixel.x as u32, crate_pixel.y as u32);
+    let (full_crate, half_crate) = (luminance(pixel(&full, x, y)), luminance(pixel(&half, x, y)));
+    assert!((full_crate - half_crate).abs() < 4.0, "crate {full_crate} at full scale, {half_crate} at half");
+
+    // Out-of-range scales clamp; non-finite ones restore full resolution.
+    renderer.set_render_scale(0.05);
+    assert_eq!(renderer.render_scale(), joy_renderer::MIN_RENDER_SCALE);
+    renderer.set_render_scale(f32::NAN);
+    assert_eq!(renderer.render_scale(), joy_renderer::MAX_RENDER_SCALE);
+}
+
 #[test]
 fn point_lights_illuminate_without_an_environment() {
     let Some(gpu) = gpu() else {

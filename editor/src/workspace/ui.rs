@@ -1139,7 +1139,7 @@ impl WorkspaceView {
         };
     }
 
-    /// Ask for a file to import (TypeScript's hidden file input).
+    /// Ask for a file to import through the platform file dialog.
     fn begin_import(&mut self, workspace: &mut Workspace) {
         let filter = FileFilter::new("Joy assets", &["form", "formlab", "joyfx", "joylevel", "joyobject"]);
         let request = OpenRequest::text("Import asset", filter).maximum_bytes(crate::server::MAXIMUM_ASSET_BYTES);

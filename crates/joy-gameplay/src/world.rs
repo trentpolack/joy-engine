@@ -53,7 +53,7 @@ pub struct PresentedEntity<'a> {
 /// context together.
 ///
 /// Dropping the world removes every system (running `on_remove` in reverse order), then every entity (running
-/// `on_destroy` hooks and detaching components), and then releases physics, like the TypeScript `World.destroy`.
+/// `on_destroy` hooks and detaching components), and then releases physics.
 #[derive(Debug)]
 pub struct World {
     /// Entity owner.
@@ -88,8 +88,8 @@ impl World {
 
     /// Advance physics, then entities, by finite nonnegative simulation seconds.
     ///
-    /// Physics runs first so systems and behaviors observe the completed solver state, matching the TypeScript
-    /// `World.update`. Fails without changing state for an invalid delta.
+    /// Physics runs first so systems and behaviors observe the completed solver state. Fails without changing state
+    /// for an invalid delta.
     pub fn update(&mut self, elapsed_seconds: f32) -> Result<WorldStep, GameplayError> {
         if !elapsed_seconds.is_finite() || elapsed_seconds < 0.0 {
             return Err(GameplayError::InvalidDelta(WORLD_DELTA));
@@ -164,7 +164,7 @@ impl World {
 
 impl Drop for World {
     fn drop(&mut self) {
-        // Systems release first and entities before the physics they own, like the TypeScript `World.destroy`.
+        // Systems release first, and entities release before the physics they own.
         self.entities.clear_systems();
         self.clear();
     }

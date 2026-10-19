@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The seeded destructible structure (TypeScript `structure.ts`): a 13×6 front wall of masonry chunks and a shallow
-//! U-shaped return shell of stronger frame chunks. Coordinate-derived ids stay stable; the seed only varies materials.
+//! The seeded destructible structure: a 13×6 front wall of masonry chunks and a shallow U-shaped return shell of
+//! stronger frame chunks. Coordinate-derived ids stay stable; the seed only varies materials.
 
 use joy_engine::core::{
     RandomSource,
@@ -19,7 +19,8 @@ const INTERIOR_CHANCE: f64 = 0.22;
 const SHELL_ROWS: u32 = 4;
 const SHELL_DEPTH: u32 = 6;
 
-/// Generate the wall and return-shell chunks for `seed`, in the TypeScript generation order.
+/// Generate the wall and return-shell chunks for `seed` in a fixed row and column order, so a seed always draws the
+/// same materials.
 pub fn generate_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
     let mut random = SeededRandom::new(seed);
     let [width, height, depth] = DESTRUCTION.chunk_size;

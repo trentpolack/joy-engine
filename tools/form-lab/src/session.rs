@@ -57,7 +57,7 @@ use crate::parameter_values::{
 };
 use crate::project_metadata::project_name_change;
 
-/// Storage key of browser recovery, shared with the TypeScript tool's `localStorage` key.
+/// Storage key of browser recovery (a `localStorage` key); stable so recovery drafts keep loading.
 pub const RECOVERY_KEY: &str = "joy-form-lab-v1";
 
 /// Delay between the last edit and a live rebuild, in milliseconds.
@@ -791,7 +791,7 @@ impl Session {
         self.set_status(message, StatusState::Error);
     }
 
-    /// Replace the status line (and clear Go to error, as the TypeScript `status()` does).
+    /// Replace the status line and clear Go to error.
     pub fn set_status(&mut self, message: impl Into<String>, state: StatusState) {
         self.error_location = None;
         self.status = Status { message: message.into(), state };
@@ -865,7 +865,7 @@ impl Session {
     }
 
     /// An edit to the source, materials, or all overrides at once (a variant): restart property history (script edits
-    /// have their own undo, as in TypeScript), mark edits, persist, and schedule a build.
+    /// have their own undo), mark edits, persist, and schedule a build.
     fn changed(&mut self) {
         self.history.reset(self.property_snapshot());
         self.has_edits = true;

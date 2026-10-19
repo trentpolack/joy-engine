@@ -59,7 +59,7 @@ use crate::lab_values::{
     validate_draft,
 };
 
-/// Default exact-field width (the TypeScript lab grid's 76 px value column).
+/// Default exact-field width: the lab grid's value column.
 pub const NUMBER_FIELD_WIDTH: f32 = 76.0;
 
 /// Width of a bounded scalar's leading label column.
@@ -172,7 +172,7 @@ pub struct NumericDrafts {
 }
 
 impl NumericDrafts {
-    /// Whether any field holds an invalid draft (confirmed or still being typed), like the TypeScript `validate()`.
+    /// Whether any field holds an invalid draft (confirmed or still being typed).
     pub fn has_rejected(&self) -> bool {
         !self.rejected.is_empty()
     }
@@ -625,8 +625,7 @@ impl<'a> ScalarControl<'a> {
         self
     }
 
-    /// Snap slider drags to multiples of `step` from the minimum (continuous by default, the TypeScript
-    /// `sliderStep: 'any'`).
+    /// Snap slider drags to multiples of `step` from the minimum (continuous by default).
     pub fn slider_step(mut self, step: f64) -> Self {
         self.slider_step = Some(step);
         self
@@ -925,10 +924,10 @@ fn slider_control(
     ControlResponse { response, changed, phase, component: None }
 }
 
-/// The lab range slider (the TypeScript `.lab-range`): a thin rail with an accent fill up to the value and a round
-/// accent thumb. Pressing or dragging sets the value from the pointer, snapped to multiples of `step` from the minimum
-/// when given; arrow keys move it by a step (or a hundredth of the range) while focused. A value it did not edit is
-/// never clamped or rounded, even outside the range. Returns a response marked changed when the value changed.
+/// The lab range slider: a thin rail with an accent fill up to the value and a round accent thumb. Pressing or dragging
+/// sets the value from the pointer, snapped to multiples of `step` from the minimum when given; arrow keys move it by a
+/// step (or a hundredth of the range) while focused. A value it did not edit is never clamped or rounded, even outside
+/// the range. Returns a response marked changed when the value changed.
 pub fn lab_slider(
     ui: &mut Ui,
     value: &mut f64,
@@ -1184,7 +1183,7 @@ pub fn reset_button(ui: &mut Ui, modified: bool, default: f64) -> Response {
     if modified { response.on_hover_text(format!("Reset to default {}", format_number(default))) } else { response }
 }
 
-/// The accent dot after a modified property's heading (TypeScript `.parameter.modified h3::after`).
+/// The accent dot after a modified property's heading.
 pub fn modified_marker(ui: &mut Ui, modified: bool) {
     if modified {
         ui.label(egui::RichText::new("•").color(tokens::ACCENT)).on_hover_text("Modified from its default");

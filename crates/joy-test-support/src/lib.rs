@@ -1,58 +1,44 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Shared helpers for comparing Rust output with JSON recorded from the TypeScript engine.
+//! Test-only helpers shared by Joy Engine crates and the games built on it: golden files that record deterministic
+//! behavior.
+//!
+//! A golden file is a JSON recording of what the code produced when it was last recorded on purpose: the inputs a test
+//! replays and the outputs it observed. Tests rebuild the recording from the current code and check it with
+//! [`GoldenFile::assert_matches`] (or [`GoldenFile::assert_section_matches`] for one part of a shared file). When
+//! behavior changes on purpose, re-record and review the fixture diff like any other change:
+//!
+//! ```text
+//! JOY_UPDATE_FIXTURES=1 cargo test -p <package>
+//! ```
+//!
+//! Engine crates take this crate as a dev-dependency; games reach it as `joy_engine::testing` by enabling the
+//! facade's `test-support` feature in their `[dev-dependencies]`.
 
-use serde::Serialize;
-use serde_json::Value;
+mod compare;
+mod golden;
 
-/// Assert that a serializable Rust value equals recorded TypeScript JSON.
-///
-/// Numbers compare as exact `f64` values (JavaScript writes `2`, serde may write `2.0`), object keys compare without
-/// regard to order, and the first mismatch is reported with its JSON path.
-pub fn assert_matches_recording(actual: &impl Serialize, expected: &Value, context: &str) {
-    let actual = serde_json::to_value(actual).expect("test values serialize");
-    if let Err(mismatch) = compare(&actual, expected, "$") {
-        panic!("{context}: {mismatch}");
-    }
+pub use compare::{
+    Mismatch,
+    Tolerance,
+    compare,
+};
+pub use golden::{
+    GoldenFile,
+    UPDATE_FIXTURES_VARIABLE,
+    rerecord,
+    update_requested,
+};
+
+/// A single-precision value as its shortest round-tripping decimal (`0.3`, not `0.30000001192092896`), so recordings of
+/// `f32` data stay readable.
+pub fn json_f32(value: f32) -> serde_json::Value {
+    let shortest: f64 = value.to_string().parse().expect("f32 text parses as f64");
+    serde_json::Value::from(shortest)
 }
 
-/// Recursive comparison; returns the first mismatch.
-fn compare(actual: &Value, expected: &Value, path: &str) -> Result<(), String> {
-    match (actual, expected) {
-        (Value::Number(left), Value::Number(right)) => {
-            let (left, right) = (left.as_f64(), right.as_f64());
-            if left == right {
-                return Ok(());
-            }
-            Err(format!("{path}: {left:?} != {right:?}"))
-        }
-        (Value::Array(left), Value::Array(right)) => {
-            if left.len() != right.len() {
-                return Err(format!("{path}: length {} != {}", left.len(), right.len()));
-            }
-            for (index, (left, right)) in left.iter().zip(right).enumerate() {
-                compare(left, right, &format!("{path}[{index}]"))?;
-            }
-            Ok(())
-        }
-        (Value::Object(left), Value::Object(right)) => {
-            if left.len() != right.len() {
-                let mut left_keys: Vec<_> = left.keys().collect();
-                let mut right_keys: Vec<_> = right.keys().collect();
-                left_keys.sort();
-                right_keys.sort();
-                return Err(format!("{path}: keys {left_keys:?} != {right_keys:?}"));
-            }
-            for (key, value) in left {
-                let Some(other) = right.get(key) else {
-                    return Err(format!("{path}: unexpected key {key}"));
-                };
-                compare(value, other, &format!("{path}.{key}"))?;
-            }
-            Ok(())
-        }
-        _ if actual == expected => Ok(()),
-        _ => Err(format!("{path}: {actual} != {expected}")),
-    }
+/// Single-precision values as an array of [`json_f32`] numbers.
+pub fn json_f32s(values: &[f32]) -> serde_json::Value {
+    serde_json::Value::Array(values.iter().copied().map(json_f32).collect())
 }

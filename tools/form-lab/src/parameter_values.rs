@@ -96,7 +96,7 @@ impl NumericParameter {
         self.value.iter().zip(&self.default_value).any(|(value, default)| value != default)
     }
 
-    /// A JSON override for components, scalar for scalars and an array otherwise, written as JavaScript writes numbers.
+    /// A JSON override for components: a scalar for scalars and an array otherwise, with integral values as integers.
     pub fn override_value(&self, components: &[f64]) -> Json {
         if self.kind == ParameterKind::Scalar {
             joy_engine::core::json_number(components.first().copied().unwrap_or_default())
@@ -278,8 +278,8 @@ pub fn mesh_name(mesh: &Json) -> &str {
     mesh.get("name").and_then(Json::as_str).unwrap_or("Mesh")
 }
 
-/// A material resource with one base color channel changed; alpha below one switches to BLEND, as the TypeScript
-/// controls do. Fails for a value outside 0–1.
+/// A material resource with one base color channel changed; alpha below one switches to BLEND. Fails for a value
+/// outside 0–1.
 pub fn with_material_base_color(resource: &Json, channel: usize, value: f64) -> Result<Json, String> {
     let mut edited = read_material_value(resource).map_err(|error| error.0)?;
     let material = &mut edited["material"];

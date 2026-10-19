@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! JSON-lines FORM evaluator for tools and parity harnesses.
+//! JSON-lines FORM evaluator for tools and reference-corpus harnesses.
 //!
 //! Each input line is one request, `{"source": "...", "overrides": {...}, "materials": [...]}`,
 //! where `overrides` (default `{}`) and `materials` (default and `null`: no palette) are

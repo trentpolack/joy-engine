@@ -6,8 +6,8 @@
 //! sample. Simulation, documents, and scripts stay in `joy_fx`; `joy_engine::particles` combines both.
 //!
 //! [`collect_particle_lights`] turns particles into point lights; [`append_particle_effect`] or
-//! [`create_particle_effect_batches`] build triangles, using the same JavaScript-compatible math as the simulation so
-//! recorded geometry stays identical.
+//! [`create_particle_effect_batches`] build triangles, using the same deterministic `f64` math as the simulation so
+//! geometry reproduces on every target.
 //!
 //! ```
 //! use joy_fx::{ParticleEffect, ParticleEffectOptions, compile_particle_effect};

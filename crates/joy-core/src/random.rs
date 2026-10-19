@@ -3,13 +3,13 @@
 
 //! Deterministic random streams.
 //!
-//! `SeededRandom` preserves the retired TypeScript engine's `createSeededRandom` sequence bit for bit. Seeded
-//! gameplay and cosmetic sequences match recorded fixtures and agree across native and WebAssembly builds.
+//! `SeededRandom` is a 32-bit linear congruential generator whose sequence is fixed bit for bit, so seeded gameplay
+//! and cosmetic sequences reproduce golden recordings and agree across native and WebAssembly builds.
 
-/// Linear congruential multiplier shared with the TypeScript engine (Numerical Recipes constants).
+/// Linear congruential multiplier (Numerical Recipes constants).
 const LCG_MULTIPLIER: u32 = 1_664_525;
 
-/// Linear congruential increment shared with the TypeScript engine.
+/// Linear congruential increment (Numerical Recipes constants).
 const LCG_INCREMENT: u32 = 1_013_904_223;
 
 /// Divisor that maps a 32-bit state into the half-open unit interval.
@@ -35,8 +35,8 @@ pub struct SeededRandom {
 }
 
 impl SeededRandom {
-    /// Create a stream from an integer seed, normalized to an unsigned 32-bit value exactly like JavaScript's
-    /// `seed >>> 0` (negative and oversized seeds wrap modulo 2^32).
+    /// Create a stream from an integer seed, normalized to an unsigned 32-bit value (negative and oversized seeds wrap
+    /// modulo 2^32).
     pub fn new(seed: i64) -> Self {
         let normalized = seed.rem_euclid(1_i64 << 32) as u32;
         Self { state: normalized }
@@ -50,7 +50,7 @@ impl SeededRandom {
 
 impl RandomSource for SeededRandom {
     fn next_unit(&mut self) -> f64 {
-        // `Math.imul` followed by `>>> 0` is 32-bit wrapping arithmetic.
+        // The state advances with 32-bit wrapping arithmetic.
         self.state = self.state.wrapping_mul(LCG_MULTIPLIER).wrapping_add(LCG_INCREMENT);
         f64::from(self.state) / UNIT_DIVISOR
     }
@@ -61,7 +61,7 @@ pub fn random_range(minimum: f64, maximum: f64, random: &mut impl RandomSource) 
     minimum + (random.next_unit() * (maximum - minimum))
 }
 
-/// Return an integer in `[minimum, maximum_exclusive)`; consumes exactly one draw, matching the TypeScript helper.
+/// Return an integer in `[minimum, maximum_exclusive)`; consumes exactly one draw, so seeded runs reproduce exactly.
 pub fn random_integer(minimum: i64, maximum_exclusive: i64, random: &mut impl RandomSource) -> i64 {
     random_range(minimum as f64, maximum_exclusive as f64, random).floor() as i64
 }

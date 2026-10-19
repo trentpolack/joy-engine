@@ -26,10 +26,10 @@ pub type IntentSampler = dyn FnMut(f32, &EntityState) -> ControlIntent;
 /// Samples intent and may fail, for example when an input device disconnects.
 pub type FallibleIntentSampler = dyn FnMut(f32, &EntityState) -> Result<ControlIntent, GameplayError>;
 
-/// The TypeScript `PlayerController`: an [`IntentController`] sampling player input.
+/// An [`IntentController`] sampling player input.
 pub type PlayerController = IntentController;
 
-/// The TypeScript `AIController`: an [`IntentController`] sampling AI decisions.
+/// An [`IntentController`] sampling AI decisions.
 pub type AiController = IntentController;
 
 /// A controller that owns its possession id and a sampler, and borrows the world on each call.

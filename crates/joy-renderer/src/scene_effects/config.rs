@@ -377,7 +377,7 @@ impl Default for AdaptiveExposureOptions {
 
 /// Opaque-scene effects that run after the opaque pass and before transparency and display processing.
 ///
-/// Like TypeScript, effects need a WebGPU-class backend (native or browser WebGPU); WebGL 2 reports them unavailable.
+/// Effects need a WebGPU-class backend (native or browser WebGPU); WebGL 2 reports them unavailable.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, default)]
 pub struct SceneEffectsOptions {
@@ -407,7 +407,7 @@ pub struct SceneEffectsOptions {
     pub adaptive_exposure: Option<AdaptiveExposureOptions>,
 }
 
-/// Effect names in TypeScript order, for capability reports and controls.
+/// Effect names in their stable reporting order, for capability reports and controls.
 pub const SCENE_EFFECT_NAMES: [&str; 11] = [
     "depthAwareBlur",
     "ssao",
@@ -441,7 +441,7 @@ pub struct SceneEffectsRequirements {
     pub clustered_lighting: bool,
 }
 
-/// Invalid scene effect options or frame inputs. Messages follow the TypeScript engine.
+/// Invalid scene effect options or frame inputs. Messages are stable diagnostics that name camelCase settings.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum SceneEffectsError {
     /// A setting was outside its range.
@@ -471,7 +471,7 @@ pub enum SceneEffectsError {
     InvalidFrame(String),
 }
 
-/// Inclusive range check matching the TypeScript `assertRange`.
+/// Inclusive range check that also rejects NaN and infinite values.
 fn check(name: &str, key: &str, value: f32, minimum: f32, maximum: f32) -> Result<(), SceneEffectsError> {
     if value.is_finite() && value >= minimum && value <= maximum {
         return Ok(());
@@ -499,7 +499,7 @@ fn integer(name: &str, key: &str, value: f32) -> Result<(), SceneEffectsError> {
     if value.fract() == 0.0 { Ok(()) } else { Err(SceneEffectsError::NotAnInteger(format!("{name}.{key}"))) }
 }
 
-/// Positive-only bound: the smallest positive value, standing in for TypeScript's `Number.MIN_VALUE`.
+/// Positive-only lower bound: the smallest positive `f32`, so zero fails and every positive value passes.
 const POSITIVE: f32 = f32::from_bits(1);
 const UNBOUNDED: f32 = f32::INFINITY;
 
@@ -513,7 +513,7 @@ impl SceneEffectsOptions {
         self.enabled_names().next().is_some()
     }
 
-    /// Names of the enabled effects in TypeScript order.
+    /// Names of the enabled effects, in [`SCENE_EFFECT_NAMES`] order.
     pub fn enabled_names(&self) -> impl Iterator<Item = &'static str> + '_ {
         let enabled = [
             self.depth_aware_blur.is_some(),
@@ -531,7 +531,7 @@ impl SceneEffectsOptions {
         SCENE_EFFECT_NAMES.into_iter().zip(enabled).filter_map(|(name, on)| on.then_some(name))
     }
 
-    /// Check every setting against the TypeScript ranges and rules.
+    /// Check every enabled effect's settings against their ranges and rules, reporting the first failure.
     pub fn validate(&self) -> Result<(), SceneEffectsError> {
         if let Some(blur) = &self.depth_aware_blur {
             let name = "depthAwareBlur";

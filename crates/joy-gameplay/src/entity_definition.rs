@@ -9,9 +9,9 @@
 //! touch `type`, `tags`, and `components`. Unknown top-level keys are dropped.
 //!
 //! Serialization writes keys in the established document order (`template`, `overrides`, `id`, `name`, `type`, `tags`,
-//! `transform`, `components`) and writes transform numbers the way JavaScript does (integers without a decimal point),
-//! so documents round trip byte for byte. Transforms are stored as `f32`: authored values that need more than single
-//! precision are rounded to the nearest `f32` and written back in its shortest decimal form.
+//! `transform`, `components`) and writes transform numbers in the document number spelling (integers without a decimal
+//! point), so documents round trip byte for byte. Transforms are stored as `f32`: authored values that need more than
+//! single precision are rounded to the nearest `f32` and written back in its shortest decimal form.
 
 use indexmap::IndexMap;
 use joy_core::math::Vec3;
@@ -44,10 +44,10 @@ pub(crate) const OBJECT_EXTENSION: &str = ".joyobject";
 /// Keys an object instance may override.
 const OVERRIDE_KEYS: [&str; 3] = ["type", "tags", "components"];
 
-/// Largest magnitude written as a JSON integer (JavaScript's safe integer range).
+/// Largest magnitude written as a JSON integer (2^53 - 1, beyond which `f64` cannot represent every integer).
 const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 
-/// Serialized transform field names (TypeScript `TRANSFORM_PROPERTY`).
+/// Serialized transform field names.
 mod transform_property {
     pub const POSITION: &str = "position";
     pub const ROTATION: &str = "rotation";
@@ -95,7 +95,7 @@ impl EntityTransform {
         })
     }
 
-    /// Serialize as `{position, rotation, scale}` with JavaScript-style numbers.
+    /// Serialize as `{position, rotation, scale}` with document-style numbers (see [`number_to_json`]).
     pub fn to_json(&self) -> Value {
         let mut record = Map::new();
         record.insert(transform_property::POSITION.to_owned(), vector_to_json(self.position));
@@ -245,7 +245,7 @@ impl EntityDefinition {
             validate_override_keys(overrides)?;
         }
 
-        // The transform is read last, matching the order in which the TypeScript copy reports vector errors.
+        // The transform is read last, so other field errors are reported before vector errors.
         let transform = match transform_value {
             None => EntityTransform::IDENTITY,
             Some(value) => EntityTransform::from_json(value)?,
@@ -254,7 +254,8 @@ impl EntityDefinition {
         Ok(Self { id, name, kind, tags, transform, components, template, overrides })
     }
 
-    /// Serialize in the TypeScript key order. Overrides are written (as `{}` if absent) whenever a template is linked.
+    /// Serialize in the established document key order. Overrides are written (as `{}` if absent) whenever a template
+    /// is linked.
     pub fn to_json(&self) -> Value {
         let mut record = Map::new();
         if let Some(template) = &self.template {

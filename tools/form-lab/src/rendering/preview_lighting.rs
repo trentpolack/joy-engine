@@ -164,7 +164,7 @@ impl PreviewLightingSettings {
         self
     }
 
-    /// Validate before changing the accepted preview lighting (`validatePreviewLighting`).
+    /// Validate before changing the accepted preview lighting.
     pub fn validate(&self) -> Result<(), String> {
         for field in PREVIEW_LIGHTING_FIELDS {
             let value = self.get(field.key);
@@ -212,7 +212,7 @@ pub struct StudioEnvironment {
     pub panel_colors: [[f64; 3]; 2],
 }
 
-/// The studio the TypeScript tool lights its preview with.
+/// The studio FORM LAB lights its preview with.
 pub const STUDIO_ENVIRONMENT: StudioEnvironment = StudioEnvironment {
     width: 256,
     height: 128,
@@ -230,7 +230,7 @@ pub fn studio_environment_options() -> EnvironmentMapOptions {
     EnvironmentMapOptions { size: 64, irradiance_size: 16, brdf_lut_size: 128, sample_count: 64, ..Default::default() }
 }
 
-/// Generate the studio's linear HDR equirectangular RGBA pixels, top row first (`createStudioPixels`).
+/// Generate the studio's linear HDR equirectangular RGBA pixels, top row first.
 pub fn create_studio_pixels() -> Vec<f32> {
     let config = &STUDIO_ENVIRONMENT;
     let (width, height) = (config.width as usize, config.height as usize);
@@ -259,7 +259,7 @@ pub fn create_studio_pixels() -> Vec<f32> {
     data
 }
 
-/// The engine shadow preset for a quality name used by the TypeScript tool (`low`, `balanced`, `cinematic`).
+/// The name shown for an engine shadow preset (`low`, `balanced`, `cinematic`).
 pub fn quality_name(quality: ShadowQuality) -> &'static str {
     match quality {
         ShadowQuality::Low => "low",

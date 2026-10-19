@@ -111,7 +111,7 @@ pub fn collect_particle_lights(effect: &ParticleEffect, max_lights: usize) -> Pa
     ParticleLightSelection { lights: candidates, omitted }
 }
 
-/// Sort brightest first, breaking ties by birth index, like the TypeScript comparator.
+/// Sort brightest first, breaking ties by birth index so equally bright particles keep a deterministic order.
 #[doc(hidden)]
 pub fn rank_particle_lights(lights: &mut [ParticlePointLight]) {
     lights.sort_by(|left, right| match right.luminance().partial_cmp(&left.luminance()) {

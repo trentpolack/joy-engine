@@ -5,8 +5,9 @@
 //!
 //! Each fixed quadtree leaf picks a fractional LOD from its prebuilt geometric errors and the conservative distance to
 //! its bounds; neighbors then share the coarser fractional level along each edge. The compute shader
-//! (`terrain-select.wgsl`) applies the same policy on WebGPU-class backends. Math runs in `f64` with V8's `Math.hypot`
-//! algorithm like the TypeScript engine, so CPU results match it bit for bit; GPU uploads convert to `f32`.
+//! (`terrain-select.wgsl`) applies the same policy on WebGPU-class backends. Math runs in `f64` with the portable
+//! `deterministic` functions, so CPU results are identical on every target and match the golden terrain recording;
+//! GPU uploads convert to `f32`.
 
 use joy_core::math::DVec3;
 

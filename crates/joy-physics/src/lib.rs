@@ -109,13 +109,13 @@ pub struct RaycastHit {
     pub distance: f32,
 }
 
-/// Physics validation and ownership failures. Messages follow the TypeScript engine.
+/// Physics validation and ownership failures. Messages are stable diagnostics.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum PhysicsError {
     /// A scalar was non-finite or outside its inclusive range.
     #[error("{name} must be finite and between {} and {}.", format_number(*.minimum), format_number(*.maximum))]
     OutOfRange {
-        /// Option or argument name, in TypeScript spelling.
+        /// Option or argument name, in camelCase document spelling.
         name: &'static str,
         /// Inclusive lower bound.
         minimum: f64,

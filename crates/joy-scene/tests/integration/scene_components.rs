@@ -1,9 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Presentation component schemas and readers: the recorded `render`, `light`, and `effect` schemas, presets,
-//! validation issues, and field lookups, the `light` and `render` readers, plus strict `postProcess` reading and
-//! preset round trips through the engine component catalog.
+//! Presentation component schemas and readers: the `render`, `light`, and `effect` schemas, presets, validation
+//! issues, and field lookups checked exactly against `tests/fixtures/presentation-components.json`, a golden
+//! recording, then the `light` and `render` readers, strict `postProcess` reading, and preset round trips through the
+//! engine component catalog. Re-record with `JOY_UPDATE_FIXTURES=1` when the presentation schemas change on purpose.
 
 use joy_core::math::Vec3;
 use joy_core::{
@@ -29,50 +30,59 @@ use joy_scene::{
     engine_component_catalog,
     presentation_component_schemas,
 };
+use joy_test_support::{
+    Tolerance,
+    golden_file,
+};
 use serde_json::{
     Value,
     json,
 };
 
-use joy_test_support::assert_matches_recording;
+/// Component types the golden recording covers: the presentation schemas this crate adds to the catalog.
+const RECORDED_TYPES: [&str; 3] = ["render", "light", "effect"];
 
-const REFERENCE: &str = include_str!("../fixtures/presentation-components.json");
-
-fn reference() -> Value {
-    serde_json::from_str(REFERENCE).expect("the presentation component reference is valid JSON")
+/// Replace each recorded case's outputs, in place, with what `record_outputs` produces for it now.
+fn replay_cases(cases: &mut Value, record_outputs: impl Fn(&mut Value)) {
+    for case in cases.as_array_mut().unwrap() {
+        record_outputs(case);
+    }
 }
 
 #[test]
 fn presentation_schemas_presets_and_issues_match_the_recording() {
-    let reference = reference();
-    let recorded_types = ["render", "light", "effect"];
+    let golden = golden_file!("presentation-components.json");
+    let mut produced = golden.recording().clone();
+    let catalog = engine_component_catalog();
+
+    // The recorded schemas, then every preset they declare with the component record it creates.
     let schemas: Vec<_> = presentation_component_schemas()
         .into_iter()
-        .filter(|schema| recorded_types.contains(&schema.kind.as_str()))
+        .filter(|schema| RECORDED_TYPES.contains(&schema.kind.as_str()))
         .collect();
-    assert_matches_recording(&schemas, &reference["builtIns"], "presentation schemas");
+    let presets: Vec<Value> = schemas
+        .iter()
+        .flat_map(|schema| &schema.presets)
+        .map(|preset| json!({"id": preset.id, "created": catalog.create_component(&preset.id).unwrap()}))
+        .collect();
+    produced["builtIns"] = json!(schemas);
+    produced["presets"] = Value::Array(presets);
 
-    let catalog = engine_component_catalog();
-    for preset in reference["presets"].as_array().unwrap() {
-        let created = catalog.create_component(preset["id"].as_str().unwrap()).unwrap();
-        assert_matches_recording(&created, &preset["created"], preset["id"].as_str().unwrap());
-    }
-    for case in reference["validationCases"].as_array().unwrap() {
-        let issues = catalog.validate(case["type"].as_str().unwrap(), &case["data"]);
-        assert_matches_recording(&issues, &case["issues"], &case["data"].to_string());
-    }
-    for case in reference["entityCases"].as_array().unwrap() {
+    replay_cases(&mut produced["validationCases"], |case| {
+        case["issues"] = json!(catalog.validate(case["type"].as_str().unwrap(), &case["data"]));
+    });
+    replay_cases(&mut produced["entityCases"], |case| {
         let entity = EntityDefinition::from_json(&case["entity"]).unwrap();
-        assert_matches_recording(&catalog.validate_entity(&entity), &case["issues"], &entity.id);
-    }
-    for case in reference["fieldCases"].as_array().unwrap() {
+        case["issues"] = json!(catalog.validate_entity(&entity));
+    });
+    replay_cases(&mut produced["fieldCases"], |case| {
         let path: Vec<&str> =
             case["path"].as_array().unwrap().iter().map(|segment| segment.as_str().unwrap()).collect();
         let field = catalog.field(case["type"].as_str().unwrap(), &path);
-        let actual =
-            json!({"name": field.map(|field| &field.name), "unit": field.and_then(|field| field.unit.as_ref())});
-        assert_matches_recording(&actual, &json!({"name": case["field"], "unit": case["unit"]}), &case.to_string());
-    }
+        case["field"] = json!(field.map(|field| &field.name));
+        case["unit"] = json!(field.and_then(|field| field.unit.as_ref()));
+    });
+    golden.assert_matches(&produced, &Tolerance::exact());
 }
 
 #[test]

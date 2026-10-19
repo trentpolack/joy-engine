@@ -50,7 +50,7 @@ pub(super) fn euler_from_solver_rotation(rotation: Rotation) -> Vec3 {
     joy_core::euler_from_quat(Quat::from_xyzw(rotation.x, rotation.y, rotation.z, rotation.w))
 }
 
-/// Validate a finite scalar against an inclusive range. Comparison happens in `f64` with the TypeScript bounds.
+/// Validate a finite scalar against an inclusive range. The value widens to `f64`, so `f64` bounds apply exactly.
 pub(super) fn finite_number(value: f32, name: &'static str, minimum: f64, maximum: f64) -> Result<f32, PhysicsError> {
     let widened = f64::from(value);
     if !widened.is_finite() || widened < minimum || widened > maximum {

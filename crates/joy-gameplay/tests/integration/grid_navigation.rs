@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Grid navigation parity with results recorded from the TypeScript `searchGrid` and `traceGridRoute`.
+//! Grid navigation: `search_grid` settle order, costs, and predecessors and `trace_grid_route` paths checked against
+//! recorded expectations, plus tie-breaking and runaway limits.
 
 use joy_gameplay::{
     DEFAULT_CELL_LIMIT,
@@ -13,7 +14,7 @@ use joy_gameplay::{
 };
 
 /// Orthogonal grid rules from rows of step costs; `#` is impassable. Cells are row-major indices, and neighbors are
-/// listed +X, -X, +Z, -Z exactly like the TypeScript test helper.
+/// listed +X, -X, +Z, -Z, an order the recorded settle orders and tie-breaks depend on.
 struct Grid {
     rows: Vec<Vec<char>>,
 }
@@ -60,7 +61,7 @@ fn dump(routes: &GridRoutes<usize>) -> Vec<(usize, f64, Option<usize>)> {
 }
 
 #[test]
-fn weighted_searches_match_typescript_results() {
+fn weighted_searches_match_the_recorded_results() {
     let weighted = Grid::new(&["1131", "1#11", "1111"]);
     let budget_four = weighted.search(0, 4.0);
     assert_eq!(

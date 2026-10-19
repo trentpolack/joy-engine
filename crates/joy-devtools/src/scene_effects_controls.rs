@@ -146,9 +146,9 @@ impl SceneEffectsControls {
         Self::default()
     }
 
-    /// Use `tuning` for enabled effects' settings at each quality instead of the engine's quality defaults, the way
-    /// the TypeScript scene effects lab selects complete preset entries. Effects the tuning leaves `None` keep the
-    /// defaults.
+    /// Use `tuning` for enabled effects' settings at each quality instead of the engine's quality defaults, so each
+    /// quality selects a complete preset entry (the scene effects example does this). Effects the tuning leaves `None`
+    /// keep the defaults.
     pub fn with_tuning(mut self, tuning: EffectTuning) -> Self {
         self.tuning = Some(tuning);
         self

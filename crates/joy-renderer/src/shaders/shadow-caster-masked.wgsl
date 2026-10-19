@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 // Alpha-tested shadow caster for submeshes with masked materials: texels below the cutoff leave holes in the depth map,
-// so masked surfaces cast the coverage the camera sees. Matches the TypeScript PBR caster.
+// so masked surfaces cast the coverage the camera sees.
 
 struct Caster {
   lightViewProjection: mat4x4f,

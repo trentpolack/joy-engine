@@ -3,9 +3,9 @@
 
 //! `.joyfx` particle effect documents: validation, normalization, and compilation into shared definitions.
 //!
-//! [`compile_particle_effect`] validates a JSON document exactly like the TypeScript `compileParticleEffect` (same
-//! limits, same check order, and the same messages), normalizes it (defaults filled, bursts sorted by time), and compiles
-//! every emitter's spawn and update scripts. The result is an immutable, cheaply cloned [`CompiledParticleEffect`] that
+//! [`compile_particle_effect`] validates a JSON document against fixed limits, in a fixed check order, with stable
+//! authored diagnostics, normalizes it (defaults filled, bursts sorted by time), and compiles every emitter's spawn and
+//! update scripts. The result is an immutable, cheaply cloned [`CompiledParticleEffect`] that
 //! any number of [`ParticleEffect`](crate::ParticleEffect) instances share.
 //!
 //! Units: effects use caller-defined world units, seconds, radians, and linear HDR RGB.
@@ -376,7 +376,7 @@ pub struct ParticleEffectAsset {
 }
 
 impl ParticleEffectAsset {
-    /// Serialize in the TypeScript key order, with integral numbers written as integers like `JSON.stringify`.
+    /// Serialize in the established document key order, with integral numbers written as JSON integers.
     pub fn to_json(&self) -> Value {
         let mut record = Map::new();
         record.insert("version".to_owned(), Value::from(self.version));
@@ -465,7 +465,7 @@ pub enum ParticleAssetError {
     /// The text was not JSON.
     #[error("Invalid particle effect JSON: {0}")]
     Json(String),
-    /// A document field was missing, mistyped, or out of range; the message matches the TypeScript engine's.
+    /// A document field was missing, mistyped, or out of range; the message is a stable diagnostic.
     #[error("{0}")]
     Invalid(String),
     /// An embedded texture source was invalid.
@@ -489,9 +489,9 @@ pub fn parse_particle_effect(text: &str) -> Result<CompiledParticleEffect, Parti
 
 /// Validate and compile a JSON effect document into an immutable shared definition.
 ///
-/// The definition owns a normalized copy, so callers may keep editing their source JSON. Validation order and messages
-/// match the TypeScript `compileParticleEffect`; script failures are reported as [`ParticleAssetError::Script`] with the
-/// emitter id and source location.
+/// The definition owns a normalized copy, so callers may keep editing their source JSON. Validation runs in a fixed
+/// order with stable messages; script failures are reported as [`ParticleAssetError::Script`] with the emitter id and
+/// source location.
 pub fn compile_particle_effect(input: &Value) -> Result<CompiledParticleEffect, ParticleAssetError> {
     let source = record(Some(input), "effect")?;
     if source.get("version").and_then(Value::as_f64) != Some(f64::from(PARTICLE_EFFECT_VERSION)) {
@@ -819,7 +819,7 @@ fn number(value: Option<&Value>, path: &str, min: f64, max: f64, integer: bool) 
     })
 }
 
-/// A number as `JSON.stringify` writes it: integral values without a fractional part.
+/// A number in the document number spelling: integral values without a fractional part.
 fn json_number(value: f64) -> Value {
     if value.fract() == 0.0 && value.abs() < 9_007_199_254_740_992.0 {
         return Value::from(value as i64);

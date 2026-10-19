@@ -35,8 +35,8 @@ impl Diagnostic {
     }
 }
 
-/// A rejected FORM resource or document value (material palette, parameter override, or mesh), with the TypeScript
-/// runtime's message. Values have no source position, so this carries no line or column.
+/// A rejected FORM resource or document value (material palette, parameter override, or mesh), with its stable
+/// authored diagnostic message. Values have no source position, so this carries no line or column.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{0}")]
 pub struct FormValueError(pub String);

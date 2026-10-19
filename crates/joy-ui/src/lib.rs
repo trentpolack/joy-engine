@@ -9,6 +9,7 @@
 mod display;
 mod egui_layer;
 pub mod hud_text;
+mod linear_composite;
 pub mod theme;
 #[cfg(target_arch = "wasm32")]
 mod web_input;

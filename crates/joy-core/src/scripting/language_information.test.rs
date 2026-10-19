@@ -7,7 +7,7 @@ use super::*;
 use serde_json::json;
 
 #[test]
-fn catalogs_read_typescript_records() {
+fn catalogs_read_serialized_records() {
     let catalog: ScriptLanguageCatalog = serde_json::from_value(json!({
         "id": "joyfx",
         "symbols": [

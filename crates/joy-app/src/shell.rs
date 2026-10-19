@@ -8,7 +8,8 @@
 //! layer, call [`App::start`], then run frames. Each frame: tick the clock, update input, run the input, simulation,
 //! and presentation phases, acquire the surface, run the render phase, paint UI, present, and run the after-frame phase.
 //! A phase error stops the loop and is shown to the player. Hiding the window resets the clock; losing focus releases
-//! held input.
+//! held input. On HDR surfaces the shell re-reads the display's headroom about once a second (it follows the brightness
+//! slider on Apple displays) and after resizes and moves, and hands changes to the renderer and UI.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -69,6 +70,9 @@ use crate::clock::{
 };
 use crate::surface::ConfiguredSurface;
 
+/// Seconds between reads of an HDR display's headroom and SDR white level.
+const DISPLAY_POLL_SECONDS: f64 = 1.0;
+
 /// Shell configuration; copied at startup.
 #[derive(Clone, Debug)]
 pub struct ShellOptions {
@@ -76,8 +80,11 @@ pub struct ShellOptions {
     pub title: String,
     /// Enables the development overlay (backquote toggles details). Disable for production builds.
     pub development: bool,
-    /// Renderer settings (shadows, sky, display processing).
+    /// Renderer settings (shadows, sky, display processing, render scale).
     pub renderer: RendererOptions,
+    /// Present highlights above SDR white on HDR displays when the platform offers an extended-range surface. Off keeps
+    /// standard dynamic range output everywhere. The UI and normally lit content look the same either way.
+    pub high_dynamic_range: bool,
     /// Preferred graphics API; browsers also honor `?backend=webgpu` or `?backend=webgl`.
     pub backend: BackendPreference,
     /// Player input actions and axes.
@@ -96,6 +103,7 @@ impl Default for ShellOptions {
             title: "Joy Engine".to_owned(),
             development: cfg!(debug_assertions),
             renderer: RendererOptions::default(),
+            high_dynamic_range: true,
             backend: BackendPreference::Auto,
             input: InputMap::new(),
             window_size: (1280, 800),
@@ -174,6 +182,8 @@ struct Running {
     clock: FrameClock,
     requests: ShellRequests,
     started: Instant,
+    /// Seconds since `started` at which an HDR surface's display is read again; zero reads on the next frame.
+    next_display_poll: f64,
     /// The app asked for the pointer lock and the shell applied it.
     pointer_lock: bool,
     touches: TouchOwners,
@@ -231,7 +241,7 @@ impl<A: App> ApplicationHandler for WindowedShell<A> {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            match pollster::block_on(start_gpu(window.clone(), backend)) {
+            match pollster::block_on(start_gpu(window.clone(), backend, self.options.high_dynamic_range)) {
                 Ok(startup) => self.finish_startup(event_loop, window, startup),
                 Err(error) => self.fail(event_loop, ShellError::Graphics(error)),
             }
@@ -241,8 +251,9 @@ impl<A: App> ApplicationHandler for WindowedShell<A> {
             let slot: StartupSlot = Default::default();
             let task_slot = slot.clone();
             let task_window = window.clone();
+            let high_dynamic_range = self.options.high_dynamic_range;
             wasm_bindgen_futures::spawn_local(async move {
-                let result = start_gpu(task_window.clone(), backend).await;
+                let result = start_gpu(task_window.clone(), backend, high_dynamic_range).await;
                 *task_slot.borrow_mut() = Some(result);
                 task_window.request_redraw();
             });
@@ -269,11 +280,15 @@ impl<A: App> ApplicationHandler for WindowedShell<A> {
             WindowEvent::Resized(size) => {
                 running.surface.resize(&running.gpu, size.width, size.height);
                 running.renderer.resize(size.width, size.height, display_scale(&running.window));
+                running.next_display_poll = 0.0;
             }
             WindowEvent::ScaleFactorChanged { .. } => {
                 let size = running.window.inner_size();
                 running.renderer.resize(size.width, size.height, display_scale(&running.window));
+                running.next_display_poll = 0.0;
             }
+            // A window moved to another display may have different headroom.
+            WindowEvent::Moved(_) => running.next_display_poll = 0.0,
             WindowEvent::KeyboardInput { event, .. } => {
                 let PhysicalKey::Code(code) = event.physical_key else {
                     return;
@@ -379,9 +394,12 @@ impl<A: App> WindowedShell<A> {
         let size = window.inner_size();
         surface.resize(&gpu, size.width, size.height);
         let scale_factor = display_scale(&window);
+        let display = surface.display_output(&gpu);
         let mut renderer = Renderer::new(&gpu, surface.view_format, self.options.renderer.clone());
         renderer.resize(size.width, size.height, scale_factor);
-        let egui = EguiLayer::new(&gpu, &window, surface.view_format);
+        renderer.set_display_output(display);
+        let egui = EguiLayer::new(&gpu, &window, surface.view_format, display);
+        log::info!("{}: presenting {display}", self.options.title);
 
         let viewport = Viewport { logical_size: renderer.logical_size(), scale_factor };
         let mut context = StartContext { capabilities: gpu.capabilities(), renderer: &mut renderer, viewport };
@@ -402,6 +420,7 @@ impl<A: App> WindowedShell<A> {
             clock: FrameClock::new(self.options.maximum_frame_seconds),
             requests: ShellRequests::default(),
             started: Instant::now(),
+            next_display_poll: DISPLAY_POLL_SECONDS,
             pointer_lock: false,
             touches: TouchOwners::default(),
             #[cfg(target_arch = "wasm32")]
@@ -443,6 +462,7 @@ impl<A: App> WindowedShell<A> {
             clock,
             requests,
             started,
+            next_display_poll,
             pointer_lock,
             touches: _,
             #[cfg(target_arch = "wasm32")]
@@ -460,7 +480,8 @@ impl<A: App> WindowedShell<A> {
             return Ok(());
         }
         let time = clock.tick(started.elapsed().as_secs_f64());
-        // UI text entry suspends gameplay input, as focused form fields do in the TypeScript shell.
+        follow_display(surface, gpu, renderer, egui, started.elapsed().as_secs_f64(), next_display_poll);
+        // UI text entry suspends gameplay input, so typing into a field never drives the game.
         input.set_typing(egui.wants_keyboard());
         input.set_gamepads(gamepads.poll());
         let lock_held = *pointer_lock && pointer_lock_held(window);
@@ -548,13 +569,50 @@ impl<A: App> WindowedShell<A> {
     }
 }
 
+/// Read an HDR surface's display when its poll is due and hand a changed headroom or SDR white level to the renderer
+/// and UI. Standard surfaces never change.
+fn follow_display(
+    surface: &ConfiguredSurface,
+    gpu: &GpuContext,
+    renderer: &mut Renderer,
+    egui: &mut EguiLayer,
+    now_seconds: f64,
+    next_poll: &mut f64,
+) {
+    if !surface.encoding.is_extended() || now_seconds < *next_poll {
+        return;
+    }
+    *next_poll = now_seconds + DISPLAY_POLL_SECONDS;
+    let display = surface.display_output(gpu);
+    if display != renderer.display_output() {
+        renderer.set_display_output(display);
+        egui.set_display_output(gpu, display);
+    }
+}
+
 /// Create the GPU device for a window's surface.
-async fn start_gpu(window: Arc<Window>, backend: BackendPreference) -> Result<Startup, RenderError> {
+async fn start_gpu(
+    window: Arc<Window>,
+    backend: BackendPreference,
+    high_dynamic_range: bool,
+) -> Result<Startup, RenderError> {
     let instance = GpuContext::create_instance(backend).await;
     let surface = instance.create_surface(window.clone()).map_err(|error| RenderError::Surface(error.to_string()))?;
     let gpu = GpuContext::new(instance, Some(&surface)).await?;
     let size = window.inner_size();
-    let surface = ConfiguredSurface::new(&gpu, surface, size.width, size.height)?;
+    let surface = ConfiguredSurface::new(&gpu, surface, size.width, size.height, high_dynamic_range)?;
+
+    // Browsers without HDR canvases accept the extended configuration but present it clamped; standard output keeps
+    // their highlights from clipping early.
+    #[cfg(target_arch = "wasm32")]
+    let surface = {
+        let mut surface = surface;
+        if surface.encoding.is_extended() && !crate::web::canvas_presents_extended_range(&window) {
+            log::info!("This browser does not present HDR canvases; using standard dynamic range.");
+            surface.fall_back_to_standard_range(&gpu)?;
+        }
+        surface
+    };
     Ok(Startup { gpu, surface })
 }
 

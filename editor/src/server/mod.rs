@@ -25,7 +25,7 @@ pub use bundled_projects::{
     BundledProjects,
 };
 
-/// Largest asset the editor reads or writes, in bytes (the TypeScript service's 6 MB bound).
+/// Largest asset the editor reads or writes, in bytes (6 MB).
 pub const MAXIMUM_ASSET_BYTES: usize = 6_000_000;
 
 /// Asset formats every project supports, as lowercase dot extensions; manifests may add more.
@@ -88,7 +88,7 @@ impl DiskDocument {
     }
 }
 
-/// Why a project operation did not happen. Messages match the TypeScript service where it had one.
+/// Why a project operation did not happen. Messages are stable diagnostics.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProjectError {
     /// The file changed since it was read; `current` is what is on disk now. Nothing was written.
@@ -171,8 +171,8 @@ pub trait ProjectStore {
 
 /// A content revision for `text`: a 64-bit FNV-1a hash and the byte length, in hexadecimal.
 ///
-/// Revisions only need to tell versions of one file apart within an editing session; the TypeScript service used a
-/// SHA-256 digest for the same purpose.
+/// Revisions only need to tell versions of one file apart within an editing session, so a fast non-cryptographic hash
+/// suffices.
 pub fn revision(text: &str) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for byte in text.as_bytes() {
@@ -182,7 +182,7 @@ pub fn revision(text: &str) -> String {
     format!("{hash:016x}{:08x}", text.len())
 }
 
-/// The lowercase extension of a path's final component including the dot (Node's `path.extname`), or an empty string.
+/// The lowercase extension of a path's final component including the dot, or an empty string.
 pub fn extension_of(path: &str) -> String {
     let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
     match name.rfind('.') {
@@ -212,7 +212,7 @@ pub fn project_formats(manifest: Option<&ProjectManifest>) -> Vec<String> {
     formats
 }
 
-/// Order asset paths like JavaScript's `localeCompare` for plain ASCII names: case-insensitively, then exactly.
+/// Order asset paths case-insensitively, then by exact byte order.
 pub(crate) fn compare_paths(left: &str, right: &str) -> std::cmp::Ordering {
     left.to_lowercase().cmp(&right.to_lowercase()).then_with(|| left.cmp(right))
 }

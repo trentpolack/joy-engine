@@ -8,7 +8,7 @@ use crate::post_process::BloomQuality;
 
 #[test]
 fn pyramid_levels_round_like_luma() {
-    // 1366 × 768: a quarter of 1366 is 341.5, which JavaScript's Math.round takes up.
+    // 1366 × 768: a quarter of 1366 is 341.5, which rounds half up to 342, as luma.gl rounds level sizes.
     let sizes: Vec<(u32, u32)> =
         BLOOM_LEVEL_SCALES.iter().map(|scale| (level_size(1366, *scale), level_size(768, *scale))).collect();
     assert_eq!(sizes, [(683, 384), (342, 192), (171, 96), (85, 48), (43, 24)]);
@@ -39,9 +39,9 @@ fn anamorphic_stretch_keeps_each_axis_within_the_blur_limit() {
 }
 
 #[test]
-fn graph_shape_follows_only_typescript_pipeline_key_values() {
+fn graph_shape_follows_only_pipeline_key_values() {
     let base = PostProcessSettings { bloom_strength: 1.0, ..PostProcessSettings::default() };
-    let key = |config: &PostProcessSettings| GraphKey::new(config, 640, 360);
+    let key = |config: &PostProcessSettings| GraphKey::new(config, (640, 360), (640, 360), false);
     // Uniform-only changes keep the graph.
     let tuned = PostProcessSettings {
         bloom_strength: 2.5,
@@ -64,7 +64,12 @@ fn graph_shape_follows_only_typescript_pipeline_key_values() {
     // A later blur moves the composite ahead of it.
     assert!(!key(&base).composes_bloom_early());
     assert!(key(&PostProcessSettings { vignette_blur: 0.5, ..base.clone() }).composes_bloom_early());
-    assert!(key(&PostProcessSettings { blur_radius: 0.01, ..base }).composes_bloom_early());
+    assert!(key(&PostProcessSettings { blur_radius: 0.01, ..base.clone() }).composes_bloom_early());
+    // A reduced render scale and an extended display reshape it; only a scene smaller than the output upscales.
+    let scaled = GraphKey::new(&base, (320, 180), (640, 360), false);
+    assert_ne!(key(&base), scaled);
+    assert!(scaled.upscales() && !key(&base).upscales());
+    assert_ne!(key(&base), GraphKey::new(&base, (640, 360), (640, 360), true));
 }
 
 /// Every bloom stage and the resolve validate and translate to WebGL 2 GLSL without extensions.

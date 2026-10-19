@@ -116,7 +116,7 @@ pub enum LevelSceneError {
     },
 }
 
-/// Retained presentation of a level's entities in a borrowed [`RenderScene`]; the TypeScript `LevelScene` equivalent.
+/// Retained presentation of a level's entities in a borrowed [`RenderScene`].
 ///
 /// Entities without a `render` component, or whose render record names neither a resolvable asset nor a box or sphere,
 /// are invisible. Entity scale multiplies `render.size` (full dimensions). Instances are owned by this object and live
@@ -227,7 +227,8 @@ impl LevelScene {
                 (Some(asset), _) => (asset, render.color),
                 (None, Some(shape)) => {
                     let asset = if shape == PrimitiveShape::Box { &self.box_asset } else { &self.sphere_asset };
-                    // An unresolved mesh drawn as its fallback shape takes the primitive default color, as in TypeScript.
+                    // An unresolved mesh drawn as its fallback shape takes the primitive default color unless the
+                    // record sets one.
                     let color =
                         if has_color(record) { render.color } else { RENDER_COMPONENT_DEFAULTS.primitive_color };
                     (asset.clone(), color)
@@ -288,7 +289,7 @@ impl LevelScene {
     }
 }
 
-/// The record's drawable primitive shape; a mesh resolver returning `None` falls back to it, like the TypeScript scene.
+/// The record's drawable primitive shape; a mesh resolver returning `None` falls back to it.
 fn primitive_shape(record: &JsonRecord) -> Option<PrimitiveShape> {
     record
         .get("shape")

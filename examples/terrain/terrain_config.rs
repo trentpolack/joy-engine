@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Tuning for the terrain example, matching the TypeScript `terrain-config.js`. Demonstration units only; they are not
-//! the source's physical dimensions.
+//! Tuning for the terrain example. Demonstration units only; they are not the source's physical dimensions.
 
 use joy_engine::core::Color;
 use joy_engine::math::Vec3;

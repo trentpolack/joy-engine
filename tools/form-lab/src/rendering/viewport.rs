@@ -340,7 +340,7 @@ impl Viewport {
             return target.draw(&RenderScene::new(), &self.camera, &inputs).map_err(|error| error.to_string());
         };
 
-        // Shadows fit the framed content every frame, as the TypeScript preview's shadow camera did.
+        // Shadows fit the framed content every frame.
         let radius = self.camera.radius;
         let shadows = ShadowOptions {
             quality: self.lighting.quality,

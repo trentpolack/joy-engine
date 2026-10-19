@@ -6,8 +6,8 @@
 //! Cells are caller-defined keys compared by equality and hash: tile indices, interned strings, or stable ids. The
 //! engine never interprets coordinates, terrain, factions, or occupancy; callers express those rules through the
 //! `neighbors` and `step_cost` callbacks. Searches are synchronous, allocate only their result and a private frontier,
-//! and never retain the borrowed callbacks. This is a port of the TypeScript `grid-navigation.ts`; results, including
-//! tie-breaking and settle order, are identical.
+//! and never retain the borrowed callbacks. Tie-breaking and settle order are fixed, so the same inputs always produce
+//! the same results.
 
 use std::hash::Hash;
 
@@ -174,7 +174,7 @@ struct FrontierEntry<Cell> {
     order: u64,
 }
 
-/// Binary min-heap ordered by cost, then insertion order, ported from the TypeScript heap so pops match exactly.
+/// Binary min-heap ordered by cost, then insertion order, so equal-cost entries pop in a deterministic order.
 struct FrontierHeap<Cell> {
     entries: Vec<FrontierEntry<Cell>>,
 }

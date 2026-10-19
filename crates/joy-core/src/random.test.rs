@@ -5,9 +5,9 @@
 
 use super::*;
 
-/// Values recorded from the TypeScript engine's `createSeededRandom` for the same seeds.
+/// Golden sequence values for these seeds; the generator must reproduce them exactly.
 #[test]
-fn matches_typescript_sequences() {
+fn matches_recorded_sequences() {
     let mut stream = SeededRandom::new(1);
     let expected = [0.23645552527159452, 0.3692706737201661, 0.5042420323006809, 0.7048832636792213];
     for value in expected {

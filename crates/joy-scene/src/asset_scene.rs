@@ -278,7 +278,8 @@ impl AssetScene {
 
         let result = self.stage(generation, entities, &mut cached_read);
         if result.is_err() {
-            // Compiled meshes the failed preparation added are not displayed; drop them like TypeScript's staging cache.
+            // Compiled meshes the failed preparation added are not displayed; drop them so the library holds only
+            // displayed meshes.
             let meshes = &self.meshes;
             self.library.retain(|asset| meshes.values().any(|mesh| mesh.ptr_eq(asset)));
         }

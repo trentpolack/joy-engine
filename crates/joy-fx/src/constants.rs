@@ -27,7 +27,7 @@ pub enum ParticleRenderer {
 }
 
 impl ParticleRenderer {
-    /// Every renderer, in the TypeScript declaration order.
+    /// Every renderer, in its stable declaration order.
     pub const ALL: [Self; 8] = [
         Self::Soft,
         Self::Streak,

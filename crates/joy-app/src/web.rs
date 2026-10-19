@@ -48,6 +48,35 @@ pub(crate) fn game_canvas(id: &str) -> Option<web_sys::HtmlCanvasElement> {
     Some(canvas)
 }
 
+/// Whether the canvas's WebGPU context kept the `"extended"` tone mapping it was configured with. Browsers without HDR
+/// canvases drop the setting (or cannot report it) and clamp to standard range, so the shell presents standard output
+/// to them instead. Reads the context through reflection because the bindings the engine enables do not cover it.
+pub(crate) fn canvas_presents_extended_range(window: &winit::window::Window) -> bool {
+    use winit::platform::web::WindowExtWebSys;
+    let Some(canvas) = window.canvas() else {
+        return false;
+    };
+    let Ok(Some(context)) = canvas.get_context("webgpu") else {
+        return false;
+    };
+    let property = |object: &wasm_bindgen::JsValue, name: &str| {
+        js_sys::Reflect::get(object, &wasm_bindgen::JsValue::from_str(name)).ok().filter(|value| !value.is_undefined())
+    };
+    let Some(get_configuration) =
+        property(&context, "getConfiguration").and_then(|method| method.dyn_into::<js_sys::Function>().ok())
+    else {
+        return false;
+    };
+    let Ok(configuration) = get_configuration.call0(&context) else {
+        return false;
+    };
+    let mode = property(&configuration, "toneMapping").and_then(|tone_mapping| property(&tone_mapping, "mode"));
+    mode.and_then(|mode| mode.as_string()).as_deref() == Some(EXTENDED_TONE_MAPPING)
+}
+
+/// The WebGPU canvas tone-mapping mode that presents values above SDR white.
+const EXTENDED_TONE_MAPPING: &str = "extended";
+
 /// Publish readiness only after presenting a frame, for the loading screen and browser captures.
 pub(crate) fn mark_canvas_ready(window: &winit::window::Window, backend: &str) {
     use winit::platform::web::WindowExtWebSys;
@@ -57,7 +86,7 @@ pub(crate) fn mark_canvas_ready(window: &winit::window::Window, backend: &str) {
     }
 }
 
-/// Show a startup or runtime failure where the player can see it, matching the TypeScript failure panels.
+/// Show a startup or runtime failure where the player can see it, as a fixed panel along the bottom of the page.
 pub(crate) fn report_failure(title: &str, message: &str) {
     let Some(document) = web_sys::window().and_then(|window| window.document()) else {
         return;

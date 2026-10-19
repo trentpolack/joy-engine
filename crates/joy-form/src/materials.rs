@@ -1,8 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! FORM material palettes: serialized validation (ported from `src/form/materials.ts`) and the
-//! typed [`FormMaterial`] view renderers consume.
+//! FORM material palettes: serialized validation and the typed [`FormMaterial`] view renderers consume.
 
 use serde::{
     Deserialize,
@@ -31,7 +30,7 @@ const DEFAULT_ALPHA_CUTOFF: f64 = 0.5;
 
 /// How a renderer combines a material's alpha with the framebuffer, following glTF.
 ///
-/// Serialized as `"OPAQUE"`, `"MASK"`, or `"BLEND"`, the TypeScript `MATERIAL_ALPHA_MODE` spelling.
+/// Serialized as `"OPAQUE"`, `"MASK"`, or `"BLEND"`, the glTF `alphaMode` spelling.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum AlphaMode {
@@ -112,7 +111,7 @@ impl FormMaterial {
     /// Convert a serialized material record without failing.
     ///
     /// Each field that is missing or invalid (a non-string name, a tuple of the wrong length,
-    /// a factor outside its range, or an unknown alpha mode) takes its `defaultMaterial()` value, and
+    /// a factor outside its range, or an unknown alpha mode) takes its `FormMaterial::default()` value, and
     /// a texture slot that is not a string is `None`. Records produced by evaluation are already
     /// validated and convert exactly. The input is only borrowed.
     pub fn from_json(value: &Json) -> Self {

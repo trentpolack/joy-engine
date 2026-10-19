@@ -20,13 +20,15 @@ use crate::post_process::PostProcessSettings;
 use crate::postprocessor::PostProcessor;
 use crate::{
     ColorVertex,
+    DisplayOutput,
     GpuContext,
     PresentationTime,
     RenderError,
 };
 use joy_core::LinearColor;
 
-/// Shader markers the TypeScript engine expands so geometry shaders leave display processing to the post chain.
+/// Post-processing markers authored shaders may contain; they expand so geometry shaders leave display processing
+/// to the post chain.
 const POST_UNIFORMS_MARKER: &str = "// JOY_POST_UNIFORMS_MACRO";
 const POST_DECLARATIONS_MARKER: &str = "// JOY_POST_DECLARATIONS_MACRO";
 const POST_APPLY_MARKER: &str = "// JOY_POST_APPLY_MACRO";
@@ -41,7 +43,7 @@ const MINIMUM_VERTEX_CAPACITY: u64 = 4096 * VERTEX_STRIDE;
 #[derive(Clone, Debug)]
 pub struct TriangleRendererOptions {
     /// WGSL source with `vertexMain(@location(0) position: vec3f, @location(1) color: vec4f)` and `fragmentMain`, and
-    /// one uniform block at `@group(0) @binding(0)`. The TypeScript `JOY_POST_*` markers are accepted: the uniform and
+    /// one uniform block at `@group(0) @binding(0)`. Authored `JOY_POST_*` markers are accepted: the uniform and
     /// declaration markers expand to nothing and the apply marker to `return sourceColor;`. Fragment output is linear
     /// scene color; display processing happens afterwards. The shader is trusted project code: an invalid shader is a
     /// programming error reported by wgpu, not a recoverable failure.
@@ -182,6 +184,17 @@ impl TriangleRenderer {
         self.post.set_settings(settings);
     }
 
+    /// The presentation target's encoding and HDR headroom.
+    pub fn display_output(&self) -> DisplayOutput {
+        self.post.display_output()
+    }
+
+    /// Write for `display` from the next frame; the shell sets it when the surface is configured and as headroom
+    /// changes, so it matches the target views passed to [`TriangleRenderer::encode`].
+    pub fn set_display_output(&mut self, display: DisplayOutput) {
+        self.post.set_display_output(self.gpu.device(), display);
+    }
+
     /// Set the presentation clock for the next frame; `RenderTarget::draw_triangles` copies the shell's clock here.
     pub fn set_presentation_time(&mut self, time: PresentationTime) {
         self.presentation_time = time;
@@ -207,7 +220,8 @@ impl TriangleRenderer {
         }
         let gpu = self.gpu.clone();
         let (device, queue) = (gpu.device(), gpu.queue());
-        self.post.prepare(device, queue, width, height, self.presentation_time.time_seconds as f32);
+        let size = (width, height);
+        self.post.prepare(device, queue, size, size, self.presentation_time.time_seconds as f32);
         queue.write_buffer(&self.uniform_buffer, 0, frame.uniforms);
 
         // One allocation holds opaque then transparent vertices; incomplete trailing triangles are dropped.
@@ -287,7 +301,7 @@ impl TriangleRenderer {
     }
 }
 
-/// Expand the TypeScript post-processing markers for a shader whose display processing happens in the post chain.
+/// Expand the `JOY_POST_*` markers for a shader whose display processing happens in the post chain.
 pub(crate) fn expand_post_markers(source: &str) -> String {
     source
         .replace(POST_UNIFORMS_MARKER, "")

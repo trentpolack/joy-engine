@@ -2,8 +2,7 @@
 // Licensed under the MIT License.
 
 //! Particle simulation behavior: seeded emission, parameters, children and limits, failures, cadence independence,
-//! borrowed random streams, owner edits, and profiling. Ported from the TypeScript `test/particle-effect.test.mjs` and
-//! `test/particle-lights-profile.test.mjs`.
+//! borrowed random streams, owner edits, and profiling.
 
 use joy_core::LinearColor;
 use std::cell::Cell;
@@ -24,7 +23,7 @@ use serde_json::{
     json,
 };
 
-/// The TypeScript suite's base document with emitter overrides merged in.
+/// A one-emitter test document (a two-particle burst driven by a `speed` parameter) with emitter overrides merged in.
 fn document(overrides: Value) -> Value {
     let mut emitter = json!({"id": "main", "enabled": true, "root": true, "duration": 0, "rate": 0,
         "bursts": [{"time": 0, "count": 2}], "lifetime": 1, "renderer": "soft",

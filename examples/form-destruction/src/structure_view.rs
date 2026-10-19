@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Structure presentation from committed engine state (TypeScript `structure-view.ts`); it never changes health or
-//! collision dimensions. The material view uses the engine's chunk tints. The debug views inset faces slightly to reveal
-//! chunk boundaries, then color remaining resistance or committed support paths.
+//! Structure presentation from committed engine state; it never changes health or collision dimensions. The material
+//! view uses the engine's chunk tints. The debug views inset faces slightly to reveal chunk boundaries, then color
+//! remaining resistance or committed support paths.
 
 use std::collections::HashMap;
 

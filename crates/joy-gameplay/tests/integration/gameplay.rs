@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Entity lifetime, update order, systems, possession, and controller semantics protected by the TypeScript suite.
+//! Entity lifetime, update order, systems, possession, and controller semantics.
 
 use std::cell::{
     Cell,

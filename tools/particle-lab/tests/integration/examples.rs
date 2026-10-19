@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The TypeScript `test/examples.test.js`, ported.
+//! Bundled examples and emitter presets: examples compile with the current scripting syntax, and presets compile
+//! without shared parameters or child references and are detached copies.
 
 use joy_engine::particles::compile_particle_effect;
 use particle_lab::constants::EmitterPreset;

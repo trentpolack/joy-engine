@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The lab's deterministic Y-up room (TypeScript `room.ts`): saturated red and green walls for screen-space color
-//! bleed, blocks and corners for contact occlusion, thin slats for temporal antialiasing, a smooth floor (scene
-//! roughness 0.18) and blue block (0.05) for reflections, linear colors above one for HDR bloom, and 27 shadowed point
-//! lights for direct and clustered volumetric lighting.
+//! The lab's deterministic Y-up room: saturated red and green walls for screen-space color bleed, blocks and corners
+//! for contact occlusion, thin slats for temporal antialiasing, a smooth floor (scene roughness 0.18) and blue block
+//! (0.05) for reflections, linear colors above one for HDR bloom, and 27 shadowed point lights for direct and clustered
+//! volumetric lighting.
 
 use joy_engine::prelude::*;
 
@@ -14,7 +14,7 @@ pub struct Room {
     pub scene: RenderScene,
     /// The orange block that sine motion moves.
     pub moving: MeshInstanceId,
-    /// Point lights in world units; every light casts shadows, the TypeScript default.
+    /// Point lights in world units; every light casts shadows by default.
     pub lights: Vec<PointLight>,
 }
 

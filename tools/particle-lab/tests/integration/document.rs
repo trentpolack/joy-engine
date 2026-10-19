@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The TypeScript `test/document.test.js`, ported: portable reads, recovery reads, size and version limits, detached
-//! examples, script whitespace, and vector parameters; plus the Rust document edits and property snapshots.
+//! Effect documents: portable reads, recovery reads, size and version limits, detached examples, script whitespace, and
+//! vector parameters; plus document edits and property snapshots.
 
 use joy_engine::particles::{
     ParticleEffect,

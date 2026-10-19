@@ -68,7 +68,7 @@ const INDENT: &str = "  ";
 /// Most completion rows shown before scrolling.
 const COMPLETION_ROWS: usize = 8;
 
-/// Minimum gutter width (the TypeScript editor's 36 px).
+/// Minimum gutter width in logical pixels.
 const MINIMUM_GUTTER_WIDTH: f32 = 36.0;
 
 /// What the editor did this frame.
@@ -78,7 +78,7 @@ pub struct ScriptEditorResponse {
     pub response: egui::Response,
     /// Whether the author changed the text.
     pub changed: bool,
-    /// Ctrl/Cmd+Enter was pressed (the TypeScript `onRun`).
+    /// Ctrl/Cmd+Enter was pressed to run the script.
     pub run_requested: bool,
     /// One-based cursor line.
     pub line: usize,
@@ -89,7 +89,7 @@ pub struct ScriptEditorResponse {
 }
 
 impl ScriptEditorResponse {
-    /// The TypeScript status text: `Ln 3, Col 7 · 12 lines`.
+    /// The status line text, such as `Ln 3, Col 7 · 12 lines`.
     pub fn status_text(&self) -> String {
         format!(
             "Ln {}, Col {} · {} {}",
@@ -196,8 +196,7 @@ impl ScriptEditor {
         self.focus_requested = true;
     }
 
-    /// Start a new undo history with the cursor at the start, for a document or emitter switch (the TypeScript
-    /// `setState` with fresh state).
+    /// Start a new undo history with the cursor at the start, for a document or emitter switch.
     pub fn reset_history(&mut self) {
         self.reset_requested = true;
         self.completion = None;
@@ -655,7 +654,7 @@ fn highlight_job(syntax: &ScriptSyntax, source: &str, font: &FontId) -> LayoutJo
     job
 }
 
-/// The TypeScript editor's highlight colors.
+/// The script editor's highlight color for a token kind.
 pub fn token_color(kind: TokenKind) -> Color32 {
     match kind {
         TokenKind::Comment => tokens::SCRIPT_COMMENT,

@@ -33,7 +33,7 @@ fn accept(session: &mut Session) {
 }
 
 #[test]
-fn builds_report_progress_success_and_failure_like_the_typescript_tool() {
+fn builds_report_progress_success_and_failure() {
     let mut session = Session::new(FormDocument::from_script("Tower", SOURCE), None);
     session.compile();
     assert_eq!(session.status().message, "Starting compiler…");

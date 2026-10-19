@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Revolve, tube, and smooth-normal generators. Ported from `src/form/procedural-shapes.ts`.
+//! Revolve, tube, and smooth-normal generators.
 
 use super::store::{
     self,

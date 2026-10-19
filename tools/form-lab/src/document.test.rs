@@ -14,7 +14,7 @@ fn file_stems_keep_ascii_words() {
 }
 
 #[test]
-fn serialized_documents_keep_the_typescript_key_order() {
+fn serialized_documents_use_the_stable_key_order() {
     let document = FormDocument {
         name: "Study".into(),
         source: "point(0,0,0)".into(),

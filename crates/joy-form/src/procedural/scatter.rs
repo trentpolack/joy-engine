@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Area- and weight-proportional point scattering. Ported from `src/form/procedural-scatter.ts`.
+//! Area- and weight-proportional point scattering.
 
 use super::{
     shapes::{

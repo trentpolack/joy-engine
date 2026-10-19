@@ -25,14 +25,18 @@ mod textured;
 pub(crate) use maps::MaterialMaps;
 pub(crate) use textured::TexturedPass;
 
-/// Main depth buffer format (matches the TypeScript renderer's `depth24plus`).
+/// Main depth buffer format; `Depth24Plus` is available on every backend, including WebGL 2.
 pub(crate) const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth24Plus;
 
 /// Shadow map format for cascades and point-light faces; sampled with comparison and plain depth samplers.
 pub(crate) const SHADOW_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-/// Display-referred intermediate written by the resolve pass.
+/// Display-referred intermediate written by the resolve pass for standard dynamic range: 8-bit encoded storage keeps dark
+/// gradients from banding.
 pub(crate) const DISPLAY_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+
+/// Display-referred intermediate for extended-range output, which must hold encoded values above SDR white.
+pub(crate) const EXTENDED_DISPLAY_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 /// Format of the scene-effect attachments: view-space normals with roughness, and signed screen-space motion.
 pub(crate) const ATTACHMENT_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
@@ -102,7 +106,7 @@ impl InstanceRaw {
         Self { model: IDENTITY_MATRIX, tint: [1.0; 4], flags: [1.0, 1.0, 0.0, 0.0], previous_model: IDENTITY_MATRIX };
 }
 
-/// Sky uniforms (`Atmosphere` in atmosphere.wgsl). 352 bytes, identical to the TypeScript block.
+/// Sky uniforms (`Atmosphere` in atmosphere.wgsl). 352 bytes; the field order and layout mirror the WGSL struct.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub(crate) struct AtmosphereUniforms {

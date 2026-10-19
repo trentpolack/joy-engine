@@ -1,9 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! `AssetScene`: FORM meshes and per-entity effects with staged synchronization. Ported from the TypeScript
-//! `test/asset-scene.test.mjs`, plus parity with a recorded TypeScript `AssetScene` run and the Rust additions
-//! (textured effects and world-space particle lights).
+//! `AssetScene`: FORM meshes and per-entity effects with staged synchronization, textured effects, and world-space
+//! particle lights. A recorded `AssetScene` run is checked against the `assetScene` section of `joy-renderer`'s
+//! particle golden recording (`tests/fixtures/particles-parity.json`); re-record it with `JOY_UPDATE_FIXTURES=1` when
+//! the presentation changes on purpose.
 
 use std::collections::HashMap;
 
@@ -21,12 +22,26 @@ use joy_scene::{
     AssetScene,
     AssetSceneError,
 };
+use joy_test_support::{
+    GoldenFile,
+    Tolerance,
+    json_f32s,
+};
 use serde_json::{
     Value,
     json,
 };
 
 const BOX_FORM: &str = "project meta(name=\"Box\")\nbox(0, 0, 0, 2, 2, 2)";
+
+/// The golden recording section this suite owns in the shared particle recording.
+const ASSET_SCENE_SECTION: &str = "/assetScene";
+
+/// Relative tolerance for single-precision particle geometry and its sums.
+const GEOMETRY_TOLERANCE: f64 = 2e-6;
+
+/// Values per flattened colored vertex: position and RGBA.
+const COLORED_STRIDE: usize = 7;
 
 fn entity(value: Value) -> EntityDefinition {
     EntityDefinition::from_json(&value).unwrap_or_else(|error| panic!("{error}"))
@@ -36,17 +51,44 @@ fn reader(files: &HashMap<String, String>) -> impl FnMut(&str) -> Result<String,
     move |path: &str| files.get(path).cloned().ok_or_else(|| format!("missing {path}"))
 }
 
+/// The particle golden recording, shared with `joy-renderer`'s particle tests.
+fn particle_recording() -> GoldenFile {
+    GoldenFile::open(concat!(env!("CARGO_MANIFEST_DIR"), "/../joy-renderer/tests/fixtures/particles-parity.json"))
+}
+
 fn fixture_text(file: &str) -> String {
-    // The particle fixtures live with the particle parity suite in `joy-renderer`.
+    // The particle fixtures live with the particle tests in `joy-renderer`.
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../joy-renderer/tests/fixtures").join(file);
     std::fs::read_to_string(path).unwrap()
 }
 
+/// Each running effect's id, fixed-step tick count, and live particle count.
+fn effects_record(assets: &AssetScene) -> Value {
+    let effects = assets.effects().map(|(id, instance)| {
+        json!({"id": id, "ticks": instance.effect().ticks(), "count": instance.effect().particles().len()})
+    });
+    Value::Array(effects.collect())
+}
+
+/// Vertex count, sum, absolute sum, and first vertex of the scene's flattened colored particle geometry.
+fn particles_record(assets: &AssetScene, camera: &ParticleCameraBasis) -> Value {
+    let vertices = assets.particles(camera);
+    let values: Vec<f32> =
+        vertices.iter().flat_map(|vertex| vertex.position.iter().chain(&vertex.color).copied()).collect();
+    let sum: f64 = values.iter().copied().map(f64::from).sum();
+    let absolute: f64 = values.iter().map(|value| f64::from(value.abs())).sum();
+    json!({
+        "vertexCount": vertices.len(),
+        "sum": sum,
+        "abs": absolute,
+        "first": json_f32s(&values[..COLORED_STRIDE.min(values.len())]),
+    })
+}
+
 #[test]
-fn asset_scene_matches_the_typescript_presentation() {
-    let fixture: Value =
-        serde_json::from_str(include_str!("../../../joy-renderer/tests/fixtures/particles-parity.json")).unwrap();
-    let recorded = &fixture["assetScene"];
+fn asset_scene_matches_the_recorded_presentation() {
+    let golden = particle_recording();
+    let mut recorded = golden.recording().pointer(ASSET_SCENE_SECTION).expect("an assetScene recording").clone();
     let files: HashMap<String, String> = recorded["files"]
         .as_object()
         .unwrap()
@@ -62,39 +104,18 @@ fn asset_scene_matches_the_typescript_presentation() {
     };
     let camera = ParticleCameraBasis { right: axis("right"), up: axis("up"), backward: axis("backward") };
 
+    // Frames replay their recorded durations; effects, the reported error, and particle geometry are produced.
     let mut scene = RenderScene::new();
     let mut assets = AssetScene::new();
     assert!(assets.sync(&mut scene, &entities, None, reader(&files)).unwrap());
-    for frame in recorded["frames"].as_array().unwrap() {
+    for frame in recorded["frames"].as_array_mut().unwrap() {
         assets.step(frame["seconds"].as_f64().unwrap());
-        let effects: Vec<Value> = assets
-            .effects()
-            .map(|(id, instance)| {
-                json!({"id": id, "ticks": instance.effect().ticks(), "count": instance.effect().particles().len()})
-            })
-            .collect();
-        assert_eq!(Value::Array(effects), frame["effects"]);
-        assert_eq!(assets.error(), frame["error"].as_str().unwrap());
-
-        let vertices = assets.particles(&camera);
-        let expected = &frame["particles"];
-        assert_eq!(vertices.len() as u64, expected["vertexCount"].as_u64().unwrap());
-        let values: Vec<f64> = vertices
-            .iter()
-            .flat_map(|vertex| {
-                vertex.position.iter().chain(&vertex.color).map(|value| f64::from(*value)).collect::<Vec<_>>()
-            })
-            .collect();
-        let sum: f64 = values.iter().sum();
-        let absolute: f64 = values.iter().map(|value| value.abs()).sum();
-        let scale = 1.0 + expected["abs"].as_f64().unwrap();
-        assert!((sum - expected["sum"].as_f64().unwrap()).abs() <= 2e-6 * scale, "sum {sum} vs {}", expected["sum"]);
-        assert!((absolute - expected["abs"].as_f64().unwrap()).abs() <= 2e-6 * scale);
-        for (actual, expected) in values.iter().zip(expected["first"].as_array().unwrap()) {
-            let expected = expected.as_f64().unwrap();
-            assert!((actual - expected).abs() <= 2e-6 * (1.0 + expected.abs()), "{actual} vs {expected}");
-        }
+        frame["effects"] = effects_record(&assets);
+        frame["error"] = json!(assets.error());
+        frame["particles"] = particles_record(&assets, &camera);
     }
+    let tolerance = Tolerance::exact().with_key("particles", GEOMETRY_TOLERANCE);
+    golden.assert_section_matches(ASSET_SCENE_SECTION, &recorded, &tolerance);
 }
 
 #[test]

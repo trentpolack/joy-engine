@@ -29,7 +29,7 @@ const INPUTS: [(&str, &str); 7] = [
 /// FORM alpha modes in `gltf_pbr` `alpha_mode` order.
 const ALPHA_MODES: [&str; 3] = ["OPAQUE", "MASK", "BLEND"];
 
-/// Why MaterialX could not be written or read. Messages match the TypeScript tool.
+/// Why MaterialX could not be written or read. Messages are stable diagnostics.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MaterialXError(pub String);
 
@@ -41,7 +41,7 @@ impl std::fmt::Display for MaterialXError {
 
 impl std::error::Error for MaterialXError {}
 
-/// Export constant `gltf_pbr` surface materials as MaterialX 1.39 XML (`exportMaterialX`). Palettes with maps fail
+/// Export constant `gltf_pbr` surface materials as MaterialX 1.39 XML. Palettes with maps fail
 /// instead of silently dropping them.
 pub fn export_materialx(materials: &[Json]) -> Result<String, MaterialXError> {
     let validated = read_materials(Some(&Json::Array(materials.to_vec()))).map_err(|error| MaterialXError(error.0))?;
@@ -87,7 +87,7 @@ pub fn export_materialx(materials: &[Json]) -> Result<String, MaterialXError> {
     Ok(format!("{}\n", lines.join("\n")))
 }
 
-/// Import FORM LAB's constant `gltf_pbr` MaterialX subset (`importMaterialX`). Returns validated material records;
+/// Import FORM LAB's constant `gltf_pbr` MaterialX subset. Returns validated material records;
 /// a Default material is included only when the document authors one.
 pub fn import_materialx(text: &str) -> Result<Vec<Json>, MaterialXError> {
     let upper = text.to_ascii_uppercase();

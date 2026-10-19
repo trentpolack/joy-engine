@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The Examples library, ported from `test/form-library.test.js`, plus the bundled copy browsers use.
+//! The Examples library, plus the bundled copy browsers use.
 
 use form_lab::form_assets::{
     bundled_form_assets,

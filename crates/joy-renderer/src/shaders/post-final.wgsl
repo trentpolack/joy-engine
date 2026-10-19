@@ -2,15 +2,18 @@
 // Licensed under the MIT License.
 
 // Final display pass: edge antialiasing blended by strength, then animated luminance-aware film grain. Reads the
-// resolved, sRGB-encoded display image and writes the presentation target. Non-sRGB targets receive the encoded values
-// as they are; an sRGB target view encodes on write, so the pass decodes first and the stored bytes are identical.
+// resolved, sRGB-encoded display image and writes the presentation target. Non-sRGB and extended sRGB targets receive
+// the encoded values as they are; an sRGB target view encodes on write and an extended linear (scRGB) target expects
+// linear light, so for those the pass decodes first.
 
 struct Presentation {
   // XY reciprocal target size, Z antialias strength, W grain intensity.
   frame: vec4f,
   // X grain cell size in pixels, Y grain speed in cycles per second, Z decorrelated variant (0 or 1), W time seconds.
   grain: vec4f,
-  // X is 1 when the presentation target view encodes sRGB itself; YZW unused.
+  // X is 1 when the presentation target expects linear values (an sRGB view or an extended linear surface), Y the
+  // largest encoded value the display shows (1 for standard output, more with HDR headroom), Z the linear signal value
+  // of SDR white (1 except on extended linear surfaces whose 1 is dimmer than SDR white), W unused.
   output: vec4f,
 };
 
@@ -85,14 +88,15 @@ fn antialias(coordinate: vec2f, texel: vec2f) -> vec3f {
 }
 
 /**
- * Hash used by the grain; matches the TypeScript engine's portable noise function.
+ * Hash used by the grain: the common portable `fract(sin(dot))` noise function.
  */
 fn rand(value: vec2f) -> f32 {
   return fract(sin(dot(value, vec2f(12.9898, 78.233)))*43758.547);
 }
 
 /**
- * Decode sRGB-encoded display values with the exact IEC 61966-2-1 curve (`joy_core::srgb_to_linear`).
+ * Decode sRGB-encoded display values with the exact IEC 61966-2-1 curve (`joy_core::srgb_to_linear`); values above one
+ * continue the curve.
  */
 fn decodeSrgb(encoded: vec3f) -> vec3f {
   let curve = pow((encoded + vec3f(0.055))/1.055, vec3f(2.4));
@@ -121,11 +125,11 @@ fn decodeSrgb(encoded: vec3f) -> vec3f {
     let luminance = luma(color);
     let midtoneWeight = 1.0 - smoothstep(0.35, 1.0, abs((luminance*2.0) - 1.0));
     let grain = (noiseValue - 0.5)*presentation.frame.w*mix(0.6, 1.0, midtoneWeight);
-    color = clamp(color + vec3f(grain), vec3f(0.0), vec3f(1.0));
+    color = clamp(color + vec3f(grain), vec3f(0.0), vec3f(presentation.output.y));
   }
 
   if(presentation.output.x > 0.5) {
-    color = decodeSrgb(color);
+    color = decodeSrgb(color)*presentation.output.z;
   }
   return vec4f(color, 1.0);
 }

@@ -13,6 +13,8 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, P
 - Opaque geometry rasterizes once per view: a depth pre-pass (terrain first, then batches front to back; `RendererOptions::depth_prepass`) fills depth, the scene pass writes the scene-effect normal, roughness, and motion attachments beside its color instead of in two extra passes, and the sky draws last on the far plane.
 - Each shadow view draws only the casters inside its cascade or point-light face, and a point light renders shadow faces only when a caster reaches it.
 - Material maps and sprite and particle textures get GPU-generated mip chains, sampled trilinearly with anisotropic filtering.
+- Added HDR output: on displays that can show HDR, the shell presents an extended-range surface (scRGB natively, extended sRGB in browsers with HDR canvases), follows the display's headroom, and the display resolve extends tone-mapped highlights into it while midtones and the UI stay at SDR white (`DisplayOutput`, `Renderer::set_display_output`, and `ShellOptions::high_dynamic_range`, on by default). Breaking: `EguiLayer::new` takes the display output.
+- Added a main-scene render scale (`RendererOptions::render_scale`, `Renderer::set_render_scale`, and `Renderer::render_size`): the scene, its effects, and bloom render below the drawing-buffer resolution and the display resolve upscales them with a bicubic filter, while antialiasing, grain, and UI stay at full resolution.
 
 ### Lights
 - Frames may supply any number of point lights: the renderer skips invalid lights and lights that cannot reach the view, then draws the 32 that light it most (`RendererDiagnostics::point_lights` and `point_lights_omitted`), instead of failing the frame above 32.
@@ -21,6 +23,10 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, P
 
 ### Terrain
 - Breaking: terrain draws only as `RenderScene` terrain instances. Removed `TerrainRenderer`, `TerrainFrame`, `RenderTarget::draw_terrain`, and terrain GPU timing; `Renderer::terrain_stats` reports an instance's statistics, and the terrain example draws through the scene renderer.
+
+### Tests
+- Recorded fixtures are now golden recordings re-recorded from Rust: `joy-test-support`'s `GoldenFile` checks a test's rebuilt recording with a numeric tolerance, and `JOY_UPDATE_FIXTURES=1 cargo test -p <package>` re-records it, rewriting only values that changed and keeping each file's layout. Games reach it as `joy_engine::testing` through the facade's `test-support` feature in their dev-dependencies. `assert_matches_recording` was replaced by `GoldenFile`.
+- Tests, fixtures, and source comments no longer present the retired TypeScript engine as the reference; comments state the real constraint (seeded determinism, golden recordings, or the authored document format) instead.
 
 ### Physics and Simulation
 - Breaking: vehicles are physics bodies. `PhysicsWorld::create_vehicle` returns a `BodyHandle` (`VehicleHandle` was removed), vehicle queries take the chassis body, and `joy-gameplay`'s world no longer keeps a separate vehicle map (`LevelRuntime::vehicle` folded into `body`).

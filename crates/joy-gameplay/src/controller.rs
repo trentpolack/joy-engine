@@ -47,8 +47,7 @@ impl Controller {
 
     /// Validate one frame of `elapsed_seconds`; the base controller samples nothing.
     ///
-    /// A negative or non-finite delta clears the possessed entity's intent (calling `reset_control`) and fails, like
-    /// the TypeScript `Controller.update`.
+    /// A negative or non-finite delta clears the possessed entity's intent (calling `reset_control`) and fails.
     pub fn update(&self, world: &mut EntityWorld, elapsed_seconds: f32) -> Result<(), GameplayError> {
         validate_controller_delta(world, self.id, elapsed_seconds)
     }

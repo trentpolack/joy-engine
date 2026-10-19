@@ -3,8 +3,7 @@
 
 // PBR material: world-space GGX metallic/roughness shading. Factors are baked into each vertex (FORM materials and
 // `PbrMesh` palettes); texture maps multiply them, normal maps perturb the surface through a derivative tangent frame,
-// and an optional environment adds image-based diffuse and specular light. Matches the TypeScript PBR material pass.
-// Prepended at load time by scene-common.wgsl.
+// and an optional environment adds image-based diffuse and specular light. Prepended at load time by scene-common.wgsl.
 
 struct ImageLighting {
   // X intensity (zero disables image lighting), Y horizontal rotation in radians, Z highest specular mip.
@@ -106,9 +105,9 @@ fn pbrColor(input: PbrOutput, frontFacing: bool) -> vec4f {
   let uvX = dpdx(input.uv);
   let uvY = dpdy(input.uv);
 
-  // Double-sided like the TypeScript pass: back faces flip the authored normal, and front faces keep it even where
-  // smooth shading tips it away from the eye, so silhouettes keep their grazing-angle response. Normals rebuilt from
-  // screen-space derivatives have no authored side and face the eye instead.
+  // Double-sided: back faces flip the authored normal, and front faces keep it even where smooth shading tips it away
+  // from the eye, so silhouettes keep their grazing-angle response. Normals rebuilt from screen-space derivatives have
+  // no authored side and face the eye instead.
   let derivative = cross(positionX, positionY);
   var n = normalize(input.worldNormal)*select(-1.0, 1.0, frontFacing);
   if(dot(input.worldNormal, input.worldNormal) < 0.000001) {
@@ -117,8 +116,8 @@ fn pbrColor(input: PbrOutput, frontFacing: bool) -> vec4f {
   let determinant = (uvX.x*uvY.y) - (uvX.y*uvY.x);
   var tangent = (positionX*uvY.y) - (positionY*uvX.y);
   tangent-= n*dot(n, tangent);
-  // Degeneracy thresholds scale with the derivatives. The TypeScript pass compares against fixed 1e-7 values, which
-  // screen-space derivatives at ordinary viewing distances fall below, so its normal maps rarely apply.
+  // Degeneracy thresholds scale with the derivatives: screen-space derivatives at ordinary viewing distances fall below
+  // fixed thresholds such as 1e-7, which would keep normal maps from applying.
   let uvScale = max(dot(uvX, uvX), dot(uvY, uvY));
   let positionScale = max(dot(positionX, positionX), dot(positionY, positionY));
   let mapped = (abs(determinant) > (0.000001*uvScale)) && (dot(tangent, tangent) > (0.000001*uvScale*positionScale));

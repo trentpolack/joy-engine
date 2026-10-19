@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Bloom parity with luma.gl's multiscale bloom, the pipeline the TypeScript engine runs. HDR patches drawn by the
+//! Bloom parity with luma.gl's multiscale bloom, the pipeline the engine's bloom follows. HDR patches drawn by the
 //! triangle renderer pass through the engine's display processing and are compared with a CPU transcription of
 //! luma.gl's fragment path (thresholded tent extraction, tent downsamples, paired-tap Gaussians, bicubic
 //! reconstruction, starburst, and the additive composite); the lens streaks, energy, and spread are also checked
@@ -66,7 +66,7 @@ const TOLERANCE: i32 = 2;
 /// Pyramid level sizes relative to the drawing buffer (luma.gl's `BLOOM_PYRAMID_LEVELS`).
 const LEVEL_SCALES: [f64; 5] = [0.5, 0.25, 0.125, 0.0625, 0.03125];
 
-/// The TypeScript renderer's kernel scale: a radius of 0.025 at 720 pixels is eight texels.
+/// The engine's kernel scale: a radius of 0.025 at 720 pixels is eight texels.
 const BLOOM_RADIUS_SCALE: f32 = 8.0 / (720.0 * 0.025);
 
 const LUMINANCE: [f32; 3] = [0.2126, 0.7152, 0.0722];
@@ -243,7 +243,7 @@ fn texture_uv(x: usize, y: usize, output: (usize, usize), transform: [f32; 2]) -
     (u, v)
 }
 
-/// luma.gl's `bloomExtract_applyThreshold` with the TypeScript renderer's soft-knee conversion.
+/// luma.gl's `bloomExtract_applyThreshold` with the engine's soft-knee conversion.
 fn threshold(color: [f32; 4], config: &PostProcessSettings) -> [f32; 4] {
     let luminance = (color[0] * LUMINANCE[0]) + (color[1] * LUMINANCE[1]) + (color[2] * LUMINANCE[2]);
     let soft_knee = config.bloom_knee / config.bloom_threshold.max(0.00001);
@@ -335,7 +335,7 @@ fn bicubic(source: &Image, u: f32, v: f32) -> [f32; 4] {
     add(color, scale(source.sample(u1, v1), wx1 * wy1))
 }
 
-/// luma.gl's starburst with the TypeScript renderer's two rays: a horizontal average of the glow.
+/// luma.gl's starburst with the engine's two rays: a horizontal average of the glow.
 fn starburst(glow: &Image, length: f32, intensity: f32) -> Image {
     Image::from_fn(glow.width, glow.height, |x, y| {
         let (u, v) = texture_uv(x, y, glow.size(), [1.0, 1.0]);

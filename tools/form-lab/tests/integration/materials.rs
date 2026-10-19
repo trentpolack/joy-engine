@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Material palettes and MaterialX, ported from `test/materials.test.js`, plus the TypeScript tool's MaterialX text.
+//! Material palettes and MaterialX, plus the recorded MaterialX reference text (`tests/fixtures/materials.mtlx`).
 
 use form_lab::materialx::{
     export_materialx,
@@ -88,7 +88,7 @@ fn materialx_constant_gltf_pbr_materials_round_trip_all_supported_values() {
 }
 
 #[test]
-fn materialx_text_matches_the_typescript_tool() {
+fn materialx_text_matches_the_recording() {
     let mut rough = default_material();
     rough["roughness"] = json!(0.75);
     let mut glass = crate::support::glass();
@@ -157,7 +157,7 @@ fn materialx_export_generates_shader_names_outside_the_shared_material_namespace
 #[test]
 fn materialx_import_returns_only_authored_definitions_while_preserving_an_authored_default() {
     let xml = export_materialx(&[copper()]).unwrap();
-    // Remove the Default material and its shader, as the TypeScript test's regular expressions do.
+    // Remove the Default material and its shader.
     let without_default = {
         let start = xml.find("  <surfacematerial name=\"Default\"").unwrap();
         let end = xml[start..].find("</surfacematerial>\n").unwrap() + start + "</surfacematerial>\n".len();

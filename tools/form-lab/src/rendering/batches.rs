@@ -30,7 +30,7 @@ pub struct MarkerCamera {
     pub distance: f32,
 }
 
-/// Markers for `data`: its authored points, or every vertex when `all_vertices` is set (`pointBatch`).
+/// Markers for `data`: its authored points, or every vertex when `all_vertices` is set.
 ///
 /// `size` is the marker size control (one to six) and `viewport_height` the preview's height in logical pixels. Each
 /// marker contributes six vertices.
@@ -96,7 +96,7 @@ pub fn append_marker(output: &mut Vec<ColorVertex>, position: Vec3, basis: Camer
     }
 }
 
-/// Alpha under the material's glTF policy, including vertex alpha (`materialAlpha`).
+/// Alpha under the material's glTF policy, including vertex alpha.
 pub fn material_alpha(material: &FormMaterial, vertex_alpha: f64) -> f32 {
     let alpha = material.base_color[3] * vertex_alpha;
     match material.alpha_mode {

@@ -3,12 +3,23 @@
 
 //! Immediate-mode UI over the rendered scene, on both native windows and browser canvases.
 
-use joy_renderer::GpuContext;
+use joy_renderer::{
+    DisplayOutput,
+    GpuContext,
+    OutputEncoding,
+};
 use winit::window::Window;
+
+use crate::linear_composite::{
+    INTERFACE_FORMAT,
+    LinearComposite,
+};
 
 /// Owns egui's context, winit input translation, and the wgpu painter.
 ///
-/// Native builds translate input with egui-winit; browsers use the engine's own translator (see `web_input`).
+/// Native builds translate input with egui-winit; browsers use the engine's own translator (see `web_input`). UI white is
+/// SDR white on every output: extended linear (scRGB) targets paint through a composite that scales it to the display's
+/// SDR white level, and the other encodings take egui's output as it is.
 pub struct EguiLayer {
     /// The egui context every frame's UI runs in.
     pub context: egui::Context,
@@ -17,11 +28,14 @@ pub struct EguiLayer {
     #[cfg(target_arch = "wasm32")]
     state: crate::web_input::WebEguiInput,
     painter: egui_wgpu::Renderer,
+    /// Present for extended linear outputs, where egui paints into an intermediate first.
+    composite: Option<LinearComposite>,
 }
 
 impl EguiLayer {
-    /// Create a layer that paints into views of `output_format`.
-    pub fn new(gpu: &GpuContext, window: &Window, output_format: wgpu::TextureFormat) -> Self {
+    /// Create a layer that paints into views of `output_format` carrying `display`'s signal. The encoding is fixed for
+    /// the layer's lifetime; [`EguiLayer::set_display_output`] follows later SDR white level changes.
+    pub fn new(gpu: &GpuContext, window: &Window, output_format: wgpu::TextureFormat, display: DisplayOutput) -> Self {
         let context = egui::Context::default();
         crate::theme::apply(&context);
         let max_texture_side = gpu.capabilities().max_texture_dimension as usize;
@@ -39,8 +53,19 @@ impl EguiLayer {
             let _ = window;
             crate::web_input::WebEguiInput::new(max_texture_side)
         };
-        let painter = egui_wgpu::Renderer::new(gpu.device(), output_format, egui_wgpu::RendererOptions::default());
-        Self { context, state, painter }
+        let composite = (display.encoding == OutputEncoding::ExtendedLinear).then(|| {
+            LinearComposite::new(gpu.device(), gpu.queue(), output_format, display.effective_sdr_white_level())
+        });
+        let painter_format = if composite.is_some() { INTERFACE_FORMAT } else { output_format };
+        let painter = egui_wgpu::Renderer::new(gpu.device(), painter_format, egui_wgpu::RendererOptions::default());
+        Self { context, state, painter, composite }
+    }
+
+    /// Follow a change in the display's SDR white level. The encoding stays the one the layer was created for.
+    pub fn set_display_output(&mut self, gpu: &GpuContext, display: DisplayOutput) {
+        if let Some(composite) = &self.composite {
+            composite.set_sdr_white_level(gpu.queue(), display.effective_sdr_white_level());
+        }
     }
 
     /// Forward a window event; returns whether egui consumed it (the game should then ignore it).
@@ -93,8 +118,31 @@ impl EguiLayer {
         let platform_output = std::mem::take(&mut full_output.platform_output);
         self.state.handle_platform_output(window, platform_output);
 
-        paint_output(&mut self.painter, gpu, &self.context, encoder, output, size_in_pixels, full_output);
+        let Some(composite) = &mut self.composite else {
+            paint_output(&mut self.painter, gpu, &self.context, encoder, output, size_in_pixels, full_output);
+            return;
+        };
+
+        // Extended linear output: paint into the cleared intermediate, then blend it over the scene.
+        let interface = composite.interface_view(gpu.device(), size_in_pixels);
+        clear_interface(encoder, interface);
+        paint_output(&mut self.painter, gpu, &self.context, encoder, interface, size_in_pixels, full_output);
+        composite.composite(encoder, output);
     }
+}
+
+/// Clear the UI intermediate to transparent before egui paints into it.
+fn clear_interface(encoder: &mut wgpu::CommandEncoder, interface: &wgpu::TextureView) {
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("ui clear"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: interface,
+            resolve_target: None,
+            ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT), store: wgpu::StoreOp::Store },
+            depth_slice: None,
+        })],
+        ..Default::default()
+    });
 }
 
 /// Tessellate one UI pass's output and paint it over `output` with `painter`, consuming every texture update (uploads

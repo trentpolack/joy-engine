@@ -5,7 +5,7 @@
 # crates in `crates/`. Each crate owns one system and names its architecture layer in `[package.metadata.joy]`;
 # `[workspace.metadata.joy]` below orders the layers, and `npm run check` enforces both.
 #
-#   cargo test                          # every engine crate: unit, parity, and headless GPU tests
+#   cargo test                          # every engine crate: unit, golden-recording, and headless GPU tests
 #   cargo test -p joy-gameplay          # one crate (simulation and content crates build without wgpu or winit)
 #   cargo run --example form-viewer     # FORM assets through the engine renderer
 #   cargo run --example terrain         # resident continuous-LOD terrain (Dragon Pit)
@@ -78,6 +78,14 @@ log.workspace = true
 
 # UI (platform layer), re-exported for HUDs and tools.
 egui.workspace = true
+
+# Golden-file test helpers, re-exported as `testing` for games' tests through the `test-support` feature.
+joy-test-support = { workspace = true, optional = true }
+
+[features]
+# Games enable this in `[dev-dependencies]` only (`joy-engine = { workspace = true, features = ["test-support"] }`),
+# so test helpers never reach game builds.
+test-support = ["dep:joy-test-support"]
 
 # Re-exported for `web_main!`, which declares a game's browser entry point.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -171,8 +179,8 @@ web-time = "1.1.0"
 # WAV decoding for the audio bank.
 hound = "3.5.1"
 
-# Portable IEEE math (FreeBSD msun ports) so particle scripts compute identical transcendental results natively and
-# in WebAssembly, and match the TypeScript engine's V8 results for exp, tan, and atan2 bit for bit.
+# Portable IEEE math (FreeBSD msun ports) behind `math::deterministic`, so simulations and particle scripts compute
+# identical transcendental results natively and in WebAssembly.
 libm = "0.2.16"
 
 # PNG decoding for embedded particle textures on every target (browsers included); already used by `image` natively.

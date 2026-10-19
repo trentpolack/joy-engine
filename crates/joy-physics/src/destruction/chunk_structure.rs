@@ -5,7 +5,8 @@
 //!
 //! Radial damage is queued and committed only at an explicit simulation boundary, so geometry, collision, and queries
 //! change together. Coordinates and dimensions use caller-defined world units (Y up); hit points use the same units as
-//! queued damage. Arithmetic uses `f64` in the established evaluation order to preserve recorded parity results.
+//! queued damage. Arithmetic uses `f64` in a fixed evaluation order so seeded runs and golden recordings reproduce
+//! exactly.
 
 use indexmap::IndexMap;
 use serde::{

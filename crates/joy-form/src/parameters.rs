@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Parameter declarations, override validation, and clamping. Ported from `src/form/parameters.ts`.
+//! Parameter declarations, override validation, and clamping.
 
 use crate::{
     resources,

@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The FORM destruction demo (TypeScript `site/src/main.ts`): one seeded chunk structure with cumulative damage and
-//! ground support, persistent rigid debris, impact markers, and the integrity, support, and material views.
+//! The FORM destruction demo: one seeded chunk structure with cumulative damage and ground support, persistent rigid
+//! debris, impact markers, and the integrity, support, and material views.
 //!
 //! A click projects a ray from the camera onto the nearest active chunk and queues radial damage; the next simulation
 //! step commits it, so geometry, colliders, debris, and the HUD change together even when nothing breaks. Drags orbit
@@ -77,7 +77,7 @@ pub struct Impact {
     pub point: DVec3,
 }
 
-/// Copied diagnostics (TypeScript `snapshot()`); positions are meters and timings milliseconds.
+/// Copied diagnostics; positions are meters and timings milliseconds.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(dead_code, reason = "part of the capture and test API that the integration tests drive")]
 pub struct DemoSnapshot {

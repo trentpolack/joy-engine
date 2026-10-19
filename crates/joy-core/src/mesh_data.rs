@@ -42,7 +42,7 @@ pub struct ShadedMesh3D {
 
 /// Local Y-up indexed mesh input for mesh assets. Optional attributes are absent or vertex-aligned.
 ///
-/// Fields serialize with the TypeScript names; absent optional attributes are omitted.
+/// Fields serialize with camelCase document names; absent optional attributes are omitted.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MeshAssetData {

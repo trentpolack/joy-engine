@@ -1,11 +1,11 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-// Textured transparent material for camera-facing particles and other straight-alpha sprites; the Rust port of the
-// TypeScript `shaders/particles/textured.wgsl`. Texture RGB is stored as sRGB and decoded to linear by the sampler, then
-// multiplied by the linear HDR vertex color; alpha stays straight for source-over blending. The TypeScript shader's
-// `tint` uniform was always white and is omitted. Prepended at load time by scene-common.wgsl, whose frame uniforms
-// (group 0) provide the camera; group 1 (the shadow receiver) is bound but unused.
+// Textured transparent material for camera-facing particles and other straight-alpha sprites. Texture RGB is stored as
+// sRGB and decoded to linear by the sampler, then multiplied by the linear HDR vertex color; alpha stays straight for
+// source-over blending. Vertex colors carry any tint; there is no tint uniform. Prepended at load time by
+// scene-common.wgsl, whose frame uniforms (group 0) provide the camera; group 1 (the shadow receiver) is bound but
+// unused.
 
 @group(2) @binding(0) var particleTexture: texture_2d<f32>;
 @group(2) @binding(1) var particleTextureSampler: sampler;

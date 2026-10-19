@@ -14,7 +14,7 @@ use crate::RenderError;
 /// Preferred HDR scene format when the adapter can render, filter, and blend it.
 const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
-/// Fallback scene format with reduced highlight range, matching the TypeScript fallback.
+/// Fallback scene format with reduced highlight range, for adapters that cannot render, filter, and blend half floats.
 const LDR_SCENE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// Which family of graphics APIs to request.
@@ -30,7 +30,7 @@ pub enum BackendPreference {
 }
 
 impl BackendPreference {
-    /// Parse the TypeScript engine's `?backend=` query values (`webgpu`, `webgl`); anything else selects `Auto`.
+    /// Parse the browser's `?backend=` query values (`webgpu`, `webgl`); anything else selects `Auto`.
     pub fn from_query_value(value: Option<&str>) -> Self {
         match value {
             Some("webgpu") => Self::Primary,

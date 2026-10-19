@@ -77,7 +77,7 @@ pub(crate) fn write_atomically(path: &Path, text: &str, revision: &str) -> Resul
     result.map(|()| revision_of(text))
 }
 
-/// Pretty JSON with a trailing newline, as the TypeScript tools write documents.
+/// Two-space indented JSON with a trailing newline, the layout authored documents are saved in.
 pub(crate) fn pretty_json(value: &serde_json::Value) -> Result<String, String> {
     serde_json::to_string_pretty(value).map(|text| format!("{text}\n")).map_err(|error| error.to_string())
 }

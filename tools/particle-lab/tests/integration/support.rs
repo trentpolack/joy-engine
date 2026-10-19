@@ -17,7 +17,7 @@ use joy_engine::{
 };
 use particle_lab::ParticleLabTool;
 
-/// Capture width, matching the TypeScript screenshots.
+/// Capture width.
 pub const WIDTH: u32 = 1280;
 /// Capture height.
 pub const HEIGHT: u32 = 800;
@@ -85,7 +85,7 @@ impl Harness {
         self.widgets.iter().map(|(label, _)| label.as_str()).collect()
     }
 
-    /// Replace the text in the field named `name` and confirm with Tab (the TypeScript test's `fill` then `Tab`).
+    /// Replace the text in the field named `name` and confirm with Tab.
     pub fn fill(&mut self, name: &str, text: &str) {
         self.click_named(name);
         self.idle(1);

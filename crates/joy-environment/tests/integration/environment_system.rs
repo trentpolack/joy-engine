@@ -1,81 +1,87 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Environment parity with frames recorded from the TypeScript `EnvironmentSystem`.
+//! Environment frames checked against `tests/fixtures/environment-reference.json`, a golden recording of the frames a
+//! range of latitudes, times of day, clock rates, and winds produce. Re-record with `JOY_UPDATE_FIXTURES=1` when the
+//! environment changes on purpose.
 
 use joy_environment::{
     AtmosphereLight,
     CelestialBody,
+    EnvironmentFrame,
     EnvironmentOptions,
     EnvironmentSystem,
 };
-use serde_json::Value;
+use joy_test_support::{
+    Tolerance,
+    golden_file,
+    json_f32,
+    json_f32s,
+};
+use serde_json::{
+    Value,
+    json,
+};
 
-/// Frames recorded from the TypeScript engine; see the fixture's `source` field.
-const REFERENCE: &str = include_str!("../fixtures/environment-reference.json");
-
-/// Agreement required between the f64 TypeScript values and the stored f32 values.
+/// Agreement required between recorded and produced values: frames compute in `f64` and store `f32`.
 const TOLERANCE: f64 = 1e-5;
 
-fn assert_close(label: &str, field: &str, actual: f64, expected: f64) {
-    assert!((actual - expected).abs() <= TOLERANCE, "{label} {field}: {actual} vs {expected}");
-}
-
-fn assert_triple(label: &str, field: &str, actual: [f32; 3], expected: &Value) {
-    for (axis, value) in actual.iter().enumerate() {
-        assert_close(label, &format!("{field}[{axis}]"), f64::from(*value), expected[axis].as_f64().unwrap());
-    }
-}
-
-fn assert_light(label: &str, light: &AtmosphereLight, expected: &Value) {
+/// One recorded celestial light.
+fn light_record(light: &AtmosphereLight) -> Value {
     let kind = match light.kind {
         CelestialBody::Sun => "sun",
         CelestialBody::Moon => "moon",
     };
-    assert_eq!(kind, expected["kind"], "{label} kind");
     let light = &light.light;
-    assert_triple(label, &format!("{kind}.direction"), light.direction.to_array(), &expected["direction"]);
-    assert_triple(label, &format!("{kind}.color"), light.color.rgb_array(), &expected["color"]);
-    assert_close(
-        label,
-        &format!("{kind}.intensity"),
-        f64::from(light.intensity),
-        expected["intensity"].as_f64().unwrap(),
-    );
-    let radius = expected["angularRadius"].as_f64().unwrap();
-    assert_close(label, &format!("{kind}.angularRadius"), f64::from(light.angular_radius), radius);
-    assert!(light.casts_shadow);
+    json!({
+        "kind": kind,
+        "direction": json_f32s(&light.direction.to_array()),
+        "color": json_f32s(&light.color.rgb_array()),
+        "intensity": json_f32(light.intensity),
+        "angularRadius": json_f32(light.angular_radius),
+        "castsShadow": light.casts_shadow,
+    })
+}
+
+/// One recorded frame.
+fn frame_record(frame: &EnvironmentFrame) -> Value {
+    json!({
+        "elapsedSeconds": frame.elapsed_seconds,
+        "timeOfDay": frame.time_of_day,
+        "sun": light_record(&frame.sun),
+        "moon": light_record(&frame.moon),
+        "primary": if frame.primary_light == frame.sun { "sun" } else { "moon" },
+        "skylight": {
+            "color": json_f32s(&frame.skylight.color.rgb_array()),
+            "groundColor": json_f32s(&frame.skylight.ground_color.rgb_array()),
+            "intensity": json_f32(frame.skylight.intensity),
+        },
+        "wind": {
+            "direction": json_f32s(&frame.wind.direction.to_array()),
+            "velocity": json_f32s(&frame.wind.velocity.to_array()),
+            "speed": json_f32(frame.wind.speed),
+        },
+    })
 }
 
 #[test]
-fn frames_match_typescript_reference() {
-    let reference: Value = serde_json::from_str(REFERENCE).unwrap();
-    let cases = reference["cases"].as_array().unwrap();
+fn frames_match_the_recording() {
+    let golden = golden_file!("environment-reference.json");
+    let mut produced = golden.recording().clone();
+    let cases = produced["cases"].as_array_mut().unwrap();
     assert!(cases.len() >= 6);
 
+    // Each case replays its options (authored records, in the document spellings) and clock steps.
     for case in cases {
-        let label = case["label"].as_str().unwrap();
-        // Authored option records use the TypeScript spellings, so they deserialize directly.
         let options = EnvironmentOptions::from_json(&case["options"]).unwrap();
         let mut environment = EnvironmentSystem::new(options).unwrap();
         let mut frame = environment.sample();
         for delta in case["steps"].as_array().unwrap() {
             frame = environment.step(delta.as_f64().unwrap()).unwrap();
         }
-
-        let expected = &case["frame"];
-        assert_close(label, "elapsedSeconds", frame.elapsed_seconds, expected["elapsedSeconds"].as_f64().unwrap());
-        assert_close(label, "timeOfDay", frame.time_of_day, expected["timeOfDay"].as_f64().unwrap());
-        assert_light(label, &frame.sun, &expected["sun"]);
-        assert_light(label, &frame.moon, &expected["moon"]);
-        assert_eq!(frame.primary_light, if expected["primary"] == "sun" { frame.sun } else { frame.moon }, "{label}");
-        assert_triple(label, "skylight.color", frame.skylight.color.rgb_array(), &expected["skylight"]["color"]);
-        let skylight = expected["skylight"]["intensity"].as_f64().unwrap();
-        assert_close(label, "skylight.intensity", f64::from(frame.skylight.intensity), skylight);
-        assert_triple(label, "wind.direction", frame.wind.direction.to_array(), &expected["wind"]["direction"]);
-        assert_triple(label, "wind.velocity", frame.wind.velocity.to_array(), &expected["wind"]["velocity"]);
-        assert_close(label, "wind.speed", f64::from(frame.wind.speed), expected["wind"]["speed"].as_f64().unwrap());
+        case["frame"] = frame_record(&frame);
     }
+    golden.assert_matches(&produced, &Tolerance::relative(TOLERANCE));
 }
 
 #[test]

@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Documents, ported from `test/document.test.js`: reading, budgets, malformed input, every shipped asset at default
-//! and maximum parameters, typed overrides, project renames, variants, and the gameplay examples' entity records.
+//! Documents: reading, budgets, malformed input, every shipped asset at default and maximum parameters, typed
+//! overrides, project renames, variants, and the gameplay examples' entity records.
 
 use form_lab::document::{
     DocumentError,

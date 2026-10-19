@@ -6,7 +6,7 @@
 //!
 //! Games declare a list of [`ConfigField`]s (their CONFIG panel), merge saved overrides into a complete record with
 //! [`create_config_values`] or [`create_config_document_values`], and generate the persistence schema with
-//! [`create_config_schema`]. Values are JavaScript numbers (`f64`); records keep field order. Validation order and
+//! [`create_config_schema`]. Values are double-precision numbers (`f64`); records keep field order. Validation order and
 //! error messages preserve the authored format's established validation contract.
 
 use indexmap::IndexMap;
@@ -36,7 +36,7 @@ const DOCUMENT_KEYS: [&str; 3] = ["$schema", "version", "values"];
 /// A field step of exactly one marks an integer field.
 const INTEGER_STEP: f64 = 1.0;
 
-/// When a changed value takes effect, serialized with the TypeScript `TUNING_APPLY_MODE` spellings.
+/// When a changed value takes effect, serialized as `live`, `next-spawn`, or `restart`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ConfigApplyMode {
@@ -88,7 +88,7 @@ pub struct ConfigField {
 /// A complete, independently owned value record keyed by field key, in field order.
 pub type ConfigValues = IndexMap<String, f64>;
 
-/// Invalid field metadata, overrides, or documents. Messages match the TypeScript engine.
+/// Invalid field metadata, overrides, or documents. Messages are stable diagnostics.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum ConfigError {
     /// A field had an empty key.
@@ -159,7 +159,7 @@ pub fn create_config_values(
 /// Validate a serialized version-1 override document (untrusted parsed JSON) and return complete values.
 ///
 /// The document must be an object with only `$schema` (a string, optional), `version` (exactly 1), and `values` (an
-/// object of overrides). Override values that are not JSON numbers fail as non-finite, like the TypeScript check.
+/// object of overrides). Override values that are not JSON numbers fail the finite check at their field.
 pub fn create_config_document_values(fields: &[ConfigField], document: &Value) -> Result<ConfigValues, ConfigError> {
     let Value::Object(record) = document else {
         return Err(ConfigError::DocumentNotAnObject);
@@ -183,9 +183,9 @@ pub fn create_config_document_values(fields: &[ConfigField], document: &Value) -
 
 /// Produce the strict JSON Schema (draft 2020-12) used by editors and persistence boundaries.
 ///
-/// Values stay optional because override files only store authored differences. Key order and number spelling match
-/// the TypeScript `createConfigSchema`, so `serde_json::to_string_pretty` writes the same text as
-/// `JSON.stringify(schema, null, 2)`.
+/// Values stay optional because override files only store authored differences. Key order and number spelling
+/// (integral bounds as JSON integers) are fixed, so `serde_json::to_string_pretty` reproduces existing schema files
+/// byte for byte, except that it writes small magnitudes such as `0.000001` in exponent form (`1e-6`).
 pub fn create_config_schema(fields: &[ConfigField]) -> Result<Value, ConfigError> {
     validate_fields(fields)?;
 

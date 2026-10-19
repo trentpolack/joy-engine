@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The real interface on a headless device with synthetic input, ported from the TypeScript `live-apply-browser.mjs`
-//! and `browser.mjs` checks.
+//! The real interface on a headless device with synthetic input: live and explicit apply, script diagnostics, keyboard
+//! shortcuts and camera gestures, slider undo, emitter selection, and hosted tabs.
 
 use joy_engine::egui::{
     Key,

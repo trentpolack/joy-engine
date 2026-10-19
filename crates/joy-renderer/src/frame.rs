@@ -19,8 +19,8 @@ use joy_core::{
 use crate::environment::ImageLighting;
 use crate::texture::TextureAsset;
 
-/// Point lights the renderer draws per frame, matching the TypeScript engine. Frames may supply more; the renderer keeps
-/// the ones that contribute most to the view (see [`FrameInputs::lights`]).
+/// Point lights the renderer draws per frame, the length of the scene shaders' light arrays (`scene-common.wgsl`).
+/// Frames may supply more; the renderer keeps the ones that contribute most to the view (see [`FrameInputs::lights`]).
 pub const MAX_POINT_LIGHTS: usize = 32;
 
 /// Default ambient irradiance when no environment is supplied; with an environment the default is zero, since the
@@ -58,7 +58,7 @@ pub struct EnvironmentLighting {
 }
 
 impl EnvironmentLighting {
-    /// Pack into the sixteen-vec4 block shared with the TypeScript engine's environment uniforms.
+    /// Pack into the sixteen-vec4 `environment` block of the sky uniforms, in the slot order `atmosphere.wgsl` reads.
     pub fn pack(&self) -> [[f32; 4]; 16] {
         let light = |light: &DirectionalLight| -> ([f32; 4], [f32; 4]) {
             (
@@ -96,7 +96,7 @@ pub struct ColorVertex {
 
 /// A transient world-space vertex with texture coordinates, for textured transparent draws such as particle sprites.
 ///
-/// The layout (36 bytes: XYZ, RGBA, UV) matches the TypeScript textured particle stream.
+/// The layout (36 bytes: XYZ, RGBA, UV) matches the vertex attributes of `textured.wgsl`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct TexturedVertex {

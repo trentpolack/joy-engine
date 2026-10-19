@@ -420,8 +420,7 @@ pub(crate) fn prepare_environment_map(
     Ok(EnvironmentMap { bind_group, _views: views, _textures: textures, max_mip: (mips - 1) as f32 })
 }
 
-/// Convert a validated nonnegative value to an IEEE half float, including subnormals and mantissa carry, like the
-/// TypeScript `encodePositiveHalf`.
+/// Convert a validated nonnegative value to an IEEE half float, including subnormals and mantissa carry.
 fn encode_positive_half(value: f32) -> u16 {
     let value = f64::from(value);
     if value < deterministic::powi(2_f64, -14) {

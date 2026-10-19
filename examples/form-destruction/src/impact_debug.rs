@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Bounded world-space impact markers (TypeScript `impact-debug.ts`): a white hit cross, a yellow incoming-ray segment,
-//! and three cyan rings outlining the spherical damage radius. Markers draw in the transparent pass (unlit, depth
-//! tested), fade before expiry, and are released when disabled or cleared. Scenes are borrowed per call.
+//! Bounded world-space impact markers: a white hit cross, a yellow incoming-ray segment, and three cyan rings outlining
+//! the spherical damage radius. Markers draw in the transparent pass (unlit, depth tested), fade before expiry, and are
+//! released when disabled or cleared. Scenes are borrowed per call.
 
 use joy_engine::prelude::*;
 use joy_engine::rendering::{

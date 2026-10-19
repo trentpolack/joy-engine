@@ -1,12 +1,13 @@
 # Copyright (c) 2026 Trent Polack. All Rights Reserved.
 # Licensed under the MIT License.
 
-# Test-only helpers shared by Joy Engine crates (recorded-reference comparison). A dev-dependency only; never part of
-# the engine API.
+# Test-only golden-file helpers shared by Joy Engine crates and games. Engine crates take it as a dev-dependency;
+# games reach it as `joy_engine::testing` through the facade's `test-support` feature in their dev-dependencies, so
+# it never reaches a game build.
 
 [package]
 name = "joy-test-support"
-description = "Test-only helpers shared by Joy Engine crates."
+description = "Test-only golden-file helpers shared by Joy Engine crates and games."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

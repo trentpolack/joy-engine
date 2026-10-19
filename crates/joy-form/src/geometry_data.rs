@@ -15,7 +15,7 @@ use crate::materials::FormMaterial;
 ///
 /// Distances use script units. Per-vertex arrays are flat and share one vertex order:
 /// `positions` and `normals` hold three components per vertex, `uvs` two, `colors` three, and
-/// `alphas` one. The JSON form uses the TypeScript runtime's camelCase field names; absent
+/// `alphas` one. The JSON form uses camelCase document field names; absent
 /// `userData` and `outputs` are omitted and an absent `project` is `null`.
 ///
 /// The record is plain owned data. The caller owns it outright; it borrows nothing from the
@@ -62,7 +62,7 @@ impl GeometryData {
     /// The result has one entry per `materials` record, in palette order, so
     /// `triangle_materials` and `point_materials` index it directly. Evaluated palettes are
     /// already validated; a missing or malformed field (for example, after manual editing)
-    /// falls back to the TypeScript `defaultMaterial()` value for that field.
+    /// falls back to the `FormMaterial::default()` value for that field.
     pub fn form_materials(&self) -> Vec<FormMaterial> {
         self.materials.iter().map(FormMaterial::from_json).collect()
     }

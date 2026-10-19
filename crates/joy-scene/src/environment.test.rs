@@ -12,7 +12,7 @@ use joy_renderer::CloudOptions;
 use super::*;
 
 #[test]
-fn packed_environment_matches_the_typescript_uniform_layout() {
+fn packed_environment_matches_the_shader_uniform_layout() {
     let options = EnvironmentOptions { time_of_day: 0.5, ..Default::default() };
     let frame = EnvironmentSystem::new(options).unwrap().step(2.0).unwrap();
     let sky = SkyOptions { clouds: CloudOptions { shadow_strength: 0.3, ..Default::default() }, ..Default::default() };

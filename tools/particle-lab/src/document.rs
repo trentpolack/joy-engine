@@ -64,7 +64,7 @@ pub fn read_recovery_asset(text: &str) -> Result<ParticleEffectAsset, String> {
     Ok(lenient_asset(&record))
 }
 
-/// Export text: two-space indented JSON with a trailing newline (the TypeScript `JSON.stringify(asset, null, 2)`).
+/// Export text: two-space indented JSON with a trailing newline.
 pub fn write_asset(asset: &ParticleEffectAsset) -> String {
     let text = serde_json::to_string_pretty(&asset.to_json()).expect("effect JSON always serializes");
     format!("{text}\n")
@@ -261,8 +261,8 @@ pub fn delete_parameter(asset: &mut ParticleEffectAsset, name: &str) -> Result<(
     Ok(())
 }
 
-/// Rename parameter `name` to the trimmed `next` (moved to the end, as a re-added JavaScript key). Returns the new
-/// name, or `None` when the name is empty or unchanged.
+/// Rename parameter `name` to the trimmed `next`, which moves the parameter to the end of the document order. Returns
+/// the new name, or `None` when the name is empty or unchanged.
 pub fn rename_parameter(asset: &mut ParticleEffectAsset, name: &str, next: &str) -> Result<Option<String>, String> {
     let next = next.trim();
     if next.is_empty() || next == name {
@@ -477,7 +477,7 @@ fn contains_identifier(text: &str, name: &str) -> bool {
     })
 }
 
-/// `6000000` as `6,000,000` (JavaScript `toLocaleString` in English).
+/// `6000000` as `6,000,000`: English thousands separators.
 fn group_thousands(value: usize) -> String {
     let digits = value.to_string();
     let mut grouped = String::new();

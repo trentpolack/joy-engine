@@ -1,40 +1,66 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! GLB/glTF mesh decoding parity (strides, sparse accessors, embedded buffers, and a FORM LAB export), compared exactly
-//! against the TypeScript engine.
+//! GLB/glTF mesh decoding (strides, sparse accessors, embedded buffers, and a FORM LAB export) checked against
+//! `tests/fixtures/glb/glb-reference.json`, a golden recording of each fixture mesh or its rejection message. Comparisons
+//! are exact. Re-record with `JOY_UPDATE_FIXTURES=1` when decoding changes on purpose.
 
+use joy_core::IndexedMesh3D;
 use joy_dcc_gltf::{
     GlbError,
     parse_glb_mesh,
 };
-use joy_test_support::assert_matches_recording;
-use serde_json::Value;
+use joy_test_support::{
+    Tolerance,
+    golden_file,
+};
+use serde_json::{
+    Value,
+    json,
+};
 
-const GLB_REFERENCE: &str = include_str!("../fixtures/glb/glb-reference.json");
 const MULTI_MESH_GLB: &[u8] = include_bytes!("../fixtures/glb/multi-mesh.glb");
 const EMBEDDED_GLTF: &[u8] = include_bytes!("../fixtures/glb/embedded.gltf");
 const FORM_SPHERE_GLB: &[u8] = include_bytes!("../fixtures/glb/form-sphere.glb");
 
-#[test]
-fn glb_meshes_decode_like_the_typescript_loader() {
-    let reference: Value = serde_json::from_str(GLB_REFERENCE).unwrap();
-    for case in reference.as_array().unwrap() {
-        let bytes = match case["file"].as_str().unwrap() {
-            "multi-mesh.glb" => MULTI_MESH_GLB,
-            "embedded.gltf" => EMBEDDED_GLTF,
-            "form-sphere.glb" => FORM_SPHERE_GLB,
-            other => panic!("unexpected fixture {other}"),
-        };
-        let context = format!("{} {}", case["file"], case["mesh"]);
-        match (parse_glb_mesh(bytes, case["mesh"].as_str()), case["result"].get("ok")) {
-            (Ok(mesh), Some(expected)) => assert_matches_recording(&mesh, expected, &context),
-            (Err(error), None) => assert_eq!(error.to_string(), case["result"]["error"].as_str().unwrap(), "{context}"),
-            (result, _) => panic!("{context}: {result:?} does not match {}", case["result"]),
-        }
+/// The container a recorded case decodes, by its file name.
+fn fixture_bytes(file: &str) -> &'static [u8] {
+    match file {
+        "multi-mesh.glb" => MULTI_MESH_GLB,
+        "embedded.gltf" => EMBEDDED_GLTF,
+        "form-sphere.glb" => FORM_SPHERE_GLB,
+        other => panic!("unexpected fixture {other}"),
     }
+}
 
-    // An empty name selects the first mesh, like the TypeScript loader.
+/// A decode result as the recording spells it: `{"ok": mesh}` or `{"error": message}`.
+fn result_record(result: Result<IndexedMesh3D, GlbError>) -> Value {
+    match result {
+        Ok(mesh) => json!({
+            "ok": {
+                "name": mesh.name,
+                "positions": mesh.positions,
+                "normals": mesh.normals,
+                "indices": mesh.indices,
+            }
+        }),
+        Err(error) => json!({"error": error.to_string()}),
+    }
+}
+
+#[test]
+fn glb_meshes_decode_as_recorded() {
+    let golden = golden_file!("glb/glb-reference.json");
+    let mut produced = golden.recording().clone();
+
+    // Each case names a container and an optional mesh; `null` selects the first mesh.
+    for case in produced.as_array_mut().unwrap() {
+        let bytes = fixture_bytes(case["file"].as_str().unwrap());
+        case["result"] = result_record(parse_glb_mesh(bytes, case["mesh"].as_str()));
+    }
+    golden.assert_matches(&produced, &Tolerance::exact());
+
+    // An empty name selects the first mesh, the same as no name.
     assert_eq!(parse_glb_mesh(MULTI_MESH_GLB, Some("")).unwrap().name, "Tetra");
 }
 

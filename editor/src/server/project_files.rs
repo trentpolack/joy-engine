@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Native project files: the Rust port of `project-files.mjs`.
+//! Native project files.
 //!
 //! A hosting workspace (the game repository) keeps its projects in `projects/<id>/`, each with a `project.joyproject`
 //! manifest. Open Folder adds any other folder with a manifest for the session; it never changes the workspace.

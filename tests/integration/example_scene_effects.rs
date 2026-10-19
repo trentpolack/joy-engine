@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The SCENE EFFECTS example (`examples/scene-effects`) on a real device, ported from its browser captures: the room
-//! renders with 27 shadowed point lights, effect presets and temporal tests change the frame without blanking it, the
-//! shadow fixture's off-camera blocker shadows the floor through five lights, and the shadow-material fixture's masked,
-//! PBR, and vertex-color casters and receivers shadow one another.
+//! The SCENE EFFECTS example (`examples/scene-effects`) on a real device: the room renders with 27 shadowed point
+//! lights, effect presets and temporal tests change the frame without blanking it, the shadow fixture's off-camera
+//! blocker shadows the floor through five lights, and the shadow-material fixture's masked, PBR, and vertex-color
+//! casters and receivers shadow one another.
 //!
 //! Needs a GPU adapter (llvmpipe or SwiftShader is enough); without one each test prints a note and returns. Set
 //! `JOY_RENDER_CAPTURE_DIR` to keep PNG captures. Native only.
@@ -160,8 +160,8 @@ fn replacing_the_scene_swaps_the_wall_colors() {
     assert!(left_wall[2] > left_wall[0] * 2.0, "the replacement's left wall is blue: {left_wall:?}");
 }
 
-/// The TypeScript `shadows-browser` capture: an off-camera blocker shadows the floor from five lights, one light can
-/// opt out of casting while still lighting, and the fifth light illuminates on its own.
+/// The shadow fixture: an off-camera blocker shadows the floor from five lights, one light can opt out of casting while
+/// still lighting, and the fifth light illuminates on its own.
 #[test]
 fn the_shadow_fixture_casts_from_an_off_camera_blocker() {
     let Some(mut shell) = shell() else {
@@ -197,11 +197,11 @@ fn the_shadow_fixture_casts_from_an_off_camera_blocker() {
 // Shadow-material fixture
 // ---------------------------------------------------------------------------------------------------------------------
 
-/// Capture size of the TypeScript fixture.
+/// Capture size of the shadow-material fixture, in pixels.
 const FIXTURE_SIZE: u32 = 640;
 
-/// Floor positions (z = 0.5) the TypeScript fixture samples: inside alternating checker cells of the blocker's
-/// texture, plus one point beyond the blocker.
+/// Floor positions (z = 0.5) the fixture samples: inside alternating checker cells of the blocker's texture, plus one
+/// point beyond the blocker.
 const SAMPLE_X: [f32; 5] = [-1.5, -0.5, 0.5, 1.5, 4.0];
 
 /// A 32-pixel texture of 4×4 cells: white where `(x + y)` is odd, transparent elsewhere.
@@ -250,7 +250,7 @@ fn fixture_mesh(masked: bool, pbr_floor: bool) -> PbrMesh {
     }
 }
 
-/// A horizontal vertex-color quad (the TypeScript colored triangle queue), lit like `Shading::Lit` meshes.
+/// A horizontal vertex-color quad standing in for colored triangle geometry, lit like `Shading::Lit` meshes.
 fn colored_quad(half: f32, height: f32, color: f32) -> MeshAsset {
     MeshAsset::from_channels(MeshChannels {
         positions: &[-half, height, -half, half, height, -half, half, height, half, -half, height, half],
@@ -261,7 +261,7 @@ fn colored_quad(half: f32, height: f32, color: f32) -> MeshAsset {
     .expect("quad geometry")
 }
 
-/// Render one fixture variant from the TypeScript camera with light straight down, returning the red channel at each
+/// Render one fixture variant from the fixture's camera with light straight down, returning the red channel at each
 /// sample.
 fn capture_mask_shadow(
     gpu: &GpuContext,
@@ -337,7 +337,7 @@ fn capture_mask_shadow(
         .collect()
 }
 
-/// The TypeScript `shadow-material-fixture` regression: only the floor is visible; a high cutout casts vertically.
+/// The shadow-material fixture: only the floor is visible; a high cutout casts vertically.
 #[test]
 fn masked_pbr_casters_shadow_receivers_through_alpha_holes() {
     let Some(gpu) = pollster::block_on(GpuContext::headless(BackendPreference::Auto))

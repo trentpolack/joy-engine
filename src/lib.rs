@@ -143,6 +143,11 @@ pub use log;
 /// JSON values for authored records and FORM parameters.
 pub use serde_json;
 
+/// Golden-file helpers for games' tests (`joy-test-support`): recordings of deterministic behavior that tests check
+/// and re-record with `JOY_UPDATE_FIXTURES=1`. Enabled by the `test-support` feature, which games turn on only in their
+/// `[dev-dependencies]`.
+#[cfg(feature = "test-support")]
+pub use joy_test_support as testing;
 /// The browser binding generator, re-exported for [`web_main!`]. Not part of the game-facing API.
 #[cfg(target_arch = "wasm32")]
 #[doc(hidden)]

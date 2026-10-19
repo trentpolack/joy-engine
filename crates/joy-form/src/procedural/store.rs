@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 //! Editable geometry records, attribute storage, topology edits, and allocation limits.
-//! Ported from `src/form/procedural-geometry.ts`.
 
 use crate::{
     math::hypot,

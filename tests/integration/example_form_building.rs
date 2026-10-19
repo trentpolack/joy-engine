@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The FORM BUILDING example (`examples/form-building`), ported from its Node tests and browser captures: presets and
-//! extreme parameters evaluate to valid deterministic geometry, material overrides reach the PBR asset, failed
-//! evaluations leave the previous building intact, baked records round trip, the FORM LAB documents resolve through
-//! `FormAssetLibrary` to the same building, and every preset and baked mode render.
+//! The FORM BUILDING example (`examples/form-building`): presets and extreme parameters evaluate to valid deterministic
+//! geometry, material overrides reach the PBR asset, failed evaluations leave the previous building intact, baked
+//! records round trip, the FORM LAB documents resolve through `FormAssetLibrary` to the same building, and every preset
+//! and baked mode render.
 //!
 //! The render test needs a GPU adapter (llvmpipe or SwiftShader is enough); without one it prints a note and returns.
 //! Set `JOY_RENDER_CAPTURE_DIR` to keep PNG captures. Native only.
@@ -93,7 +93,7 @@ fn presets_extremes_and_overrides_evaluate_deterministically() {
         assert_eq!(geometry, program.evaluate(&values, None).unwrap(), "{name}: deterministic");
         sizes.push((name, geometry.positions.len() / 3, geometry.triangles.len() / 3));
     }
-    // The TypeScript findings' vertex and triangle counts.
+    // Known vertex and triangle counts: a change here means the generated buildings changed.
     assert_eq!(sizes[0], ("cottage".to_owned(), 198, 290));
     assert_eq!(sizes[1], ("warehouse".to_owned(), 232, 348));
     assert_eq!(sizes[2], ("apartments".to_owned(), 1480, 2220));

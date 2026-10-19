@@ -13,7 +13,7 @@ use joy_renderer::{
 /// The renderer's lighting record for one frame of `frame`, with `sky` shaping scattering, fog, clouds, light shafts,
 /// and ambient occlusion.
 ///
-/// Copies the values the TypeScript `createEnvironmentUniforms` and `createEnvironmentLighting` read, in their order.
+/// Copies the frame's lights, wind, and clock, and groups the sky settings into the slots the sky shader reads.
 /// Validate authored sky settings once with [`SkyOptions::validate`] before lighting frames with them.
 pub fn environment_lighting(frame: &EnvironmentFrame, sky: &SkyOptions) -> EnvironmentLighting {
     let atmosphere = &sky.atmosphere;

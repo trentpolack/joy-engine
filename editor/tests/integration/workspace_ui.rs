@@ -1,10 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The workspace driven through its real UI in a headless shell with synthetic input (the TypeScript workspace,
-//! content, and usability browser workflows): the Content Browser (open, search, filters, New, rename with F2,
-//! delete with confirmation, Cmd/Ctrl+P), saves and conflicts, external reloads, repair views, unsaved-work prompts,
-//! session restore, and the Documentation and Project Details panels.
+//! The workspace driven through its real UI in a headless shell with synthetic input: the Content Browser (open,
+//! search, filters, New, rename with F2, delete with confirmation, Cmd/Ctrl+P), saves and conflicts, external reloads,
+//! repair views, unsaved-work prompts, session restore, and the Documentation and Project Details panels.
 
 use joy_editor::workspace::main::TabContent;
 use joy_editor::workspace::tool_bridge::ToolRegistry;

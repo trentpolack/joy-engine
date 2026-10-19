@@ -67,7 +67,7 @@ const MAX_FIXED_STEP: f64 = 1.0;
 /// Largest accepted sub-step bound.
 const MAX_SUB_STEPS_LIMIT: u32 = 120;
 
-/// Tolerance that lets an accumulator a hair below one fixed step still execute it (matches the TypeScript engine).
+/// Tolerance that lets an accumulator a hair below one fixed step still execute it, so rounding cannot drop a step.
 const ACCUMULATOR_EPSILON: f64 = 1e-12;
 
 /// Source of world identities. This is identity bookkeeping only (it lets handles detect foreign worlds); it holds no
@@ -134,7 +134,7 @@ pub struct PhysicsWorld {
     // Identity stamped into every handle this world issues.
     pub(super) world_id: u64,
 
-    // Fixed-step policy and catch-up state (seconds; the accumulator is f64 like the TypeScript engine).
+    // Fixed-step policy and catch-up state (seconds; the accumulator is f64 so rounding does not shift step counts).
     fixed_step: f32,
     max_sub_steps: u32,
     accumulator: f64,
@@ -233,9 +233,9 @@ impl PhysicsWorld {
 
     /// Closest hit along the world-space segment from `from` to `to`, or `None`.
     ///
-    /// Like the TypeScript engine (cannon-es with `skipBackfaces`), a body whose shape contains the segment start is
-    /// ignored. Non-finite or zero-length segments return `None`. The result is a copy; the body handle is borrowed.
-    /// Queries read current body poses, so bodies created or teleported since the last step are found immediately.
+    /// A body whose shape contains the segment start is ignored (cannon-es `skipBackfaces` semantics). Non-finite or
+    /// zero-length segments return `None`. The result is a copy; the body handle is borrowed. Queries read current
+    /// body poses, so bodies created or teleported since the last step are found immediately.
     pub fn raycast(&self, from: Vec3, to: Vec3) -> Option<RaycastHit> {
         self.raycast_bodies(from, to, self.bodies.keys().copied())
     }

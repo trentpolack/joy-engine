@@ -162,7 +162,7 @@ pub enum StepScale {
 }
 
 impl StepScale {
-    /// The scale for a key press's modifiers; Shift wins over Alt as in the TypeScript controls.
+    /// The scale for a key press's modifiers; Shift wins over Alt.
     pub fn from_modifiers(modifiers: egui::Modifiers) -> Self {
         if modifiers.shift {
             Self::Fine

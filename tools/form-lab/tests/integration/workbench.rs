@@ -16,7 +16,7 @@ use joy_engine::{
     HeadlessShell,
 };
 
-/// Capture size, matching the TypeScript screenshots.
+/// Capture width.
 pub const WIDTH: u32 = 1280;
 /// Capture height.
 pub const HEIGHT: u32 = 800;
