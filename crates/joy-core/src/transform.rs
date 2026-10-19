@@ -42,7 +42,7 @@ impl Transform {
     pub const IDENTITY: Self = Self {
         position: Vec3::ZERO,
         rotation: Vec3::ZERO,
-        scale: Vec3::ONE
+        scale: Vec3::ONE,
     };
 
     /// Create a transform from its three components.
@@ -50,7 +50,7 @@ impl Transform {
         Self {
             position,
             rotation,
-            scale
+            scale,
         }
     }
 
@@ -77,7 +77,7 @@ impl Transform {
         Self {
             position: self.transform_point(offset),
             rotation: self.rotation,
-            scale: dimensions * self.scale
+            scale: dimensions * self.scale,
         }
     }
 }
@@ -93,19 +93,21 @@ pub fn quat_from_euler(rotation: Vec3) -> Quat {
 /// At gimbal lock the equivalent canonical rotation fixes X to zero, matching the TypeScript physics adapter.
 pub fn euler_from_quat(rotation: Quat) -> Vec3 {
     let (x, y, z, w) = (rotation.x, rotation.y, rotation.z, rotation.w);
-    let matrix11 = 1.0 - (((y*y) + (z* z))*2.0);
-    let matrix21 = 2.0 * ((x*y) + (z* w));
-    let matrix31 = 2.0 * ((x*z) - (y*w));
+    let (x_squared, y_squared, z_squared) = (x.powi(2), y.powi(2), z.powi(2));
+
+    let matrix11 = 1.0 - ((y_squared + z_squared) * 2.0);
+    let matrix21 = 2.0 * ((x * y) + (z * w));
+    let matrix31 = 2.0 * ((x * z) - (y * w));
     let cosine_y = matrix11.hypot(matrix21);
     let rotation_y = (-matrix31).atan2(cosine_y);
 
-    if cosine_y > GIMBAL_LOCK_EPSILON {
-        let rotation_x = (((y*z) + (x*w))*2.0).atan2(1.0 - (((x * x) + (y * y))*2.0));
+    if (cosine_y > GIMBAL_LOCK_EPSILON) {
+        let rotation_x = (((y * z) + (x * w)) * 2.0).atan2(1.0 - ((x_squared + y_squared) * 2.0));
         let rotation_z = matrix21.atan2(matrix11);
         return Vec3::new(rotation_x, rotation_y, rotation_z);
     }
 
-    let rotation_z = (((z*w) - (x*y))*2.0).atan2(1.0 - (((x*x) + (z*z))*2.0));
+    let rotation_z = (((z * w) - (x * y)) * 2.0).atan2(1.0 - ((x_squared + z_squared) * 2.0));
     Vec3::new(0.0, rotation_y, rotation_z)
 }
 

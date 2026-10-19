@@ -1,3 +1,6 @@
+# Unstable options that are useful for this project (`imports_layout` mostly).
+unstable_features = true
+
 # Matches `joy-apps` so engine, games, and tools share one Rust layout.
 max_width = 120
 use_small_heuristics = "Max"
@@ -6,5 +9,5 @@ use_small_heuristics = "Max"
 reorder_imports = true
 imports_layout = "Vertical"
 
-# Unstable options that are useful for this project (`imports_layout` mostly).
-unstable_features = true
+# No inlining of struct fields, even if they are small.
+struct_lit_width = 0

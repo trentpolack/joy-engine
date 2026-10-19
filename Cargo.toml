@@ -270,6 +270,7 @@ console_log = "1.0.0"
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
+unused_parens = "allow"
 
 [workspace.lints.clippy]
 # Explicit parenthesized arithmetic is part of the house style; keep clippy from fighting it.
