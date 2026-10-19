@@ -71,5 +71,5 @@ impl ConfigFile {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/config_file.rs"]
+#[path = "config_file.test.rs"]
 mod tests;

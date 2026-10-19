@@ -519,5 +519,5 @@ pub(crate) fn fullscreen_pipeline(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/materials.rs"]
+#[path = "mod.test.rs"]
 mod tests;

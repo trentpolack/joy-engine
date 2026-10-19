@@ -189,5 +189,5 @@ pub fn project_name_tokens(source: &str) -> Result<Vec<SourceToken>, Diagnostic>
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/lib.rs"]
+#[path = "lib.test.rs"]
 mod tests;

@@ -252,5 +252,5 @@ pub fn add_line(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/geometry.rs"]
+#[path = "mod.test.rs"]
 mod tests;

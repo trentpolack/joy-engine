@@ -60,5 +60,5 @@ pub fn distance_to_rectangle_edge(width: f64, height: f64, angle: f64) -> f64 {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/math.rs"]
+#[path = "mod.test.rs"]
 mod tests;

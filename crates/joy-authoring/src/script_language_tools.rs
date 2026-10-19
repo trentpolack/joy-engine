@@ -469,5 +469,5 @@ pub fn line_count(text: &str) -> usize {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/script_language_tools.rs"]
+#[path = "script_language_tools.test.rs"]
 mod tests;

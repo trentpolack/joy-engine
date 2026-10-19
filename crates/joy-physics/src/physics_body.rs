@@ -340,5 +340,5 @@ fn damping_coefficient(damping: f32) -> f32 {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/physics_body.rs"]
+#[path = "physics_body.test.rs"]
 mod tests;

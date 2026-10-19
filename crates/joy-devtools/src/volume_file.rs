@@ -141,5 +141,5 @@ fn volume_record_mut<'a>(
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/volume_file.rs"]
+#[path = "volume_file.test.rs"]
 mod tests;

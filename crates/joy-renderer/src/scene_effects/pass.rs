@@ -251,5 +251,5 @@ fn parse_declaration(declaration: &str, index: u32) -> Option<Binding> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/scene_effects/pass.rs"]
+#[path = "pass.test.rs"]
 mod tests;

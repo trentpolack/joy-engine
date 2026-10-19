@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Unit tests for `src/bin/joy-form-evaluate.rs`.
+//! Unit tests for `src/bin/joy-form-evaluate/main.rs`.
 
 use super::*;
 

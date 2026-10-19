@@ -603,5 +603,5 @@ impl MeshCollection {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/scene.rs"]
+#[path = "mod.test.rs"]
 mod tests;

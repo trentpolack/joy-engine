@@ -186,5 +186,5 @@ where
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/native.rs"]
+#[path = "native.test.rs"]
 mod tests;

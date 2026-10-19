@@ -539,5 +539,5 @@ fn invalid(message: &str) -> GlbError {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/glb_mesh_loader.rs"]
+#[path = "glb_mesh_loader.test.rs"]
 mod tests;

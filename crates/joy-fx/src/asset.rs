@@ -816,5 +816,5 @@ fn json_numbers(values: &[f64]) -> Value {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/asset.rs"]
+#[path = "asset.test.rs"]
 mod tests;

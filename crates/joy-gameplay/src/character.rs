@@ -190,5 +190,5 @@ impl<K: Into<String>, V: Into<ControlValue>> FromIterator<(K, V)> for ControlInt
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/character.rs"]
+#[path = "character.test.rs"]
 mod tests;

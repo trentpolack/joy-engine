@@ -186,5 +186,5 @@ impl LiveTuning {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/live_tuning.rs"]
+#[path = "live_tuning.test.rs"]
 mod tests;

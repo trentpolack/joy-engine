@@ -644,5 +644,5 @@ fn validate(data: &MeshData) -> Result<(), RenderError> {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/mesh.rs"]
+#[path = "mesh.test.rs"]
 mod tests;

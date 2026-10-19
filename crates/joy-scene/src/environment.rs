@@ -55,5 +55,5 @@ fn celestial_light(light: &AtmosphereLight) -> CelestialLight {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/environment.rs"]
+#[path = "environment.test.rs"]
 mod tests;

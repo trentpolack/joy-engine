@@ -480,5 +480,5 @@ fn paint_crescent(painter: &Painter, center: Pos2, radius: f32, color: Color32) 
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/hud_text.rs"]
+#[path = "hud_text.test.rs"]
 mod tests;

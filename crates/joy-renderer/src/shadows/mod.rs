@@ -249,5 +249,5 @@ pub(crate) fn point_face_views(position: Vec3, range: f32) -> [Mat4; POINT_FACES
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/shadows.rs"]
+#[path = "mod.test.rs"]
 mod tests;

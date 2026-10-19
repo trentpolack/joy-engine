@@ -734,5 +734,5 @@ fn fullscreen(
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/postprocessor.rs"]
+#[path = "mod.test.rs"]
 mod tests;

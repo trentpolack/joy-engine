@@ -72,5 +72,5 @@ impl FixedStepLoop {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/fixed_step.rs"]
+#[path = "fixed_step.test.rs"]
 mod tests;

@@ -509,5 +509,5 @@ fn validate_value(control: &PostProcessControl, value: &Value) -> Result<(), Pos
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/post_process.rs"]
+#[path = "post_process.test.rs"]
 mod tests;

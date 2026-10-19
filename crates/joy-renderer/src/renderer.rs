@@ -1650,5 +1650,5 @@ fn single_buffer_group(
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/renderer.rs"]
+#[path = "renderer.test.rs"]
 mod tests;

@@ -110,5 +110,5 @@ pub fn euler_from_quat(rotation: Quat) -> Vec3 {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/transform.rs"]
+#[path = "transform.test.rs"]
 mod tests;

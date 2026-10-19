@@ -277,5 +277,5 @@ impl TextureAsset {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/texture.rs"]
+#[path = "texture.test.rs"]
 mod tests;

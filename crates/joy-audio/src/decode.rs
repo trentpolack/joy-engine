@@ -62,5 +62,5 @@ fn decode_pcm(sound: &PcmSound) -> Result<DecodedSound, String> {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/decode.rs"]
+#[path = "decode.test.rs"]
 mod tests;

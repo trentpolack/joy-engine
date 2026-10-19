@@ -2,6 +2,10 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-19-2026
+### Engine Organization
+- Moved unit tests from `tests/unit/` to sit beside the module they test as `<file>.test.rs` (`mesh.rs` and `mesh.test.rs`), declared with a same-folder `#[path]`, so tests sort and move with their module and `tests/` holds only integration tests, fixtures, and tooling tests. See the [Rust coding standards](docs/rust-coding-standards.md#tests).
+
 ## 10-18-2026
 ### Engine Organization
 - Breaking: renamed the shell contract from `Game` to `App` (`app.rs`, with `AppResult`, `AppError`, and `ShellError::App`), since games, tools, and examples all implement it, and moved `FixedStepLoop` from `joy-app` into `joy-core` (still in the prelude).

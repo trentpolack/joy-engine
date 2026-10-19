@@ -32,5 +32,5 @@ pub fn backing_pixel_ratio(width: f32, height: f32, device_pixel_ratio: f32, lim
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/display.rs"]
+#[path = "display.test.rs"]
 mod tests;

@@ -63,5 +63,5 @@ pub fn decode_base64(encoded: &str) -> Option<Vec<u8>> {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/base64.rs"]
+#[path = "base64.test.rs"]
 mod tests;

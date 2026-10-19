@@ -156,5 +156,5 @@ pub(crate) fn claims_press(context: &egui::Context, position: egui::Pos2) -> boo
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/egui_layer.rs"]
+#[path = "egui_layer.test.rs"]
 mod tests;

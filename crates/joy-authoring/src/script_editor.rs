@@ -697,5 +697,5 @@ fn kind_color(kind: ScriptSymbolKind) -> Color32 {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/script_editor.rs"]
+#[path = "script_editor.test.rs"]
 mod tests;

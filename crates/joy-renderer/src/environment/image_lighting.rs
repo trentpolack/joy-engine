@@ -432,5 +432,5 @@ fn encode_positive_half(value: f32) -> u16 {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/environment/image_lighting.rs"]
+#[path = "image_lighting.test.rs"]
 mod tests;

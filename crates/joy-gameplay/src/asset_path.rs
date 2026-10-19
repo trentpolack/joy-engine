@@ -34,5 +34,5 @@ pub fn asset_path<'a>(path: &'a str, extensions: &[&str]) -> Result<&'a str, Ass
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/asset_path.rs"]
+#[path = "asset_path.test.rs"]
 mod tests;

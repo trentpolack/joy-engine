@@ -1306,5 +1306,5 @@ fn paint_reset_icon(ui: &Ui, rect: Rect, color: Color32) {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/lab_controls.rs"]
+#[path = "lab_controls.test.rs"]
 mod tests;

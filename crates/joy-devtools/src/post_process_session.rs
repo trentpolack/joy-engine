@@ -230,5 +230,5 @@ impl PostProcessSession {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/post_process_session.rs"]
+#[path = "post_process_session.test.rs"]
 mod tests;

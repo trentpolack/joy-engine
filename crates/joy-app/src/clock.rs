@@ -79,5 +79,5 @@ impl FrameClock {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/clock.rs"]
+#[path = "clock.test.rs"]
 mod tests;

@@ -686,5 +686,5 @@ fn rotate(point: [f64; 3], angles: [f64; 3], inverse: bool) -> [f64; 3] {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/asset_scene.rs"]
+#[path = "asset_scene.test.rs"]
 mod tests;

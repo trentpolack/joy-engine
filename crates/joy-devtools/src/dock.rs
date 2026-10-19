@@ -252,5 +252,5 @@ pub(crate) fn round_to_step(value: f64, step: f64) -> f64 {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/dock.rs"]
+#[path = "dock.test.rs"]
 mod tests;

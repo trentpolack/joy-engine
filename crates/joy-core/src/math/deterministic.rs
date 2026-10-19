@@ -156,5 +156,5 @@ pub fn cbrt(value: f64) -> f64 {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/math/deterministic.rs"]
+#[path = "deterministic.test.rs"]
 mod tests;

@@ -164,5 +164,5 @@ fn encode_base64(bytes: &[u8]) -> String {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/texture_source.rs"]
+#[path = "texture_source.test.rs"]
 mod tests;

@@ -765,5 +765,5 @@ pub fn key_code_name(code: winit::keyboard::KeyCode) -> String {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/lib.rs"]
+#[path = "lib.test.rs"]
 mod tests;

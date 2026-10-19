@@ -613,5 +613,5 @@ fn lenient_emitter(record: &Map<String, Value>, index: usize) -> ParticleEmitter
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/document.rs"]
+#[path = "document.test.rs"]
 mod tests;

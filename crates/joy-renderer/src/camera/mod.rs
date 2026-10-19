@@ -353,5 +353,5 @@ pub fn intersect_ray_plane(ray: WorldRay, normal: Vec3, offset: f32) -> Option<V
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/camera.rs"]
+#[path = "mod.test.rs"]
 mod tests;

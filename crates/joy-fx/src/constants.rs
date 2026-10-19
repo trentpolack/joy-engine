@@ -134,5 +134,5 @@ impl std::fmt::Display for ParticleValueKind {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/constants.rs"]
+#[path = "constants.test.rs"]
 mod tests;

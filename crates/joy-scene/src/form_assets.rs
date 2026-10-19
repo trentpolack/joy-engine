@@ -371,5 +371,5 @@ fn form_vertex(geometry: &GeometryData, index: usize, material: Option<&FormMate
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/form_assets.rs"]
+#[path = "form_assets.test.rs"]
 mod tests;

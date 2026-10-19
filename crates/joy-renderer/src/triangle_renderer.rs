@@ -332,5 +332,5 @@ fn triangle_pipeline(
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/triangle_renderer.rs"]
+#[path = "triangle_renderer.test.rs"]
 mod tests;

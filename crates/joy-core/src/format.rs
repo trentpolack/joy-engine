@@ -62,5 +62,5 @@ pub fn json_number(value: f64) -> Value {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/format.rs"]
+#[path = "format.test.rs"]
 mod tests;

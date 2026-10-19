@@ -67,5 +67,5 @@ pub fn random_integer(minimum: i64, maximum_exclusive: i64, random: &mut impl Ra
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/random.rs"]
+#[path = "random.test.rs"]
 mod tests;

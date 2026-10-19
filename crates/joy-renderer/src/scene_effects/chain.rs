@@ -678,5 +678,5 @@ fn transform_bytes(scale: [f32; 2]) -> [u8; 16] {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/scene_effects/chain.rs"]
+#[path = "chain.test.rs"]
 mod tests;

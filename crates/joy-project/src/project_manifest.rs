@@ -232,5 +232,5 @@ fn is_truthy(value: &Value) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/project_manifest.rs"]
+#[path = "project_manifest.test.rs"]
 mod tests;

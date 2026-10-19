@@ -81,5 +81,5 @@ pub fn sort_top_down_transparent_triangles(vertices: &[ColorVertex]) -> Vec<Colo
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/camera/top_down_camera.rs"]
+#[path = "top_down_camera.test.rs"]
 mod tests;

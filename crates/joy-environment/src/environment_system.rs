@@ -480,5 +480,5 @@ fn check_range(value: f64, minimum: f64, maximum: f64, name: &'static str) -> Re
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/environment_system.rs"]
+#[path = "environment_system.test.rs"]
 mod tests;

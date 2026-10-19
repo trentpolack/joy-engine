@@ -358,5 +358,5 @@ impl ConfigEditor {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/config_panel.rs"]
+#[path = "config_panel.test.rs"]
 mod tests;

@@ -489,5 +489,5 @@ pub(crate) fn scene_effect_pipelines(options: &SceneEffectsOptions, color: wgpu:
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/scene_effects/pipelines.rs"]
+#[path = "pipelines.test.rs"]
 mod tests;

@@ -370,5 +370,5 @@ fn quantize(channel: f32) -> u8 {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/color.rs"]
+#[path = "color.test.rs"]
 mod tests;

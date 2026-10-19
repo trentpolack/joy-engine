@@ -272,5 +272,5 @@ impl std::fmt::Debug for ConfigSession {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/config_session.rs"]
+#[path = "config_session.test.rs"]
 pub(crate) mod tests;

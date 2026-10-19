@@ -68,5 +68,5 @@ pub(super) fn finite_vector(value: Vec3, name: &'static str) -> Result<Vec3, Phy
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/convert.rs"]
+#[path = "convert.test.rs"]
 mod tests;

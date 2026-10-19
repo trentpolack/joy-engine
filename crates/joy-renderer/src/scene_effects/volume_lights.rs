@@ -252,5 +252,5 @@ fn intersects_tile(planes: &[[f64; 8]], tile: usize, x: f64, y: f64, z: f64, rad
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/scene_effects/volume_lights.rs"]
+#[path = "volume_lights.test.rs"]
 mod tests;

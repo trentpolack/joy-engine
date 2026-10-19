@@ -73,5 +73,5 @@ impl ScriptLanguageCatalog {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/scripting/language_information.rs"]
+#[path = "language_information.test.rs"]
 mod tests;

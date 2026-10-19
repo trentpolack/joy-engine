@@ -74,5 +74,5 @@ pub fn particle_language_catalog() -> ScriptLanguageCatalog {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/language_information.rs"]
+#[path = "language_information.test.rs"]
 mod tests;

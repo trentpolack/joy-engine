@@ -226,5 +226,5 @@ pub fn sort_transparent_triangles(vertices: &[ColorVertex], backward: Vec3) -> V
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/frame.rs"]
+#[path = "frame.test.rs"]
 mod tests;

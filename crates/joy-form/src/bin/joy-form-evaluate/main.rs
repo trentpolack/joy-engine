@@ -127,5 +127,5 @@ fn write_response(output: &mut impl Write, response: &Value) -> io::Result<()> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/bin/joy-form-evaluate.rs"]
+#[path = "main.test.rs"]
 mod tests;

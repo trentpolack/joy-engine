@@ -279,5 +279,5 @@ impl std::fmt::Debug for AudioBank {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/lib.rs"]
+#[path = "lib.test.rs"]
 mod tests;

@@ -540,5 +540,5 @@ fn union(left: Bounds, right: Bounds) -> Bounds {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/terrain/terrain_scene_pass.rs"]
+#[path = "terrain_scene_pass.test.rs"]
 mod tests;

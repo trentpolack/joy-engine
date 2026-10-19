@@ -1146,5 +1146,5 @@ fn scalar_operation(operator: BinaryOperator, left: f64, right: f64) -> f64 {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/script.rs"]
+#[path = "script.test.rs"]
 mod tests;

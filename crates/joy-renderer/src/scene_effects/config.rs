@@ -678,5 +678,5 @@ impl SceneEffectsOptions {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/scene_effects/config.rs"]
+#[path = "config.test.rs"]
 mod tests;

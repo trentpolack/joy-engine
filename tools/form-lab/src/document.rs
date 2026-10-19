@@ -228,5 +228,5 @@ pub fn file_stem(name: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/document.rs"]
+#[path = "document.test.rs"]
 mod tests;

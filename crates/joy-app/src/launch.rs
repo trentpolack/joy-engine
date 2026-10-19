@@ -32,5 +32,5 @@ fn argument_parameter(arguments: impl IntoIterator<Item = String>, name: &str) -
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/launch.rs"]
+#[path = "launch.test.rs"]
 mod tests;

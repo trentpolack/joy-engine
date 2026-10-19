@@ -172,5 +172,5 @@ fn append_line(
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/editor_grid.rs"]
+#[path = "editor_grid.test.rs"]
 mod tests;

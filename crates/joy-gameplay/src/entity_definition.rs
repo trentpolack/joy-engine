@@ -369,5 +369,5 @@ pub fn number_to_json(value: f32) -> Value {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/entity_definition.rs"]
+#[path = "entity_definition.test.rs"]
 mod tests;

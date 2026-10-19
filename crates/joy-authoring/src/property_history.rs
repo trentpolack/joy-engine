@@ -137,5 +137,5 @@ impl<Snapshot: Clone + PartialEq> PropertyHistory<Snapshot> {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/property_history.rs"]
+#[path = "property_history.test.rs"]
 mod tests;

@@ -289,5 +289,5 @@ fn has_color(record: &JsonRecord) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/level_scene.rs"]
+#[path = "level_scene.test.rs"]
 mod tests;

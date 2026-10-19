@@ -268,5 +268,5 @@ pub fn picked_color_hex(hex: &str, previous: &[f64], minimums: &[f64], maximums:
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/lab_values.rs"]
+#[path = "lab_values.test.rs"]
 mod tests;

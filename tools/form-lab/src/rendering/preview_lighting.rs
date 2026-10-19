@@ -269,5 +269,5 @@ pub fn quality_name(quality: ShadowQuality) -> &'static str {
 }
 
 #[cfg(test)]
-#[path = "../../tests/unit/rendering/preview_lighting.rs"]
+#[path = "preview_lighting.test.rs"]
 mod tests;

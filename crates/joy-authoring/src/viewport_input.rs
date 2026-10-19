@@ -157,5 +157,5 @@ pub fn viewport_input(ui: &mut Ui, rect: Rect, id: Id) -> ViewportActions {
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/viewport_input.rs"]
+#[path = "viewport_input.test.rs"]
 mod tests;

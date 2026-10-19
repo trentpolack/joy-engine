@@ -577,5 +577,5 @@ fn find_volume(level: &Value, entity: Option<&str>) -> Result<(String, PostProce
 }
 
 #[cfg(test)]
-#[path = "../tests/unit/post_process_editor.rs"]
+#[path = "post_process_editor.test.rs"]
 mod tests;
