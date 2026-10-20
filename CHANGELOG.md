@@ -2,6 +2,10 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-20-2026
+### Patch Delivery
+- Hosted patch application now searches both the host delivery directory and the source repository's `.patches/`, warns about duplicates, and removes matching bundles only after success or already-applied detection. Different patches and conflicts retain every bundle.
+
 ## 10-19-2026
 ### Engine Organization
 - Moved unit tests from `tests/unit/` to sit beside the module they test as `<file>.test.rs` (`mesh.rs` and `mesh.test.rs`), declared with a same-folder `#[path]`, so tests sort and move with their module and `tests/` holds only integration tests, fixtures, and tooling tests. See the [Rust coding standards](docs/rust-coding-standards.md#tests).

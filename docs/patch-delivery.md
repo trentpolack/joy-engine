@@ -38,6 +38,6 @@ JoyGames uses the same engine-owned implementation through the Node-only `joy-en
 | Command Location | Patched Repository | Bundle Location |
 | --- | --- | --- |
 | Engine root, standalone or nested | That engine repository | Engine root's `.patches/` |
-| JoyGames root | `joy-engine/` | JoyGames root's `.patches/` |
+| JoyGames root (apply) | `joy-engine/` | JoyGames root's `.patches/` and the engine root's `.patches/` |
 
-JoyGames keeps its existing `fetch-joy-engine-patch`, `apply-joy-engine-patch`, and `apply-patches` commands. Use those root commands for deliveries returned through a JoyGames cloud task. Running a command inside the nested engine intentionally uses the engine's own delivery directory. Bundles are not automatically moved or searched for in ancestor directories.
+JoyGames keeps its existing `fetch-joy-engine-patch`, `apply-joy-engine-patch`, and `apply-patches` commands. Applying from a host checks its configured delivery directory and the source repository's `.patches/`. Duplicate patches produce a warning listing both paths. Byte-identical copies apply once, and all four bundle files in each location are removed only after success or already-applied detection. Different patches fail before changing source or bundles; keep the intended bundle in one location before retrying. Conflicts retain every copy, and unrelated files remain untouched. Running a command inside the nested engine still uses only the engine's own delivery directory; there is no ancestor-directory search.

@@ -10,25 +10,40 @@ import { spawnSync } from 'node:child_process';
 import { readPatchPaths as readDeliveryPaths, runPatchGit, validatePatchScope } from './patch-delivery.mjs';
 
 /**
- * Apply one verified delivery, reconciling conflicts outside the live repository and cleaning up only on success.
+ * Find a delivery in the host or source repository, reconcile outside the live repository, and clean up on success.
+ * Identical patch copies share one application; different patches fail before any source or delivery is changed.
  * @param {import('./patch-delivery.mjs').PatchTarget} target
  * @param {string[]} [arguments_] Pass --no-mergetool for noninteractive failure handling.
  */
 export async function applyProjectPatch(target, arguments_ = process.argv.slice(2)) {
   const REPOSITORY_DIRECTORY = target.repositoryDirectory;
-  const PATCH_PATH = resolve(target.deliveryDirectory, target.patchName);
-  const BASE_PATH = resolve(target.deliveryDirectory, target.baseName);
   const useMergetool = !arguments_.includes('--no-mergetool');
   if(arguments_.length > 1 || (arguments_.length === 1 && useMergetool)) {
     throw new Error(`Usage: npm run apply-${target.id}-patch -- [--no-mergetool]`);
   }
 
-  if(!existsSync(PATCH_PATH)) {
+  const deliveryDirectories = [...new Set([target.deliveryDirectory, resolve(REPOSITORY_DIRECTORY, '.patches')])];
+  const pendingDirectories = deliveryDirectories.filter(directory => existsSync(resolve(directory, target.patchName)));
+  if(pendingDirectories.length === 0) {
     console.log(`No pending ${target.label} patch.`);
     return;
   }
 
-  const patch = await readFile(PATCH_PATH, 'utf8');
+  const PATCH_PATH = resolve(pendingDirectories[0], target.patchName);
+  const BASE_PATH = resolve(pendingDirectories[0], target.baseName);
+  const patchBytes = await readFile(PATCH_PATH);
+  if(pendingDirectories.length > 1) {
+    const patchPaths = pendingDirectories.map(directory => resolve(directory, target.patchName));
+    console.warn(`Warning: duplicate ${target.label} patches found:\n${patchPaths.join('\n')}`);
+    for(const patchPath of patchPaths.slice(1)) {
+      const duplicateBytes = await readFile(patchPath);
+      if(!patchBytes.equals(duplicateBytes)) {
+        throw new Error(`${target.label} patches differ. Keep the intended bundle in one delivery directory and retry. All patch files were retained; no source files were changed.`);
+      }
+    }
+    console.warn('The patches are identical. Applying once and cleaning up both bundles only after success.');
+  }
+  const patch = patchBytes.toString('utf8');
   validatePatchScope(target, patch);
 
   const reverseCheck = runGit(['apply', '--reverse', '--check', PATCH_PATH], false);
@@ -207,12 +222,14 @@ export async function applyProjectPatch(target, arguments_ = process.argv.slice(
   }
 
   /**
-   * Remove this delivery's files only after Git confirms successful application.
+   * Remove only the discovered matching bundles after Git confirms successful application.
    */
   async function removeAppliedPatchFiles() {
     // Remove metadata first so interrupted cleanup can still retry using the patch.
-    for(const fileName of target.deliveryNames) {
-      await rm(resolve(target.deliveryDirectory, fileName), {force: true});
+    for(const directory of pendingDirectories) {
+      for(const fileName of target.deliveryNames) {
+        await rm(resolve(directory, fileName), {force: true});
+      }
     }
     console.log(`Removed applied ${target.label} patch files.`);
   }
