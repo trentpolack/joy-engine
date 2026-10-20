@@ -1,3 +1,5 @@
+[![Rust CI](https://github.com/trentpolack/joy-engine/actions/workflows/rust-ci.yml/badge.svg)](https://github.com/trentpolack/joy-engine/actions/workflows/rust-ci.yml)
+
 # Joy Engine
 Joy Engine is a Rust game engine for native applications and browser WebAssembly. It provides rendering, simulation, procedural content, audio, input, and authoring tools through the `joy-engine` crate, a facade over the engine's system crates in `crates/` (`joy-core`, `joy-physics`, `joy-gameplay`, `joy-form`, `joy-renderer`, `joy-app`, and others). Games and tools use one implementation on Windows, macOS, Linux, WebGPU, and the WebGL 2 fallback.
 
