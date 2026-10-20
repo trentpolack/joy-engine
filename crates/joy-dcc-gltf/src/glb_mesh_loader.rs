@@ -20,7 +20,11 @@ use serde_json::{
     Value,
 };
 
-use joy_core::IndexedMesh3D;
+use joy_core::math::{
+    DVec3,
+    Vec3,
+};
+use joy_render_types::Mesh;
 
 /// `glTF` magic at the start of a binary container (little-endian).
 const GLB_MAGIC: u32 = 0x4654_6C67;
@@ -118,9 +122,9 @@ pub enum GlbError {
 /// Decode one indexed triangle mesh from binary (GLB) or JSON glTF 2.0 bytes.
 ///
 /// `mesh_name` selects a mesh by exact name, so exporters that retain other scene objects still work; `None` (or an
-/// empty name) selects the first mesh. Returns copied model-space data owned by the caller; float positions and
-/// normals widen to `f64` exactly.
-pub fn parse_glb_mesh(bytes: &[u8], mesh_name: Option<&str>) -> Result<IndexedMesh3D, GlbError> {
+/// empty name) selects the first mesh. Returns a copied model-space [`Mesh`] owned by the caller, with positions,
+/// normals, and indices (one unnamed material slot); float positions widen to `f64` exactly.
+pub fn parse_glb_mesh(bytes: &[u8], mesh_name: Option<&str>) -> Result<Mesh, GlbError> {
     let asset = GltfAsset::parse(bytes)?;
     asset.check_requirements()?;
     let mesh = asset.select_mesh(mesh_name.filter(|name| !name.is_empty()))?;
@@ -174,7 +178,14 @@ pub fn parse_glb_mesh(bytes: &[u8], mesh_name: Option<&str>) -> Result<IndexedMe
     if indices.iter().any(|index| *index as usize >= vertex_count) {
         return Err(GlbError::IndexOutOfRange);
     }
-    Ok(IndexedMesh3D { name, positions, normals, indices })
+    let positions = positions.as_chunks::<3>().0.iter().map(|position| DVec3::from_array(*position)).collect();
+    let normals =
+        normals.as_chunks::<3>().0.iter().map(|[x, y, z]| Vec3::new(*x as f32, *y as f32, *z as f32)).collect();
+    Ok(Mesh {
+        name,
+        normals: Some(normals),
+        ..Mesh::new(positions, indices)
+    })
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

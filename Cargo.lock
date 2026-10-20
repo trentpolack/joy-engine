@@ -1495,6 +1495,7 @@ name = "joy-dcc-gltf"
 version = "1.0.0"
 dependencies = [
  "joy-core",
+ "joy-render-types",
  "joy-test-support",
  "serde_json",
  "thiserror 2.0.21",
@@ -1546,6 +1547,7 @@ dependencies = [
  "joy-input",
  "joy-physics",
  "joy-project",
+ "joy-render-types",
  "joy-renderer",
  "joy-scene",
  "joy-storage",
@@ -1562,6 +1564,7 @@ name = "joy-environment"
 version = "1.0.0"
 dependencies = [
  "joy-core",
+ "joy-render-types",
  "joy-test-support",
  "log",
  "serde",
@@ -1574,6 +1577,7 @@ name = "joy-form"
 version = "1.0.0"
 dependencies = [
  "joy-core",
+ "joy-render-types",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -1624,6 +1628,7 @@ version = "1.0.0"
 dependencies = [
  "indexmap",
  "joy-core",
+ "joy-render-types",
  "joy-test-support",
  "rapier3d",
  "serde",
@@ -1643,6 +1648,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "joy-render-types"
+version = "1.0.0"
+dependencies = [
+ "indexmap",
+ "joy-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "joy-renderer"
 version = "1.0.0"
 dependencies = [
@@ -1652,6 +1668,7 @@ dependencies = [
  "indexmap",
  "joy-core",
  "joy-fx",
+ "joy-render-types",
  "joy-test-support",
  "log",
  "naga",
@@ -1675,6 +1692,7 @@ dependencies = [
  "joy-form",
  "joy-fx",
  "joy-gameplay",
+ "joy-render-types",
  "joy-renderer",
  "joy-test-support",
  "libm",

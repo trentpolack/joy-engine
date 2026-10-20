@@ -255,9 +255,15 @@ pub fn import_glb_mesh(bytes: &[u8], file_name: &str) -> Result<Json, String> {
     let mesh = json!({
         "kind": "mesh",
         "name": name,
-        "positions": decoded.positions.iter().map(|value| number(*value)).collect::<Vec<_>>(),
-        "normals": decoded.normals.iter().map(|value| number(*value)).collect::<Vec<_>>(),
-        "uvs": vec![0; decoded.positions.len() / 3 * 2],
+        "positions": decoded.positions.iter().flat_map(|position| position.to_array()).map(number).collect::<Vec<_>>(),
+        "normals": decoded
+            .normals
+            .iter()
+            .flatten()
+            .flat_map(|normal| normal.to_array())
+            .map(|value| number(f64::from(value)))
+            .collect::<Vec<_>>(),
+        "uvs": vec![0; decoded.positions.len() * 2],
         "indices": decoded.indices,
     });
     read_mesh(&mesh).map_err(|error| error.0)

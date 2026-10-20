@@ -8,10 +8,10 @@ use bytemuck::{
     Pod,
     Zeroable,
 };
+use joy_core::LinearColor;
 use joy_core::math::Vec3;
-use joy_core::{
+use joy_render_types::{
     DirectionalLight,
-    LinearColor,
     PointLight,
     Skylight,
 };
@@ -19,9 +19,11 @@ use joy_core::{
 use crate::environment::ImageLighting;
 use crate::texture::TextureAsset;
 
-/// Point lights the renderer draws per frame, the length of the scene shaders' light arrays (`scene-common.wgsl`).
-/// Frames may supply more; the renderer keeps the ones that contribute most to the view (see [`FrameInputs::lights`]).
-pub const MAX_POINT_LIGHTS: usize = 32;
+/// Point lights the renderer draws per frame: the width of the light texture every lit pass reads (`pointLights` in
+/// `scene-common.wgsl`). Each surface reads only the lights whose range reaches its light cluster, so the cost of many
+/// lights follows the pixels they light. Frames may supply more; the renderer keeps the ones that contribute most to
+/// the view (see [`FrameInputs::lights`]).
+pub const MAX_POINT_LIGHTS: usize = 1024;
 
 /// Default ambient irradiance when no environment is supplied; with an environment the default is zero, since the
 /// environment's skylight provides ambient light.

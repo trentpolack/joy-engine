@@ -17,7 +17,7 @@ pub use environment_system::{
     WindFrame,
     WindOptions,
 };
-pub use joy_core::{
+pub use joy_render_types::{
     DirectionalLight,
     Skylight,
 };

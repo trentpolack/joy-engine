@@ -4,15 +4,11 @@
 //! Unit tests for `src/scene/mod.rs`.
 
 use super::*;
-use crate::mesh::MeshChannels;
+use joy_core::math::DVec3;
+use joy_render_types::Mesh;
 
 fn asset() -> MeshAsset {
-    MeshAsset::from_channels(MeshChannels {
-        positions: &[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
-        indices: &[0, 1, 2],
-        ..Default::default()
-    })
-    .unwrap()
+    MeshAsset::new(&Mesh::new(vec![DVec3::ZERO, DVec3::X, DVec3::Y], vec![0, 1, 2])).unwrap()
 }
 
 #[test]

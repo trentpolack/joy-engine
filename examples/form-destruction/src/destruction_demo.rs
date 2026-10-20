@@ -57,9 +57,6 @@ pub fn input_map() -> InputMap {
         .action(CANCEL_ACTION, [InputBinding::key(key::ESCAPE)])
 }
 
-/// Scene roughness of the structure, for reflections.
-const STRUCTURE_ROUGHNESS: f32 = 0.72;
-
 /// A press on the canvas, in logical pixels: where it began, the last orbit position, and whether it became a drag.
 #[derive(Clone, Copy, Debug)]
 struct PointerGesture {
@@ -321,10 +318,8 @@ impl FormDestructionDemo {
         if self.structure.active_chunk_count() == 0 {
             return Ok(());
         }
-        let asset = MeshAsset::from_asset_data(&create_structure_mesh_data(&self.structure, self.view))?;
-        let mut mesh = MeshInstance::new(asset);
-        mesh.scene_roughness = STRUCTURE_ROUGHNESS;
-        self.structure_mesh = Some(self.scene.insert(mesh));
+        let asset = MeshAsset::new(&create_structure_mesh_data(&self.structure, self.view))?;
+        self.structure_mesh = Some(self.scene.insert(MeshInstance::new(asset)));
         Ok(())
     }
 

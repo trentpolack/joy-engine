@@ -1,34 +1,21 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Scene-to-display pipeline: HDR scene targets, bloom, blurs, the display resolve, and the final presentation pass.
+//! Scene-to-display pipeline: the HDR scene targets, bloom, and the display resolve.
 //!
-//! The pass order is bloom, optional full-image blur and vignette edge blur, exposure and tone mapping, sRGB encoding,
-//! grade, vignette, antialiasing, then film grain. Presentation targets receive what their [`DisplayOutput`] expects:
-//! sRGB-encoded values for standard output (non-sRGB views store them directly and sRGB views encode on write), the same
-//! encoding continued above SDR white for extended sRGB, or linear light for extended linear (scRGB) surfaces.
+//! After the scene and its effects, bloom builds a mip pyramid from the exposed scene (prefilter, downsamples, then
+//! upsamples that blend each wider level into the next finer one), and the resolve writes the presentation target:
+//! exposure, bloom, vignette, the display transform (filmic, AgX, ACES 2.0, or none), HDR headroom, and the encoding
+//! the target expects. See `post-bloom.wgsl` and `post-resolve.wgsl`.
 //!
-//! The scene targets (color, depth, bloom, and blurs) are the scene size, which the renderer's render scale can set below
-//! the output size; the resolve upscales the scene into the output-sized display target with a bicubic filter, so the
-//! grade, antialiasing, grain, and any UI drawn afterwards keep full output resolution.
+//! The scene targets (color, depth, and bloom) are the scene size, which the renderer's render scale can set below the
+//! output size; the resolve upscales the scene into the output with a bicubic filter, so any UI drawn afterwards keeps
+//! full output resolution. Targets are rebuilt only when sizes or the bloom pyramid's shape change; strengths,
+//! thresholds, and tone curves are uniforms.
 //!
-//! With HDR headroom, the resolve keeps the tone mapper's image up to its shoulder and extends only its brightest
-//! highlights into the headroom (see `extendHighlights` in `post-resolve.wgsl`), so normally lit content looks the same
-//! as on a standard display.
-//!
-//! Bloom is the fragment path of luma.gl's `createBloomShaderPassPipeline` with Joy Engine's authored options (MIT
-//! License, Copyright (c) vis.gl contributors; see `post-bloom.wgsl` and `scene_effects/LICENSE-luma.gl`): a
-//! two-to-five level pyramid of thresholded tent extraction and separable Gaussians, bicubic reconstruction blended by
-//! scatter, optional horizontal starburst streaks, and an additive composite. Targets are rebuilt only when the drawing
-//! size or the effect graph (bloom levels, streaks, blur passes) changes; radii, thresholds, and intensities are plain
-//! uniforms.
+//! Exposure is the authored multiplier times the value in a one-texel exposure texture, which adaptive exposure writes
+//! and which holds one otherwise ([`PostProcessor::exposure_texture`]).
 
-use crate::post_process::{
-    AgxLook,
-    FilmGrainNoise,
-    PostProcessSettings,
-    ToneMapper,
-};
 use bytemuck::{
     Pod,
     Zeroable,
@@ -38,66 +25,49 @@ use crate::display_output::{
     DisplayOutput,
     OutputEncoding,
 };
-use crate::materials::{
+use crate::pipelines::{
     BLOOM_SOURCE,
-    BLUR_SOURCE,
     DEPTH_FORMAT,
-    DISPLAY_FORMAT,
-    EXTENDED_DISPLAY_FORMAT,
-    FINAL_SOURCE,
-    RESOLVE_SOURCE,
+    FullscreenTarget,
+    draw_fullscreen,
     fullscreen_pipeline,
+    resolve_source,
     sampler_entry,
     texture_entry,
     uniform_entry,
 };
+use crate::post_process::{
+    AgxLook,
+    BloomQuality,
+    PostProcessSettings,
+    ToneMapper,
+};
+use crate::tone_mapping::aces2::{
+    Aces2,
+    AcesUniforms,
+};
 
-/// Maps the authored bloom radius (a fraction of the shortest axis) to texels: 0.025 at 720 pixels is eight texels.
-const BLOOM_RADIUS_SCALE: f32 = 8.0 / (720.0 * 0.025);
+/// Most bloom pyramid levels; the coarsest level of a long reach is then 1/256 of the scene.
+const MAX_BLOOM_LEVELS: usize = 8;
 
-/// Upper bound on the bloom kernel in texels.
-const MAX_BLOOM_RADIUS: f32 = 24.0;
+/// Smallest bloom level extent in pixels.
+const MIN_BLOOM_LEVEL_SIZE: u32 = 2;
 
-/// luma.gl's `MAX_BLOOM_BLUR_RADIUS`: the anamorphic stretch keeps each axis within it.
-const MAX_BLOOM_BLUR_RADIUS: f32 = 24.0;
+/// Format of the exposure texture adaptive exposure writes: one texel, multiplier in red.
+pub(crate) const EXPOSURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
-/// Pyramid level sizes relative to the drawing buffer, widest first (luma.gl's `BLOOM_PYRAMID_LEVELS`).
-const BLOOM_LEVEL_SCALES: [f64; 5] = [0.5, 0.25, 0.125, 0.0625, 0.03125];
+/// Display headroom steps between ACES 2.0 table rebuilds: one twentieth of SDR white.
+const ACES_HEADROOM_STEPS: f32 = 20.0;
 
-/// Starburst ray length in half-resolution texels per bloom radius per shortest-axis pixel.
-const STARBURST_LENGTH_SCALE: f32 = 4.0;
+/// One as an IEEE half float, for the exposure texture's reset.
+const HALF_ONE: u16 = 0x3c00;
 
-/// luma.gl's longest starburst ray in half-resolution texels.
-const MAX_STARBURST_LENGTH: f32 = 256.0;
-
-/// Upper bound on the full-image Gaussian radius in texels.
-const MAX_BLUR_RADIUS: f32 = 32.0;
-
-/// Vignette edge-blur radius in half-resolution texels.
-const EDGE_BLUR_RADIUS: f32 = 6.0;
-
-/// One bloom draw's uniforms (`Bloom` in `post-bloom.wgsl`); each stage reads the fields it needs.
+/// `Bloom` in `post-bloom.wgsl`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 struct BloomUniforms {
-    texture_scale: [f32; 2],
-    delta: [f32; 2],
-    threshold: f32,
-    soft_knee: f32,
-    exposure: f32,
-    radius: f32,
-    scatter: f32,
-    intensity: f32,
-    starburst_intensity: f32,
-    starburst_length: f32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct BlurUniforms {
-    direction: [f32; 2],
-    radius: f32,
-    padding: f32,
+    source: [f32; 4],
+    pyramid: [f32; 4],
 }
 
 /// `Resolve` in `post-resolve.wgsl`.
@@ -105,33 +75,32 @@ struct BlurUniforms {
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 struct ResolveUniforms {
     display: [f32; 4],
-    grade: [f32; 4],
+    filmic: [f32; 4],
     vignette: [f32; 4],
-    viewport: [f32; 4],
     output: [f32; 4],
     scene: [f32; 4],
+    encoding: [f32; 4],
 }
 
-/// `Presentation` in `post-final.wgsl`.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-struct PresentationUniforms {
-    frame: [f32; 4],
-    grain: [f32; 4],
-    output: [f32; 4],
-}
-
-/// A texture with its default view and dimensions.
+/// A texture with its default view, a view shaders can sample, and dimensions.
 struct Target {
-    // The view borrows the texture; drop it first.
+    // The views borrow the texture; drop them first.
     view: wgpu::TextureView,
-    _texture: wgpu::Texture,
+    /// The default view, or for depth-stencil formats the depth aspect alone (shaders cannot bind both aspects).
+    sample_view: wgpu::TextureView,
+    texture: wgpu::Texture,
     width: u32,
     height: u32,
 }
 
 impl Target {
     fn new(device: &wgpu::Device, label: &str, width: u32, height: u32, format: wgpu::TextureFormat) -> Self {
+        // Color targets can be copied so scene effects write their results back into the scene color; depth formats
+        // such as `Depth24Plus` cannot be copied at all.
+        let mut usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
+        if !format.is_depth_stencil_format() {
+            usage |= wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::COPY_DST;
+        }
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
             size: wgpu::Extent3d { width: width.max(1), height: height.max(1), depth_or_array_layers: 1 },
@@ -139,49 +108,117 @@ impl Target {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage,
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        Self { view, _texture: texture, width: width.max(1), height: height.max(1) }
-    }
-
-    fn size(&self) -> (u32, u32) {
-        (self.width, self.height)
+        let sample_view = if format.has_stencil_aspect() {
+            texture.create_view(&wgpu::TextureViewDescriptor {
+                label: Some(label),
+                aspect: wgpu::TextureAspect::DepthOnly,
+                ..Default::default()
+            })
+        } else {
+            view.clone()
+        };
+        Self {
+            view,
+            sample_view,
+            texture,
+            width: width.max(1),
+            height: height.max(1),
+        }
     }
 }
 
-/// Shape of the effect graph; a change rebuilds targets and bind groups. Every field derives from the scene and output
-/// sizes, the display encoding, or a setting that adds or removes passes, so uniform-only changes keep the graph.
+/// The bloom pyramid's shape for a scene: how many levels, where the first one starts, and how much of the coarsest
+/// level blends in (so the glow's reach changes smoothly between whole levels).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct BloomPyramid {
+    shape: BloomShape,
+    coarsest_weight: f32,
+}
+
+/// The pyramid's targets: level count and whether the first level is full resolution.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BloomShape {
+    levels: usize,
+    full_resolution: bool,
+}
+
+impl BloomShape {
+    /// Size of pyramid level `level` for a scene.
+    fn level_size(&self, scene: (u32, u32), level: usize) -> (u32, u32) {
+        let shift = level + usize::from(!self.full_resolution);
+        (level_extent(scene.0, shift), level_extent(scene.1, shift))
+    }
+}
+
+impl BloomPyramid {
+    /// No bloom.
+    const NONE: Self = Self {
+        shape: BloomShape {
+            levels: 0,
+            full_resolution: false,
+        },
+        coarsest_weight: 0.0,
+    };
+
+    /// The pyramid that reaches `bloom_radius` of the shorter scene axis: each level doubles the footprint of a texel,
+    /// so the coarsest level's footprint matches the reach.
+    fn new(config: &PostProcessSettings, scene: (u32, u32)) -> Self {
+        if config.bloom_strength <= 0.0 {
+            return Self::NONE;
+        }
+        let full_resolution = config.bloom_quality == BloomQuality::Ultra;
+        let reach = (config.bloom_radius * scene.0.min(scene.1) as f32).max(2.0);
+        let exponent = reach.log2();
+        let whole = exponent.ceil();
+        let mut levels = (whole as usize + usize::from(full_resolution)).clamp(2, MAX_BLOOM_LEVELS);
+        let mut coarsest_weight = (exponent - (whole - 1.0)).clamp(0.0, 1.0);
+
+        // Stop before the coarsest level would shrink below a few pixels.
+        let first_shift = if full_resolution { 0 } else { 1 };
+        while levels > 1 && level_extent(scene.0.min(scene.1), first_shift + levels - 1) < MIN_BLOOM_LEVEL_SIZE {
+            levels -= 1;
+            coarsest_weight = 1.0;
+        }
+        Self {
+            shape: BloomShape {
+                levels,
+                full_resolution,
+            },
+            coarsest_weight,
+        }
+    }
+}
+
+/// An extent halved `shift` times, at least one.
+fn level_extent(extent: u32, shift: usize) -> u32 {
+    (extent >> shift.min(31)).max(1)
+}
+
+/// Shape of the post graph; a change rebuilds targets and bind groups. Every field derives from the scene and output
+/// sizes or the bloom pyramid's level count, so uniform-only changes (including radius within a level) keep the graph.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct GraphKey {
     /// Scene target size in pixels: the drawing size times the render scale.
     width: u32,
     height: u32,
-    /// Display and presentation size in pixels.
+    /// Presentation size in pixels.
     output_width: u32,
     output_height: u32,
-    /// Whether the display target holds extended-range values.
-    extended_display: bool,
-    bloom_levels: usize,
-    lens_flare: bool,
-    full_blur: bool,
-    edge_blur: bool,
+    bloom: BloomShape,
 }
 
 impl GraphKey {
-    fn new(config: &PostProcessSettings, scene: (u32, u32), output: (u32, u32), extended_display: bool) -> Self {
-        let bloom = config.bloom_strength > 0.0;
+    fn new(config: &PostProcessSettings, scene: (u32, u32), output: (u32, u32)) -> Self {
         Self {
             width: scene.0,
             height: scene.1,
             output_width: output.0,
             output_height: output.1,
-            extended_display,
-            bloom_levels: if bloom { config.bloom_quality.levels() } else { 0 },
-            lens_flare: bloom && config.bloom_lens_flare > 0.0,
-            full_blur: config.blur_radius > 0.0,
-            edge_blur: config.vignette_blur > 0.0,
+            bloom: BloomPyramid::new(config, scene).shape,
         }
     }
 
@@ -189,42 +226,25 @@ impl GraphKey {
     fn upscales(&self) -> bool {
         self.width < self.output_width || self.height < self.output_height
     }
-
-    /// Whether a blur reads the bloomed scene, so the bloom composite must run before it rather than in the resolve.
-    fn composes_bloom_early(&self) -> bool {
-        self.bloom_levels > 0 && (self.full_blur || self.edge_blur)
-    }
 }
 
-/// What one bloom draw computes; selects its pipeline and uniforms.
+/// What one bloom draw does; selects its pipeline.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BloomStage {
-    /// Thresholded tent from the scene into the first level.
-    Extract,
-    /// Tent from the previous level's extraction.
+    /// Exposed, thresholded scene into the first level.
+    Prefilter,
+    /// One level into the next coarser one.
     Downsample,
-    /// Horizontal Gaussian.
-    BlurHorizontal,
-    /// Vertical Gaussian.
-    BlurVertical,
-    /// Bicubic wider glow blended with this level's blur.
+    /// One level tent-filtered into the next finer one, blended by the step's weight.
     Upsample,
-    /// Starburst streaks from the reconstructed glow.
-    Lens,
-    /// Scene plus glow and streaks, ahead of a blur.
-    Composite,
 }
 
 impl BloomStage {
     fn label(self) -> &'static str {
         match self {
-            Self::Extract => "bloom extract",
+            Self::Prefilter => "bloom prefilter",
             Self::Downsample => "bloom downsample",
-            Self::BlurHorizontal => "bloom blur horizontal",
-            Self::BlurVertical => "bloom blur vertical",
             Self::Upsample => "bloom upsample",
-            Self::Lens => "bloom lens",
-            Self::Composite => "bloom composite",
         }
     }
 }
@@ -232,10 +252,12 @@ impl BloomStage {
 /// One bound bloom draw.
 struct BloomStep {
     stage: BloomStage,
-    /// Index of the output in `Graph::bloom_targets`.
+    /// Index of the output level.
     output: usize,
-    /// luma.gl's aspect correction between this draw's source and output.
-    texture_scale: [f32; 2],
+    /// Texel size of the source, in UV.
+    source_texel: [f32; 2],
+    /// How much of the upsampled glow the output level takes.
+    weight: f32,
     pass: Pass,
 }
 
@@ -250,43 +272,36 @@ struct Graph {
     key: GraphKey,
     scene: Target,
     depth: Target,
-    display: Target,
-    bloom_targets: Vec<Target>,
+    bloom_levels: Vec<Target>,
     bloom_steps: Vec<BloomStep>,
-    blur_targets: Option<(Target, Target)>,
-    edge_targets: Option<(Target, Target)>,
-    blur_passes: Vec<Pass>,
-    edge_passes: Vec<Pass>,
     resolve: Pass,
-    presentation: Pass,
 }
 
 /// Owns post-processing targets, pipelines, and the current display settings.
 pub(crate) struct PostProcessor {
     // Pipelines and layouts outlive every graph.
     bloom_layout: wgpu::BindGroupLayout,
-    blur_layout: wgpu::BindGroupLayout,
     resolve_layout: wgpu::BindGroupLayout,
-    presentation_layout: wgpu::BindGroupLayout,
-    extract_pipeline: wgpu::RenderPipeline,
+    prefilter_pipeline: wgpu::RenderPipeline,
     downsample_pipeline: wgpu::RenderPipeline,
-    bloom_blur_pipeline: wgpu::RenderPipeline,
     upsample_pipeline: wgpu::RenderPipeline,
-    lens_pipeline: wgpu::RenderPipeline,
-    composite_pipeline: wgpu::RenderPipeline,
-    blur_pipeline: wgpu::RenderPipeline,
     resolve_pipeline: wgpu::RenderPipeline,
-    presentation_pipeline: wgpu::RenderPipeline,
     linear_sampler: wgpu::Sampler,
     black: Target,
 
-    // Configuration. The presentation pass writes the display output's signal; an sRGB output view encodes it itself.
+    // Exposure the resolve and bloom read, and the ACES 2.0 tables for the current display peak.
+    exposure: wgpu::Texture,
+    exposure_view: wgpu::TextureView,
+    aces_buffer: wgpu::Buffer,
+    aces_peak: Option<f32>,
+
+    // Configuration. The resolve writes the presentation target's signal; an sRGB view encodes it itself.
     scene_format: wgpu::TextureFormat,
     output_format: wgpu::TextureFormat,
     display: DisplayOutput,
     config: PostProcessSettings,
 
-    // Size-dependent resources; `None` until the first resize.
+    // Size-dependent resources; `None` until the first prepare.
     graph: Option<Graph>,
 }
 
@@ -294,17 +309,14 @@ impl PostProcessor {
     /// Compile post-processing pipelines for the scene format and presentation format.
     pub fn new(
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         scene_format: wgpu::TextureFormat,
         output_format: wgpu::TextureFormat,
         config: PostProcessSettings,
     ) -> Self {
         let bloom_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("post bloom"),
-            entries: &[uniform_entry(0), texture_entry(1), sampler_entry(2), texture_entry(3), texture_entry(4)],
-        });
-        let blur_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("post blur"),
-            entries: &[uniform_entry(0), texture_entry(1), sampler_entry(2)],
+            entries: &[uniform_entry(0), texture_entry(1), sampler_entry(2), texture_entry(3)],
         });
         let resolve_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("post resolve"),
@@ -312,35 +324,36 @@ impl PostProcessor {
                 uniform_entry(0),
                 texture_entry(1),
                 texture_entry(2),
-                texture_entry(3),
-                sampler_entry(4),
-                texture_entry(5),
+                sampler_entry(3),
+                texture_entry(4),
+                uniform_entry(5),
             ],
         });
-        let presentation_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("post presentation"),
-            entries: &[uniform_entry(0), texture_entry(1), sampler_entry(2)],
-        });
 
-        let bloom = |label: &str, entry: &str| {
-            fullscreen_pipeline(device, label, BLOOM_SOURCE, entry, &bloom_layout, scene_format)
+        let replace = wgpu::BlendState::REPLACE;
+        let blend_by_constant = wgpu::BlendState {
+            color: wgpu::BlendComponent {
+                src_factor: wgpu::BlendFactor::Constant,
+                dst_factor: wgpu::BlendFactor::OneMinusConstant,
+                operation: wgpu::BlendOperation::Add,
+            },
+            alpha: wgpu::BlendComponent::REPLACE,
         };
-        let extract_pipeline = bloom("bloom-extract", "extractMain");
-        let downsample_pipeline = bloom("bloom-downsample", "downsampleMain");
-        let bloom_blur_pipeline = bloom("bloom-blur", "blurMain");
-        let upsample_pipeline = bloom("bloom-upsample", "upsampleMain");
-        let lens_pipeline = bloom("bloom-lens", "lensMain");
-        let composite_pipeline = bloom("bloom-composite", "compositeMain");
-        let blur_pipeline =
-            fullscreen_pipeline(device, "blur", BLUR_SOURCE, "fragmentMain", &blur_layout, scene_format);
-        let resolve_pipeline = resolve_pipeline(device, &resolve_layout, DisplayOutput::STANDARD);
-        let presentation_pipeline = fullscreen_pipeline(
+        let bloom = |label: &str, entry: &str, blend: wgpu::BlendState| {
+            fullscreen_pipeline(device, label, BLOOM_SOURCE, entry, &[&bloom_layout], scene_format, blend)
+        };
+        let prefilter_pipeline = bloom("bloom-prefilter", "prefilterMain", replace);
+        let downsample_pipeline = bloom("bloom-downsample", "downsampleMain", replace);
+        let upsample_pipeline = bloom("bloom-upsample", "upsampleMain", blend_by_constant);
+        let resolve_source = resolve_source();
+        let resolve_pipeline = fullscreen_pipeline(
             device,
-            "presentation",
-            FINAL_SOURCE,
+            "resolve",
+            &resolve_source,
             "fragmentMain",
-            &presentation_layout,
+            &[&resolve_layout],
             output_format,
+            replace,
         );
 
         let linear_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -353,42 +366,58 @@ impl PostProcessor {
         });
         let black = Target::new(device, "post black", 1, 1, scene_format);
 
-        Self {
+        let exposure = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("exposure"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: EXPOSURE_FORMAT,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let exposure_view = exposure.create_view(&wgpu::TextureViewDescriptor::default());
+        let aces_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("aces parameters"),
+            size: std::mem::size_of::<AcesUniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let processor = Self {
             bloom_layout,
-            blur_layout,
             resolve_layout,
-            presentation_layout,
-            extract_pipeline,
+            prefilter_pipeline,
             downsample_pipeline,
-            bloom_blur_pipeline,
             upsample_pipeline,
-            lens_pipeline,
-            composite_pipeline,
-            blur_pipeline,
             resolve_pipeline,
-            presentation_pipeline,
             linear_sampler,
             black,
+            exposure,
+            exposure_view,
+            aces_buffer,
+            aces_peak: None,
             scene_format,
             output_format,
             display: DisplayOutput::STANDARD,
             config,
             graph: None,
-        }
+        };
+        processor.reset_exposure(queue);
+        processor
     }
 
-    /// The display output the presentation pass writes for.
+    /// The display output the resolve writes for.
     pub fn display_output(&self) -> DisplayOutput {
         self.display
     }
 
-    /// Write for `display` from the next frame. Switching between standard and extended encodings recompiles the resolve
-    /// pass and rebuilds the targets; headroom changes are uniforms only.
-    pub fn set_display_output(&mut self, device: &wgpu::Device, display: DisplayOutput) {
-        if display.encoding.is_extended() != self.display.encoding.is_extended() {
-            self.resolve_pipeline = resolve_pipeline(device, &self.resolve_layout, display);
-            self.graph = None;
-        }
+    /// Write for `display` from the next frame; encodings and headroom are uniforms.
+    pub fn set_display_output(&mut self, display: DisplayOutput) {
         self.display = display;
     }
 
@@ -397,7 +426,8 @@ impl PostProcessor {
         &self.config
     }
 
-    /// Replace post-processing settings; the effect graph is rebuilt on the next frame only if its shape changed.
+    /// Replace post-processing settings; targets are rebuilt on the next frame only if the bloom pyramid's shape
+    /// changed.
     pub fn set_settings(&mut self, settings: PostProcessSettings) {
         self.config = settings;
     }
@@ -407,59 +437,84 @@ impl PostProcessor {
         &self.graph.as_ref().expect("prepare runs before the scene pass").scene.view
     }
 
-    /// Scene depth view for the current frame. Requires [`prepare`](Self::prepare).
+    /// HDR scene color texture for the current frame, for effects that copy their results into it. Requires
+    /// [`prepare`](Self::prepare).
+    pub fn scene_texture(&self) -> &wgpu::Texture {
+        &self.graph.as_ref().expect("prepare runs before the scene pass").scene.texture
+    }
+
+    /// Scene depth and stencil attachment view for the current frame. Requires [`prepare`](Self::prepare).
     pub fn depth_view(&self) -> &wgpu::TextureView {
         &self.graph.as_ref().expect("prepare runs before the scene pass").depth.view
     }
 
-    /// Ensure targets match the scene and output sizes (in pixels) and the effect graph, then upload this frame's
+    /// Scene depth alone, for shaders that read it (`texture_depth_2d`). Requires [`prepare`](Self::prepare).
+    pub fn depth_sample_view(&self) -> &wgpu::TextureView {
+        &self.graph.as_ref().expect("prepare runs before the scene pass").depth.sample_view
+    }
+
+    /// The one-texel exposure multiplier ([`EXPOSURE_FORMAT`], red channel) that adaptive exposure copies into.
+    pub fn exposure_texture(&self) -> &wgpu::Texture {
+        &self.exposure
+    }
+
+    /// Return the exposure multiplier to one, as without adaptive exposure.
+    pub fn reset_exposure(&self, queue: &wgpu::Queue) {
+        let one = HALF_ONE.to_le_bytes();
+        let texel = [one[0], one[1], one[0], one[1], one[0], one[1], one[0], one[1]];
+        queue.write_texture(
+            self.exposure.as_image_copy(),
+            &texel,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: None,
+                rows_per_image: None,
+            },
+            wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+
+    /// Ensure targets match the scene and output sizes (in pixels) and the bloom pyramid, then upload this frame's
     /// uniforms.
-    pub fn prepare(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        scene: (u32, u32),
-        output: (u32, u32),
-        time_seconds: f32,
-    ) {
-        let key = GraphKey::new(&self.config, scene, output, self.display.encoding.is_extended());
+    pub fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, scene: (u32, u32), output: (u32, u32)) {
+        let key = GraphKey::new(&self.config, scene, output);
         if self.graph.as_ref().map(|graph| graph.key) != Some(key) {
             self.graph = Some(self.build_graph(device, key));
         }
-        self.write_uniforms(queue, time_seconds);
+        self.write_aces_tables(queue);
+        self.write_uniforms(queue);
     }
 
-    /// Record every post-processing pass after the scene pass, ending in `output`.
+    /// Record bloom and the resolve after the scene and its effects, ending in `output`.
     pub fn encode(&self, encoder: &mut wgpu::CommandEncoder, output: &wgpu::TextureView) {
         let graph = self.graph.as_ref().expect("prepare runs before encode");
 
-        // Bloom: per level extraction or downsample and two Gaussians, reconstruction inward, streaks, early composite.
         for step in &graph.bloom_steps {
-            let pipeline = match step.stage {
-                BloomStage::Extract => &self.extract_pipeline,
-                BloomStage::Downsample => &self.downsample_pipeline,
-                BloomStage::BlurHorizontal | BloomStage::BlurVertical => &self.bloom_blur_pipeline,
-                BloomStage::Upsample => &self.upsample_pipeline,
-                BloomStage::Lens => &self.lens_pipeline,
-                BloomStage::Composite => &self.composite_pipeline,
+            let (pipeline, load) = match step.stage {
+                BloomStage::Prefilter => (&self.prefilter_pipeline, wgpu::LoadOp::Clear(wgpu::Color::BLACK)),
+                BloomStage::Downsample => (&self.downsample_pipeline, wgpu::LoadOp::Clear(wgpu::Color::BLACK)),
+                BloomStage::Upsample => (&self.upsample_pipeline, wgpu::LoadOp::Load),
             };
-            fullscreen(encoder, step.stage.label(), &graph.bloom_targets[step.output].view, pipeline, &step.pass);
+            let weight = f64::from(step.weight);
+            let target = FullscreenTarget {
+                view: &graph.bloom_levels[step.output].view,
+                load,
+                blend_constant: Some(wgpu::Color {
+                    r: weight,
+                    g: weight,
+                    b: weight,
+                    a: weight,
+                }),
+            };
+            draw_fullscreen(encoder, step.stage.label(), target, pipeline, &[&step.pass.bind_group]);
         }
 
-        // Full-image blur: horizontal into the first target, vertical into the second.
-        if let Some((horizontal, vertical)) = &graph.blur_targets {
-            fullscreen(encoder, "blur horizontal", &horizontal.view, &self.blur_pipeline, &graph.blur_passes[0]);
-            fullscreen(encoder, "blur vertical", &vertical.view, &self.blur_pipeline, &graph.blur_passes[1]);
-        }
-
-        // Vignette edge blur at half resolution.
-        if let Some((horizontal, vertical)) = &graph.edge_targets {
-            fullscreen(encoder, "edge blur horizontal", &horizontal.view, &self.blur_pipeline, &graph.edge_passes[0]);
-            fullscreen(encoder, "edge blur vertical", &vertical.view, &self.blur_pipeline, &graph.edge_passes[1]);
-        }
-
-        fullscreen(encoder, "resolve", &graph.display.view, &self.resolve_pipeline, &graph.resolve);
-        fullscreen(encoder, "presentation", output, &self.presentation_pipeline, &graph.presentation);
+        let target = FullscreenTarget::cleared(output);
+        draw_fullscreen(encoder, "resolve", target, &self.resolve_pipeline, &[&graph.resolve.bind_group]);
     }
 
     /// Allocate targets for a graph shape and bind every pass.
@@ -467,201 +522,129 @@ impl PostProcessor {
         let format = self.scene_format;
         let scene = Target::new(device, "scene color", key.width, key.height, format);
         let depth = Target::new(device, "scene depth", key.width, key.height, DEPTH_FORMAT);
-        let display_format = if key.extended_display { EXTENDED_DISPLAY_FORMAT } else { DISPLAY_FORMAT };
-        let display = Target::new(device, "display", key.output_width, key.output_height, display_format);
 
-        // Bloom targets: each level's extraction, Gaussian scratch, and blur, then the streaks and the early composite.
-        // Reconstruction writes each level's extraction again once it is no longer read, as luma.gl aliases them.
-        let mut bloom_targets = Vec::new();
-        let mut levels: Vec<[usize; 3]> = Vec::new();
-        for (level, scale) in BLOOM_LEVEL_SCALES.iter().take(key.bloom_levels).enumerate() {
-            let (width, height) = (level_size(key.width, *scale), level_size(key.height, *scale));
-            let first = bloom_targets.len();
-            for role in ["extract", "scratch", "blur"] {
-                bloom_targets.push(Target::new(device, &format!("bloom {role} {level}"), width, height, format));
-            }
-            levels.push([first, first + 1, first + 2]);
-        }
-        let lens = (key.lens_flare && !levels.is_empty()).then(|| {
-            let half = &bloom_targets[levels[0][0]];
-            let (width, height) = half.size();
-            bloom_targets.push(Target::new(device, "bloom lens", width, height, format));
-            bloom_targets.len() - 1
-        });
-        let composite = key.composes_bloom_early().then(|| {
-            bloom_targets.push(Target::new(device, "bloom composite", key.width, key.height, format));
-            bloom_targets.len() - 1
-        });
-
+        // The pyramid: the prefilter writes the first level, each downsample the next, then upsamples run back inward.
+        let scene_size = (key.width, key.height);
+        let bloom_levels: Vec<Target> = (0..key.bloom.levels)
+            .map(|level| {
+                let (width, height) = key.bloom.level_size(scene_size, level);
+                Target::new(device, &format!("bloom level {level}"), width, height, format)
+            })
+            .collect();
+        let texel = |target: &Target| [1.0 / target.width as f32, 1.0 / target.height as f32];
         let mut bloom_steps = Vec::new();
-        let black = &self.black.view;
-        let mut step =
-            |stage, source: &Target, glow: &wgpu::TextureView, streaks: &wgpu::TextureView, output: usize| {
-                bloom_steps.push(BloomStep {
-                    stage,
-                    output,
-                    texture_scale: texture_scale(source.size(), bloom_targets[output].size()),
-                    pass: self.bloom_pass(device, &source.view, glow, streaks),
-                });
+        for level in 0..bloom_levels.len() {
+            let (stage, source, source_texel) = match level {
+                0 => (BloomStage::Prefilter, &scene.view, [1.0 / key.width as f32, 1.0 / key.height as f32]),
+                _ => (BloomStage::Downsample, &bloom_levels[level - 1].view, texel(&bloom_levels[level - 1])),
             };
-        for (level, &[extract, scratch, blur]) in levels.iter().enumerate() {
-            match level {
-                0 => step(BloomStage::Extract, &scene, black, black, extract),
-                _ => step(BloomStage::Downsample, &bloom_targets[levels[level - 1][0]], black, black, extract),
-            }
-            step(BloomStage::BlurHorizontal, &bloom_targets[extract], black, black, scratch);
-            step(BloomStage::BlurVertical, &bloom_targets[scratch], black, black, blur);
+            let pass = self.bloom_pass(device, source);
+            bloom_steps.push(BloomStep {
+                stage,
+                output: level,
+                source_texel,
+                weight: 1.0,
+                pass,
+            });
         }
-        let mut glow = levels.last().map(|level| level[2]);
-        for level in (0..levels.len().saturating_sub(1)).rev() {
-            let [extract, _, blur] = levels[level];
-            let wider = &bloom_targets[glow.expect("a wider level exists")];
-            step(BloomStage::Upsample, wider, &bloom_targets[blur].view, black, extract);
-            glow = Some(extract);
-        }
-        if let (Some(lens), Some(glow)) = (lens, glow) {
-            step(BloomStage::Lens, &bloom_targets[glow], black, black, lens);
-        }
-        let glow_view = glow.map_or(black, |glow| &bloom_targets[glow].view);
-        let lens_view = lens.map_or(black, |lens| &bloom_targets[lens].view);
-        if let Some(composite) = composite {
-            step(BloomStage::Composite, &scene, glow_view, lens_view, composite);
+        for level in (0..bloom_levels.len().saturating_sub(1)).rev() {
+            let coarser = &bloom_levels[level + 1];
+            let pass = self.bloom_pass(device, &coarser.view);
+            let source_texel = texel(coarser);
+            bloom_steps.push(BloomStep {
+                stage: BloomStage::Upsample,
+                output: level,
+                source_texel,
+                weight: 0.0,
+                pass,
+            });
         }
 
-        let blur_targets = key.full_blur.then(|| {
-            (
-                Target::new(device, "blur horizontal", key.width, key.height, format),
-                Target::new(device, "blur vertical", key.width, key.height, format),
-            )
-        });
-        let edge_targets = key.edge_blur.then(|| {
-            let (width, height) = ((key.width / 2).max(1), (key.height / 2).max(1));
-            (
-                Target::new(device, "edge horizontal", width, height, format),
-                Target::new(device, "edge vertical", width, height, format),
-            )
-        });
-
-        // Later passes read the chain so far: the bloomed scene when bloom composed early, then the full-image blur.
-        let mut chain = composite.map_or(&scene.view, |composite| &bloom_targets[composite].view);
-        let blur_passes = match &blur_targets {
-            Some((horizontal, vertical)) => {
-                let passes = vec![self.blur_pass(device, chain), self.blur_pass(device, &horizontal.view)];
-                chain = &vertical.view;
-                passes
-            }
-            None => Vec::new(),
-        };
-        let edge_passes = match &edge_targets {
-            Some((horizontal, _)) => vec![self.blur_pass(device, chain), self.blur_pass(device, &horizontal.view)],
-            None => Vec::new(),
-        };
-
-        // The resolve adds the glow itself unless it was composed early.
-        let (resolve_glow, resolve_lens) = if composite.is_some() { (black, black) } else { (glow_view, lens_view) };
-        let edge_view = edge_targets.as_ref().map_or(black, |(_, vertical)| &vertical.view);
-        let resolve = self.resolve_pass(device, chain, resolve_glow, resolve_lens, edge_view);
-        let presentation = self.presentation_pass(device, &display.view);
-
+        let glow = bloom_levels.first().map_or(&self.black.view, |level| &level.view);
+        let resolve = self.resolve_pass(device, &scene.view, glow);
         Graph {
             key,
             scene,
             depth,
-            display,
-            bloom_targets,
+            bloom_levels,
             bloom_steps,
-            blur_targets,
-            edge_targets,
-            blur_passes,
-            edge_passes,
             resolve,
-            presentation,
         }
     }
 
-    /// Upload uniforms derived from the current settings and drawing size.
-    fn write_uniforms(&self, queue: &wgpu::Queue, time_seconds: f32) {
-        let graph = self.graph.as_ref().expect("graph exists after prepare");
-        let config = &self.config;
-        let shortest_axis = graph.key.width.min(graph.key.height) as f32;
+    /// Rebuild the ACES 2.0 tables when the display's peak moves a step, only while ACES 2.0 is selected.
+    fn write_aces_tables(&mut self, queue: &wgpu::Queue) {
+        if self.config.tone_mapper != ToneMapper::Aces {
+            return;
+        }
+        let peak = aces_peak_luminance(self.display.effective_headroom());
+        if self.aces_peak == Some(peak) {
+            return;
+        }
+        let uniforms = Aces2::rec709(peak).uniforms();
+        queue.write_buffer(&self.aces_buffer, 0, bytemuck::bytes_of(&uniforms));
+        self.aces_peak = Some(peak);
+    }
 
-        // Bloom: the configured settings, with blur radii and starburst length scaled by the shortest axis.
-        let (horizontal_radius, vertical_radius) = bloom_blur_radii(config, shortest_axis);
-        let bloom = BloomUniforms {
-            threshold: config.bloom_threshold,
-            soft_knee: config.bloom_knee / config.bloom_threshold.max(0.00001),
-            exposure: config.exposure,
-            scatter: config.bloom_scatter,
-            intensity: config.bloom_strength,
-            starburst_intensity: config.bloom_lens_flare,
-            starburst_length: (config.bloom_radius * shortest_axis * STARBURST_LENGTH_SCALE)
-                .clamp(0.0, MAX_STARBURST_LENGTH),
-            ..BloomUniforms::default()
+    /// Upload uniforms derived from the current settings and sizes.
+    fn write_uniforms(&mut self, queue: &wgpu::Queue) {
+        let graph = self.graph.as_mut().expect("graph exists after prepare");
+        let config = &self.config;
+
+        // Bloom steps: the upsample weights follow scatter, which is a uniform-only change.
+        let quality = match config.bloom_quality {
+            BloomQuality::Low => 0.0,
+            BloomQuality::Medium => 1.0,
+            BloomQuality::High | BloomQuality::Ultra => 2.0,
         };
-        for step in &graph.bloom_steps {
-            let (delta, radius) = match step.stage {
-                BloomStage::BlurHorizontal => ([1.0, 0.0], horizontal_radius),
-                BloomStage::BlurVertical => ([0.0, 1.0], vertical_radius),
-                _ => ([0.0, 0.0], 0.0),
+        let levels = graph.bloom_levels.len();
+        let coarsest_weight = BloomPyramid::new(config, (graph.key.width, graph.key.height)).coarsest_weight;
+        for step in &mut graph.bloom_steps {
+            if step.stage == BloomStage::Upsample {
+                let fraction = if step.output + 2 == levels { coarsest_weight } else { 1.0 };
+                step.weight = config.bloom_scatter * fraction;
+            }
+            let uniforms = BloomUniforms {
+                source: [step.source_texel[0], step.source_texel[1], config.bloom_threshold, config.bloom_knee],
+                pyramid: [config.exposure, quality, 0.0, 0.0],
             };
-            let uniforms = BloomUniforms { texture_scale: step.texture_scale, delta, radius, ..bloom };
             queue.write_buffer(&step.pass.uniforms, 0, bytemuck::bytes_of(&uniforms));
         }
 
-        let blur_radius = (config.blur_radius * shortest_axis).min(MAX_BLUR_RADIUS);
-        for (index, pass) in graph.blur_passes.iter().enumerate() {
-            let direction =
-                if index == 0 { [1.0 / graph.key.width as f32, 0.0] } else { [0.0, 1.0 / graph.key.height as f32] };
-            let uniforms = BlurUniforms { direction, radius: blur_radius, padding: 0.0 };
-            queue.write_buffer(&pass.uniforms, 0, bytemuck::bytes_of(&uniforms));
-        }
-        if let Some((horizontal, _)) = &graph.edge_targets {
-            for (index, pass) in graph.edge_passes.iter().enumerate() {
-                let direction = if index == 0 {
-                    [1.0 / horizontal.width as f32, 0.0]
-                } else {
-                    [0.0, 1.0 / horizontal.height as f32]
-                };
-                let uniforms = BlurUniforms { direction, radius: EDGE_BLUR_RADIUS, padding: 0.0 };
-                queue.write_buffer(&pass.uniforms, 0, bytemuck::bytes_of(&uniforms));
-            }
-        }
-
-        // Grade adjustments: contrast, saturation, and brightness multipliers (one is neutral) become signed offsets.
-        let contrast = if config.contrast > 1.0 { 1.0 - (1.0 / config.contrast) } else { config.contrast - 1.0 };
-        let saturation =
-            if config.saturation > 1.0 { 1.001 - (1.0 / config.saturation) } else { config.saturation - 1.0 };
         let tone_mapper = match config.tone_mapper {
             ToneMapper::None => 0.0,
-            ToneMapper::Aces => 1.0,
+            ToneMapper::Filmic => 1.0,
             ToneMapper::Agx => 2.0,
+            ToneMapper::Aces => 3.0,
         };
         let look = if config.agx_look == AgxLook::Punchy { 1.0 } else { 0.0 };
-        let resolve_bloom = graph.key.bloom_levels > 0 && !graph.key.composes_bloom_early();
-        let bloom_strength = if resolve_bloom { config.bloom_strength } else { 0.0 };
+        let bloom_strength = if levels > 0 { config.bloom_strength } else { 0.0 };
         let (output_width, output_height) = (graph.key.output_width as f32, graph.key.output_height as f32);
         let (scene_width, scene_height) = (graph.key.width as f32, graph.key.height as f32);
-        let headroom = self.display.effective_headroom();
-        let encoded_peak = encoded_peak(headroom);
+        // Linear targets: sRGB-format views encode on write, and extended linear (scRGB) surfaces take linear light.
+        let linear_target = self.output_format.is_srgb() || self.display.encoding == OutputEncoding::ExtendedLinear;
+        // ACES 2.0 renders for the display's peak, and untone-mapped light shows as it is; only the curves that end at
+        // SDR white extend into the headroom.
+        let native_peak = matches!(config.tone_mapper, ToneMapper::Aces | ToneMapper::None);
         let resolve = ResolveUniforms {
             display: [config.exposure, tone_mapper, look, bloom_strength],
-            grade: [saturation, config.brightness - 1.0, contrast, config.vibrance],
-            vignette: [config.vignette_radius, config.vignette_strength, config.vignette_blur, 0.0],
-            viewport: [output_width, output_height, time_seconds, 0.0],
-            output: [headroom, encoded_peak, if graph.key.upscales() { 1.0 } else { 0.0 }, 0.0],
+            filmic: [
+                config.filmic_contrast,
+                config.filmic_linear_start,
+                config.filmic_linear_length,
+                config.filmic_toe,
+            ],
+            vignette: [config.vignette_strength, config.vignette_radius.min(0.999), output_width / output_height, 0.0],
+            output: [
+                self.display.effective_headroom(),
+                if graph.key.upscales() { 1.0 } else { 0.0 },
+                if linear_target { 1.0 } else { 0.0 },
+                self.display.effective_sdr_white_level(),
+            ],
             scene: [scene_width, scene_height, 1.0 / scene_width, 1.0 / scene_height],
+            encoding: [dither_amplitude(self.output_format), if native_peak { 1.0 } else { 0.0 }, 0.0, 0.0],
         };
         queue.write_buffer(&graph.resolve.uniforms, 0, bytemuck::bytes_of(&resolve));
-
-        let decorrelated = if config.film_grain_noise == FilmGrainNoise::Decorrelated { 1.0 } else { 0.0 };
-        // Linear outputs (sRGB-format views and extended linear surfaces) receive decoded values.
-        let decodes = self.output_format.is_srgb() || self.display.encoding == OutputEncoding::ExtendedLinear;
-        let presentation = PresentationUniforms {
-            frame: [1.0 / output_width, 1.0 / output_height, config.antialias_strength, config.film_grain],
-            grain: [config.film_grain_size, config.film_grain_speed, decorrelated, time_seconds],
-            output: [if decodes { 1.0 } else { 0.0 }, encoded_peak, self.display.effective_sdr_white_level(), 0.0],
-        };
-        queue.write_buffer(&graph.presentation.uniforms, 0, bytemuck::bytes_of(&presentation));
     }
 
     fn uniform_buffer(device: &wgpu::Device, label: &str, size: usize) -> wgpu::Buffer {
@@ -673,143 +656,83 @@ impl PostProcessor {
         })
     }
 
-    fn bloom_pass(
-        &self,
-        device: &wgpu::Device,
-        source: &wgpu::TextureView,
-        glow: &wgpu::TextureView,
-        lens: &wgpu::TextureView,
-    ) -> Pass {
+    fn bloom_pass(&self, device: &wgpu::Device, source: &wgpu::TextureView) -> Pass {
         let uniforms = Self::uniform_buffer(device, "bloom uniforms", std::mem::size_of::<BloomUniforms>());
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bloom"),
             layout: &self.bloom_layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: uniforms.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(source) },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.linear_sampler) },
-                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(glow) },
-                wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::TextureView(lens) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniforms.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(source),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&self.exposure_view),
+                },
             ],
         });
         Pass { bind_group, uniforms }
     }
 
-    fn blur_pass(&self, device: &wgpu::Device, source: &wgpu::TextureView) -> Pass {
-        let uniforms = Self::uniform_buffer(device, "blur uniforms", std::mem::size_of::<BlurUniforms>());
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("blur"),
-            layout: &self.blur_layout,
-            entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: uniforms.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(source) },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.linear_sampler) },
-            ],
-        });
-        Pass { bind_group, uniforms }
-    }
-
-    fn resolve_pass(
-        &self,
-        device: &wgpu::Device,
-        scene: &wgpu::TextureView,
-        bloom: &wgpu::TextureView,
-        lens: &wgpu::TextureView,
-        edge: &wgpu::TextureView,
-    ) -> Pass {
+    fn resolve_pass(&self, device: &wgpu::Device, scene: &wgpu::TextureView, bloom: &wgpu::TextureView) -> Pass {
         let uniforms = Self::uniform_buffer(device, "resolve uniforms", std::mem::size_of::<ResolveUniforms>());
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("resolve"),
             layout: &self.resolve_layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: uniforms.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(scene) },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(bloom) },
-                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(edge) },
-                wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::Sampler(&self.linear_sampler) },
-                wgpu::BindGroupEntry { binding: 5, resource: wgpu::BindingResource::TextureView(lens) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniforms.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(scene),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(bloom),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&self.exposure_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: self.aces_buffer.as_entire_binding(),
+                },
             ],
         });
         Pass { bind_group, uniforms }
     }
+}
 
-    fn presentation_pass(&self, device: &wgpu::Device, display: &wgpu::TextureView) -> Pass {
-        let uniforms =
-            Self::uniform_buffer(device, "presentation uniforms", std::mem::size_of::<PresentationUniforms>());
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("presentation"),
-            layout: &self.presentation_layout,
-            entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: uniforms.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(display) },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&self.linear_sampler) },
-            ],
-        });
-        Pass { bind_group, uniforms }
+/// The ACES 2.0 peak, in nits, for a display headroom: SDR white is 100 nits, and the headroom is quantized so small
+/// drifts in a display's reported headroom do not rebuild the tables.
+fn aces_peak_luminance(headroom: f32) -> f32 {
+    let steps = (headroom.max(1.0) * ACES_HEADROOM_STEPS).round();
+    100.0 * steps / ACES_HEADROOM_STEPS
+}
+
+/// One code value of an integer target, in encoded units; float targets need no dither.
+fn dither_amplitude(format: wgpu::TextureFormat) -> f32 {
+    match format.remove_srgb_suffix() {
+        wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Bgra8Unorm => 1.0 / 255.0,
+        wgpu::TextureFormat::Rgb10a2Unorm => 1.0 / 1023.0,
+        _ => 0.0,
     }
-}
-
-/// The resolve pipeline writing the display target for `display`'s encoding.
-fn resolve_pipeline(
-    device: &wgpu::Device,
-    layout: &wgpu::BindGroupLayout,
-    display: DisplayOutput,
-) -> wgpu::RenderPipeline {
-    let format = if display.encoding.is_extended() { EXTENDED_DISPLAY_FORMAT } else { DISPLAY_FORMAT };
-    fullscreen_pipeline(device, "resolve", RESOLVE_SOURCE, "fragmentMain", layout, format)
-}
-
-/// The sRGB-encoded value of `headroom` times SDR white: the largest encoded value the display chain keeps.
-fn encoded_peak(headroom: f32) -> f32 {
-    joy_core::color::linear_to_srgb(f64::from(headroom)) as f32
-}
-
-/// A pyramid level's extent along one axis: luma.gl rounds each scale of the drawing buffer half up, at least one.
-fn level_size(size: u32, scale: f64) -> u32 {
-    ((f64::from(size) * scale).round() as u32).max(1)
-}
-
-/// luma.gl's `calculateTextureScale`: aspect correction between a source and its output.
-fn texture_scale(source: (u32, u32), output: (u32, u32)) -> [f32; 2] {
-    let source_aspect = f64::from(source.0) / f64::from(source.1.max(1));
-    let output_aspect = f64::from(output.0) / f64::from(output.1.max(1));
-    if output_aspect > source_aspect {
-        [1.0, (output_aspect / source_aspect) as f32]
-    } else {
-        [(source_aspect / output_aspect) as f32, 1.0]
-    }
-}
-
-/// Horizontal and vertical Gaussian radii in level texels: the authored radius scaled to the shortest axis and capped,
-/// then luma.gl's anamorphic stretch, which lengthens one axis while keeping it within the blur limit.
-fn bloom_blur_radii(config: &PostProcessSettings, shortest_axis: f32) -> (f32, f32) {
-    let radius = (config.bloom_radius * shortest_axis * BLOOM_RADIUS_SCALE).min(MAX_BLOOM_RADIUS);
-    let ratio = config.bloom_anamorphic.clamp(-1.0, 1.0);
-    let anamorphic_radius = radius.min(MAX_BLOOM_BLUR_RADIUS / (1.0 + ratio.abs()));
-    (anamorphic_radius * (1.0 + ratio.max(0.0)), anamorphic_radius * (1.0 + (-ratio).max(0.0)))
-}
-
-/// Record one full-screen triangle into `target`.
-fn fullscreen(
-    encoder: &mut wgpu::CommandEncoder,
-    label: &str,
-    target: &wgpu::TextureView,
-    pipeline: &wgpu::RenderPipeline,
-    pass: &Pass,
-) {
-    let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: Some(label),
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: target,
-            resolve_target: None,
-            ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
-            depth_slice: None,
-        })],
-        ..Default::default()
-    });
-    render_pass.set_pipeline(pipeline);
-    render_pass.set_bind_group(0, &pass.bind_group, &[]);
-    render_pass.draw(0..3, 0..1);
 }
 
 #[cfg(test)]

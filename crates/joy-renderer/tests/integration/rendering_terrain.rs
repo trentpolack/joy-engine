@@ -32,7 +32,6 @@ use joy_renderer::{
     GpuBackend,
     GpuContext,
     MeshAsset,
-    MeshChannels,
     MeshInstance,
     OffscreenTarget,
     OrbitCamera,
@@ -212,13 +211,7 @@ fn crate_box() -> MeshAsset {
         indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
     }
     let colors: Vec<f32> = (0..positions.len() / 3).flat_map(|_| [0.95_f32, 0.4, 0.15]).collect();
-    MeshAsset::from_channels(MeshChannels {
-        positions: &positions,
-        indices: &indices,
-        colors: &colors,
-        ..Default::default()
-    })
-    .expect("box geometry is valid")
+    MeshAsset::new(&crate::flat_mesh(&positions, &indices, &colors)).expect("box geometry is valid")
 }
 
 /// Dragon Pit scaled into a 102-unit landscape with a crate hovering over the focus.
@@ -347,13 +340,10 @@ fn scene_terrain_draws_into_effect_attachments() {
     let asset = dragon_pit();
     let (mut scene, terrain, focus) = scene(&asset);
     let everything = SceneEffectsOptions {
-        gtao: Some(Default::default()),
-        outlines: Some(Default::default()),
         taa: Some(Default::default()),
         motion_blur: Some(Default::default()),
-        ssr: Some(Default::default()),
-        height_fog: Some(Default::default()),
-        ..Default::default()
+        adaptive_exposure: Some(Default::default()),
+        volumetrics: Some(Default::default()),
     };
     let mut plain = scene_renderer(&gpu, None);
     let mut effects = scene_renderer(&gpu, Some(everything));

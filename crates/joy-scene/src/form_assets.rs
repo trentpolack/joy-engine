@@ -4,35 +4,22 @@
 //! FORM geometry as renderable mesh assets.
 //!
 //! FORM itself is renderer-free; this adapter is the only path from FORM output to the screen, so FORM LAB, games, and
-//! examples all see the same result. Lit assets keep FORM's vertex colors. PBR assets multiply each vertex color by
-//! its triangle's material base color and bake the material's metallic, roughness, emission, and alpha mode into the
-//! vertices. Materials with
-//! embedded maps (PNG, JPEG, or WebP data URLs) also keep FORM's texture coordinates and draw their decoded maps as
-//! [`MaterialTextures`](joy_renderer::MaterialTextures).
+//! examples all see the same result. Evaluated geometry becomes an engine [`Mesh`](joy_render_types::Mesh) whose
+//! material slots follow FORM's palette, and each palette entry becomes a material drawn with the shading model the
+//! caller picks: [`ShadingModel::Layered`] keeps every factor and embedded map (PNG, JPEG, or WebP data URLs), while
+//! [`ShadingModel::Lit`] and [`ShadingModel::Unlit`] draw FORM's vertex colors alone in one slot, as FORM's flat look
+//! always has.
 
 use std::collections::HashMap;
 
-use joy_core::{
-    LinearColor,
-    MaterialAlphaMode,
-    PbrMaterial,
-    PbrMaterialTextures,
-    PbrMesh,
-};
-use joy_form::{
-    FormMaterial,
-    GeometryData,
-};
+use joy_form::GeometryData;
+use joy_render_types::ShadingModel;
 
 use joy_renderer::{
-    AlphaMode,
+    MaterialAsset,
     MeshAsset,
-    MeshData,
-    MeshVertex,
     RenderError,
-    Shading,
     TextureAsset,
-    VertexMaterial,
 };
 
 /// Failure compiling FORM source into a mesh asset: the script's own diagnostic, or a rejected document or mesh.
@@ -49,7 +36,7 @@ pub enum FormMeshError {
 /// Sphere segments used for level primitives.
 const PRIMITIVE_SPHERE_SEGMENTS: u32 = 16;
 
-/// Compile FORM source and convert the result for `shading`.
+/// Compile FORM source and convert the result, its palette drawn with `model`.
 ///
 /// `overrides` is a JSON object of parameter values and `materials` an optional palette, both as accepted by
 /// [`joy_form::CompiledScript::evaluate`].
@@ -57,13 +44,13 @@ pub fn compile_form_mesh(
     source: &str,
     overrides: &serde_json::Value,
     materials: Option<&serde_json::Value>,
-    shading: Shading,
+    model: ShadingModel<'_>,
 ) -> Result<MeshAsset, FormMeshError> {
     let geometry = joy_form::compile(source, overrides, materials).map_err(FormMeshError::Form)?;
-    Ok(form_mesh_asset(&geometry, shading)?)
+    Ok(form_mesh_asset(&geometry, model)?)
 }
 
-/// Compiled FORM assets for levels and tools, cached by path, source text, parameters, and shading; the mesh half of
+/// Compiled FORM assets for levels and tools, cached by path, source text, parameters, and shading model; the mesh half of
 /// [`AssetScene`](crate::AssetScene).
 ///
 /// `.form` files are FORM source; `.formlab` files are FORM LAB documents (`{"version": 1, "source", "overrides",
@@ -87,9 +74,9 @@ impl FormAssetLibrary {
         path: &str,
         text: &str,
         parameters: &serde_json::Map<String, serde_json::Value>,
-        shading: Shading,
+        model: ShadingModel<'_>,
     ) -> Result<MeshAsset, FormMeshError> {
-        let key = serde_json::json!([path, text, parameters, format!("{shading:?}")]).to_string();
+        let key = serde_json::json!([path, text, parameters, model.name()]).to_string();
         if let Some(asset) = self.cache.get(&key) {
             return Ok(asset.clone());
         }
@@ -115,7 +102,7 @@ impl FormAssetLibrary {
         overrides.extend(parameters.iter().map(|(name, value)| (name.clone(), value.clone())));
         let geometry = joy_form::compile(&source, &serde_json::Value::Object(overrides), materials.as_ref())
             .map_err(FormMeshError::Form)?;
-        let asset = form_mesh_asset_with_textures(&geometry, shading, &mut self.textures)?;
+        let asset = form_mesh_asset_with_textures(&geometry, model, &mut self.textures)?;
         self.cache.insert(key, asset.clone());
         Ok(asset)
     }
@@ -176,118 +163,56 @@ impl FormTextureCache {
     }
 }
 
-/// Convert evaluated FORM geometry into a mesh asset for `shading`, decoding any material maps.
+/// Convert evaluated FORM geometry into a mesh asset whose palette draws with `model`, decoding any material maps.
 ///
-/// Triangles are de-indexed only as far as materials require: a vertex shared by triangles with different materials is
-/// duplicated per material, so per-vertex material factors stay exact. PBR geometry whose palette carries maps instead
-/// gives every triangle its own vertices with texture coordinates. Fails for empty or malformed geometry and for maps
-/// that do not decode. Use [`form_mesh_asset_with_textures`] to reuse decoded maps across rebuilds.
-pub fn form_mesh_asset(geometry: &GeometryData, shading: Shading) -> Result<MeshAsset, RenderError> {
-    form_mesh_asset_with_textures(geometry, shading, &mut FormTextureCache::new())
+/// Fails for empty or malformed geometry, for maps that do not decode, and for a custom model (FORM palettes describe
+/// only the built-in models). Use [`form_mesh_asset_with_textures`] to reuse decoded maps across rebuilds.
+pub fn form_mesh_asset(geometry: &GeometryData, model: ShadingModel<'_>) -> Result<MeshAsset, RenderError> {
+    form_mesh_asset_with_textures(geometry, model, &mut FormTextureCache::new())
 }
 
 /// [`form_mesh_asset`] with decoded maps taken from and added to `textures`.
 pub fn form_mesh_asset_with_textures(
     geometry: &GeometryData,
-    shading: Shading,
+    model: ShadingModel<'_>,
     textures: &mut FormTextureCache,
 ) -> Result<MeshAsset, RenderError> {
-    let vertex_count = geometry.positions.len() / 3;
-    if geometry.triangles.is_empty() || vertex_count == 0 {
-        return Err(RenderError::InvalidMesh("FORM geometry has no triangles".into()));
-    }
-    let materials = geometry.form_materials();
-    let bake_materials = shading == Shading::Pbr;
-    if bake_materials && materials.iter().any(has_textures) {
-        return textured_form_mesh_asset(geometry, &materials, textures);
-    }
+    let mut mesh = geometry.to_mesh();
+    let palette = geometry.form_materials();
 
-    // Map (vertex, material) pairs to output vertices so shared vertices stay shared within a material.
-    let mut remap = std::collections::HashMap::new();
-    let mut vertices = Vec::with_capacity(vertex_count);
-    let mut indices = Vec::with_capacity(geometry.triangles.len());
-    for (triangle, corners) in geometry.triangles.as_chunks::<3>().0.iter().enumerate() {
-        let material_index =
-            if bake_materials { geometry.triangle_materials.get(triangle).copied().unwrap_or(0) } else { 0 };
-        for &corner in corners {
-            let key = (corner, material_index);
-            let index = *remap.entry(key).or_insert_with(|| {
-                let material = bake_materials.then(|| materials.get(material_index as usize)).flatten();
-                vertices.push(form_vertex(geometry, corner as usize, material));
-                (vertices.len() - 1) as u32
-            });
-            indices.push(index);
-        }
-    }
-    MeshAsset::new(MeshData { vertices, indices })
-}
-
-/// Whether a material embeds any map.
-fn has_textures(material: &FormMaterial) -> bool {
-    let maps = &material.textures;
-    [&maps.base_color, &maps.normal, &maps.emissive, &maps.metallic, &maps.roughness, &maps.ao]
-        .iter()
-        .any(|source| source.is_some())
-}
-
-/// Convert textured PBR geometry through the shared `PbrMesh` path, resolving maps through `textures`.
-fn textured_form_mesh_asset(
-    geometry: &GeometryData,
-    materials: &[FormMaterial],
-    textures: &mut FormTextureCache,
-) -> Result<MeshAsset, RenderError> {
-    let vertex_count = geometry.positions.len() / 3;
-    let uvs = if geometry.uvs.len() == vertex_count * 2 { geometry.uvs.clone() } else { vec![0.0; vertex_count * 2] };
-    let normals =
-        if geometry.normals.len() == vertex_count * 3 { geometry.normals.clone() } else { vec![0.0; vertex_count * 3] };
-    let mesh = PbrMesh {
-        positions: geometry.positions.clone(),
-        normals,
-        uvs,
-        colors: geometry.colors.clone(),
-        alphas: geometry.alphas.clone(),
-        triangles: geometry.triangles.clone(),
-        triangle_materials: geometry.triangle_materials.clone(),
-        materials: materials.iter().map(pbr_material).collect(),
+    // FORM's flat looks ignore the palette, so every triangle shares one slot and one material.
+    let palette = if model == ShadingModel::Layered {
+        palette
+    } else {
+        mesh.triangle_slots = None;
+        mesh.material_slots.clear();
+        palette.into_iter().take(1).collect()
     };
-    let mut failure = None;
-    let asset = MeshAsset::from_pbr_mesh(&mesh, |source| match textures.resolve(source) {
-        Ok(texture) => Some(texture),
-        Err(error) => {
-            failure.get_or_insert(error);
-            None
-        }
-    });
-    match (asset, failure) {
-        (Ok(asset), _) => Ok(asset),
-        (Err(_), Some(error)) => Err(error),
-        (Err(error), None) => Err(error),
-    }
-}
 
-/// The renderer's material record for a typed FORM material.
-fn pbr_material(material: &FormMaterial) -> PbrMaterial {
-    let maps = &material.textures;
-    PbrMaterial {
-        base_color: material.base_color.to_vec(),
-        emissive: material.emissive.to_vec(),
-        metallic: material.metallic,
-        roughness: material.roughness,
-        alpha_mode: match material.alpha_mode {
-            joy_form::AlphaMode::Opaque => MaterialAlphaMode::Opaque,
-            joy_form::AlphaMode::Mask => MaterialAlphaMode::Mask,
-            joy_form::AlphaMode::Blend => MaterialAlphaMode::Blend,
-        },
-        alpha_cutoff: material.alpha_cutoff,
-        textures: PbrMaterialTextures {
-            base_color: maps.base_color.clone(),
-            normal: maps.normal.clone(),
-            emissive: maps.emissive.clone(),
-            metallic: maps.metallic.clone(),
-            roughness: maps.roughness.clone(),
-            ao: maps.ao.clone(),
-        },
+    let mut materials = Vec::with_capacity(palette.len());
+    for entry in &palette {
+        let Some(material) = entry.to_material(model) else {
+            return Err(RenderError::InvalidMaterial(format!(
+                "FORM palettes convert only to built-in shading models, not \"{}\"",
+                model.name()
+            )));
+        };
+        let mut failure = None;
+        let asset = MaterialAsset::with_textures(material, |source| match textures.resolve(source) {
+            Ok(texture) => Some(texture),
+            Err(error) => {
+                failure.get_or_insert(error);
+                None
+            }
+        });
+        // A map that failed to decode reports its decode error rather than a generic unresolved source.
+        match (asset, failure) {
+            (Ok(asset), _) => materials.push(asset),
+            (Err(_), Some(error)) => return Err(error),
+            (Err(error), None) => return Err(error),
+        }
     }
+    MeshAsset::with_materials(&mesh, materials)
 }
 
 /// Unit box (full extents of one) with white vertices; instances supply size and color. Matches `meshBox(1, 1, 1)`.
@@ -303,70 +228,13 @@ pub fn primitive_sphere() -> MeshAsset {
     primitive_asset(&geometry)
 }
 
-/// Build a white, default-material asset from primitive geometry; instances supply the color.
+/// Build a white asset with the default material from primitive geometry; instances supply the color.
 fn primitive_asset(geometry: &GeometryData) -> MeshAsset {
-    let vertices = (0..geometry.positions.len() / 3)
-        .map(|index| {
-            let mut vertex = form_vertex(geometry, index, None);
-            vertex.color = [1.0; 4];
-            vertex
-        })
-        .collect();
-    MeshAsset::new(MeshData { vertices, indices: geometry.triangles.clone() })
-        .expect("FORM primitives are valid geometry")
-}
-
-/// Convert one FORM vertex, optionally baking a material.
-fn form_vertex(geometry: &GeometryData, index: usize, material: Option<&FormMaterial>) -> MeshVertex {
-    let triple = |values: &[f64], fallback: f64| -> [f32; 3] {
-        let start = index * 3;
-        match values.get(start..start + 3) {
-            Some(slice) => [slice[0] as f32, slice[1] as f32, slice[2] as f32],
-            None => [fallback as f32; 3],
-        }
-    };
-    let position = triple(&geometry.positions, 0.0);
-    let normal = triple(&geometry.normals, 0.0);
-    let color = triple(&geometry.colors, 1.0);
-    let alpha = geometry.alphas.get(index).copied().unwrap_or(1.0) as f32;
-
-    let Some(material) = material else {
-        // Lit and Unlit assets ignore materials; vertex alpha alone selects transparency.
-        let vertex_material = VertexMaterial {
-            alpha_mode: if alpha < 1.0 { AlphaMode::Blend } else { AlphaMode::Opaque },
-            ..VertexMaterial::default()
-        };
-        return MeshVertex::new(
-            position,
-            normal,
-            LinearColor::from_rgb_array(color).with_alpha(alpha),
-            vertex_material,
-        );
-    };
-
-    let base = material.base_color;
-    let baked_color = LinearColor::new(
-        color[0] * base[0] as f32,
-        color[1] * base[1] as f32,
-        color[2] * base[2] as f32,
-        alpha * base[3] as f32,
-    );
-    let vertex_material = VertexMaterial {
-        metallic: material.metallic as f32,
-        roughness: material.roughness as f32,
-        emissive: LinearColor::rgb(
-            material.emissive[0] as f32,
-            material.emissive[1] as f32,
-            material.emissive[2] as f32,
-        ),
-        alpha_mode: match material.alpha_mode {
-            joy_form::AlphaMode::Opaque => AlphaMode::Opaque,
-            joy_form::AlphaMode::Mask => AlphaMode::Mask,
-            joy_form::AlphaMode::Blend => AlphaMode::Blend,
-        },
-        alpha_cutoff: material.alpha_cutoff as f32,
-    };
-    MeshVertex::new(position, normal, baked_color, vertex_material)
+    let mut mesh = geometry.to_mesh();
+    mesh.colors = None;
+    mesh.triangle_slots = None;
+    mesh.material_slots.clear();
+    MeshAsset::new(&mesh).expect("FORM primitives are valid geometry")
 }
 
 #[cfg(test)]

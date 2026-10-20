@@ -4,6 +4,9 @@
 //! Development controls that preview scene effects on a running renderer: presets, quality, per-effect toggles, and
 //! HDR bloom. Settings are temporary and never saved.
 //!
+//! The status line names any requested effect this device cannot run (volumetric fog needs compute shaders, which
+//! WebGL 2 lacks), so authors see the fallback instead of a silently missing effect.
+//!
 //! Games draw [`ui`](SceneEffectsControls::ui) inside a HUD panel during the UI phase and call
 //! [`apply`](SceneEffectsControls::apply) with the renderer during the render phase, which commits any change. The bloom
 //! toggle adjusts post-processing, which games set every frame, so they pass their settings through
@@ -20,37 +23,32 @@ use joy_renderer::post_process::{
     PostProcessSettings,
 };
 use joy_renderer::scene_effects::{
-    ClusteredLightingOptions,
-    GtaoOptions,
+    ADAPTIVE_EXPOSURE_NAME,
+    MOTION_BLUR_NAME,
+    MotionBlurOptions,
     SceneEffectsOptions,
-    SsaoOptions,
-    SsgiOptions,
-    SsrOptions,
+    TAA_NAME,
+    VOLUMETRICS_NAME,
+    VolumetricOptions,
+    VolumetricQuality,
 };
 
 /// Effects in display order with their labels.
-const EFFECTS: [(&str, &str); 11] = [
-    ("depthAwareBlur", "Depth-aware blur"),
-    ("ssao", "SSAO"),
-    ("gtao", "GTAO"),
-    ("ssgi", "SSGI color bleed"),
-    ("outlines", "Outlines"),
-    ("taa", "Temporal antialiasing"),
-    ("motionBlur", "Motion blur"),
-    ("ssr", "Screen-space reflections"),
-    ("heightFog", "Screen-height fog approximation"),
-    ("clusteredLighting", "Clustered volumetric lighting"),
-    ("adaptiveExposure", "Adaptive exposure"),
+const EFFECTS: [(&str, &str); 4] = [
+    (TAA_NAME, "Temporal antialiasing"),
+    (MOTION_BLUR_NAME, "Motion blur"),
+    (ADAPTIVE_EXPOSURE_NAME, "Adaptive exposure"),
+    (VOLUMETRICS_NAME, "Volumetric fog and lighting"),
 ];
 
-/// Effect cost and resolution.
+/// Effect cost.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EffectQuality {
-    /// Half resolution, fewer samples.
+    /// Fewer motion-blur samples and a coarse fog volume.
     Low,
-    /// Half resolution, default samples.
+    /// The engine defaults.
     Medium,
-    /// Full resolution, more samples.
+    /// More motion-blur samples and a fine fog volume.
     High,
 }
 
@@ -59,11 +57,11 @@ pub enum EffectQuality {
 pub enum EffectPreset {
     /// Nothing enabled.
     Off,
-    /// Ambient occlusion and outlines.
-    Contact,
-    /// Fog, volumetric lighting, and adaptive exposure.
+    /// A camera's look: temporal antialiasing, motion blur, and adaptive exposure.
+    Cinematic,
+    /// Volumetric fog and lighting with adaptive exposure.
     Atmosphere,
-    /// The full lighting set with antialiasing.
+    /// Every effect, with bloom.
     Combined,
     /// A hand-picked selection.
     Custom,
@@ -72,7 +70,7 @@ pub enum EffectPreset {
 impl EffectPreset {
     const ALL: [(EffectPreset, &'static str); 5] = [
         (EffectPreset::Off, "All off"),
-        (EffectPreset::Contact, "Contact + edges"),
+        (EffectPreset::Cinematic, "Cinematic"),
         (EffectPreset::Atmosphere, "Atmosphere"),
         (EffectPreset::Combined, "Combined"),
         (EffectPreset::Custom, "Custom"),
@@ -81,9 +79,9 @@ impl EffectPreset {
     fn effects(self) -> &'static [&'static str] {
         match self {
             Self::Off | Self::Custom => &[],
-            Self::Contact => &["gtao", "outlines"],
-            Self::Atmosphere => &["heightFog", "clusteredLighting", "adaptiveExposure"],
-            Self::Combined => &["gtao", "ssgi", "taa", "ssr", "clusteredLighting", "adaptiveExposure"],
+            Self::Cinematic => &[TAA_NAME, MOTION_BLUR_NAME, ADAPTIVE_EXPOSURE_NAME],
+            Self::Atmosphere => &[VOLUMETRICS_NAME, ADAPTIVE_EXPOSURE_NAME],
+            Self::Combined => &[TAA_NAME, MOTION_BLUR_NAME, ADAPTIVE_EXPOSURE_NAME, VOLUMETRICS_NAME],
         }
     }
 
@@ -174,47 +172,28 @@ impl SceneEffectsControls {
 
     /// The scene effects these controls request.
     pub fn configuration(&self) -> SceneEffectsOptions {
-        let scale = if self.quality == EffectQuality::High { 1.0 } else { 0.5 };
-        let pick = |low: f32, medium: f32, high: f32| match self.quality {
-            EffectQuality::Low => low,
-            EffectQuality::Medium => medium,
-            EffectQuality::High => high,
+        let (blur_samples, fog_quality) = match self.quality {
+            EffectQuality::Low => (8, VolumetricQuality::Low),
+            EffectQuality::Medium => (12, VolumetricQuality::Medium),
+            EffectQuality::High => (16, VolumetricQuality::High),
         };
         let tuned = self.tuning.map_or_else(SceneEffectsOptions::default, |tuning| tuning(self.quality));
         let on = |name: &str| self.enabled.contains(&name);
         SceneEffectsOptions {
-            depth_aware_blur: on("depthAwareBlur").then(|| tuned.depth_aware_blur.unwrap_or_default()),
-            ssao: on("ssao")
-                .then(|| tuned.ssao.unwrap_or(SsaoOptions { resolution_scale: scale, ..Default::default() })),
-            gtao: on("gtao")
-                .then(|| tuned.gtao.unwrap_or(GtaoOptions { resolution_scale: scale, ..Default::default() })),
-            ssgi: on("ssgi").then(|| {
-                tuned.ssgi.unwrap_or(SsgiOptions {
-                    resolution_scale: scale,
-                    ray_count: pick(3.0, 7.0, 12.0),
+            taa: on(TAA_NAME).then(|| tuned.taa.unwrap_or_default()),
+            motion_blur: on(MOTION_BLUR_NAME).then(|| {
+                tuned.motion_blur.unwrap_or(MotionBlurOptions {
+                    sample_count: blur_samples,
                     ..Default::default()
                 })
             }),
-            outlines: on("outlines").then(|| tuned.outlines.unwrap_or_default()),
-            taa: on("taa").then(|| tuned.taa.unwrap_or_default()),
-            motion_blur: on("motionBlur").then(|| tuned.motion_blur.unwrap_or_default()),
-            ssr: on("ssr").then(|| {
-                tuned.ssr.unwrap_or(SsrOptions {
-                    resolution_scale: scale,
-                    sample_count: pick(16.0, 48.0, 80.0),
+            adaptive_exposure: on(ADAPTIVE_EXPOSURE_NAME).then(|| tuned.adaptive_exposure.unwrap_or_default()),
+            volumetrics: on(VOLUMETRICS_NAME).then(|| {
+                tuned.volumetrics.unwrap_or(VolumetricOptions {
+                    quality: fog_quality,
                     ..Default::default()
                 })
             }),
-            height_fog: on("heightFog").then(|| tuned.height_fog.unwrap_or_default()),
-            clustered_lighting: on("clusteredLighting").then(|| {
-                tuned.clustered_lighting.unwrap_or(ClusteredLightingOptions {
-                    resolution_scale: scale,
-                    sample_count: pick(5.0, 10.0, 16.0),
-                    ..Default::default()
-                })
-            }),
-            adaptive_exposure: on("adaptiveExposure").then(|| tuned.adaptive_exposure.unwrap_or_default()),
-            color_format: None,
         }
     }
 
@@ -281,15 +260,10 @@ impl SceneEffectsControls {
             });
     }
 
-    /// Enable or disable one effect; ambient-occlusion choices are exclusive.
+    /// Enable or disable one effect by its options name (such as [`TAA_NAME`]).
     pub fn toggle(&mut self, name: &'static str, enabled: bool) {
         self.enabled.retain(|existing| *existing != name);
         if enabled {
-            match name {
-                "ssao" => self.enabled.retain(|existing| *existing != "gtao"),
-                "gtao" => self.enabled.retain(|existing| *existing != "ssao"),
-                _ => {}
-            }
             self.enabled.push(name);
         }
         self.preset = EffectPreset::Custom;
@@ -357,18 +331,25 @@ impl SceneEffectsControls {
     fn update_status(&mut self, renderer: &Renderer) {
         self.error = false;
         let report = renderer.scene_effects_capabilities();
-        self.status = if !report.available {
-            "WebGL 2: scene effects require WebGPU and are unavailable here. HDR bloom remains available.".to_owned()
+        let backend = renderer.diagnostics().backend;
+        if !report.available {
+            self.status =
+                format!("{backend}: scene effects need float render targets here. HDR bloom remains available.");
+            return;
+        }
+        let requested = if self.enabled.is_empty() && !self.bloom {
+            "scene effects off".to_owned()
         } else {
-            let format =
-                report.color_format.map_or("display color".to_owned(), |format| format!("{format:?}").to_lowercase());
-            let requested = if self.enabled.is_empty() && !self.bloom {
-                "scene effects off".to_owned()
-            } else {
-                format!("{} scene effects requested", self.enabled.len())
-            };
-            format!("{} · {format} · {requested}.", renderer.diagnostics().backend)
+            format!("{} scene effects requested", self.enabled.len())
         };
+        self.status = format!("{backend} · {requested}.");
+
+        // Requested effects this device skips, with the reason.
+        for effect in report.effects.iter().filter(|effect| effect.requested && !effect.available) {
+            let label = EFFECTS.iter().find(|(name, _)| *name == effect.name).map_or(effect.name, |(_, label)| label);
+            let reason = effect.reason.unwrap_or("Unavailable on this device.");
+            self.status.push_str(&format!(" {label}: {reason}"));
+        }
     }
 }
 

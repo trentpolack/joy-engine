@@ -30,15 +30,15 @@ use joy_renderer::{
     Camera,
     FrameInputs,
     GpuContext,
+    Material,
+    MaterialAsset,
     MeshAsset,
-    MeshChannels,
     MeshInstance,
     OffscreenTarget,
     OrbitCamera,
     RenderScene,
     Renderer,
     RendererOptions,
-    Shading,
     project_to_viewport,
 };
 use serde_json::json;
@@ -70,8 +70,7 @@ fn block(size: f32) -> MeshAsset {
         }
         indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
     }
-    MeshAsset::from_channels(MeshChannels { positions: &positions, indices: &indices, ..Default::default() })
-        .expect("block geometry is valid")
+    MeshAsset::new(&crate::flat_mesh(&positions, &indices, &[])).expect("block geometry is valid")
 }
 
 fn pixel(pixels: &[u8], point: Vec2) -> [u8; 3] {
@@ -113,9 +112,10 @@ fn textured_and_colored_particles_blend_over_the_scene_with_depth_testing() {
     let batches = create_particle_effect_batches(&effect, &basis, None, &[]).unwrap();
     let draws = textures.transparent_draws(&batches).unwrap();
     let mut scene = RenderScene::new();
-    let mut occluder =
-        MeshInstance::new(block(2.0)).with_transform(Transform::new(Vec3::new(2.5, 0.0, 2.0), Vec3::ZERO, Vec3::ONE));
-    occluder.shading = Shading::Unlit;
+    let unlit = MaterialAsset::new(Material::unlit(LinearColor::WHITE)).unwrap();
+    let occluder = MeshInstance::new(block(2.0))
+        .with_transform(Transform::new(Vec3::new(2.5, 0.0, 2.0), Vec3::ZERO, Vec3::ONE))
+        .with_material(unlit);
     scene.insert(occluder);
 
     let inputs = FrameInputs {

@@ -6,63 +6,68 @@
 use super::*;
 
 #[test]
-fn defaults_validate_and_report_requirements() {
+fn defaults_validate_and_report_their_names_and_needs() {
     let all = SceneEffectsOptions {
-        depth_aware_blur: Some(Default::default()),
-        gtao: Some(Default::default()),
-        ssgi: Some(Default::default()),
-        outlines: Some(Default::default()),
-        taa: Some(Default::default()),
-        motion_blur: Some(Default::default()),
-        ssr: Some(Default::default()),
-        height_fog: Some(Default::default()),
-        clustered_lighting: Some(Default::default()),
+        taa: Some(TaaOptions::default()),
+        motion_blur: Some(MotionBlurOptions::default()),
+        adaptive_exposure: Some(AdaptiveExposureOptions::default()),
+        volumetrics: Some(VolumetricOptions::default()),
+    };
+    all.validate().unwrap();
+    assert_eq!(all.enabled_names().collect::<Vec<_>>(), SCENE_EFFECT_NAMES);
+    assert!(all.needs_motion_vectors());
+
+    let exposure_only = SceneEffectsOptions {
         adaptive_exposure: Some(Default::default()),
         ..Default::default()
     };
-    all.validate().unwrap();
-    let requirements = all.requirements();
-    assert!(requirements.depth_texture && requirements.normal_texture && requirements.velocity_texture);
-    assert!(requirements.taa_velocity_texture && requirements.clustered_lighting);
-    assert_eq!(all.enabled_names().count(), 10);
-
-    let exposure_only = SceneEffectsOptions { adaptive_exposure: Some(Default::default()), ..Default::default() };
-    assert!(!exposure_only.requirements().depth_texture);
+    assert!(!exposure_only.needs_motion_vectors() && exposure_only.any_enabled());
     assert!(!SceneEffectsOptions::default().any_enabled());
 }
 
 #[test]
-fn invalid_settings_report_stable_messages() {
-    let both =
-        SceneEffectsOptions { ssao: Some(Default::default()), gtao: Some(Default::default()), ..Default::default() };
-    assert_eq!(both.validate(), Err(SceneEffectsError::ExclusiveOcclusion));
-    let scale = SceneEffectsOptions {
-        ssao: Some(SsaoOptions { resolution_scale: 0.1, ..Default::default() }),
+fn out_of_range_settings_are_rejected_by_name() {
+    let reject = |options: SceneEffectsOptions| options.validate().unwrap_err().to_string();
+    let taa = SceneEffectsOptions {
+        taa: Some(TaaOptions {
+            history_weight: 1.0,
+        }),
         ..Default::default()
     };
-    assert_eq!(
-        scale.validate().unwrap_err().to_string(),
-        "ssao.resolutionScale must be a finite number from 0.25 through 1."
-    );
-    let rays =
-        SceneEffectsOptions { ssgi: Some(SsgiOptions { ray_count: 2.5, ..Default::default() }), ..Default::default() };
-    assert_eq!(rays.validate(), Err(SceneEffectsError::NotAnInteger("ssgi.rayCount".into())));
-    let exposure = SceneEffectsOptions {
-        adaptive_exposure: Some(AdaptiveExposureOptions { minimum_exposure: 9.0, ..Default::default() }),
-        ..Default::default()
-    };
-    assert_eq!(exposure.validate(), Err(SceneEffectsError::ExposureBounds));
-}
+    assert_eq!(reject(taa), "Scene effect taa.historyWeight must be in [0, 0.98].");
 
-#[test]
-fn options_read_camel_case_json_spellings() {
-    let options: SceneEffectsOptions = serde_json::from_str(
-        r#"{"ssao": {"normalSource": "normal-texture"}, "taa": {"reprojection": "camera"}, "colorFormat": "rgba8unorm"}"#,
-    )
-    .unwrap();
-    assert_eq!(options.ssao.unwrap().normal_source, NormalSource::NormalTexture);
-    assert_eq!(options.ssao.unwrap().radius, 7.0);
-    assert_eq!(options.taa.unwrap().reprojection, Reprojection::Camera);
-    assert_eq!(options.color_format, Some(SceneEffectsColorFormat::Rgba8unorm));
-    assert!(serde_json::from_str::<SceneEffectsOptions>(r#"{"bloom": {}}"#).is_err());
+    let blur = MotionBlurOptions {
+        sample_count: 64,
+        ..Default::default()
+    };
+    assert!(
+        reject(SceneEffectsOptions {
+            motion_blur: Some(blur),
+            ..Default::default()
+        })
+        .contains("sampleCount")
+    );
+
+    let exposure = AdaptiveExposureOptions {
+        minimum_exposure: 4.0,
+        maximum_exposure: 2.0,
+        ..Default::default()
+    };
+    let message = reject(SceneEffectsOptions {
+        adaptive_exposure: Some(exposure),
+        ..Default::default()
+    });
+    assert!(message.contains("maximumExposure"), "{message}");
+
+    let fog = VolumetricOptions {
+        density: f32::NAN,
+        ..Default::default()
+    };
+    assert!(
+        reject(SceneEffectsOptions {
+            volumetrics: Some(fog),
+            ..Default::default()
+        })
+        .contains("density")
+    );
 }

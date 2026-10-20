@@ -3,13 +3,14 @@
 
 //! Shared, immutable mesh assets.
 //!
-//! A `MeshAsset` copies and validates indexed local-space geometry once. Assets hold no GPU resources; the renderer
-//! uploads each asset the first time it draws it and releases the upload once no scene references the asset. Removing
-//! an instance or dropping a scene never invalidates an asset used elsewhere.
+//! A [`MeshAsset`] copies and validates a [`Mesh`] once into interleaved `f32` vertices and groups its triangles into one
+//! [`Submesh`] per material slot. Assets hold no GPU resources: the renderer uploads each asset the first time it draws
+//! it and releases the upload once no scene references the asset. Removing an instance or dropping a scene never
+//! invalidates an asset used elsewhere.
 //!
-//! Material factors are baked into vertices. Submeshes may also carry [`MaterialTextures`] (base color, normal,
-//! emissive, metallic, roughness, and occlusion maps) that multiply those factors in the PBR pass;
-//! [`MeshAsset::from_pbr_mesh`] builds such assets from a `PbrMesh` document.
+//! Geometry and materials stay separate: an asset carries one default [`MaterialAsset`] per slot, and scene instances
+//! may override any slot (see [`MeshInstance`](crate::MeshInstance)). Vertices hold geometry only, so one asset draws
+//! with any material and any shading model.
 
 use std::sync::Arc;
 use std::sync::atomic::{
@@ -21,230 +22,53 @@ use bytemuck::{
     Pod,
     Zeroable,
 };
+use joy_core::LinearColor;
 use joy_core::math::Vec3;
+use joy_render_types::{
+    Mesh,
+    MeshDocument,
+};
 
 use crate::RenderError;
+use crate::material::MaterialAsset;
 use crate::texture::TextureAsset;
-use joy_core::{
-    LinearColor,
-    MaterialAlphaMode,
-    MeshAssetData,
-    PbrMaterial,
-    PbrMesh,
-};
 
 /// Source of process-unique asset identities used to key GPU uploads.
 static NEXT_ASSET_ID: AtomicU64 = AtomicU64::new(1);
 
-/// Default roughness for geometry without an authored material: fully rough, so the PBR path reads as diffuse.
-pub const DEFAULT_ROUGHNESS: f32 = 1.0;
-
-/// Material transparency handling, matching FORM's PBR alpha modes.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-pub enum AlphaMode {
-    /// Alpha is ignored.
-    #[default]
-    Opaque,
-    /// Fragments below the cutoff are discarded; survivors are opaque.
-    Mask,
-    /// Straight-alpha source-over blending, sorted back to front.
-    Blend,
-}
-
-impl AlphaMode {
-    /// Shader encoding stored in the vertex surface channel.
-    fn shader_value(self) -> f32 {
-        match self {
-            Self::Opaque => 0.0,
-            Self::Mask => 1.0,
-            Self::Blend => 2.0,
-        }
-    }
-}
-
-/// Interleaved GPU vertex shared by every surface material. 80 bytes.
+/// Interleaved GPU vertex shared by every mesh pass. 48 bytes.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
-pub struct MeshVertex {
-    /// Local-space position.
+pub(crate) struct MeshVertex {
+    /// Model-space position.
     pub position: [f32; 3],
-    /// Local-space normal; zero requests faceted derivative normals.
+    /// Unit model-space normal; zero where the mesh authored none, which shading models shade as faceted.
     pub normal: [f32; 3],
-    /// Linear RGBA vertex color (material base color is already applied).
+    /// Linear RGBA vertex color with straight alpha.
     pub color: [f32; 4],
-    /// Metallic, roughness, alpha cutoff, and alpha mode.
-    pub surface: [f32; 4],
-    /// Linear RGB emission; the fourth component is reserved.
-    pub emissive: [f32; 4],
     /// Texture coordinates with a top-left origin; repeat outside `[0, 1]`.
     pub uv: [f32; 2],
 }
 
-/// Per-vertex material factors baked into the vertex stream.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct VertexMaterial {
-    /// Metallic factor in `[0, 1]`.
-    pub metallic: f32,
-    /// Perceptual roughness in `[0, 1]`.
-    pub roughness: f32,
-    /// Linear emission; RGB may exceed one, and alpha is unused.
-    pub emissive: LinearColor,
-    /// Transparency handling.
-    pub alpha_mode: AlphaMode,
-    /// Cutoff used by `AlphaMode::Mask`.
-    pub alpha_cutoff: f32,
-}
-
-impl Default for VertexMaterial {
-    fn default() -> Self {
-        Self {
-            metallic: 0.0,
-            roughness: DEFAULT_ROUGHNESS,
-            emissive: LinearColor::BLACK,
-            alpha_mode: AlphaMode::Opaque,
-            alpha_cutoff: 0.5,
-        }
-    }
-}
-
 impl MeshVertex {
-    /// Build a vertex from its channels and baked material.
-    pub fn new(position: [f32; 3], normal: [f32; 3], color: LinearColor, material: VertexMaterial) -> Self {
+    /// A vertex with no authored normal or texture coordinates, as transient triangles draw.
+    pub(crate) fn colored(position: [f32; 3], color: LinearColor) -> Self {
         Self {
             position,
-            normal,
+            normal: [0.0; 3],
             color: color.to_array(),
-            surface: [material.metallic, material.roughness, material.alpha_cutoff, material.alpha_mode.shader_value()],
-            emissive: material.emissive.with_alpha(0.0).to_array(),
             uv: [0.0; 2],
         }
     }
-
-    /// This vertex with texture coordinates.
-    pub fn with_uv(mut self, uv: [f32; 2]) -> Self {
-        self.uv = uv;
-        self
-    }
-
-    /// Whether this vertex belongs to a blended surface.
-    fn blends(&self) -> bool {
-        self.surface[3] > 1.5
-    }
-
-    /// Whether this vertex belongs to an alpha-tested surface.
-    fn masks(&self) -> bool {
-        (0.5..1.5).contains(&self.surface[3])
-    }
 }
 
-/// Texture maps for one material; missing maps behave as white (or a flat normal). Color maps (base color and
-/// emission) are sRGB; normal maps are tangent-space XYZ; metallic, roughness, and occlusion read the red channel.
-#[derive(Clone, Debug, Default)]
-pub struct TextureMaps {
-    /// Base color and alpha, multiplied with the vertex color.
-    pub base_color: Option<TextureAsset>,
-    /// Tangent-space normal map.
-    pub normal: Option<TextureAsset>,
-    /// Emission, multiplied with the emissive factor.
-    pub emissive: Option<TextureAsset>,
-    /// Metalness, multiplied with the metallic factor.
-    pub metallic: Option<TextureAsset>,
-    /// Roughness, multiplied with the roughness factor.
-    pub roughness: Option<TextureAsset>,
-    /// Ambient occlusion, applied to ambient and image-based light.
-    pub ao: Option<TextureAsset>,
-}
-
-impl TextureMaps {
-    /// Whether no map is set.
-    pub fn is_empty(&self) -> bool {
-        self.textures().all(|texture| texture.is_none())
-    }
-
-    fn textures(&self) -> impl Iterator<Item = &Option<TextureAsset>> {
-        [&self.base_color, &self.normal, &self.emissive, &self.metallic, &self.roughness, &self.ao].into_iter()
-    }
-}
-
-/// Shared, immutable texture maps for PBR submeshes. Handles compare equal when they share one allocation.
-#[derive(Clone, Debug)]
-pub struct MaterialTextures {
-    inner: Arc<MaterialTexturesInner>,
-}
-
-#[derive(Debug)]
-struct MaterialTexturesInner {
-    id: u64,
-    maps: TextureMaps,
-}
-
-impl MaterialTextures {
-    /// Share a set of maps.
-    pub fn new(maps: TextureMaps) -> Self {
-        let id = NEXT_ASSET_ID.fetch_add(1, Ordering::Relaxed);
-        Self { inner: Arc::new(MaterialTexturesInner { id, maps }) }
-    }
-
-    /// Process-unique identity used to key GPU bindings.
-    pub fn id(&self) -> u64 {
-        self.inner.id
-    }
-
-    /// The maps.
-    pub fn maps(&self) -> &TextureMaps {
-        &self.inner.maps
-    }
-
-    /// A type-erased weak reference used by the GPU cache to release bindings for dropped materials.
-    pub(crate) fn downgrade(&self) -> std::sync::Weak<dyn std::any::Any + Send + Sync> {
-        let strong: Arc<dyn std::any::Any + Send + Sync> = self.inner.clone();
-        Arc::downgrade(&strong)
-    }
-}
-
-impl PartialEq for MaterialTextures {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.inner, &other.inner)
-    }
-}
-
-impl Eq for MaterialTextures {}
-
-/// A contiguous index range drawn with one alpha mode and, for PBR, one set of texture maps.
+/// A contiguous index range drawn with one material slot.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Submesh {
-    /// Index range into `MeshData::indices`.
+    /// Index range into the asset's index buffer.
     pub indices: std::ops::Range<u32>,
-    /// Whether this range blends (and therefore draws in the sorted transparent queue).
-    pub blend: bool,
-    /// Whether any triangle is alpha-tested, so shadow casters must test alpha too.
-    pub masked: bool,
-    /// Texture maps applied by the PBR pass; `None` uses the baked vertex factors alone.
-    pub textures: Option<MaterialTextures>,
-}
-
-/// Validated indexed triangle geometry in local space.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct MeshData {
-    /// Interleaved vertices.
-    pub vertices: Vec<MeshVertex>,
-    /// Triangle list indices into `vertices`.
-    pub indices: Vec<u32>,
-}
-
-/// Plain channel arrays accepted by [`MeshAsset::from_channels`].
-#[derive(Clone, Debug, Default)]
-pub struct MeshChannels<'a> {
-    /// Packed XYZ positions.
-    pub positions: &'a [f32],
-    /// Triangle list indices.
-    pub indices: &'a [u32],
-    /// Packed XYZ normals; empty for faceted shading.
-    pub normals: &'a [f32],
-    /// Packed linear RGB colors; empty for white.
-    pub colors: &'a [f32],
-    /// Per-vertex alpha; empty for opaque.
-    pub alphas: &'a [f32],
+    /// The material slot the range draws with.
+    pub slot: usize,
 }
 
 /// Axis-aligned bounds in the asset's local space.
@@ -283,228 +107,94 @@ pub struct MeshAsset {
 #[derive(Debug)]
 struct MeshAssetInner {
     id: u64,
-    data: MeshData,
+    vertices: Vec<MeshVertex>,
+    indices: Vec<u32>,
     submeshes: Vec<Submesh>,
+    materials: Vec<MaterialAsset>,
     bounds: Bounds,
     has_vertex_alpha: bool,
 }
 
 impl MeshAsset {
-    /// Validate and take ownership of interleaved geometry.
+    /// Validate and copy `mesh`, drawing every slot with the default material (opaque white lit shading).
     ///
-    /// Triangles are regrouped so opaque and blended ranges are contiguous; the relative order within each group is
-    /// preserved. Fails for empty geometry, incomplete triangles, out-of-range indices, or non-finite positions.
-    pub fn new(data: MeshData) -> Result<Self, RenderError> {
-        validate(&data)?;
+    /// Fails for meshes [`Mesh::validate`] rejects, and for positions or attributes that do not fit finite `f32`s.
+    pub fn new(mesh: &Mesh) -> Result<Self, RenderError> {
+        Self::with_materials(mesh, Vec::new())
+    }
 
-        // Partition triangles by blend state so each group draws with one pipeline.
-        let mut opaque = Vec::with_capacity(data.indices.len());
-        let mut blended = Vec::new();
-        for triangle in data.indices.as_chunks::<3>().0 {
-            let blends = triangle.iter().any(|index| data.vertices[*index as usize].blends());
-            if blends {
-                blended.extend_from_slice(triangle);
-            } else {
-                opaque.extend_from_slice(triangle);
-            }
-        }
-        let opaque_count = opaque.len() as u32;
-        let total = (opaque.len() + blended.len()) as u32;
-        let masked = opaque.iter().any(|index| data.vertices[*index as usize].masks());
+    /// Validate and copy `mesh` with `materials` as its slots' defaults, in slot order. Slots past the end of
+    /// `materials` draw with the default material; extra materials are ignored.
+    ///
+    /// Triangles are regrouped by slot, keeping their order within each slot, and authored normals are normalized.
+    pub fn with_materials(mesh: &Mesh, materials: Vec<MaterialAsset>) -> Result<Self, RenderError> {
+        mesh.validate().map_err(|error| RenderError::InvalidMesh(error.to_string()))?;
+        let vertices = interleave(mesh)?;
+        let slot_count = mesh.slot_count();
+
+        // One submesh per slot that has triangles, slots in order and triangles in authored order within each.
+        let mut indices = Vec::with_capacity(mesh.indices.len());
         let mut submeshes = Vec::new();
-        if opaque_count > 0 {
-            submeshes.push(Submesh { indices: 0..opaque_count, blend: false, masked, textures: None });
-        }
-        if total > opaque_count {
-            submeshes.push(Submesh { indices: opaque_count..total, blend: true, masked: false, textures: None });
-        }
-        opaque.extend(blended);
-
-        let has_vertex_alpha = data.vertices.iter().any(|vertex| vertex.color[3] < 1.0);
-        Ok(Self::assemble(MeshData { vertices: data.vertices, indices: opaque }, submeshes, has_vertex_alpha))
-    }
-
-    /// Build an asset from a `PbrMesh` document, resolving texture sources through `resolve`.
-    ///
-    /// Every triangle gets its own three vertices, authored normals are normalized (zero normals use the triangle's
-    /// face normal), material factors multiply vertex colors and texture samples, and triangles group by material with
-    /// blended materials last. Alpha is governed by the materials, so the asset reports no vertex alpha. Fails for
-    /// misaligned channels, invalid indices or material references, out-of-range material values, or a texture source
-    /// that does not resolve.
-    pub fn from_pbr_mesh(
-        mesh: &PbrMesh,
-        mut resolve: impl FnMut(&str) -> Option<TextureAsset>,
-    ) -> Result<Self, RenderError> {
-        let invalid = |message: &str| RenderError::InvalidMesh(message.to_owned());
-        let count = mesh.positions.len() / 3;
-        let aligned = mesh.positions.len().is_multiple_of(3)
-            && mesh.normals.len() == count * 3
-            && mesh.colors.len() == count * 3
-            && mesh.uvs.len() == count * 2
-            && mesh.alphas.len() == count
-            && mesh.triangles.len().is_multiple_of(3)
-            && mesh.triangle_materials.len() == mesh.triangles.len() / 3;
-        if !aligned {
-            return Err(invalid(
-                "PBR geometry requires aligned positions, normals, colors, alpha, UVs and triangle materials.",
-            ));
-        }
-        let channels = [&mesh.positions, &mesh.normals, &mesh.colors, &mesh.uvs, &mesh.alphas];
-        if channels.iter().any(|values| values.iter().any(|value| !(*value as f32).is_finite())) {
-            return Err(invalid("PBR vertex attributes must fit finite float32 values."));
-        }
-        let materials = mesh
-            .materials
-            .iter()
-            .map(|material| resolve_material(material, &mut resolve))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        // Triangle order within each material is preserved; materials draw in palette order, blended ones last.
-        let mut order: Vec<usize> = (0..mesh.triangle_materials.len()).collect();
-        for &material in &mesh.triangle_materials {
-            if materials.get(material as usize).is_none() {
-                return Err(invalid("PBR triangle references an unknown material."));
-            }
-        }
-        order.sort_by_key(|&triangle| {
-            let material = mesh.triangle_materials[triangle] as usize;
-            (materials[material].blend, material)
-        });
-
-        let read = |values: &[f64], index: usize, width: usize| -> Vec<f32> {
-            values[index * width..(index + 1) * width].iter().map(|value| *value as f32).collect()
-        };
-        let mut vertices = Vec::with_capacity(mesh.triangles.len());
-        let mut submeshes: Vec<Submesh> = Vec::new();
-        for triangle in order {
-            let corners =
-                [mesh.triangles[triangle * 3], mesh.triangles[triangle * 3 + 1], mesh.triangles[triangle * 3 + 2]];
-            if corners.iter().any(|index| *index as usize >= count) {
-                return Err(invalid("PBR triangle index is outside the vertex array."));
-            }
-            let material_index = mesh.triangle_materials[triangle] as usize;
-            let material = &materials[material_index];
-            let positions = corners.map(|index| Vec3::from_slice(&read(&mesh.positions, index as usize, 3)));
-            let face = (positions[1] - positions[0]).cross(positions[2] - positions[0]);
-            let flat = if face.length() > 0.0 { face.normalize() } else { Vec3::Y };
-            let first = vertices.len() as u32;
-            for (corner, index) in corners.iter().enumerate() {
-                let index = *index as usize;
-                let authored = Vec3::from_slice(&read(&mesh.normals, index, 3));
-                let scale = authored.abs().max_element();
-                let normal = if scale > 0.0 { (authored / scale).normalize() } else { flat };
-                let color = read(&mesh.colors, index, 3);
-                let alpha = mesh.alphas[index] as f32 * material.base[3];
-                let rgba =
-                    [color[0] * material.base[0], color[1] * material.base[1], color[2] * material.base[2], alpha];
-                let uv = read(&mesh.uvs, index, 2);
-                vertices.push(
-                    MeshVertex::new(
-                        positions[corner].to_array(),
-                        normal.to_array(),
-                        LinearColor::from(rgba),
-                        material.factors,
-                    )
-                    .with_uv([uv[0], uv[1]]),
-                );
-            }
-            match submeshes.last_mut() {
-                Some(last)
-                    if last.textures == material.textures
-                        && last.blend == material.blend
-                        && last.masked == material.masked =>
-                {
-                    last.indices.end = first + 3;
+        for slot in 0..slot_count {
+            let start = indices.len() as u32;
+            for (triangle, corners) in mesh.indices.as_chunks::<3>().0.iter().enumerate() {
+                if mesh.triangle_slot(triangle) as usize == slot {
+                    indices.extend_from_slice(corners);
                 }
-                _ => submeshes.push(Submesh {
-                    indices: first..first + 3,
-                    blend: material.blend,
-                    masked: material.masked,
-                    textures: material.textures.clone(),
-                }),
+            }
+            let end = indices.len() as u32;
+            if end > start {
+                submeshes.push(Submesh {
+                    indices: start..end,
+                    slot,
+                });
             }
         }
-        if vertices.is_empty() {
-            return Err(invalid("geometry needs at least one vertex and one triangle"));
-        }
-        let indices = (0..vertices.len() as u32).collect();
-        Ok(Self::assemble(MeshData { vertices, indices }, submeshes, false))
-    }
 
-    fn assemble(data: MeshData, submeshes: Vec<Submesh>, has_vertex_alpha: bool) -> Self {
-        let bounds = data.vertices.iter().fold(
-            Bounds { min: Vec3::splat(f32::INFINITY), max: Vec3::splat(f32::NEG_INFINITY) },
+        let mut slot_materials = materials;
+        slot_materials.truncate(slot_count);
+        while slot_materials.len() < slot_count {
+            slot_materials.push(MaterialAsset::default());
+        }
+
+        let bounds = vertices.iter().fold(
+            Bounds {
+                min: Vec3::splat(f32::INFINITY),
+                max: Vec3::splat(f32::NEG_INFINITY),
+            },
             |bounds, vertex| {
                 let position = Vec3::from_array(vertex.position);
                 Bounds { min: bounds.min.min(position), max: bounds.max.max(position) }
             },
         );
+        let has_vertex_alpha = vertices.iter().any(|vertex| vertex.color[3] < 1.0);
         let id = NEXT_ASSET_ID.fetch_add(1, Ordering::Relaxed);
-        Self { inner: Arc::new(MeshAssetInner { id, data, submeshes, bounds, has_vertex_alpha }) }
-    }
-
-    /// Build an asset from plain channel arrays with default (fully rough, opaque) material factors.
-    ///
-    /// Colors default to white and alpha to one. Normals may be empty for faceted shading.
-    pub fn from_channels(channels: MeshChannels<'_>) -> Result<Self, RenderError> {
-        let vertex_count = channels.positions.len() / 3;
-        if !channels.positions.len().is_multiple_of(3) {
-            return Err(RenderError::InvalidMesh("positions must contain complete XYZ vertices".into()));
-        }
-        let check = |name: &str, length: usize, stride: usize| -> Result<(), RenderError> {
-            if length != 0 && length != vertex_count * stride {
-                return Err(RenderError::InvalidMesh(format!("{name} must match the vertex count")));
-            }
-            Ok(())
-        };
-        check("normals", channels.normals.len(), 3)?;
-        check("colors", channels.colors.len(), 3)?;
-        check("alphas", channels.alphas.len(), 1)?;
-
-        let vertices = (0..vertex_count)
-            .map(|index| {
-                let triple = |values: &[f32], fallback: f32| {
-                    if values.is_empty() {
-                        [fallback; 3]
-                    } else {
-                        [values[index * 3], values[(index * 3) + 1], values[(index * 3) + 2]]
-                    }
-                };
-                let position = triple(channels.positions, 0.0);
-                let normal = triple(channels.normals, 0.0);
-                let color = triple(channels.colors, 1.0);
-                let alpha = channels.alphas.get(index).copied().unwrap_or(1.0);
-                let material = VertexMaterial {
-                    alpha_mode: if alpha < 1.0 { AlphaMode::Blend } else { AlphaMode::Opaque },
-                    ..VertexMaterial::default()
-                };
-                MeshVertex::new(position, normal, LinearColor::new(color[0], color[1], color[2], alpha), material)
-            })
-            .collect();
-        Self::new(MeshData { vertices, indices: channels.indices.to_vec() })
-    }
-
-    /// Build an asset from the shared [`MeshAssetData`] record, such as destructible chunk geometry, with default
-    /// (fully rough, opaque) material factors.
-    ///
-    /// Positions, indices, normals, colors, and alphas convert as in [`MeshAsset::from_channels`]; UVs, materials,
-    /// triangle materials, and metadata are not interpreted (FORM geometry with materials converts through
-    /// `form_mesh_asset`). Fails for misaligned channels or invalid geometry.
-    pub fn from_asset_data(data: &MeshAssetData) -> Result<Self, RenderError> {
-        let narrow = |values: Option<&Vec<f64>>| -> Vec<f32> {
-            values.map_or_else(Vec::new, |values| values.iter().map(|value| *value as f32).collect())
-        };
-        let positions = narrow(Some(&data.positions));
-        let normals = narrow(data.normals.as_ref());
-        let colors = narrow(data.colors.as_ref());
-        let alphas = narrow(data.alphas.as_ref());
-        Self::from_channels(MeshChannels {
-            positions: &positions,
-            indices: &data.indices,
-            normals: &normals,
-            colors: &colors,
-            alphas: &alphas,
+        Ok(Self {
+            inner: Arc::new(MeshAssetInner {
+                id,
+                vertices,
+                indices,
+                submeshes,
+                materials: slot_materials,
+                bounds,
+                has_vertex_alpha,
+            }),
         })
+    }
+
+    /// Validate a mesh document and build its asset, resolving each material's texture sources through `resolve` (see
+    /// [`MaterialAsset::with_textures`]).
+    pub fn from_document(
+        document: &MeshDocument,
+        mut resolve: impl FnMut(&str) -> Option<TextureAsset>,
+    ) -> Result<Self, RenderError> {
+        document.validate().map_err(|error| RenderError::InvalidMesh(error.to_string()))?;
+        let materials = document
+            .materials
+            .iter()
+            .map(|material| MaterialAsset::with_textures(material.clone(), &mut resolve))
+            .collect::<Result<Vec<_>, _>>()?;
+        Self::with_materials(&document.mesh, materials)
     }
 
     /// Process-unique identity used to key GPU uploads.
@@ -512,19 +202,34 @@ impl MeshAsset {
         self.inner.id
     }
 
-    /// Validated geometry, with opaque triangles before blended ones.
-    pub fn data(&self) -> &MeshData {
-        &self.inner.data
-    }
-
-    /// Contiguous index ranges: opaque ones first, then blended ones.
+    /// The index ranges of each slot that has triangles, in slot order.
     pub fn submeshes(&self) -> &[Submesh] {
         &self.inner.submeshes
+    }
+
+    /// The default material of every slot, in slot order.
+    pub fn materials(&self) -> &[MaterialAsset] {
+        &self.inner.materials
+    }
+
+    /// Number of material slots.
+    pub fn slot_count(&self) -> usize {
+        self.inner.materials.len()
     }
 
     /// Local-space bounds.
     pub fn bounds(&self) -> Bounds {
         self.inner.bounds
+    }
+
+    /// Number of vertices.
+    pub fn vertex_count(&self) -> usize {
+        self.inner.vertices.len()
+    }
+
+    /// Number of triangles.
+    pub fn triangle_count(&self) -> usize {
+        self.inner.indices.len() / 3
     }
 
     /// Whether any vertex has alpha below one; `RenderPassKind::Auto` instances then draw transparently.
@@ -537,6 +242,16 @@ impl MeshAsset {
         Arc::ptr_eq(&self.inner, &other.inner)
     }
 
+    /// Interleaved vertices, for upload.
+    pub(crate) fn vertices(&self) -> &[MeshVertex] {
+        &self.inner.vertices
+    }
+
+    /// Triangle-list indices grouped by slot, for upload.
+    pub(crate) fn indices(&self) -> &[u32] {
+        &self.inner.indices
+    }
+
     /// A type-erased weak reference used by the GPU cache to release uploads for dropped assets.
     pub(crate) fn downgrade(&self) -> std::sync::Weak<dyn std::any::Any + Send + Sync> {
         let strong: Arc<dyn std::any::Any + Send + Sync> = self.inner.clone();
@@ -544,103 +259,27 @@ impl MeshAsset {
     }
 }
 
-/// A `PbrMaterial` converted to baked factors and shared texture maps.
-struct ResolvedMaterial {
-    base: [f32; 4],
-    factors: VertexMaterial,
-    blend: bool,
-    masked: bool,
-    textures: Option<MaterialTextures>,
-}
-
-/// Validate a material's colors and factor ranges, then resolve its texture sources.
-fn resolve_material(
-    material: &PbrMaterial,
-    resolve: &mut impl FnMut(&str) -> Option<TextureAsset>,
-) -> Result<ResolvedMaterial, RenderError> {
-    let invalid = |message: &str| RenderError::InvalidMesh(message.to_owned());
-    let color_valid = |values: &[f64]| values.iter().all(|value| (*value as f32).is_finite() && *value >= 0.0);
-    if !matches!(material.base_color.len(), 3 | 4)
-        || material.emissive.len() != 3
-        || !color_valid(&material.base_color)
-        || !color_valid(&material.emissive)
-    {
-        return Err(invalid(
-            "PBR material colors require nonnegative finite float32 channels (RGBA base color and RGB emissive).",
-        ));
-    }
-    let alpha = material.base_color.get(3).copied().unwrap_or(1.0);
-    if [alpha, material.metallic, material.roughness, material.alpha_cutoff]
-        .iter()
-        .any(|value| !(0.0..=1.0).contains(value))
-    {
-        return Err(invalid("PBR material alpha, metallic, roughness and alpha cutoff must be between 0 and 1."));
-    }
-    let mut texture = |source: &Option<String>| -> Result<Option<TextureAsset>, RenderError> {
-        match source {
-            None => Ok(None),
-            Some(source) if source.trim().is_empty() => {
-                Err(invalid("PBR material texture sources must be nonempty URLs or null."))
-            }
-            Some(source) => resolve(source)
-                .map(Some)
-                .ok_or_else(|| RenderError::InvalidMesh(format!("PBR texture \"{source}\" could not be loaded."))),
+/// Interleave a validated mesh's attributes as `f32` vertices: colors default to white, texture coordinates to zero,
+/// and authored normals are normalized (zero normals stay zero, which shades faceted).
+fn interleave(mesh: &Mesh) -> Result<Vec<MeshVertex>, RenderError> {
+    let mut vertices = Vec::with_capacity(mesh.positions.len());
+    for (index, position) in mesh.positions.iter().enumerate() {
+        let position = position.as_vec3();
+        if !position.is_finite() {
+            return Err(RenderError::InvalidMesh("positions must fit finite float32 values".into()));
         }
-    };
-    let sources = &material.textures;
-    let maps = TextureMaps {
-        base_color: texture(&sources.base_color)?,
-        normal: texture(&sources.normal)?,
-        emissive: texture(&sources.emissive)?,
-        metallic: texture(&sources.metallic)?,
-        roughness: texture(&sources.roughness)?,
-        ao: texture(&sources.ao)?,
-    };
-    let alpha_mode = match material.alpha_mode {
-        MaterialAlphaMode::Opaque => AlphaMode::Opaque,
-        MaterialAlphaMode::Mask => AlphaMode::Mask,
-        MaterialAlphaMode::Blend => AlphaMode::Blend,
-    };
-    let color = |index: usize| material.base_color[index] as f32;
-    Ok(ResolvedMaterial {
-        base: [color(0), color(1), color(2), alpha as f32],
-        factors: VertexMaterial {
-            metallic: material.metallic as f32,
-            roughness: material.roughness as f32,
-            emissive: LinearColor::rgb(
-                material.emissive[0] as f32,
-                material.emissive[1] as f32,
-                material.emissive[2] as f32,
-            ),
-            alpha_mode,
-            alpha_cutoff: material.alpha_cutoff as f32,
-        },
-        blend: alpha_mode == AlphaMode::Blend,
-        masked: alpha_mode == AlphaMode::Mask,
-        textures: (!maps.is_empty()).then(|| MaterialTextures::new(maps)),
-    })
-}
-
-/// Reject geometry the GPU path cannot draw safely.
-fn validate(data: &MeshData) -> Result<(), RenderError> {
-    if data.vertices.is_empty() || data.indices.is_empty() {
-        return Err(RenderError::InvalidMesh("geometry needs at least one vertex and one triangle".into()));
+        let normal = mesh.normals.as_ref().map_or(Vec3::ZERO, |normals| normals[index]);
+        let normal = if normal.length_squared() > 0.0 { normal.normalize_or_zero() } else { Vec3::ZERO };
+        let color = mesh.colors.as_ref().map_or(LinearColor::WHITE, |colors| colors[index]);
+        let uv = mesh.uvs.as_ref().map_or([0.0; 2], |uvs| uvs[index].to_array());
+        vertices.push(MeshVertex {
+            position: position.to_array(),
+            normal: normal.to_array(),
+            color: color.to_array(),
+            uv,
+        });
     }
-    if !data.indices.len().is_multiple_of(3) {
-        return Err(RenderError::InvalidMesh("indices must form complete triangles".into()));
-    }
-    let vertex_count = data.vertices.len() as u32;
-    if let Some(index) = data.indices.iter().find(|index| **index >= vertex_count) {
-        return Err(RenderError::InvalidMesh(format!("index {index} exceeds {vertex_count} vertices")));
-    }
-    let finite = data
-        .vertices
-        .iter()
-        .all(|vertex| vertex.position.iter().chain(&vertex.normal).chain(&vertex.color).all(|value| value.is_finite()));
-    if !finite {
-        return Err(RenderError::InvalidMesh("vertex channels must be finite".into()));
-    }
-    Ok(())
+    Ok(vertices)
 }
 
 #[cfg(test)]

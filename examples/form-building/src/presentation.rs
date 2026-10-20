@@ -12,5 +12,5 @@ use joy_engine::prelude::*;
 /// visible.
 pub fn populate_building_scene(scene: &mut RenderScene, asset: MeshAsset) -> MeshInstanceId {
     scene.clear();
-    scene.insert(MeshInstance::new(asset).with_shading(Shading::Pbr))
+    scene.insert(MeshInstance::new(asset))
 }

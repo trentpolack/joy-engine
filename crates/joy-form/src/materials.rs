@@ -13,6 +13,18 @@ use serde_json::{
 };
 use std::collections::HashSet;
 
+use joy_core::LinearColor;
+use joy_render_types::{
+    LitSurface,
+    Material,
+    Shading,
+    ShadingModel,
+    Surface,
+    SurfaceLayer,
+    SurfaceMaps,
+    UnlitSurface,
+};
+
 const MAX_MATERIALS: usize = 128;
 pub(crate) const MAX_TEXTURE_BYTES: usize = 4_000_000;
 pub(crate) const MAX_TOTAL_TEXTURE_BYTES: usize = 32_000_000;
@@ -28,20 +40,9 @@ const DEFAULT_ROUGHNESS: f64 = 1.0;
 const DEFAULT_EMISSIVE: [f64; 3] = [0.0, 0.0, 0.0];
 const DEFAULT_ALPHA_CUTOFF: f64 = 0.5;
 
-/// How a renderer combines a material's alpha with the framebuffer, following glTF.
-///
-/// Serialized as `"OPAQUE"`, `"MASK"`, or `"BLEND"`, the glTF `alphaMode` spelling.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum AlphaMode {
-    /// Alpha is ignored; the surface is fully opaque.
-    #[default]
-    Opaque,
-    /// Fragments with alpha below [`FormMaterial::alpha_cutoff`] are discarded.
-    Mask,
-    /// Alpha blends the surface over what is behind it.
-    Blend,
-}
+/// How a renderer combines a material's alpha with the framebuffer, following glTF: the engine's one alpha-mode
+/// vocabulary, serialized as `"OPAQUE"`, `"MASK"`, or `"BLEND"`.
+pub use joy_render_types::AlphaMode;
 
 /// Embedded texture sources for one material, each a `data:image/(png|jpeg|webp);base64,` URI.
 ///
@@ -135,6 +136,54 @@ impl FormMaterial {
                 ao: texture("ao"),
             },
         }
+    }
+}
+
+impl FormMaterial {
+    /// This palette entry as an engine [`Material`] drawn with `model`.
+    ///
+    /// [`ShadingModel::Layered`] keeps every factor and map (FORM's metallic-roughness description is a surface
+    /// layer); [`ShadingModel::Lit`] and [`ShadingModel::Unlit`] draw FORM's vertex colors alone, as FORM's flat look
+    /// always has. Returns `None` for a custom model, whose inputs FORM cannot describe.
+    pub fn to_material(&self, model: ShadingModel<'_>) -> Option<Material> {
+        let shading = match model {
+            ShadingModel::Layered => {
+                let color = |values: &[f64]| values.iter().map(|value| *value as f32).collect::<Vec<_>>();
+                let base = color(&self.base_color);
+                let emissive = color(&self.emissive);
+                let maps = &self.textures;
+                Shading::Layered(Surface::Layer(SurfaceLayer {
+                    emissive: LinearColor::rgb(emissive[0], emissive[1], emissive[2]),
+                    maps: SurfaceMaps {
+                        base_color: maps.base_color.clone(),
+                        normal: maps.normal.clone(),
+                        emissive: maps.emissive.clone(),
+                        metallic: maps.metallic.clone(),
+                        roughness: maps.roughness.clone(),
+                        occlusion: maps.ao.clone(),
+                    },
+                    ..SurfaceLayer::metallic_roughness(
+                        LinearColor::new(base[0], base[1], base[2], base[3]),
+                        self.metallic as f32,
+                        self.roughness as f32,
+                    )
+                }))
+            }
+            ShadingModel::Lit => Shading::Lit(LitSurface::default()),
+            ShadingModel::Unlit => Shading::Unlit(UnlitSurface::default()),
+            ShadingModel::Custom(_) => return None,
+        };
+        // FORM's flat looks never alpha-tested or blended by material; their vertex alpha still draws transparently.
+        let (alpha_mode, alpha_cutoff) = match model {
+            ShadingModel::Layered => (self.alpha_mode, self.alpha_cutoff as f32),
+            _ => (AlphaMode::Opaque, self.alpha_cutoff as f32),
+        };
+        Some(Material {
+            name: self.name.clone(),
+            shading,
+            alpha_mode,
+            alpha_cutoff,
+        })
     }
 }
 

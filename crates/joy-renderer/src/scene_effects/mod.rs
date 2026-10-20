@@ -1,55 +1,50 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Screen-space scene effects: ambient occlusion (SSAO or GTAO), global illumination, reflections, outlines, height fog,
-//! clustered volumetric lighting, depth-aware blur, temporal antialiasing, motion blur, and adaptive exposure.
+//! Scene effects: temporal antialiasing, motion blur, adaptive exposure, and volumetric fog and lighting.
 //!
-//! The shader passes are luma.gl's (`@luma.gl/effects`, MIT License, Copyright (c) vis.gl contributors; see
-//! `LICENSE-luma.gl`), assembled by the engine's Rust shader-pass renderer.
+//! Each effect owns its targets and passes; [`SceneEffectsRuntime`] runs the enabled ones in the renderer's pass order
+//! (see `runtime.rs`). Every effect works on WebGPU and native backends. On WebGL 2, temporal antialiasing, motion
+//! blur, and adaptive exposure need float render targets, and volumetric fog, which needs compute shaders, reports
+//! itself unavailable.
 
 mod attachments;
-mod chain;
 mod config;
-mod effects;
-mod pass;
-mod passes;
-mod pipelines;
-mod volume_lights;
+mod exposure;
+mod frame;
+mod motion_blur;
+mod runtime;
+mod temporal;
+mod volumetrics;
 
 pub(crate) use attachments::SceneAttachments;
-pub(crate) use effects::{
-    EffectStage,
+pub use config::{
+    ADAPTIVE_EXPOSURE_NAME,
+    AdaptiveExposureOptions,
+    MOTION_BLUR_NAME,
+    MotionBlurOptions,
+    SCENE_EFFECT_NAMES,
+    SceneEffectsError,
+    SceneEffectsOptions,
+    TAA_NAME,
+    TaaOptions,
+    VOLUMETRICS_NAME,
+    VolumetricOptions,
+    VolumetricQuality,
+};
+pub(crate) use frame::{
     EffectsFrame,
+    copy_into_scene,
+    effect_target,
+    linear_sampler,
+};
+pub(crate) use runtime::{
+    EffectSupport,
+    EffectsSetup,
     SceneEffectsRuntime,
     capabilities,
 };
-pub(crate) use volume_lights::{
-    VolumeCamera,
-    VolumeLights,
-};
-
-pub use config::{
-    AdaptiveExposureOptions,
-    ClusteredLightingOptions,
-    DepthAwareBlurOptions,
-    GtaoOptions,
-    HeightFogOptions,
-    MotionBlurOptions,
-    NormalSource,
-    OutlineOptions,
-    Reprojection,
-    SCENE_EFFECT_NAMES,
-    SceneEffectsColorFormat,
-    SceneEffectsError,
-    SceneEffectsOptions,
-    SceneEffectsRequirements,
-    SsaoOptions,
-    SsgiOptions,
-    SsrOptions,
-    TaaOptions,
-};
-pub use effects::{
+pub use runtime::{
     SceneEffectCapability,
     SceneEffectsCapabilities,
 };
-pub use volume_lights::SceneVolumeStats;

@@ -75,7 +75,7 @@ pub mod key {
     pub const CONTROL_LEFT: &str = "ControlLeft";
     /// The right control key.
     pub const CONTROL_RIGHT: &str = "ControlRight";
-    /// The backquote key, which toggles development tools.
+    /// The backquote key, which toggles the development console.
     pub const BACKQUOTE: &str = "Backquote";
     /// The A key.
     pub const KEY_A: &str = "KeyA";

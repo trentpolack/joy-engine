@@ -34,11 +34,17 @@ fn invalid_values_are_rejected_and_leave_overrides_unchanged() {
         reject(json!({"bloomKnee": 0})),
         PostProcessError::BelowMinimum { key: "bloomKnee", minimum: 0.0, exclusive: true }
     );
-    assert_eq!(reject(json!({"vibrance": -1.5})).to_string(), "Post-processing vibrance must be at least -1.");
-    assert_eq!(reject(json!({"brightness": 3})), PostProcessError::AboveMaximum { key: "brightness", maximum: 2.0 });
+    assert_eq!(reject(json!({"filmicToe": 0.5})).to_string(), "Post-processing filmicToe must be at least 1.");
+    assert_eq!(
+        reject(json!({"vignetteStrength": 2})),
+        PostProcessError::AboveMaximum {
+            key: "vignetteStrength",
+            maximum: 1.0
+        }
+    );
     assert_eq!(reject(json!({"exposure": "bright"})), PostProcessError::NotFinite("exposure"));
-    assert_eq!(reject(json!({"glow": 1})), PostProcessError::UnknownSetting("glow".into()));
-    assert!(matches!(reject(json!({"toneMapper": "filmic"})), PostProcessError::InvalidChoice { .. }));
+    assert_eq!(reject(json!({"filmGrain": 0.1})), PostProcessError::UnknownSetting("filmGrain".into()));
+    assert!(matches!(reject(json!({"toneMapper": "reinhard"})), PostProcessError::InvalidChoice { .. }));
 
     let mut edited = overrides(json!({"exposure": 2}));
     assert!(edited.set("exposure", json!(-1)).is_err());
@@ -47,15 +53,15 @@ fn invalid_values_are_rejected_and_leave_overrides_unchanged() {
 
 #[test]
 fn blending_moves_numbers_exposure_and_choices_toward_the_overrides() {
-    let target = overrides(json!({"contrast": 2, "exposure": 4, "toneMapper": "aces"}));
+    let target = overrides(json!({"filmicContrast": 2, "exposure": 4, "toneMapper": "aces"}));
     let base = PostProcessSettings::DEFAULT;
     assert_eq!(base.blend_toward(&target, 0.0), base);
     let full = base.with_overrides(&target);
-    assert_eq!((full.contrast, full.exposure, full.tone_mapper), (2.0, 4.0, ToneMapper::Aces));
-    assert_eq!(full.saturation, base.saturation, "omitted settings are unchanged");
+    assert_eq!((full.filmic_contrast, full.exposure, full.tone_mapper), (2.0, 4.0, ToneMapper::Aces));
+    assert_eq!(full.bloom_scatter, base.bloom_scatter, "omitted settings are unchanged");
 
     // Exposure interpolates in stops, so half weight from 1 toward 4 is 2; choices switch at half weight.
     let half = base.blend_toward(&target, 0.5);
-    assert_eq!((half.contrast, half.exposure, half.tone_mapper), (1.5, 2.0, ToneMapper::Aces));
-    assert_eq!(base.blend_toward(&target, 0.49).tone_mapper, ToneMapper::Agx);
+    assert_eq!((half.filmic_contrast, half.exposure, half.tone_mapper), (1.5, 2.0, ToneMapper::Aces));
+    assert_eq!(base.blend_toward(&target, 0.49).tone_mapper, ToneMapper::Filmic);
 }

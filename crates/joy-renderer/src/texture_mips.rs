@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 
 use crate::gpu::GpuContext;
-use crate::materials::{
+use crate::pipelines::{
     sampler_entry,
     texture_entry,
 };

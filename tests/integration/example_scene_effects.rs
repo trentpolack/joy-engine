@@ -3,7 +3,7 @@
 
 //! The SCENE EFFECTS example (`examples/scene-effects`) on a real device: the room renders with 27 shadowed point
 //! lights, effect presets and temporal tests change the frame without blanking it, the shadow fixture's off-camera
-//! blocker shadows the floor through five lights, and the shadow-material fixture's masked, PBR, and vertex-color
+//! blocker shadows the floor through five lights, and the shadow-material fixture's masked, layered, and vertex-color
 //! casters and receivers shadow one another.
 //!
 //! Needs a GPU adapter (llvmpipe or SwiftShader is enough); without one each test prints a note and returns. Set
@@ -17,18 +17,22 @@ use std::collections::HashMap;
 
 use example::config;
 use example::scene_effects_example::SceneEffectsExample;
+use joy_engine::core::LinearColor;
 use joy_engine::core::color::srgb_to_linear;
-use joy_engine::core::{
-    LinearColor,
-    MaterialAlphaMode,
-    PbrMaterial,
-    PbrMaterialTextures,
-    PbrMesh,
-};
 use joy_engine::development::EffectPreset;
 use joy_engine::math::{
+    DVec3,
     Vec2,
     Vec3,
+};
+use joy_engine::render_types::{
+    AlphaMode,
+    Material,
+    MaterialSlot,
+    Mesh,
+    MeshDocument,
+    SurfaceLayer,
+    SurfaceMaps,
 };
 use joy_engine::rendering::{
     BackendPreference,
@@ -39,14 +43,12 @@ use joy_engine::rendering::{
     FrameInputs,
     GpuContext,
     MeshAsset,
-    MeshChannels,
     MeshInstance,
     OffscreenTarget,
     OrbitCamera,
     RenderScene,
     Renderer,
     RendererOptions,
-    Shading,
     Skylight,
     TextureAsset,
     project_to_viewport,
@@ -121,12 +123,13 @@ fn the_room_renders_with_shadowed_point_lights_and_effect_presets() {
     assert!(left_wall[0] > left_wall[1] * 2.0, "left wall is red: {left_wall:?}");
     assert!(right_wall[1] > right_wall[0] * 2.0, "right wall is green: {right_wall:?}");
 
-    // Combined turns on the lighting set and bloom; on this backend the effects visibly change the frame.
+    // Combined turns on every effect and bloom; on this backend the effects visibly change the frame.
     lab.controls_mut().select_preset(EffectPreset::Combined);
     let combined = frames(&mut shell, &mut lab, 4, "example-scene-effects-combined");
     let effects = lab.snapshot().effects;
-    assert!(effects.gtao.is_some() && effects.ssgi.is_some() && effects.taa.is_some() && effects.ssr.is_some());
-    assert_eq!(effects.gtao.unwrap().radius, 2.2, "the lab's tuning, not the engine defaults");
+    assert!(effects.taa.is_some() && effects.motion_blur.is_some() && effects.adaptive_exposure.is_some());
+    let fog = effects.volumetrics.expect("Combined includes volumetric fog");
+    assert_eq!(fog.max_distance, 40.0, "the lab's tuning, not the engine defaults");
     assert!(shell.renderer().post_process().bloom_strength == config::BLOOM_STRENGTH);
     if shell.renderer().scene_effects_capabilities().available {
         assert!(difference(&baseline, &combined) > 0.5, "effects change the frame");
@@ -216,49 +219,53 @@ fn checker() -> TextureAsset {
     TextureAsset::from_rgba8(32, 32, pixels).expect("checker texture")
 }
 
-fn fixture_material(alpha_mode: MaterialAlphaMode, base_color: Option<&str>) -> PbrMaterial {
-    PbrMaterial {
-        base_color: vec![0.6, 0.6, 0.6, 1.0],
-        emissive: vec![0.0; 3],
-        metallic: 0.0,
+/// A gray, fully rough layered material, optionally sampling `base_color` (which also carries the mask's coverage).
+fn fixture_material(alpha_mode: AlphaMode, base_color: Option<&str>) -> Material {
+    let layer = SurfaceLayer {
+        base_color: LinearColor::rgb(0.6, 0.6, 0.6),
         roughness: 1.0,
-        alpha_mode,
-        alpha_cutoff: 0.5,
-        textures: PbrMaterialTextures { base_color: base_color.map(str::to_owned), ..Default::default() },
-    }
+        maps: SurfaceMaps {
+            base_color: base_color.map(str::to_owned),
+            ..SurfaceMaps::default()
+        },
+        ..SurfaceLayer::default()
+    };
+    Material::layered(layer).with_alpha_mode(alpha_mode)
 }
 
-/// The fixture's PBR mesh: a 12-unit floor (unless the floor is vertex-colored instead) and a 4-unit textured blocker
-/// 20 units up, far above the camera's view.
-fn fixture_mesh(masked: bool, pbr_floor: bool) -> PbrMesh {
-    let blocker = if masked { MaterialAlphaMode::Mask } else { MaterialAlphaMode::Opaque };
-    PbrMesh {
-        positions: vec![
-            -6.0, 0.0, -6.0, 6.0, 0.0, -6.0, 6.0, 0.0, 6.0, -6.0, 0.0, 6.0, -2.0, 20.0, -2.0, 2.0, 20.0, -2.0, 2.0,
-            20.0, 2.0, -2.0, 20.0, 2.0,
-        ],
-        normals: [0.0, 1.0, 0.0].repeat(8),
-        colors: vec![1.0; 24],
-        alphas: vec![1.0; 8],
-        uvs: vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0],
-        triangles: if pbr_floor { vec![0, 2, 1, 0, 3, 2, 4, 6, 5, 4, 7, 6] } else { vec![4, 6, 5, 4, 7, 6] },
-        triangle_materials: if pbr_floor { vec![0, 0, 1, 1] } else { vec![1, 1] },
-        materials: vec![
-            fixture_material(MaterialAlphaMode::Opaque, None),
-            fixture_material(blocker, Some("checker.png")),
-        ],
-    }
+/// The fixture's layered mesh: a 12-unit floor (slot 0, unless the floor is vertex-colored instead) and a 4-unit
+/// textured blocker (slot 1) 20 units up, far above the camera's view.
+fn fixture_document(masked: bool, layered_floor: bool) -> MeshDocument {
+    let blocker = if masked { AlphaMode::Mask } else { AlphaMode::Opaque };
+    let corners = [(-6.0, 0.0, -6.0), (6.0, 0.0, -6.0), (6.0, 0.0, 6.0), (-6.0, 0.0, 6.0)].into_iter().chain([
+        (-2.0, 20.0, -2.0),
+        (2.0, 20.0, -2.0),
+        (2.0, 20.0, 2.0),
+        (-2.0, 20.0, 2.0),
+    ]);
+    let positions: Vec<DVec3> = corners.map(|(x, y, z)| DVec3::new(x, y, z)).collect();
+    let uv = [Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)];
+    let indices = if layered_floor { vec![0, 2, 1, 0, 3, 2, 4, 6, 5, 4, 7, 6] } else { vec![4, 6, 5, 4, 7, 6] };
+    let mesh = Mesh {
+        normals: Some(vec![Vec3::Y; 8]),
+        uvs: Some(uv.repeat(2)),
+        triangle_slots: Some(if layered_floor { vec![0, 0, 1, 1] } else { vec![1, 1] }),
+        material_slots: vec![MaterialSlot::named("floor"), MaterialSlot::named("blocker")],
+        ..Mesh::new(positions, indices)
+    };
+    let materials = vec![fixture_material(AlphaMode::Opaque, None), fixture_material(blocker, Some("checker.png"))];
+    MeshDocument::new(mesh, materials)
 }
 
-/// A horizontal vertex-color quad standing in for colored triangle geometry, lit like `Shading::Lit` meshes.
-fn colored_quad(half: f32, height: f32, color: f32) -> MeshAsset {
-    MeshAsset::from_channels(MeshChannels {
-        positions: &[-half, height, -half, half, height, -half, half, height, half, -half, height, half],
-        indices: &[0, 2, 1, 0, 3, 2],
-        colors: &[color; 12],
-        ..Default::default()
-    })
-    .expect("quad geometry")
+/// A horizontal vertex-color quad standing in for colored triangle geometry, drawn with the default lit material.
+fn colored_quad(half: f64, height: f64, color: f32) -> MeshAsset {
+    let corners = [(-half, -half), (half, -half), (half, half), (-half, half)];
+    let positions = corners.into_iter().map(|(x, z)| DVec3::new(x, height, z)).collect();
+    let mesh = Mesh {
+        colors: Some(vec![LinearColor::rgb(color, color, color); 4]),
+        ..Mesh::new(positions, vec![0, 2, 1, 0, 3, 2])
+    };
+    MeshAsset::new(&mesh).expect("quad geometry")
 }
 
 /// Render one fixture variant from the fixture's camera with light straight down, returning the red channel at each
@@ -272,10 +279,10 @@ fn capture_mask_shadow(
 ) -> Vec<u8> {
     let textures = HashMap::from([("checker.png", checker())]);
     let asset =
-        MeshAsset::from_pbr_mesh(&fixture_mesh(masked, !colored_receiver), |source| textures.get(source).cloned())
+        MeshAsset::from_document(&fixture_document(masked, !colored_receiver), |source| textures.get(source).cloned())
             .expect("fixture mesh");
     let mut scene = RenderScene::new();
-    scene.insert(MeshInstance::new(asset).with_shading(Shading::Pbr));
+    scene.insert(MeshInstance::new(asset));
     if colored_receiver {
         scene.insert(MeshInstance::new(colored_quad(6.0, 0.0, 0.6)));
     }
@@ -339,7 +346,7 @@ fn capture_mask_shadow(
 
 /// The shadow-material fixture: only the floor is visible; a high cutout casts vertically.
 #[test]
-fn masked_pbr_casters_shadow_receivers_through_alpha_holes() {
+fn masked_layered_casters_shadow_receivers_through_alpha_holes() {
     let Some(gpu) = pollster::block_on(GpuContext::headless(BackendPreference::Auto))
         .map_err(|error| {
             eprintln!("skipping GPU test: {error}");
@@ -361,10 +368,13 @@ fn masked_pbr_casters_shadow_receivers_through_alpha_holes() {
     for index in [1, 3] {
         assert!(masked[index] <= solid[index].saturating_add(20), "opaque alpha cells retain shadow: {report}");
     }
-    // A vertex-color caster shadows PBR receivers, and the PBR caster shadows vertex-color receivers while the floor
+    // A vertex-color caster shadows layered receivers, and the layered caster shadows vertex-color receivers while the floor
     // beyond it keeps its direct light.
-    assert!(colored[..4].iter().all(|value| *value < 30), "colored casters shadow PBR receivers: {report}");
-    assert!(colored_receiver[..4].iter().all(|value| *value < 30), "PBR casters shadow colored receivers: {report}");
+    assert!(colored[..4].iter().all(|value| *value < 30), "colored casters shadow layered receivers: {report}");
+    assert!(
+        colored_receiver[..4].iter().all(|value| *value < 30),
+        "layered casters shadow colored receivers: {report}"
+    );
     let darkest = *colored_receiver[..4].iter().max().unwrap();
     assert!(colored_receiver[4] > darkest.saturating_add(100), "normal bias preserves unoccluded light: {report}");
 }

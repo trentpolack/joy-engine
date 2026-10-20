@@ -38,13 +38,18 @@ fn geometry_matches_recorded_values() {
 }
 
 #[test]
-fn meshes_scale_rotate_offset_and_shade() {
-    let mesh =
-        ShadedMesh3D { name: "wedge".into(), triangles: vec![[1.0, 0.0, 0.5, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5]] };
+fn shaded_shapes_scale_rotate_offset_and_shade() {
+    let shape = ShadedShape {
+        name: "wedge".into(),
+        triangles: vec![ShadedTriangle {
+            corners: [DVec3::new(1.0, 0.0, 0.5), DVec3::new(0.0, 1.0, 0.0), DVec3::ZERO],
+            shade: 0.5,
+        }],
+    };
     let mut vertices = Vec::new();
-    add_mesh(
+    add_shaded_shape(
         &mut vertices,
-        &mesh,
+        &shape,
         10.0,
         20.0,
         2.0,
@@ -58,12 +63,15 @@ fn meshes_scale_rotate_offset_and_shade() {
     assert!((first[0] - 10.0).abs() < 1e-5 && (first[1] - 22.0).abs() < 1e-5 && (first[2] - 4.0).abs() < 1e-6);
     assert_eq!(vertices[0].color, [0.4, 0.5, 0.1, 0.5]);
     // Shades above one brighten every channel by the same factor, keeping the hue.
-    let bright = ShadedMesh3D {
-        triangles: vec![[0.0; 9].into_iter().chain([2.0]).collect::<Vec<_>>().try_into().unwrap()],
-        ..mesh
+    let bright = ShadedShape {
+        triangles: vec![ShadedTriangle {
+            corners: [DVec3::ZERO; 3],
+            shade: 2.0,
+        }],
+        ..shape
     };
     let mut vertices = Vec::new();
-    add_mesh(&mut vertices, &bright, 0.0, 0.0, 1.0, 0.0, LinearColor::new(0.8, 0.2, 0.0, 1.0), 0.0);
+    add_shaded_shape(&mut vertices, &bright, 0.0, 0.0, 1.0, 0.0, LinearColor::new(0.8, 0.2, 0.0, 1.0), 0.0);
     assert_eq!(vertices[0].color, [1.6, 0.4, 0.0, 1.0]);
 }
 

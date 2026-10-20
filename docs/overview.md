@@ -6,7 +6,7 @@ Joy Engine is a workspace of system crates behind the `joy-engine` facade crate.
 
 `RenderScene` retains mesh and terrain instances and optional parent nodes. `MeshAsset` handles share immutable geometry; the renderer retains uploaded resources. Conservative instance culling preserves offscreen shadow casters. Terrain keeps its heightfield and indexed grid resident, selects continuous LOD on the GPU when supported, and uses CPU selection on GL backends. Transparent geometry sorts back to front and retains the usual intersecting-surface limitations.
 
-The renderer supports Lit, PBR, and Unlit surfaces, atmosphere, directional cascades, point-light shadows, image-based lighting, and HDR display processing. Backend capability checks remain centralized. WebGPU is preferred in browsers, WebGL 2 is the fallback, and WebGL 1 is not supported.
+The renderer supports lit, layered, unlit, and game-registered shading models, deferred and clustered forward lighting, atmosphere, directional cascades, atlas point-light shadows, image-based lighting, scene effects, and HDR display processing (see [lighting and shadows](lighting.md)). Backend capability checks remain centralized. WebGPU is preferred in browsers, WebGL 2 is the fallback, and WebGL 1 is not supported.
 
 ## Simulation and Content
 `World` owns entity and physics simulation without a renderer. `LevelRuntime` instantiates authored documents; `LevelScene` and `AssetScene` belong to rendering and synchronize presentation separately. FORM compiles procedural source to plain geometry. Particle definitions are shared while each effect owns its simulation and cosmetic random stream. Games retain rules, camera policy, tuning, and authored assets.

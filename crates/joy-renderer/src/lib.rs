@@ -7,11 +7,14 @@
 //! in browsers and on Vulkan, Metal, DirectX 12, or OpenGL natively. Shaders are authored once in WGSL.
 //!
 //! Games and authoring previews share these rendering contracts:
-//! - Lit (flat, double-sided vertex-color lighting), PBR (metallic-roughness), and Unlit material passes.
-//! - A directional key light with cascaded soft shadows, a sky-and-ground skylight, and any number of point lights (the
-//!   32 that matter most to each view draw, with optional soft shadows), on WebGL 2 as well as WebGPU.
+//! - Materials ([`MaterialAsset`]) drawn by registered shading models: lit (flat, faceted, double-sided stylized
+//!   lighting), layered (physically based surface layers), unlit, and any model a game registers. Meshes carry
+//!   geometry and material slots only; instances may override any slot's material.
+//! - A directional key light with cascaded soft shadows, a sky-and-ground skylight, and any number of point lights (up
+//!   to [`MAX_POINT_LIGHTS`] that matter most to each view draw, binned into light clusters, with optional soft
+//!   shadows from a shared atlas). Opaque surfaces shade deferred where the device allows and forward on WebGL 2.
 //! - The procedural atmosphere sky driven by an environment frame and [`SkyOptions`].
-//! - HDR scene targets, bloom, blurs, AgX/ACES/linear tone mapping, grading, vignette, antialiasing, and film grain.
+//! - HDR scene targets, scene effects, bloom, and filmic, AgX, or ACES 2.0 tone mapping.
 //!
 //! The renderer owns every GPU resource it creates; scenes, cameras, and frame inputs are borrowed per frame.
 //!
@@ -25,6 +28,8 @@
 mod camera;
 mod capture;
 mod culling;
+mod debug_view;
+mod deferred;
 mod display;
 mod display_output;
 mod editor_grid;
@@ -33,12 +38,15 @@ mod error;
 mod frame;
 mod geometry;
 mod gpu;
-mod materials;
+mod lighting;
+mod material;
 mod mesh;
 pub mod particles;
+mod pipelines;
 mod point_lights;
 pub mod post_process;
 mod postprocessor;
+mod profiler;
 mod renderer;
 mod scene;
 pub mod scene_effects;
@@ -47,6 +55,7 @@ mod sky;
 pub mod terrain;
 mod texture;
 mod texture_mips;
+mod tone_mapping;
 mod transparency;
 mod triangle_renderer;
 
@@ -72,6 +81,7 @@ pub use capture::{
     CAPTURE_FORMAT,
     OffscreenTarget,
 };
+pub use debug_view::DebugView;
 pub use display::{
     BackingLimits,
     backing_pixel_ratio,
@@ -106,14 +116,16 @@ pub use frame::{
     TransparentDraw,
 };
 pub use geometry::{
+    ShadedShape,
+    ShadedTriangle,
     add_circle,
     add_gradient_radial_polygon,
     add_line,
-    add_mesh,
     add_polygon,
     add_quad,
     add_radial_polygon,
     add_ring,
+    add_shaded_shape,
     add_triangle,
 };
 pub use gpu::{
@@ -122,29 +134,52 @@ pub use gpu::{
     GpuCapabilities,
     GpuContext,
 };
-/// The shared light records, re-exported so rendering code names them beside the frame inputs that carry them.
-pub use joy_core::{
+/// The shared render records, re-exported so rendering code names lights, meshes, and materials beside the assets and
+/// frame inputs that carry them.
+pub use joy_render_types::{
+    AlphaMode,
+    Coat,
+    CustomShading,
     DirectionalLight,
+    Fuzz,
+    Haze,
+    LitSurface,
+    Material,
+    MaterialSlot,
+    Mesh,
+    MeshDocument,
     PointLight,
+    ShaderValue,
+    Shading,
+    ShadingModel,
     Skylight,
+    Surface,
+    SurfaceLayer,
+    SurfaceMaps,
+    ThinFilm,
+    UnlitSurface,
+};
+pub use material::{
+    MaterialAsset,
+    ParameterDefinition,
+    ShadingModelDefinition,
+    TextureDefinition,
+    TextureFallback,
 };
 pub use mesh::{
-    AlphaMode,
     Bounds,
-    DEFAULT_ROUGHNESS,
-    MaterialTextures,
     MeshAsset,
-    MeshChannels,
-    MeshData,
-    MeshVertex,
     Submesh,
-    TextureMaps,
-    VertexMaterial,
 };
 pub use post_process::{
     PostProcessError,
     PostProcessOverrides,
     PostProcessSettings,
+};
+pub use profiler::{
+    FramePhase,
+    FrameProfile,
+    PhaseTiming,
 };
 pub use renderer::{
     MAX_RENDER_SCALE,
@@ -163,11 +198,11 @@ pub use scene::{
     SceneGraphError,
     SceneNode,
     SceneNodeId,
-    Shading,
     TerrainInstance,
     TerrainInstanceId,
 };
 pub use shadows::{
+    MAX_SHADOWED_POINT_LIGHTS,
     ShadowOptions,
     ShadowQuality,
 };

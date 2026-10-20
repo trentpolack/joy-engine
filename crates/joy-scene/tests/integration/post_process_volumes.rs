@@ -62,7 +62,7 @@ fn bounded_volumes_cover_their_scaled_shape_and_fade_in_over_the_blend_distance(
     // Outside the box only the global look applies; the disabled sphere never does.
     let outside = volumes.resolve(Vec3::ZERO);
     assert_exposure(&outside, 2.0);
-    assert_eq!(outside.tone_mapper, ToneMapper::Agx);
+    assert_eq!(outside.tone_mapper, ToneMapper::Filmic, "the engine default");
 
     // The entity's scale doubles the box to two meters a side; its center is fully inside.
     let inside = volumes.resolve(Vec3::new(10.0, 0.0, 0.0));
@@ -83,21 +83,26 @@ fn bounded_volumes_cover_their_scaled_shape_and_fade_in_over_the_blend_distance(
 #[test]
 fn priorities_order_application_independently_of_authored_order() {
     let level = level(json!([
-        volume("late", [0.0, 0.0, 0.0], [1.0, 1.0, 1.0], json!({"unbounded": true, "priority": 5, "contrast": 1.5})),
+        volume(
+            "late",
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0],
+            json!({"unbounded": true, "priority": 5, "filmicContrast": 1.5})
+        ),
         volume(
             "early",
             [0.0, 0.0, 0.0],
             [1.0, 1.0, 1.0],
-            json!({"unbounded": true, "contrast": 0.5, "saturation": 0.5})
+            json!({"unbounded": true, "filmicContrast": 0.5, "bloomScatter": 0.5})
         ),
-        volume("tie", [0.0, 0.0, 0.0], [1.0, 1.0, 1.0], json!({"unbounded": true, "saturation": 2, "weight": 0.5}))
+        volume("tie", [0.0, 0.0, 0.0], [1.0, 1.0, 1.0], json!({"unbounded": true, "bloomScatter": 1, "weight": 0.5}))
     ]));
     let mut volumes = PostProcessVolumes::from_level(&level).unwrap();
     let settings = volumes.resolve(Vec3::ZERO);
 
     // The higher priority applies last even though it is authored first; equal priorities keep authored order.
-    assert_eq!(settings.contrast, 1.5);
-    assert_eq!(settings.saturation, 1.25);
+    assert_eq!(settings.filmic_contrast, 1.5);
+    assert_eq!(settings.bloom_scatter, 0.75);
     assert_eq!(volumes.global_volume(), Some("early"));
 }
 

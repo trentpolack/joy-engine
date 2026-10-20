@@ -1,24 +1,30 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Scene-effect attachments: view-space normals with roughness, and screen-space motion with and without temporal
-//! jitter. Opaque materials write all three beside the scene color in the scene pass itself (see `SceneTargets` in the
-//! materials module), so opaque geometry is rasterized once whatever the effects need.
+//! The scene-effect attachment: screen-space motion, view depth, and coverage, which opaque surfaces write beside the
+//! scene color in the scene pass itself (see `SceneTargets` in the pipelines module and scene-common.wgsl), so opaque
+//! geometry is rasterized once and effects never load the depth buffer (WebGL 2 shaders cannot).
 
-use crate::materials::ATTACHMENT_FORMAT;
+use crate::pipelines::ATTACHMENT_FORMAT;
 
-/// One owned attachment texture and its view.
-struct Attachment {
+/// The motion target the scene pass writes for temporal antialiasing and motion blur, matched to the frame size.
+pub(crate) struct SceneAttachments {
     // The view references the texture; drop it first.
-    view: wgpu::TextureView,
+    motion: wgpu::TextureView,
     _texture: wgpu::Texture,
+    size: (u32, u32),
 }
 
-impl Attachment {
-    fn new(device: &wgpu::Device, label: &str, size: (u32, u32)) -> Self {
+impl SceneAttachments {
+    /// Allocate the attachment for a `size` frame in physical pixels.
+    pub(crate) fn new(device: &wgpu::Device, size: (u32, u32)) -> Self {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(label),
-            size: wgpu::Extent3d { width: size.0.max(1), height: size.1.max(1), depth_or_array_layers: 1 },
+            label: Some("scene motion"),
+            size: wgpu::Extent3d {
+                width: size.0.max(1),
+                height: size.1.max(1),
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -26,67 +32,36 @@ impl Attachment {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
-        Self { view: texture.create_view(&wgpu::TextureViewDescriptor::default()), _texture: texture }
-    }
-
-    /// A color attachment cleared to `clear` and stored for the effects.
-    fn color_attachment(&self, clear: wgpu::Color) -> wgpu::RenderPassColorAttachment<'_> {
-        wgpu::RenderPassColorAttachment {
-            view: &self.view,
-            resolve_target: None,
-            ops: wgpu::Operations { load: wgpu::LoadOp::Clear(clear), store: wgpu::StoreOp::Store },
-            depth_slice: None,
-        }
-    }
-}
-
-/// The normal-and-roughness and motion targets the scene pass writes for scene effects, matched to the frame size.
-pub(crate) struct SceneAttachments {
-    normal_roughness: Attachment,
-    motion: Attachment,
-    jittered_motion: Attachment,
-    size: (u32, u32),
-}
-
-impl SceneAttachments {
-    /// Allocate attachments for a `size` frame in physical pixels.
-    pub(crate) fn new(device: &wgpu::Device, size: (u32, u32)) -> Self {
         Self {
-            normal_roughness: Attachment::new(device, "scene normal roughness", size),
-            motion: Attachment::new(device, "scene motion", size),
-            jittered_motion: Attachment::new(device, "scene motion jittered", size),
+            motion: texture.create_view(&wgpu::TextureViewDescriptor::default()),
+            _texture: texture,
             size,
         }
     }
 
-    /// The frame size these attachments were allocated for.
+    /// The frame size this attachment was allocated for.
     pub(crate) fn size(&self) -> (u32, u32) {
         self.size
     }
 
-    /// The scene pass's attachment slots after its color target, in material output order. Uncovered pixels face the
-    /// camera and do not move.
-    pub(crate) fn color_attachments(&self) -> [Option<wgpu::RenderPassColorAttachment<'_>>; 3] {
-        let facing_camera = wgpu::Color { r: 0.5, g: 0.5, b: 1.0, a: 1.0 };
-        [
-            Some(self.normal_roughness.color_attachment(facing_camera)),
-            Some(self.motion.color_attachment(wgpu::Color::TRANSPARENT)),
-            Some(self.jittered_motion.color_attachment(wgpu::Color::TRANSPARENT)),
-        ]
+    /// The attachment slots after a scene pass's color target. The first pass of a frame clears them (uncovered pixels,
+    /// such as the sky, keep zero coverage); a later pass over the same frame loads what earlier passes wrote.
+    pub(crate) fn color_attachments(&self, clear: bool) -> [Option<wgpu::RenderPassColorAttachment<'_>>; 1] {
+        let load = if clear { wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT) } else { wgpu::LoadOp::Load };
+        [Some(wgpu::RenderPassColorAttachment {
+            view: &self.motion,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load,
+                store: wgpu::StoreOp::Store,
+            },
+            depth_slice: None,
+        })]
     }
 
-    /// View-space normals with roughness in alpha.
-    pub(crate) fn normal_roughness(&self) -> &wgpu::TextureView {
-        &self.normal_roughness.view
-    }
-
-    /// Unjittered motion (antialiasing and motion blur).
+    /// RG screen-space motion in UV units from the previous frame's position to this one's (without jitter), B view
+    /// depth, A coverage.
     pub(crate) fn motion(&self) -> &wgpu::TextureView {
-        &self.motion.view
-    }
-
-    /// Jittered motion (lighting effects).
-    pub(crate) fn jittered_motion(&self) -> &wgpu::TextureView {
-        &self.jittered_motion.view
+        &self.motion
     }
 }

@@ -116,7 +116,7 @@ impl PropLibrary {
 /// Evaluate one prop's FORM source and build its colliders.
 fn build_prop(definition: &PropDefinition) -> AppResult<Prop> {
     let geometry = CompiledScript::parse(definition.source)?.evaluate(&Value::Object(Map::new()), None)?;
-    let asset = form_mesh_asset(&geometry, Shading::Pbr)?;
+    let asset = form_mesh_asset(&geometry, ShadingModel::Layered)?;
 
     let stopwatch = Stopwatch::start();
     let shape = match definition.collider {

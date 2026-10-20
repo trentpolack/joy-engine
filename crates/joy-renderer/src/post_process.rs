@@ -25,22 +25,24 @@ use joy_core::math::deterministic;
 /// Key of the exposure setting, which blends in log space because exposure is perceived multiplicatively.
 const EXPOSURE_KEY: &str = "exposure";
 
-/// Weight at and above which a blend adopts an override's discrete choice (tone mapper, grain noise, and so on).
+/// Weight at and above which a blend adopts an override's discrete choice (tone mapper, bloom quality, and so on).
 const CHOICE_SWITCH_WEIGHT: f32 = 0.5;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------------------------------------------------
 
-/// Display transform applied after linear HDR composition.
+/// Display transform applied after exposure and bloom.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ToneMapper {
-    /// AgX with optional punchy look (default).
+    /// A parametric toe, linear section, and shoulder per channel (default); see the `filmic*` settings.
+    Filmic,
+    /// AgX, with an optional punchy look.
     Agx,
-    /// Fitted ACES filmic curve.
+    /// The ACES 2.0 Output Transform, rendered for the display's peak (SDR or HDR).
     Aces,
-    /// Linear exposure with a display clamp.
+    /// Exposed linear light with a display clamp.
     None,
 }
 
@@ -49,140 +51,89 @@ pub enum ToneMapper {
 #[serde(rename_all = "lowercase")]
 pub enum AgxLook {
     /// The base AgX curve.
-    Neutral,
+    Default,
     /// Adds AgX's power and saturation look before the display transform.
     Punchy,
 }
 
-/// Bloom pyramid depth.
+/// Bloom filtering quality; glow reach comes from [`PostProcessSettings::bloom_radius`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BloomQuality {
-    /// Two pyramid levels.
+    /// Four texels per downsample and upsample.
     Low,
-    /// Three pyramid levels.
+    /// Thirteen-tap downsamples and nine-tap tent upsamples.
     Medium,
-    /// Four pyramid levels.
+    /// Medium filters plus firefly suppression, so small, very bright highlights do not flicker.
     High,
-    /// Five pyramid levels.
+    /// High, with the first pyramid level at full resolution for a tighter glow core.
     Ultra,
-}
-
-impl BloomQuality {
-    /// Number of downsampled HDR levels used by the bloom pyramid.
-    pub fn levels(self) -> usize {
-        match self {
-            Self::Low => 2,
-            Self::Medium => 3,
-            Self::High => 4,
-            Self::Ultra => 5,
-        }
-    }
-}
-
-/// Film-grain hash variant. Neither variant claims a blue-noise spectrum.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum FilmGrainNoise {
-    /// Single analog-style hash.
-    Analog,
-    /// Average of two offset hashes.
-    Decorrelated,
 }
 
 /// Complete, validated post-processing values. Lengths are fractions of the shorter viewport axis unless noted.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PostProcessSettings {
-    /// Display transform after linear HDR composition.
+    /// Display transform after exposure and bloom.
     pub tone_mapper: ToneMapper,
-    /// Linear scene exposure before tone mapping.
+    /// Linear multiplier on scene light before bloom and the display transform; adaptive exposure multiplies it.
     pub exposure: f32,
     /// AgX grading look.
     pub agx_look: AgxLook,
 
-    /// Display brightness multiplier in `[0, 2]`.
-    pub brightness: f32,
-    /// Muted-color saturation adjustment in `[-1, 1]`.
-    pub vibrance: f32,
+    /// Filmic: slope of the linear section.
+    pub filmic_contrast: f32,
+    /// Filmic: exposed linear light where the toe ends and the linear section begins.
+    pub filmic_linear_start: f32,
+    /// Filmic: fraction of the range above the linear start that stays linear before the shoulder.
+    pub filmic_linear_length: f32,
+    /// Filmic: toe exponent; higher values deepen shadows.
+    pub filmic_toe: f32,
 
-    /// Full-image Gaussian blur radius as a fraction of the shorter axis.
-    pub blur_radius: f32,
-
-    /// Display saturation after tone mapping.
-    pub saturation: f32,
-    /// Display contrast around middle gray.
-    pub contrast: f32,
-
-
-    /// Edge-only scene smoothing in `[0, 1]`; zero disables it.
-    pub antialias_strength: f32,
-
-    /// Bright-pass glow strength; zero disables bloom.
+    /// Glow strength; zero disables bloom.
     pub bloom_strength: f32,
-    /// Blur reach as a fraction of the shorter viewport axis.
+    /// Glow reach as a fraction of the shorter viewport axis.
     pub bloom_radius: f32,
-    /// Linear luminance at which glow begins.
+    /// Exposed linear luminance at which glow begins.
     pub bloom_threshold: f32,
     /// Width of the soft transition into bloom; always positive.
     pub bloom_knee: f32,
-    /// Horizontal stretch of the bloom halo in `[0, 1]`.
-    pub bloom_anamorphic: f32,
-    /// Bloom pyramid depth.
+    /// Bloom filtering quality.
     pub bloom_quality: BloomQuality,
-    /// Contribution of the wider bloom levels during reconstruction.
+    /// How much of each wider pyramid level blends into the next finer one, in `[0, 1]`.
     pub bloom_scatter: f32,
-    /// Horizontal diffraction streak strength.
-    pub bloom_lens_flare: f32,
 
-    /// Luminance-aware grain intensity.
-    pub film_grain: f32,
-    /// Grain cell size in physical pixels.
-    pub film_grain_size: f32,
-    /// Grain animation rate in cycles per second.
-    pub film_grain_speed: f32,
-    /// Grain hash variant.
-    pub film_grain_noise: FilmGrainNoise,
-
-    /// Edge darkening strength.
+    /// Corner darkening strength in `[0, 1]`.
     pub vignette_strength: f32,
-    /// Normalized radius where edge darkening begins; always positive.
+    /// Fraction of the center-to-corner distance where darkening begins.
     pub vignette_radius: f32,
-    /// Blur toward the vignette edge in `[0, 1]`.
-    pub vignette_blur: f32,
 }
 
 impl PostProcessSettings {
-    /// The engine's defaults: AgX with the punchy look, edge antialiasing, and every optional effect off.
+    /// The engine's defaults: the filmic curve at unit exposure, with bloom and vignette off.
     pub const DEFAULT: Self = Self {
-        tone_mapper: ToneMapper::Agx,
-        antialias_strength: 1.0,
+        tone_mapper: ToneMapper::Filmic,
         exposure: 1.0,
+        agx_look: AgxLook::Default,
+        filmic_contrast: 1.0,
+        filmic_linear_start: 0.22,
+        filmic_linear_length: 0.4,
+        filmic_toe: 1.33,
         bloom_strength: 0.0,
-        bloom_radius: 0.025,
+        bloom_radius: 0.05,
         bloom_threshold: 1.0,
         bloom_knee: 0.35,
-        bloom_anamorphic: 0.0,
         bloom_quality: BloomQuality::High,
-        bloom_scatter: 0.55,
-        bloom_lens_flare: 0.0,
-        brightness: 1.0,
-        vibrance: 0.0,
-        blur_radius: 0.0,
-        saturation: 1.0,
-        contrast: 1.0,
-        film_grain: 0.0,
-        film_grain_size: 1.5,
-        film_grain_speed: 18.0,
-        film_grain_noise: FilmGrainNoise::Decorrelated,
+        bloom_scatter: 0.7,
         vignette_strength: 0.0,
         vignette_radius: 0.72,
-        vignette_blur: 0.0,
-        agx_look: AgxLook::Punchy,
     };
 
-    /// Linear scene color resolved straight to the display: no tone curve, antialiasing, or optional effects.
-    pub const NEUTRAL: Self = Self { tone_mapper: ToneMapper::None, antialias_strength: 0.0, ..Self::DEFAULT };
+    /// Linear scene color resolved straight to the display: no tone curve or optional effects.
+    pub const NEUTRAL: Self = Self {
+        tone_mapper: ToneMapper::None,
+        ..Self::DEFAULT
+    };
 
     /// These settings with `overrides` applied in full.
     pub fn with_overrides(&self, overrides: &PostProcessOverrides) -> Self {
@@ -407,30 +358,21 @@ const fn choice(
 // One control per row keeps the table scannable; rustfmt would split each row across many lines.
 #[rustfmt::skip]
 pub const POST_PROCESS_CONTROLS: &[PostProcessControl] = &[
-    choice("toneMapper", "Tone Mapper", "Display", "agx", &["agx", "aces", "none"], "Display transform after linear HDR composition."),
-    choice("agxLook", "AgX Look", "Display", "punchy", &["neutral", "punchy"], "Punchy adds the AgX power and saturation look before the display transform."),
-    number("exposure", "Exposure", "Display", 1.0, (Some(0.0), false, None, Some(4.0)), 0.01, "Linear scene exposure before tone mapping."),
-    number("antialiasStrength", "Antialias Strength", "Display", 1.0, (Some(0.0), false, Some(1.0), Some(1.0)), 0.01, "Edge-only scene smoothing; zero disables it."),
-    number("bloomStrength", "Strength", "Bloom", 0.0, (Some(0.0), false, None, Some(3.0)), 0.01, "Bright-pass glow strength; zero disables its visual contribution."),
-    number("bloomRadius", "Radius", "Bloom", 0.025, (Some(0.0), false, Some(0.25), Some(0.1)), 0.001, "Blur reach as a fraction of the shorter viewport axis."),
-    number("bloomThreshold", "Threshold", "Bloom", 1.0, (Some(0.0), false, None, Some(4.0)), 0.01, "Linear luminance at which glow begins."),
-    number("bloomAnamorphic", "Anamorphic", "Bloom", 0.0, (Some(0.0), false, Some(1.0), Some(1.0)), 0.01, "Stretches bloom horizontally into a lens-flare shape."),
-    choice("bloomQuality", "Quality", "Bloom", "high", &["low", "medium", "high", "ultra"], "Two to five HDR pyramid levels; higher levels retain broader, smoother glow."),
-    number("bloomScatter", "Scatter", "Bloom", 0.55, (Some(0.0), false, Some(1.0), Some(1.0)), 0.01, "Contribution of the wider bloom levels during reconstruction."),
-    number("bloomLensFlare", "Lens Streaks", "Bloom", 0.0, (Some(0.0), false, None, Some(3.0)), 0.01, "Independent horizontal diffraction streaks generated from HDR highlights."),
+    choice("toneMapper", "Tone Mapper", "Display", "filmic", &["filmic", "agx", "aces", "none"], "Display transform: the parametric filmic curve, AgX, the ACES 2.0 Output Transform, or none."),
+    choice("agxLook", "AgX Look", "Display", "default", &["default", "punchy"], "Punchy adds AgX's power and saturation look before the display transform."),
+    number("exposure", "Exposure", "Display", 1.0, (Some(0.0), false, None, Some(4.0)), 0.01, "Linear multiplier on scene light before bloom and the display transform; adaptive exposure multiplies it."),
+    number("filmicContrast", "Contrast", "Filmic", 1.0, (Some(0.1), false, Some(3.0), Some(2.0)), 0.01, "Slope of the curve's linear section."),
+    number("filmicLinearStart", "Linear Start", "Filmic", 0.22, (Some(0.01), false, Some(0.9), Some(0.6)), 0.01, "Exposed linear light where the toe ends and the linear section begins."),
+    number("filmicLinearLength", "Linear Length", "Filmic", 0.4, (Some(0.0), false, Some(0.95), Some(0.95)), 0.01, "Fraction of the range above the linear start that stays linear before the shoulder."),
+    number("filmicToe", "Toe", "Filmic", 1.33, (Some(1.0), false, Some(3.0), Some(3.0)), 0.01, "Toe exponent; higher values deepen shadows."),
+    number("bloomStrength", "Strength", "Bloom", 0.0, (Some(0.0), false, None, Some(3.0)), 0.01, "Glow strength; zero disables bloom."),
+    number("bloomRadius", "Radius", "Bloom", 0.05, (Some(0.0), true, Some(0.5), Some(0.25)), 0.001, "Glow reach as a fraction of the shorter viewport axis."),
+    number("bloomThreshold", "Threshold", "Bloom", 1.0, (Some(0.0), false, None, Some(4.0)), 0.01, "Exposed linear luminance at which glow begins."),
     number("bloomKnee", "Soft Knee", "Bloom", 0.35, (Some(0.0), true, None, Some(2.0)), 0.01, "Width of the transition into bloom; must be positive."),
-    number("saturation", "Saturation", "Grade", 1.0, (Some(0.0), false, None, Some(3.0)), 0.01, "Display saturation after tone mapping."),
-    number("contrast", "Contrast", "Grade", 1.0, (Some(0.0), false, None, Some(3.0)), 0.01, "Display contrast around middle gray."),
-    number("brightness", "Brightness", "Grade", 1.0, (Some(0.0), false, Some(2.0), Some(2.0)), 0.01, "Display brightness multiplier; zero is black and one preserves the tone-mapped image."),
-    number("vibrance", "Vibrance", "Grade", 0.0, (Some(-1.0), false, Some(1.0), None), 0.01, "Adjusts muted colors more strongly than saturated colors."),
-    number("blurRadius", "Gaussian Radius", "Blur", 0.0, (Some(0.0), false, Some(0.05), Some(0.05)), 0.001, "Full-image Gaussian blur as a fraction of the shorter viewport axis."),
-    number("filmGrain", "Intensity", "Film Grain", 0.0, (Some(0.0), false, None, Some(0.2)), 0.001, "Luminance-aware grain intensity."),
-    number("filmGrainSize", "Size", "Film Grain", 1.5, (Some(0.5), false, Some(8.0), Some(8.0)), 0.1, "Noise-cell size in physical pixels."),
-    number("filmGrainSpeed", "Speed", "Film Grain", 18.0, (Some(0.0), false, None, Some(60.0)), 0.5, "Noise animation rate in cycles per second."),
-    choice("filmGrainNoise", "Noise", "Film Grain", "decorrelated", &["analog", "decorrelated"], "Analog hash or averaged decorrelated hash grain; neither claims a blue-noise spectrum."),
-    number("vignetteStrength", "Strength", "Vignette", 0.0, (Some(0.0), false, None, Some(1.0)), 0.01, "Edge darkening strength."),
-    number("vignetteBlur", "Blur", "Vignette", 0.0, (Some(0.0), false, Some(1.0), Some(1.0)), 0.01, "Softens the image toward the vignette edge."),
-    number("vignetteRadius", "Radius", "Vignette", 0.72, (Some(0.0), true, Some(1.0), Some(1.0)), 0.01, "Normalized radius where edge darkening begins."),
+    choice("bloomQuality", "Quality", "Bloom", "high", &["low", "medium", "high", "ultra"], "Filtering: low reads four texels per step, medium widens the filters, high suppresses fireflies, and ultra starts at full resolution."),
+    number("bloomScatter", "Scatter", "Bloom", 0.7, (Some(0.0), false, Some(1.0), Some(1.0)), 0.01, "How much of each wider pyramid level blends into the next finer one; higher values spread the glow."),
+    number("vignetteStrength", "Strength", "Vignette", 0.0, (Some(0.0), false, Some(1.0), Some(1.0)), 0.01, "Corner darkening strength."),
+    number("vignetteRadius", "Radius", "Vignette", 0.72, (Some(0.0), false, Some(1.0), Some(1.0)), 0.01, "Fraction of the center-to-corner distance where darkening begins."),
 ];
 
 /// The control for a setting key, or `None` for an unknown key.

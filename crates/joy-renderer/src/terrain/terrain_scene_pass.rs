@@ -6,8 +6,9 @@
 //! Each live instance keeps one adapter with resident GPU resources; the asset stays shared. A frame prepares every
 //! adapter before any pass opens (selection runs once per frame in the terrain's local space, for the camera), then
 //! records the same indexed, continuously morphed surface into the shadow views whose volume it reaches, the depth
-//! pre-pass, and the lit scene pass, which also writes the scene-effect attachments when effects need them. Adapters for
-//! instances that leave the scene are released.
+//! pre-pass, and the lit scene pass (or, with deferred lighting, the G-buffer pass, in the lit model's encoding), which
+//! also writes the scene-effect attachments when effects need them. Adapters for instances that leave the scene are
+//! released.
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -25,15 +26,17 @@ use crate::culling::{
     outside_frustum,
     world_bounds,
 };
-use crate::materials::{
+use crate::mesh::Bounds;
+use crate::pipelines::{
     CasterBias,
     DEPTH_FORMAT,
+    GBUFFER_ENCODING,
     SHADOW_FORMAT,
     ScenePipelines,
     SceneTargets,
+    gbuffer_depth_state,
     scene_common,
 };
-use crate::mesh::Bounds;
 use crate::scene::{
     RenderScene,
     TerrainInstance,
@@ -79,8 +82,10 @@ struct TerrainPipelines {
     lit: wgpu::RenderPipeline,
     caster: wgpu::RenderPipeline,
     depth: wgpu::RenderPipeline,
-    // The lit pipeline with scene-effect attachments; compiled when effects first need it.
+    // The lit pipeline with scene-effect attachments, and the G-buffer pipelines; compiled when first needed.
     lit_targets: Option<wgpu::RenderPipeline>,
+    gbuffer: Option<wgpu::RenderPipeline>,
+    gbuffer_targets: Option<wgpu::RenderPipeline>,
     lit_layout: wgpu::PipelineLayout,
     lit_source: String,
     scene_format: wgpu::TextureFormat,
@@ -188,14 +193,31 @@ impl SceneTerrain {
         Ok(prepared)
     }
 
-    /// Compile the lit pipeline that writes `targets` before a pass that draws with it opens.
-    pub(crate) fn ensure_lit(&mut self, device: &wgpu::Device, targets: SceneTargets) {
-        if let Some(pipelines) = &mut self.pipelines
-            && targets == SceneTargets::ColorAndAttachments
-            && pipelines.lit_targets.is_none()
-        {
-            pipelines.lit_targets = Some(pipelines.lit_pipeline(device, targets));
+    /// Compile the pipeline the frame draws terrain with before a pass that uses it opens: the G-buffer pipeline writing
+    /// `targets` when `deferred`, else the lit pipeline writing `targets`.
+    pub(crate) fn ensure_lit(&mut self, device: &wgpu::Device, targets: SceneTargets, deferred: bool) {
+        let Some(pipelines) = &mut self.pipelines else {
+            return;
+        };
+        let slot = match (deferred, targets) {
+            (false, SceneTargets::Color) => return,
+            (false, SceneTargets::ColorAndAttachments) => &mut pipelines.lit_targets,
+            (true, SceneTargets::Color) => &mut pipelines.gbuffer,
+            (true, SceneTargets::ColorAndAttachments) => &mut pipelines.gbuffer_targets,
+        };
+        if slot.is_none() {
+            let pipeline = if deferred {
+                gbuffer_pipeline(device, &pipelines.lit_source, &pipelines.lit_layout, pipelines.scene_format, targets)
+            } else {
+                lit_pipeline(device, &pipelines.lit_source, &pipelines.lit_layout, pipelines.scene_format, targets)
+            };
+            *slot = Some(pipeline);
         }
+    }
+
+    /// Whether any terrain is visible to the camera this frame.
+    pub(crate) fn has_visible(&self) -> bool {
+        self.frame_passes().any(|terrain| terrain.visible)
     }
 
     /// Draw camera-visible terrain into the lit scene pass; returns draw calls and triangles.
@@ -210,6 +232,25 @@ impl SceneTerrain {
             SceneTargets::Color => &pipelines.lit,
             SceneTargets::ColorAndAttachments => pipelines.lit_targets.as_ref().expect("ensure_lit compiled it"),
         };
+        self.draw_visible(pass, pipeline)
+    }
+
+    /// Draw camera-visible terrain into the G-buffer pass in the lit model's encoding; returns draw calls and
+    /// triangles. Expects the same groups as [`draw_lit`](Self::draw_lit), the lit model's stencil reference, and
+    /// [`ensure_lit`](Self::ensure_lit) for deferred `targets`.
+    pub(crate) fn draw_gbuffer(&self, pass: &mut wgpu::RenderPass<'_>, targets: SceneTargets) -> (usize, usize) {
+        let Some(pipelines) = &self.pipelines else {
+            return (0, 0);
+        };
+        let pipeline = match targets {
+            SceneTargets::Color => pipelines.gbuffer.as_ref(),
+            SceneTargets::ColorAndAttachments => pipelines.gbuffer_targets.as_ref(),
+        };
+        self.draw_visible(pass, pipeline.expect("ensure_lit compiled it"))
+    }
+
+    /// Draw every camera-visible terrain with `pipeline`; returns draw calls and triangles.
+    fn draw_visible(&self, pass: &mut wgpu::RenderPass<'_>, pipeline: &wgpu::RenderPipeline) -> (usize, usize) {
         let (mut draws, mut triangles) = (0, 0);
         for terrain in self.frame_passes().filter(|terrain| terrain.visible) {
             draws += terrain.geometry.draw(pass, pipeline, LIT_GROUP);
@@ -331,14 +372,20 @@ impl TerrainPipelines {
             &[],
             depth_state(DEPTH_FORMAT, Default::default()),
         );
-        let lit_source = format!("{common}\n{lit_geometry}\n{TERRAIN_SCENE_SOURCE}");
+        let lit_source = format!("{common}\n{GBUFFER_ENCODING}\n{lit_geometry}\n{TERRAIN_SCENE_SOURCE}");
         let lit = lit_pipeline(device, &lit_source, &lit_layout, scene_format, SceneTargets::Color);
-        Self { layout, lit, caster, depth, lit_targets: None, lit_layout, lit_source, scene_format }
-    }
-
-    /// The lit terrain pipeline writing `targets`.
-    fn lit_pipeline(&self, device: &wgpu::Device, targets: SceneTargets) -> wgpu::RenderPipeline {
-        lit_pipeline(device, &self.lit_source, &self.lit_layout, self.scene_format, targets)
+        Self {
+            layout,
+            lit,
+            caster,
+            depth,
+            lit_targets: None,
+            gbuffer: None,
+            gbuffer_targets: None,
+            lit_layout,
+            lit_source,
+            scene_format,
+        }
     }
 }
 
@@ -356,8 +403,27 @@ fn lit_pipeline(
         source,
         layout,
         Some(targets.fragment_entry()),
-        &targets.states(scene_format, true),
+        &targets.states(scene_format),
         depth_state(DEPTH_FORMAT, Default::default()),
+    )
+}
+
+/// Compile the terrain G-buffer pipeline for `targets`.
+fn gbuffer_pipeline(
+    device: &wgpu::Device,
+    source: &str,
+    layout: &wgpu::PipelineLayout,
+    scene_format: wgpu::TextureFormat,
+    targets: SceneTargets,
+) -> wgpu::RenderPipeline {
+    terrain_pipeline(
+        device,
+        "terrain g-buffer",
+        source,
+        layout,
+        Some(targets.gbuffer_entry()),
+        &targets.gbuffer_states(scene_format),
+        gbuffer_depth_state(),
     )
 }
 

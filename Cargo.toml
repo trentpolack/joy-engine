@@ -67,6 +67,7 @@ joy-gameplay.workspace = true
 joy-input.workspace = true
 joy-physics.workspace = true
 joy-project.workspace = true
+joy-render-types.workspace = true
 joy-renderer.workspace = true
 joy-scene.workspace = true
 joy-storage.workspace = true
@@ -119,6 +120,7 @@ default-members = [
   "crates/joy-input",
   "crates/joy-physics",
   "crates/joy-project",
+  "crates/joy-render-types",
   "crates/joy-renderer",
   "crates/joy-scene",
   "crates/joy-storage",
@@ -153,6 +155,7 @@ joy-gameplay = { path = "crates/joy-gameplay" }
 joy-input = { path = "crates/joy-input" }
 joy-physics = { path = "crates/joy-physics" }
 joy-project = { path = "crates/joy-project" }
+joy-render-types = { path = "crates/joy-render-types" }
 joy-renderer = { path = "crates/joy-renderer" }
 joy-scene = { path = "crates/joy-scene" }
 joy-storage = { path = "crates/joy-storage" }

@@ -14,16 +14,47 @@ use std::f64::consts::{
     TAU,
 };
 
-use crate::ColorVertex;
-use joy_core::math::deterministic;
-use joy_core::{
-    LinearColor,
-    ShadedMesh3D,
+use serde::{
+    Deserialize,
+    Serialize,
 };
+
+use crate::ColorVertex;
+use joy_core::LinearColor;
+use joy_core::math::{
+    DVec3,
+    deterministic,
+};
+
+/// One flat-shaded triangle of a [`ShadedShape`]: three corners and a brightness multiplier baked from its facing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ShadedTriangle {
+    /// Corners in the shape's local units, Z up out of the play plane.
+    pub corners: [DVec3; 3],
+
+    /// Multiplies the color the triangle draws with; may exceed one.
+    pub shade: f64,
+}
+
+/// A named list of flat-shaded triangles for arcade presentation, drawn with [`add_shaded_shape`].
+///
+/// Unlike a [`Mesh`](joy_render_types::Mesh), a shape carries no attributes or materials: its lighting is baked into
+/// each triangle's shade, so arcade games can draw imported models as stylized, fixed-light silhouettes.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ShadedShape {
+    /// Shape name for diagnostics.
+    pub name: String,
+
+    /// The triangles, in drawing order.
+    pub triangles: Vec<ShadedTriangle>,
+}
 
 /// Append one vertex at `(x, y, z)`.
 fn push(vertices: &mut Vec<ColorVertex>, x: f64, y: f64, z: f64, color: LinearColor) {
-    vertices.push(ColorVertex { position: [x as f32, y as f32, z as f32], color: color.to_array() });
+    vertices.push(ColorVertex { 
+        position: [x as f32, y as f32, z as f32],
+        color: color.to_array()
+    });
 }
 
 /// Append an equilateral triangle whose corners lie `radius` from its center.
@@ -38,6 +69,7 @@ pub fn add_triangle(
 ) {
     let (x, y, radius, rotation, z) =
         (f64::from(x), f64::from(y), f64::from(radius), f64::from(rotation), f64::from(z));
+
     for index in 0..3 {
         let angle = rotation + ((f64::from(index) * TAU) / 3.0);
         push(vertices, x + (deterministic::cos(angle) * radius), y + (deterministic::sin(angle) * radius), z, color);
@@ -60,6 +92,7 @@ pub fn add_quad(
         let angle = rotation + ((f64::from(index) * TAU) / 4.0);
         (x + (deterministic::cos(angle) * radius), y + (deterministic::sin(angle) * radius))
     };
+
     for index in [0, 1, 2, 0, 2, 3] {
         let (corner_x, corner_y) = corner(index);
         push(vertices, corner_x, corner_y, z, color);
@@ -76,8 +109,10 @@ pub fn add_circle(
     segments: u32,
     z: f32,
 ) {
-    let (x, y, radius, z) = (f64::from(x), f64::from(y), f64::from(radius), f64::from(z));
+    let (x, y, radius, z) =
+        (f64::from(x), f64::from(y), f64::from(radius), f64::from(z));
     let segments_f = f64::from(segments);
+
     for index in 0..segments {
         let first = (f64::from(index) / segments_f) * TAU;
         let second = (f64::from(index + 1) / segments_f) * TAU;
@@ -87,13 +122,13 @@ pub fn add_circle(
     }
 }
 
-/// Append a flat-shaded mesh scaled, rotated about Z, and offset to `(x, y, z)`. Each triangle's shade multiplies the
+/// Append a flat-shaded shape scaled, rotated about Z, and offset to `(x, y, z)`. Each triangle's shade multiplies the
 /// color's RGB, which may exceed one in the HDR scene (clipping channels separately would shift hue); alpha is
 /// unchanged.
 #[allow(clippy::too_many_arguments)] // Games call every builder with positional shape values.
-pub fn add_mesh(
+pub fn add_shaded_shape(
     vertices: &mut Vec<ColorVertex>,
-    mesh: &ShadedMesh3D,
+    shape: &ShadedShape,
     x: f32,
     y: f32,
     scale: f32,
@@ -103,18 +138,17 @@ pub fn add_mesh(
 ) {
     let (x, y, scale, rotation, z) = (f64::from(x), f64::from(y), f64::from(scale), f64::from(rotation), f64::from(z));
     let (sine, cosine) = deterministic::sin_cos(rotation);
-    for triangle in &mesh.triangles {
-        let shade = triangle[9];
-        let channel = |value: f32| (f64::from(value) * shade) as f32;
+    for triangle in &shape.triangles {
+        let channel = |value: f32| (f64::from(value) * triangle.shade) as f32;
         let shaded = LinearColor::new(channel(color.red), channel(color.green), channel(color.blue), color.alpha);
-        for corner in triangle[..9].as_chunks::<3>().0 {
-            let local_x = corner[0] * scale;
-            let local_y = corner[1] * scale;
+        for corner in &triangle.corners {
+            let local_x = corner.x * scale;
+            let local_y = corner.y * scale;
             push(
                 vertices,
                 x + (local_x * cosine) - (local_y * sine),
                 y + (local_x * sine) + (local_y * cosine),
-                z + (corner[2] * scale),
+                z + (corner.z * scale),
                 shaded,
             );
         }
@@ -202,7 +236,9 @@ pub fn add_ring(
     segments: u32,
     z: f32,
 ) {
-    let (x, y, radius, width, z) = (f64::from(x), f64::from(y), f64::from(radius), f64::from(width), f64::from(z));
+    let (x, y, radius, width, z) =
+        (f64::from(x), f64::from(y), f64::from(radius), f64::from(width), f64::from(z));
+
     let inner = (radius - width).max(0.0);
     let outer = radius + width;
     for index in 0..segments {
@@ -236,7 +272,8 @@ pub fn add_line(
 ) {
     let (ax, ay, bx, by, width, z) =
         (f64::from(ax), f64::from(ay), f64::from(bx), f64::from(by), f64::from(width), f64::from(z));
-    let angle = deterministic::atan2(by - ay, bx - ax) + (PI / 2.0);
+
+        let angle = deterministic::atan2(by - ay, bx - ax) + (PI / 2.0);
     let offset_x = (deterministic::cos(angle) * width) / 2.0;
     let offset_y = (deterministic::sin(angle) * width) / 2.0;
     let corners = [
@@ -245,6 +282,7 @@ pub fn add_line(
         (bx + offset_x, by + offset_y),
         (bx - offset_x, by - offset_y),
     ];
+
     for corner in [0, 1, 2, 0, 2, 3] {
         let (corner_x, corner_y) = corners[corner];
         push(vertices, corner_x, corner_y, z, color);

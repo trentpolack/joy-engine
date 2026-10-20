@@ -27,6 +27,9 @@ pub enum RenderError {
     /// Texture data was malformed (wrong size, unsupported extents, or an undecodable image).
     #[error("Invalid texture: {0}")]
     InvalidTexture(String),
+    /// A material was malformed (out-of-range values or an unresolved texture), or a shading model failed to compile.
+    #[error("Invalid material: {0}")]
+    InvalidMaterial(String),
     /// Terrain data or a terrain frame was invalid, or the device cannot hold the heightfield.
     #[error(transparent)]
     Terrain(#[from] crate::terrain::TerrainError),

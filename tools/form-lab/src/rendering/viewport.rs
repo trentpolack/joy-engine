@@ -39,7 +39,7 @@ use joy_engine::rendering::{
     RenderPassKind,
     RenderScene,
     Renderer,
-    Shading,
+    ShadingModel,
     ShadowOptions,
     TransparentDraw,
     form_mesh_asset_with_textures,
@@ -211,7 +211,7 @@ impl Viewport {
         let asset = if data.triangles.is_empty() {
             None
         } else {
-            let asset = form_mesh_asset_with_textures(data, Shading::Pbr, &mut self.textures)
+            let asset = form_mesh_asset_with_textures(data, ShadingModel::Layered, &mut self.textures)
                 .map_err(|error| format!("Material preview unavailable: {error}"))?;
             Some(asset)
         };
@@ -219,8 +219,8 @@ impl Viewport {
             self.scene.remove(previous);
         }
         if let Some(asset) = asset {
-            let mut instance = MeshInstance::new(asset).with_shading(Shading::Pbr).with_transform(Transform::IDENTITY);
-            // Blended materials draw in the PBR blend queue; the rest of the mesh stays opaque and casts shadows.
+            let mut instance = MeshInstance::new(asset).with_transform(Transform::IDENTITY);
+            // Blended materials draw in the transparent queue; the rest of the mesh stays opaque and casts shadows.
             instance.pass = RenderPassKind::Opaque;
             instance.visible = self.mode == ViewMode::Shaded;
             self.instance = Some(self.scene.insert(instance));

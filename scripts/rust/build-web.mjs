@@ -35,7 +35,7 @@ const engineRoot = resolve(scriptRoot, '../..');
 const WASM_TARGET = 'wasm32-unknown-unknown';
 // Licenses of adapted third-party code compiled into the engine, relative to the engine root.
 const THIRD_PARTY_LICENSES = [
-  'crates/joy-renderer/src/scene_effects/LICENSE-luma.gl',
+  'crates/joy-renderer/src/tone_mapping/LICENSE-OpenColorIO',
   'crates/joy-physics/src/sdf/LICENSE-sdf-dcd-demo'
 ];
 
@@ -101,8 +101,8 @@ writeFileSync(resolve(outputDirectory, 'THIRD-PARTY-NOTICES.txt'), thirdPartyNot
 console.log(`Web build ready: ${relative(process.cwd(), outputDirectory) || '.'} (${basename(wasmFile)}, ${profile}).`);
 
 /**
- * Every license the engine's compiled code must carry: luma.gl's shader passes and the SDF collision reference
- * implementation, separated by a rule.
+ * Every license the engine's compiled code must carry: OpenColorIO's ACES 2.0 output transform and
+ * the SDF collision reference implementation, separated by a rule.
  */
 function thirdPartyNotices() {
   const notices = THIRD_PARTY_LICENSES.map(path => readFileSync(resolve(engineRoot, path), 'utf8').trimEnd());

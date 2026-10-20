@@ -12,10 +12,9 @@
     "shape": {"enum": ["box", "sphere"]},
     "halfExtents": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number", "exclusiveMinimum": 0}},
     "radius": {"type": "number", "exclusiveMinimum": 0},
-    "toneMapper": {"enum": ["agx", "aces", "none"]},
-    "agxLook": {"enum": ["neutral", "punchy"]},
-    "bloomQuality": {"enum": ["low", "medium", "high", "ultra"]},
-    "filmGrainNoise": {"enum": ["analog", "decorrelated"]}
+    "toneMapper": {"enum": ["filmic", "agx", "aces", "none"]},
+    "agxLook": {"enum": ["default", "punchy"]},
+    "bloomQuality": {"enum": ["low", "medium", "high", "ultra"]}
   },
   "additionalProperties": {"type": "number"}
 }

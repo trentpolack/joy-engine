@@ -22,10 +22,7 @@ use crate::frame::{
     TexturedVertex,
     TransparentDraw,
 };
-use crate::mesh::{
-    MeshVertex,
-    VertexMaterial,
-};
+use crate::mesh::MeshVertex;
 
 /// One draw of the transparent queue, in drawing order.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -110,14 +107,9 @@ pub(crate) fn build_transparent_queue(
             }
             Element::Colored(triangle) => {
                 let start = transient.len() as u32;
-                transient.extend(triangle.iter().map(|vertex| {
-                    MeshVertex::new(
-                        vertex.position,
-                        [0.0; 3],
-                        LinearColor::from(vertex.color),
-                        VertexMaterial::default(),
-                    )
-                }));
+                transient.extend(
+                    triangle.iter().map(|vertex| MeshVertex::colored(vertex.position, LinearColor::from(vertex.color))),
+                );
                 let end = transient.len() as u32;
                 match queue.steps.last_mut() {
                     Some(TransparentStep::Colored(range)) if range.end == start => range.end = end,

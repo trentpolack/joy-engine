@@ -25,7 +25,10 @@ use joy_engine::particles::{
     create_particle_effect_batches,
     create_particle_render_metrics,
 };
-use joy_engine::rendering::post_process::ToneMapper;
+use joy_engine::rendering::post_process::{
+    AgxLook,
+    ToneMapper,
+};
 use joy_engine::rendering::{
     ColorVertex,
     EditorGrid,
@@ -72,16 +75,14 @@ pub const PREVIEW_BACKGROUNDS: [(&str, &str, LinearColor); 5] = [
 pub fn post_process_settings() -> PostProcessSettings {
     PostProcessSettings {
         tone_mapper: ToneMapper::Agx,
+        agx_look: AgxLook::Punchy,
         exposure: 1.05,
         bloom_strength: 0.8,
         bloom_radius: 0.025,
         bloom_threshold: 0.8,
         bloom_knee: 0.4,
-        saturation: 1.12,
-        contrast: 1.06,
         vignette_strength: 0.24,
         vignette_radius: 0.78,
-        film_grain: 0.015,
         ..PostProcessSettings::DEFAULT
     }
 }

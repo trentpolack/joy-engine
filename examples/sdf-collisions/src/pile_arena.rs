@@ -261,7 +261,7 @@ impl PileArena {
 
         let mesh = scene.map(|scene| {
             let transform = Transform::new(origin, rotation, Vec3::ONE);
-            scene.insert(MeshInstance::new(prop.asset.clone()).with_transform(transform).with_shading(Shading::Pbr))
+            scene.insert(MeshInstance::new(prop.asset.clone()).with_transform(transform))
         });
         self.pieces.push(Piece { body, prop: prop_index, mesh });
         Ok(())

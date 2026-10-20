@@ -20,6 +20,7 @@ struct TexturedOutput {
   @builtin(position) position: vec4f,
   @location(0) color: vec4f,
   @location(1) uv: vec2f,
+  @location(2) worldPosition: vec3f,
 };
 
 /**
@@ -30,12 +31,14 @@ struct TexturedOutput {
   output.position = frame.viewProjection*vec4f(vertex.position, 1.0);
   output.color = vertex.color;
   output.uv = vertex.uv;
+  output.worldPosition = vertex.position;
   return output;
 }
 
 /**
- * Sample the sprite texture and modulate it with the interpolated particle color, keeping straight alpha.
+ * Sample the sprite texture and modulate it with the interpolated particle color, keeping straight alpha, then fog it.
  */
 @fragment fn fragmentMain(input: TexturedOutput) -> @location(0) vec4f {
-  return textureSample(particleTexture, particleTextureSampler, input.uv)*input.color;
+  let color = textureSample(particleTexture, particleTextureSampler, input.uv)*input.color;
+  return applyFog(color, input.worldPosition);
 }

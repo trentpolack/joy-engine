@@ -41,7 +41,7 @@ struct FormViewer {
     environment: EnvironmentSystem,
     lighting: Option<EnvironmentLighting>,
     selected: usize,
-    shading: Shading,
+    shading: ShadingModel<'static>,
     parameters: Vec<Parameter>,
     instance: Option<MeshInstanceId>,
     error: Option<String>,
@@ -62,7 +62,7 @@ impl FormViewer {
             environment,
             lighting: None,
             selected: 0,
-            shading: Shading::Lit,
+            shading: ShadingModel::Lit,
             parameters: Vec::new(),
             instance: None,
             error: None,
@@ -99,7 +99,7 @@ impl FormViewer {
         if let Some(previous) = self.instance.take() {
             self.scene.remove(previous);
         }
-        self.instance = Some(self.scene.insert(MeshInstance::new(asset).with_shading(self.shading)));
+        self.instance = Some(self.scene.insert(MeshInstance::new(asset)));
 
         // A ground plane under the asset receives its shadow.
         let bounds = self.scene.get(self.instance.unwrap()).map(|instance| instance.asset.bounds());
@@ -177,7 +177,9 @@ impl App for FormViewer {
                     self.reframe = true;
                 }
                 ui.horizontal(|ui| {
-                    for (label, shading) in [("Lit", Shading::Lit), ("PBR", Shading::Pbr), ("Unlit", Shading::Unlit)] {
+                    for (label, shading) in
+                        [("Lit", ShadingModel::Lit), ("Layered", ShadingModel::Layered), ("Unlit", ShadingModel::Unlit)]
+                    {
                         if ui.selectable_label(self.shading == shading, label).clicked() && self.shading != shading {
                             self.shading = shading;
                             self.dirty = true;

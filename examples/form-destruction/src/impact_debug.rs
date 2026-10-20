@@ -6,10 +6,7 @@
 //! released when disabled or cleared. Scenes are borrowed per call.
 
 use joy_engine::prelude::*;
-use joy_engine::rendering::{
-    MeshChannels,
-    RenderPassKind,
-};
+use joy_engine::rendering::RenderPassKind;
 
 use super::config::destruction_config::IMPACT_DEBUG;
 
@@ -143,20 +140,19 @@ fn marker_asset(direction: Vec3, radius: f32) -> AppResult<MeshAsset> {
         half[axis] = IMPACT_DEBUG.point_size / 2.0;
         geometry.segment(-half, half, IMPACT_DEBUG.point_color);
     }
-    Ok(MeshAsset::from_channels(MeshChannels {
-        positions: &geometry.positions,
-        indices: &geometry.indices,
-        colors: &geometry.colors,
-        ..Default::default()
-    })?)
+    let mesh = Mesh {
+        colors: Some(geometry.colors),
+        ..Mesh::new(geometry.positions, geometry.indices)
+    };
+    Ok(MeshAsset::new(&mesh)?)
 }
 
 /// Accumulated marker channels.
 #[derive(Default)]
 struct MarkerGeometry {
-    positions: Vec<f32>,
+    positions: Vec<DVec3>,
     indices: Vec<u32>,
-    colors: Vec<f32>,
+    colors: Vec<LinearColor>,
 }
 
 impl MarkerGeometry {
@@ -167,12 +163,12 @@ impl MarkerGeometry {
         let right = forward.cross(reference).normalize();
         let up = right.cross(forward);
         let half_width = IMPACT_DEBUG.line_width / 2.0;
-        let start = (self.positions.len() / 3) as u32;
+        let start = self.positions.len() as u32;
         for point in [first, second] {
             for (right_sign, up_sign) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
                 let corner = point + (((right * right_sign) + (up * up_sign)) * half_width);
-                self.positions.extend_from_slice(&corner.to_array());
-                self.colors.extend_from_slice(&color);
+                self.positions.push(corner.as_dvec3());
+                self.colors.push(LinearColor::from(color));
             }
         }
         self.indices.extend(SEGMENT_INDICES.iter().map(|index| start + index));

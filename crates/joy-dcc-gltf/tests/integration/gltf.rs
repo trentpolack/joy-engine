@@ -5,11 +5,11 @@
 //! `tests/fixtures/glb/glb-reference.json`, a golden recording of each fixture mesh or its rejection message. Comparisons
 //! are exact. Re-record with `JOY_UPDATE_FIXTURES=1` when decoding changes on purpose.
 
-use joy_core::IndexedMesh3D;
 use joy_dcc_gltf::{
     GlbError,
     parse_glb_mesh,
 };
+use joy_render_types::Mesh;
 use joy_test_support::{
     Tolerance,
     golden_file,
@@ -34,13 +34,13 @@ fn fixture_bytes(file: &str) -> &'static [u8] {
 }
 
 /// A decode result as the recording spells it: `{"ok": mesh}` or `{"error": message}`.
-fn result_record(result: Result<IndexedMesh3D, GlbError>) -> Value {
+fn result_record(result: Result<Mesh, GlbError>) -> Value {
     match result {
         Ok(mesh) => json!({
             "ok": {
                 "name": mesh.name,
-                "positions": mesh.positions,
-                "normals": mesh.normals,
+                "positions": mesh.positions.iter().flat_map(|position| position.to_array()).collect::<Vec<f64>>(),
+                "normals": mesh.normals.iter().flatten().flat_map(|normal| normal.to_array().map(f64::from)).collect::<Vec<f64>>(),
                 "indices": mesh.indices,
             }
         }),

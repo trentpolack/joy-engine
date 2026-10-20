@@ -78,7 +78,7 @@ const DISPLAY_POLL_SECONDS: f64 = 1.0;
 pub struct ShellOptions {
     /// Window title and development overlay label.
     pub title: String,
-    /// Enables the development overlay (backquote toggles details). Disable for production builds.
+    /// Enables the development overlay and console (backquote toggles the console). Disable for production builds.
     pub development: bool,
     /// Renderer settings (shadows, sky, display processing, render scale).
     pub renderer: RendererOptions,
@@ -296,7 +296,7 @@ impl<A: App> ApplicationHandler for WindowedShell<A> {
                 let name = key_code_name(code);
                 let pressed = event.state == ElementState::Pressed;
                 if pressed && !event.repeat && name == key::BACKQUOTE {
-                    running.dev_tools.toggle();
+                    running.dev_tools.toggle_console();
                 }
                 // Escape closes an open development panel instead of reaching gameplay, and keys a development tool
                 // claims (such as the post-processing pause shortcut) stay with that tool.
@@ -516,18 +516,25 @@ impl<A: App> WindowedShell<A> {
             time_seconds: time.time_seconds,
             elapsed_seconds: time.elapsed_seconds,
         });
-        let mut target = RenderTarget { renderer, encoder: &mut encoder, output: &view, drawn: false };
+        frame.dev_tools.apply_to_renderer(renderer);
+        let mut target = RenderTarget {
+            renderer,
+            encoder: &mut encoder,
+            output: &view,
+            drawn: false,
+        };
         app.render(&mut frame, &mut target)?;
         if !target.drawn {
             clear(target.encoder, &view);
         }
         let diagnostics = renderer.diagnostics().clone();
+        let profile = renderer.frame_profile().cloned();
 
         // Immediate-mode UI over the scene.
         let size = [surface.config.width, surface.config.height];
         egui.paint(gpu, window, &mut encoder, &view, size, |context| {
             app.ui(context, &mut frame);
-            frame.dev_tools.ui(context, &diagnostics, viewport);
+            frame.dev_tools.ui(context, &diagnostics, profile.as_ref(), viewport);
         });
 
         gpu.queue().submit([encoder.finish()]);

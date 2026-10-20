@@ -271,8 +271,7 @@
         "postProcess": {
           "unbounded": true,
           "bloomStrength": 0.3,
-          "contrast": 0.95,
-          "saturation": 0.95,
+          "filmicContrast": 0.95,
           "vignetteStrength": 0.2
         }
       }

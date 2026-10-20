@@ -26,8 +26,6 @@ use super::config::destruction_config::{
 
 /// Material name of the ground's chunk record (only its geometry is used).
 const GROUND_MATERIAL: &str = "frame";
-/// Scene roughness of debris and the ground, for reflections.
-const DEBRIS_ROUGHNESS: f32 = 0.7;
 
 /// One released chunk: its dynamic body and the mesh that follows it.
 struct DebrisPiece {
@@ -94,8 +92,7 @@ impl DestructionDebris {
         // The ground uses its own neutral tint, independent of the chunk material palette.
         let mut geometry = create_chunk_mesh_data([&ground]);
         geometry.colors = None;
-        let mut mesh = MeshInstance::new(MeshAsset::from_asset_data(&geometry)?).with_tint(GROUND.tint);
-        mesh.scene_roughness = 1.0;
+        let mesh = MeshInstance::new(MeshAsset::new(&geometry)?).with_tint(GROUND.tint);
         let ground_mesh = scene.insert(mesh);
         Ok(Self { world, ground_mesh, pieces: Vec::new(), static_chunks: Vec::new() })
     }
@@ -143,10 +140,13 @@ impl DestructionDebris {
                 let top = center + Vec3::new(0.0, (chunk.size[1] / 2.0) as f32, 0.0);
                 self.world.apply_impulse(body, Vec3::from_array(DESTRUCTION.debris_spin_impulse), Some(top))?;
             }
-            let local = DestructibleChunkDefinition { size, center: DVec3::ZERO, ..chunk.clone() };
-            let asset = MeshAsset::from_asset_data(&create_chunk_mesh_data([&local]))?;
-            let mut mesh = MeshInstance::new(asset).with_transform(Transform::new(center, Vec3::ZERO, Vec3::ONE));
-            mesh.scene_roughness = DEBRIS_ROUGHNESS;
+            let local = DestructibleChunkDefinition {
+                size,
+                center: DVec3::ZERO,
+                ..chunk.clone()
+            };
+            let asset = MeshAsset::new(&create_chunk_mesh_data([&local]))?;
+            let mesh = MeshInstance::new(asset).with_transform(Transform::new(center, Vec3::ZERO, Vec3::ONE));
             let mesh = scene.insert(mesh);
             self.pieces.push((chunk.id.clone(), DebrisPiece { body, mesh }));
         }

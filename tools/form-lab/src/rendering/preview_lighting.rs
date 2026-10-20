@@ -225,9 +225,9 @@ pub const STUDIO_ENVIRONMENT: StudioEnvironment = StudioEnvironment {
     panel_colors: [[1.0, 0.89, 0.74], [0.65, 0.8, 1.0]],
 };
 
-/// Integration settings for the studio (specular 64, irradiance 16, BRDF 128, 64 samples), the engine defaults.
+/// Integration settings for the studio: the engine defaults (a 128-texel specular cube and 64 filtered samples).
 pub fn studio_environment_options() -> EnvironmentMapOptions {
-    EnvironmentMapOptions { size: 64, irradiance_size: 16, brdf_lut_size: 128, sample_count: 64, ..Default::default() }
+    EnvironmentMapOptions::default()
 }
 
 /// Generate the studio's linear HDR equirectangular RGBA pixels, top row first.

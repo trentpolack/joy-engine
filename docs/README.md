@@ -5,11 +5,11 @@ Joy Engine is a Rust workspace shared by native games, WebAssembly games, and au
 - [Runtime and browser builds](rust.md): setup, frame phases, renderer, and platform behavior.
 - [Architecture](overview.md) and [dependency layers](architecture/dependency-layers.md).
 - [Coding standards](coding-standards.md) and [Rust conventions](rust-coding-standards.md).
-- [Scenes](scenes.md), [scene effects](scene-effects.md), [postprocessing](postprocessing.md), and [shaders](shaders.md).
+- [Scenes](scenes.md), [meshes and materials](materials.md), [lighting and shadows](lighting.md), [scene effects](scene-effects.md), [postprocessing](postprocessing.md), and [shaders](shaders.md).
 - [Gameplay](gameplay.md), [simulation and physics](rust-simulation.md), and [environment](environment.md).
 - [FORM](rust-form.md), [particles](particles.md), [terrain](terrain.md), and [content formats](rust-content.md).
 - [Input](input.md), [audio](audio.md), and [storage](rust-storage.md).
-- [Live tuning](tuning.md) and the [authoring kit](rust-authoring.md).
+- [Live tuning](tuning.md), the [console and profiling](console-and-profiling.md), and the [authoring kit](rust-authoring.md).
 - [Joy Editor](../editor/README.md) and [engine examples](../examples/README.md).
 - [Patch delivery](patch-delivery.md).
 - [Repository audit](repository-audit.md): repeatable maintenance checks and independent audit tests.

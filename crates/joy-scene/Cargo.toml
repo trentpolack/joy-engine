@@ -19,6 +19,7 @@ publish = false
 
 [dependencies]
 joy-core.workspace = true
+joy-render-types.workspace = true
 joy-environment.workspace = true
 joy-form.workspace = true
 joy-fx.workspace = true

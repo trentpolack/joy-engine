@@ -139,14 +139,24 @@ fn ray_record(hit: Option<&ChunkRaycastHit>) -> Value {
 /// Sizes, sums, and leading and trailing values of the active chunks' mesh data.
 fn mesh_summary_record(structure: &ChunkStructure) -> Value {
     let mesh = create_chunk_mesh_data(structure.active_chunks());
-    let colors = mesh.colors.as_deref().expect("chunk meshes carry colors");
+    // The recording keeps the flat XYZ and RGB layout; colors read back as their shortest decimals (`0.18`, not the
+    // `f32` value's full expansion).
+    let positions: Vec<f64> = mesh.positions.iter().flat_map(|position| position.to_array()).collect();
+    let colors: Vec<f64> = mesh
+        .colors
+        .as_deref()
+        .expect("chunk meshes carry colors")
+        .iter()
+        .flat_map(|color| color.rgb_array())
+        .map(|channel| channel.to_string().parse().unwrap_or(f64::from(channel)))
+        .collect();
     json!({
-        "positionsLength": mesh.positions.len(),
+        "positionsLength": positions.len(),
         "indicesLength": mesh.indices.len(),
         "metadata": mesh.metadata,
-        "positionSum": mesh.positions.iter().sum::<f64>(),
+        "positionSum": positions.iter().sum::<f64>(),
         "colorSum": colors.iter().sum::<f64>(),
-        "firstPositions": &mesh.positions[..MESH_LEADING_VALUES],
+        "firstPositions": &positions[..MESH_LEADING_VALUES],
         "firstColors": &colors[..MESH_LEADING_VALUES],
         "lastIndices": &mesh.indices[mesh.indices.len() - MESH_TRAILING_INDICES..],
     })
@@ -192,7 +202,7 @@ fn chunk_damage_commits_geometry_and_traversal_queries_at_one_boundary() {
     assert!(structure.can_occupy(DVec3::new(0.0, 0.85, 0.0), player_half_extents).unwrap());
 
     let mesh = create_chunk_mesh_data(structure.active_chunks());
-    assert_eq!(mesh.metadata.as_ref().unwrap()["chunkCount"], json!(8));
+    assert_eq!(mesh.metadata["chunkCount"], json!(8));
     assert_eq!(mesh.indices.len() / 36, 8);
 
     let removed: Vec<String> = change.removed.iter().map(|chunk| chunk.id.clone()).collect();

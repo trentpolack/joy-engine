@@ -6,8 +6,8 @@
 //! and history resets), and CPU timing readouts.
 //!
 //! Simulation starts frozen at two seconds while frames keep rendering, so temporal effects accumulate history on a
-//! still image. The sidebar covers the right of the canvas; a lens shift keeps the room centered in the rest. Scene
-//! effects need a WebGPU-class backend; on WebGL 2 the controls report them unavailable while HDR bloom still works.
+//! still image. The sidebar covers the right of the canvas; a lens shift keeps the room centered in the rest. Volumetric
+//! fog needs compute shaders; on WebGL 2 the controls report it unavailable while the other effects and HDR bloom run.
 
 use joy_engine::development::{
     EffectPreset,
@@ -307,9 +307,10 @@ impl SceneEffectsExample {
 
     fn refresh_stats(&mut self) {
         let (width, height) = self.physical_size;
+        let lighting = if self.diagnostics.deferred { "deferred" } else { "forward" };
         self.stats = format!(
-            "{} · {} · {width} × {height}\n{} meshes / {} lights / t={:.3} s\nCPU frame encoding {:.2} ms · frame \
-             cadence {:.2} ms\nGPU execution: unavailable",
+            "{} · {} · {width} × {height} · {lighting} lighting\n{} meshes / {} lights / t={:.3} s\nCPU frame encoding \
+             {:.2} ms · frame cadence {:.2} ms\nGPU execution: unavailable",
             self.diagnostics.backend,
             self.color_format,
             self.room.scene.len(),

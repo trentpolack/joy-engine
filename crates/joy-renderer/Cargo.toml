@@ -20,6 +20,7 @@ publish = false
 
 [dependencies]
 joy-core.workspace = true
+joy-render-types.workspace = true
 joy-fx.workspace = true
 bytemuck.workspace = true
 serde.workspace = true

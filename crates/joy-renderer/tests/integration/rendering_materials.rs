@@ -11,6 +11,7 @@
 use std::collections::HashMap;
 
 use joy_core::color::srgb_to_linear;
+use joy_core::math::DVec3;
 use joy_core::math::{
     Vec2,
     Vec3,
@@ -18,11 +19,14 @@ use joy_core::math::{
 };
 use joy_core::{
     LinearColor,
-    MaterialAlphaMode,
-    PbrMaterial,
-    PbrMaterialTextures,
-    PbrMesh,
     Transform,
+};
+use joy_render_types::{
+    AlphaMode,
+    Material,
+    Mesh,
+    SurfaceLayer,
+    SurfaceMaps,
 };
 use joy_renderer::{
     BackendPreference,
@@ -36,6 +40,7 @@ use joy_renderer::{
     FrameInputs,
     GpuContext,
     ImageLighting,
+    MaterialAsset,
     MeshAsset,
     MeshInstance,
     OffscreenTarget,
@@ -44,7 +49,6 @@ use joy_renderer::{
     RenderScene,
     Renderer,
     RendererOptions,
-    Shading,
     Skylight,
     TextureAsset,
     project_to_viewport,
@@ -63,74 +67,81 @@ fn gpu() -> Option<GpuContext> {
     }
 }
 
-fn material(textures: PbrMaterialTextures) -> PbrMaterial {
-    PbrMaterial {
-        base_color: vec![1.0, 1.0, 1.0, 1.0],
-        emissive: vec![0.0, 0.0, 0.0],
-        metallic: 0.0,
+/// An opaque, fully rough, white layered material with `maps`.
+fn material(maps: SurfaceMaps) -> Material {
+    Material::layered(SurfaceLayer {
         roughness: 1.0,
-        alpha_mode: MaterialAlphaMode::Opaque,
-        alpha_cutoff: 0.5,
-        textures,
-    }
+        maps,
+        ..SurfaceLayer::default()
+    })
+}
+
+/// A mesh and the one material its slot draws with.
+#[derive(Clone)]
+struct Model {
+    mesh: Mesh,
+    material: Material,
 }
 
 /// A horizontal two-unit quad at height `y`, facing up, with UVs running +X and +Z from the top-left corner.
-fn quad(y: f64, material: PbrMaterial) -> PbrMesh {
-    PbrMesh {
-        positions: vec![-1.0, y, -1.0, 1.0, y, -1.0, 1.0, y, 1.0, -1.0, y, 1.0],
-        normals: [0.0, 1.0, 0.0].repeat(4),
-        uvs: vec![0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0],
-        colors: vec![1.0; 12],
-        alphas: vec![1.0; 4],
-        triangles: vec![0, 2, 1, 0, 3, 2],
-        triangle_materials: vec![0, 0],
-        materials: vec![material],
+fn quad(y: f64, material: Material) -> Model {
+    let mesh = Mesh {
+        positions: vec![
+            DVec3::new(-1.0, y, -1.0),
+            DVec3::new(1.0, y, -1.0),
+            DVec3::new(1.0, y, 1.0),
+            DVec3::new(-1.0, y, 1.0),
+        ],
+        normals: Some(vec![Vec3::Y; 4]),
+        uvs: Some(vec![Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 1.0), Vec2::new(0.0, 1.0)]),
+        ..Mesh::new(Vec::new(), vec![0, 2, 1, 0, 3, 2])
+    };
+    Model {
+        mesh,
+        material,
     }
 }
 
 /// A UV sphere of radius one with outward normals.
-fn sphere(material: PbrMaterial) -> PbrMesh {
+fn sphere(material: Material) -> Model {
     let (rings, segments) = (24_u32, 48_u32);
-    let mut mesh = PbrMesh {
-        positions: Vec::new(),
-        normals: Vec::new(),
-        uvs: Vec::new(),
-        colors: Vec::new(),
-        alphas: Vec::new(),
-        triangles: Vec::new(),
-        triangle_materials: Vec::new(),
-        materials: vec![material],
-    };
+    let (mut positions, mut normals, mut uvs, mut indices) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     for ring in 0..=rings {
         let polar = std::f64::consts::PI * f64::from(ring) / f64::from(rings);
         for segment in 0..=segments {
             let azimuth = std::f64::consts::TAU * f64::from(segment) / f64::from(segments);
-            let normal = [
+            let normal = DVec3::new(
                 deterministic::sin(polar) * deterministic::cos(azimuth),
                 deterministic::cos(polar),
                 deterministic::sin(polar) * deterministic::sin(azimuth),
-            ];
-            mesh.positions.extend(normal);
-            mesh.normals.extend(normal);
-            mesh.uvs.extend([f64::from(segment) / f64::from(segments), f64::from(ring) / f64::from(rings)]);
-            mesh.colors.extend([1.0; 3]);
-            mesh.alphas.push(1.0);
+            );
+            positions.push(normal);
+            normals.push(normal.as_vec3());
+            uvs.push(Vec2::new(segment as f32 / segments as f32, ring as f32 / rings as f32));
         }
     }
     for ring in 0..rings {
         for segment in 0..segments {
             let a = ring * (segments + 1) + segment;
             let b = a + segments + 1;
-            mesh.triangles.extend([a, a + 1, b, a + 1, b + 1, b]);
-            mesh.triangle_materials.extend([0, 0]);
+            indices.extend([a, a + 1, b, a + 1, b + 1, b]);
         }
     }
-    mesh
+    let mesh = Mesh {
+        normals: Some(normals),
+        uvs: Some(uvs),
+        ..Mesh::new(positions, indices)
+    };
+    Model {
+        mesh,
+        material,
+    }
 }
 
-fn asset(mesh: &PbrMesh, textures: &HashMap<&str, TextureAsset>) -> MeshAsset {
-    MeshAsset::from_pbr_mesh(mesh, |source| textures.get(source).cloned()).expect("valid PBR mesh")
+fn asset(model: &Model, textures: &HashMap<&str, TextureAsset>) -> MeshAsset {
+    let material = MaterialAsset::with_textures(model.material.clone(), |source| textures.get(source).cloned())
+        .expect("valid material");
+    MeshAsset::with_materials(&model.mesh, vec![material]).expect("valid mesh")
 }
 
 fn render(
@@ -180,9 +191,12 @@ fn base_color_maps_sample_by_uv() {
     // Left texel red, right texel blue: U runs along +X.
     let texture = TextureAsset::from_rgba8(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 255]).unwrap();
     let textures = HashMap::from([("checker.png", texture)]);
-    let maps = PbrMaterialTextures { base_color: Some("checker.png".into()), ..Default::default() };
+    let maps = SurfaceMaps {
+        base_color: Some("checker.png".into()),
+        ..Default::default()
+    };
     let mut scene = RenderScene::new();
-    scene.insert(MeshInstance::new(asset(&quad(0.0, material(maps)), &textures)).with_shading(Shading::Pbr));
+    scene.insert(MeshInstance::new(asset(&quad(0.0, material(maps)), &textures)));
     let camera = top_down();
     let mut renderer = Renderer::new(&gpu, CAPTURE_FORMAT, RendererOptions::default());
     let inputs = FrameInputs { ambient: Some(1.0), ..FrameInputs::default() };
@@ -213,9 +227,12 @@ fn minified_textures_average_through_their_mips() {
         .collect();
     let texture = TextureAsset::from_rgba8(size, size, checker).unwrap();
     let textures = HashMap::from([("checker.png", texture)]);
-    let maps = PbrMaterialTextures { base_color: Some("checker.png".into()), ..Default::default() };
+    let maps = SurfaceMaps {
+        base_color: Some("checker.png".into()),
+        ..Default::default()
+    };
     let mut scene = RenderScene::new();
-    scene.insert(MeshInstance::new(asset(&quad(0.0, material(maps)), &textures)).with_shading(Shading::Pbr));
+    scene.insert(MeshInstance::new(asset(&quad(0.0, material(maps)), &textures)));
 
     // From forty units away the two-unit quad spans about a dozen pixels, so each pixel covers roughly ten texels.
     let camera = OrbitCamera { distance: 40.0, ..top_down() };
@@ -246,12 +263,16 @@ fn normal_maps_tilt_shading_toward_their_direction() {
     // A uniform map tilting the surface toward +U (+X) at about 45 degrees.
     let tilted = TextureAsset::from_rgba8(1, 1, vec![218, 128, 218, 255]).unwrap();
     let textures = HashMap::from([("tilted.png", tilted)]);
-    let flat_material = material(PbrMaterialTextures::default());
-    let mapped_material = material(PbrMaterialTextures { normal: Some("tilted.png".into()), ..Default::default() });
+    let flat_material = material(SurfaceMaps::default());
+    let mapped_material = material(SurfaceMaps {
+        normal: Some("tilted.png".into()),
+        ..Default::default()
+    });
     let camera = top_down();
+    // Dim enough that the tilted surface stays below display white, so the comparison measures shading, not clipping.
     let lights = [PointLight {
         position: Vec3::new(6.0, 1.0, 0.0),
-        color: LinearColor::rgb(30.0, 30.0, 30.0),
+        color: LinearColor::rgb(8.0, 8.0, 8.0),
         range: 20.0,
         casts_shadow: false,
     }];
@@ -259,7 +280,7 @@ fn normal_maps_tilt_shading_toward_their_direction() {
     let mut brightness = Vec::new();
     for (name, material) in [("material-normal-flat", flat_material), ("material-normal-tilted", mapped_material)] {
         let mut scene = RenderScene::new();
-        scene.insert(MeshInstance::new(asset(&quad(0.0, material), &textures)).with_shading(Shading::Pbr));
+        scene.insert(MeshInstance::new(asset(&quad(0.0, material), &textures)));
         let mut renderer = Renderer::new(&gpu, CAPTURE_FORMAT, RendererOptions::default());
         let pixels = render(&gpu, &mut renderer, &scene, &camera, &inputs, name);
         brightness.push(luminance(pixel_at(&pixels, &camera, Vec3::ZERO)));
@@ -272,12 +293,14 @@ fn pbr_surfaces_flip_normals_only_on_back_faces() {
     let Some(gpu) = gpu() else {
         return;
     };
-    // Seen from above and lit only from above. The PBR pass flips the authored normal on back faces alone, so a front
+    // Seen from above and lit only from above. The layered model flips the authored normal on back faces alone, so a front
     // face whose smooth-shaded normal points away from the eye keeps it (and stays dark here), while a back face flips
     // its upward normal down.
-    let upward = quad(0.0, material(PbrMaterialTextures::default()));
-    let away = PbrMesh { normals: [0.0, -1.0, 0.0].repeat(4), ..upward.clone() };
-    let back_facing = PbrMesh { triangles: vec![0, 1, 2, 0, 2, 3], ..upward.clone() };
+    let upward = quad(0.0, material(SurfaceMaps::default()));
+    let mut away = upward.clone();
+    away.mesh.normals = Some(vec![Vec3::NEG_Y; 4]);
+    let mut back_facing = upward.clone();
+    back_facing.mesh.indices = vec![0, 1, 2, 0, 2, 3];
     let camera = top_down();
     let lights = [PointLight {
         position: Vec3::new(0.0, 3.0, 0.0),
@@ -289,7 +312,7 @@ fn pbr_surfaces_flip_normals_only_on_back_faces() {
     let mut brightness = Vec::new();
     for (name, mesh) in [("facing-front", upward), ("facing-away", away), ("facing-back", back_facing)] {
         let mut scene = RenderScene::new();
-        scene.insert(MeshInstance::new(asset(&mesh, &HashMap::new())).with_shading(Shading::Pbr));
+        scene.insert(MeshInstance::new(asset(&mesh, &HashMap::new())));
         let mut renderer = Renderer::new(&gpu, CAPTURE_FORMAT, RendererOptions::default());
         let pixels = render(&gpu, &mut renderer, &scene, &camera, &inputs, &format!("material-{name}"));
         brightness.push(luminance(pixel_at(&pixels, &camera, Vec3::ZERO)));
@@ -321,12 +344,17 @@ fn image_lighting_lights_surfaces_by_orientation() {
     assert!(renderer.prepare_environment_map(&bad, &EnvironmentMapOptions::default()).is_err());
 
     let mut scene = RenderScene::new();
-    scene.insert(
-        MeshInstance::new(asset(&sphere(material(PbrMaterialTextures::default())), &HashMap::new()))
-            .with_shading(Shading::Pbr),
-    );
-    let camera = OrbitCamera { distance: 4.0, pitch: 0.0, yaw: 0.0, ..OrbitCamera::default() };
-    let dark = FrameInputs { ambient: Some(0.0), ..FrameInputs::default() };
+    scene.insert(MeshInstance::new(asset(&sphere(material(SurfaceMaps::default())), &HashMap::new())));
+    let camera = OrbitCamera {
+        distance: 4.0,
+        pitch: 0.0,
+        yaw: 0.0,
+        ..OrbitCamera::default()
+    };
+    let dark = FrameInputs {
+        ambient: Some(0.0),
+        ..FrameInputs::default()
+    };
     let lit = FrameInputs {
         ambient: Some(0.0),
         image_lighting: Some(ImageLighting { map: &map, intensity: 1.0, rotation: 0.0 }),
@@ -358,20 +386,21 @@ fn masked_materials_cast_shadows_with_holes() {
     // Left half opaque, right half transparent: the masked right half must not shadow the floor.
     let alpha = TextureAsset::from_rgba8(2, 1, vec![255, 255, 255, 255, 255, 255, 255, 0]).unwrap();
     let textures = HashMap::from([("cutout.png", alpha)]);
-    let cutout = PbrMaterial {
-        alpha_mode: MaterialAlphaMode::Mask,
-        ..material(PbrMaterialTextures { base_color: Some("cutout.png".into()), ..Default::default() })
+    let cutout = Material {
+        alpha_mode: AlphaMode::Mask,
+        ..material(SurfaceMaps {
+            base_color: Some("cutout.png".into()),
+            ..Default::default()
+        })
     };
     let mut scene = RenderScene::new();
-    let floor = quad(0.0, material(PbrMaterialTextures::default()));
-    scene.insert(
-        MeshInstance::new(asset(&floor, &textures)).with_shading(Shading::Pbr).with_transform(Transform::new(
-            Vec3::ZERO,
-            Vec3::ZERO,
-            Vec3::splat(4.0),
-        )),
-    );
-    scene.insert(MeshInstance::new(asset(&quad(1.0, cutout), &textures)).with_shading(Shading::Pbr));
+    let floor = quad(0.0, material(SurfaceMaps::default()));
+    scene.insert(MeshInstance::new(asset(&floor, &textures)).with_transform(Transform::new(
+        Vec3::ZERO,
+        Vec3::ZERO,
+        Vec3::splat(4.0),
+    )));
+    scene.insert(MeshInstance::new(asset(&quad(1.0, cutout), &textures)));
     let sun = DirectionalLight {
         // The light is high toward -Z, so the cutout's shadow falls 0.75 units toward +Z, beyond what it occludes.
         direction: Vec3::new(0.0, 0.8, -0.6),
@@ -415,11 +444,10 @@ fn sky_and_shadow_settings_change_between_frames() {
     };
     let mut scene = RenderScene::new();
     scene.insert(
-        MeshInstance::new(asset(&quad(0.0, material(PbrMaterialTextures::default())), &HashMap::new()))
-            .with_shading(Shading::Pbr)
+        MeshInstance::new(asset(&quad(0.0, material(SurfaceMaps::default())), &HashMap::new()))
             .with_transform(Transform::new(Vec3::ZERO, Vec3::ZERO, Vec3::splat(4.0))),
     );
-    scene.insert(MeshInstance::new(asset(&quad(1.0, material(PbrMaterialTextures::default())), &HashMap::new())));
+    scene.insert(MeshInstance::new(asset(&quad(1.0, material(SurfaceMaps::default())), &HashMap::new())));
     let sun = DirectionalLight {
         direction: Vec3::new(0.0, 0.8, -0.6),
         color: LinearColor::rgb(1.0, 1.0, 1.0),
@@ -443,7 +471,7 @@ fn sky_and_shadow_settings_change_between_frames() {
     // Looking almost straight down keeps the sky out of the floor samples but in the corners when it draws.
     let camera = OrbitCamera { distance: 9.0, pitch: 0.35, yaw: 0.0, ..OrbitCamera::default() };
     let mut renderer = Renderer::new(&gpu, CAPTURE_FORMAT, RendererOptions::default());
-    let background = LinearColor::new(0.08, 0.1, 0.13, 1.0);
+    let background = LinearColor::new(0.04, 0.05, 0.065, 1.0);
     let inputs = FrameInputs {
         environment: Some(&environment),
         ambient: Some(0.05),

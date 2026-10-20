@@ -69,7 +69,7 @@ use joy_renderer::{
     MeshAsset,
     PointLight,
     RenderScene,
-    Shading,
+    ShadingModel,
     TextureAsset,
     TransparentDraw,
 };
@@ -564,10 +564,12 @@ impl AssetScene {
                     RenderComponent::read(record).map_err(component_error)?.source
             {
                 let text = read_asset(&asset)?;
-                let mesh = self
-                    .library
-                    .resolve(&asset, &text, &parameters, Shading::Lit)
-                    .map_err(|source| AssetSceneError::Mesh { path: asset.clone(), source })?;
+                let mesh = self.library.resolve(&asset, &text, &parameters, ShadingModel::Lit).map_err(|source| {
+                    AssetSceneError::Mesh {
+                        path: asset.clone(),
+                        source,
+                    }
+                })?;
                 meshes.insert(entity.id.clone(), mesh);
             }
 

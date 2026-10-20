@@ -9,7 +9,7 @@
 //! luminance attenuated by how far the camera is from their reach, and the strongest [`MAX_POINT_LIGHTS`] are kept. Ties
 //! keep the caller's order, so a stable light list draws the same lights every frame.
 
-use joy_core::PointLight;
+use joy_render_types::PointLight;
 
 use crate::camera::CameraFrame;
 use crate::culling::sphere_outside_view;

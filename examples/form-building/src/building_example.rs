@@ -25,6 +25,7 @@ use joy_engine::form::{
     GeometryData,
 };
 use joy_engine::prelude::*;
+use joy_engine::render_types::MeshDocument;
 use joy_engine::rendering::ShiftedCamera;
 use joy_engine::runtime::{
     Stopwatch,
@@ -39,9 +40,9 @@ use joy_engine::serde_json::{
 };
 
 use super::asset::{
+    asset_from_document,
     asset_from_evaluation,
-    geometry_from_mesh_data,
-    mesh_data_from_evaluation,
+    document_from_evaluation,
 };
 use super::presentation::populate_building_scene;
 
@@ -139,7 +140,7 @@ pub struct BuildingExample {
     preset: String,
     overrides: Map<String, Value>,
     parameters: Vec<NumericParameter>,
-    geometry: Option<GeometryData>,
+    document: Option<MeshDocument>,
     asset: Option<MeshAsset>,
 
     // Presentation.
@@ -186,7 +187,7 @@ impl BuildingExample {
             preset: START_PRESET.to_owned(),
             overrides: Map::new(),
             parameters,
-            geometry: None,
+            document: None,
             asset: None,
             scene: RenderScene::new(),
             camera,
@@ -203,10 +204,9 @@ impl BuildingExample {
         match mode {
             BuildingMode::Editable => example.set_preset(START_PRESET)?,
             BuildingMode::Baked => {
-                let data = serde_json::from_str(BAKED_COTTAGE)?;
-                let geometry = geometry_from_mesh_data(&data);
-                let asset = asset_from_evaluation(&geometry)?;
-                example.replace_asset(asset, geometry);
+                let document: MeshDocument = serde_json::from_str(BAKED_COTTAGE)?;
+                let asset = asset_from_document(&document)?;
+                example.replace_asset(asset, document);
                 example.fit_camera();
             }
         }
@@ -259,7 +259,7 @@ impl BuildingExample {
                 parameter.value = value;
             }
         }
-        self.replace_asset(asset, geometry);
+        self.replace_asset(asset, document_from_evaluation(&geometry));
         self.overrides = overrides;
         self.evaluation_milliseconds = evaluated;
         self.preparation_milliseconds = stopwatch.elapsed_milliseconds() - evaluated;
@@ -283,16 +283,15 @@ impl BuildingExample {
         json!({"version": 1, "name": RECIPE_NAME, "source": SOURCE, "overrides": self.overrides})
     }
 
-    /// The current building's baked mesh record, or `None` before the first evaluation in editable mode.
+    /// The current building's baked mesh document, or `None` before the first evaluation in editable mode.
     pub fn baked_mesh(&self) -> Option<Value> {
-        let geometry = self.geometry.as_ref()?;
-        serde_json::to_value(mesh_data_from_evaluation(geometry)).ok()
+        serde_json::to_value(self.document.as_ref()?).ok()
     }
 
     /// Copied diagnostics: mode, evaluation counts and CPU timings in milliseconds, geometry sizes, scene instances,
     /// bounds in meters, and render encoding timings.
     pub fn snapshot(&self) -> Value {
-        let geometry = self.geometry.as_ref();
+        let document = self.document.as_ref();
         let bounds = self.asset.as_ref().map(MeshAsset::bounds);
         let mut ordered = self.render_samples.clone();
         ordered.sort_by(f64::total_cmp);
@@ -303,9 +302,9 @@ impl BuildingExample {
             "evaluations": self.evaluations,
             "evaluationMilliseconds": round(self.evaluation_milliseconds),
             "preparationMilliseconds": round(self.preparation_milliseconds),
-            "vertices": geometry.map_or(0, |geometry| geometry.positions.len() / 3),
-            "triangles": geometry.map_or(0, |geometry| geometry.triangles.len() / 3),
-            "materialCount": geometry.map_or(0, |geometry| geometry.materials.len()),
+            "vertices": document.map_or(0, |document| document.mesh.vertex_count()),
+            "triangles": document.map_or(0, |document| document.mesh.triangle_count()),
+            "materialCount": document.map_or(0, |document| document.materials.len()),
             "instances": self.scene.len(),
             "bounds": bounds.map(|bounds| json!({
                 "min": bounds.min.to_array().map(|value| round(f64::from(value))),
@@ -320,11 +319,11 @@ impl BuildingExample {
         })
     }
 
-    fn replace_asset(&mut self, asset: MeshAsset, geometry: GeometryData) {
+    fn replace_asset(&mut self, asset: MeshAsset, document: MeshDocument) {
         // The scene holds asset handles, not GPU meshes; clearing drops the previous generation's last reference.
         populate_building_scene(&mut self.scene, asset.clone());
         self.asset = Some(asset);
-        self.geometry = Some(geometry);
+        self.document = Some(document);
         self.render_samples.clear();
         self.reset_history = true;
     }

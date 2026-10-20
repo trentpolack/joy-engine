@@ -4,7 +4,7 @@
 //! Retained presentation scene: mesh instances, resident terrain instances, and transform nodes.
 //!
 //! Scenes hold no gameplay authority. Instances reference shared assets and own their presentation state (transform,
-//! tint, opacity, visibility, pass, shading, and shadow policy). The renderer borrows a scene for each frame.
+//! material overrides, tint, opacity, visibility, pass, and shadow policy). The renderer borrows a scene for each frame.
 //!
 //! Instances and nodes may be parented to transform-only [`SceneNode`]s:
 //! their transform is local to the parent's world transform, and hiding a node hides everything beneath it. Removing
@@ -22,6 +22,7 @@ use joy_core::{
     Transform,
 };
 
+use crate::material::MaterialAsset;
 use crate::mesh::MeshAsset;
 use crate::terrain::TerrainAsset;
 
@@ -33,32 +34,24 @@ pub use terrain_instance::{
 /// Which queue an instance draws in.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum RenderPassKind {
-    /// Transparent when the asset has vertex alpha or the instance opacity is below one; opaque otherwise.
+    /// Transparent when the asset has vertex alpha or the instance opacity is below one; otherwise each slot follows
+    /// its material (blended materials draw transparently, the rest opaque).
     #[default]
     Auto,
-    /// Always opaque.
+    /// Opaque, except slots whose materials blend.
     Opaque,
-    /// Always transparent (unlit, blended, sorted back to front), even at full opacity.
+    /// Always transparent (blended and sorted back to front with the frame's other transparency), even at full
+    /// opacity. Every slot keeps its material's shading.
     Transparent,
-}
-
-/// Surface shading model for an instance's opaque geometry.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Shading {
-    /// Flat, double-sided vertex-color lighting; the engine's standard look.
-    #[default]
-    Lit,
-    /// Metallic-roughness PBR using the asset's baked material factors and normals.
-    Pbr,
-    /// Vertex color without lighting.
-    Unlit,
 }
 
 /// Presentation state for one drawn copy of an asset.
 #[derive(Clone, Debug)]
 pub struct MeshInstance {
-    /// Shared geometry.
+    /// Shared geometry with its default material per slot.
     pub asset: MeshAsset,
+    /// Per-slot material overrides in slot order; `None`, or a slot past the end, draws the asset's material.
+    pub materials: Vec<Option<MaterialAsset>>,
     /// World-space transform (scale, rotate X/Y/Z, translate).
     pub transform: Transform,
     /// Linear multiplier applied to vertex color; RGB may exceed one, and alpha is unused (see `opacity`).
@@ -69,32 +62,27 @@ pub struct MeshInstance {
     pub visible: bool,
     /// Queue selection.
     pub pass: RenderPassKind,
-    /// Opaque shading model.
-    pub shading: Shading,
-    /// Whether opaque geometry writes into the directional shadow map.
+    /// Whether opaque geometry writes into the shadow maps.
     pub casts_shadow: bool,
-    /// Whether lighting samples the directional shadow map.
+    /// Whether lighting samples the shadow maps.
     pub receives_shadow: bool,
-    /// Surface roughness in `[0, 1]` that scene effects (reflections) read; 1 is fully rough.
-    pub scene_roughness: f32,
     /// Scene node this instance inherits transform and visibility from; set through `RenderScene::set_parent`.
     pub(crate) parent: Option<SceneNodeId>,
 }
 
 impl MeshInstance {
-    /// An identity-transformed, untinted, visible, lit instance that casts and receives shadows.
+    /// An identity-transformed, untinted, visible instance drawing the asset's materials, casting and receiving shadows.
     pub fn new(asset: MeshAsset) -> Self {
         Self {
             asset,
+            materials: Vec::new(),
             transform: Transform::IDENTITY,
             tint: LinearColor::WHITE,
             opacity: 1.0,
             visible: true,
             pass: RenderPassKind::Auto,
-            shading: Shading::Lit,
             casts_shadow: true,
             receives_shadow: true,
-            scene_roughness: 1.0,
             parent: None,
         }
     }
@@ -111,13 +99,35 @@ impl MeshInstance {
         self
     }
 
-    /// Builder-style shading assignment.
-    pub fn with_shading(mut self, shading: Shading) -> Self {
-        self.shading = shading;
+    /// Builder-style override of every slot's material.
+    pub fn with_material(mut self, material: MaterialAsset) -> Self {
+        self.materials = vec![Some(material); self.asset.slot_count()];
         self
     }
 
-    /// Whether this instance draws in the sorted transparent queue.
+    /// Builder-style override of one slot's material.
+    pub fn with_slot_material(mut self, slot: usize, material: MaterialAsset) -> Self {
+        self.set_slot_material(slot, Some(material));
+        self
+    }
+
+    /// Override one slot's material, or restore the asset's with `None`.
+    pub fn set_slot_material(&mut self, slot: usize, material: Option<MaterialAsset>) {
+        if self.materials.len() <= slot {
+            self.materials.resize(slot + 1, None);
+        }
+        self.materials[slot] = material;
+    }
+
+    /// The material slot `slot` draws with: the instance's override, else the asset's default.
+    pub fn material(&self, slot: usize) -> &MaterialAsset {
+        match self.materials.get(slot) {
+            Some(Some(material)) => material,
+            _ => &self.asset.materials()[slot.min(self.asset.slot_count().saturating_sub(1))],
+        }
+    }
+
+    /// Whether every slot draws in the sorted transparent queue regardless of its material.
     pub fn is_transparent(&self) -> bool {
         match self.pass {
             RenderPassKind::Opaque => false,

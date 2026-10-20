@@ -178,8 +178,13 @@ fn examples_and_documents_render_their_materials_through_the_engine() {
     assert_eq!(session.variants().len(), 2);
     assert_eq!(session.materials().len(), 3, "Default, Checker, and Lattice");
     assert!(lab.gpu_error().is_none(), "document maps decode: {:?}", lab.gpu_error());
-    let submeshes = lab.viewport().scene().iter().next().unwrap().1.asset.submeshes().to_vec();
-    assert!(submeshes.iter().any(|submesh| submesh.textures.is_some() && submesh.masked), "the lattice is masked");
+    let asset = &lab.viewport().scene().iter().next().unwrap().1.asset;
+    let textured_mask = asset
+        .submeshes()
+        .iter()
+        .map(|submesh| &asset.materials()[submesh.slot])
+        .any(|material| material.masks() && material.texture("baseColor").is_some());
+    assert!(textured_mask, "the lattice is masked");
 
     // Applying a take replaces overrides and rebuilds; the palette stays shared.
     lab.session_mut().apply_variant(1).unwrap();

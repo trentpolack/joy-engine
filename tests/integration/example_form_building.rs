@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! The FORM BUILDING example (`examples/form-building`): presets and extreme parameters evaluate to valid deterministic
-//! geometry, material overrides reach the PBR asset, failed evaluations leave the previous building intact, baked
+//! geometry, material overrides reach the layered asset, failed evaluations leave the previous building intact, baked
 //! records round trip, the FORM LAB documents resolve through `FormAssetLibrary` to the same building, and every preset
 //! and baked mode render.
 //!
@@ -14,9 +14,9 @@
 mod example;
 
 use example::asset::{
+    asset_from_document,
     asset_from_evaluation,
-    geometry_from_mesh_data,
-    mesh_data_from_evaluation,
+    document_from_evaluation,
 };
 use example::building_example::{
     BAKED_COTTAGE,
@@ -24,14 +24,18 @@ use example::building_example::{
     BuildingMode,
     SOURCE,
 };
-use joy_engine::core::MeshAssetData;
 use joy_engine::form::{
     CompiledScript,
     GeometryData,
 };
+use joy_engine::render_types::{
+    MeshDocument,
+    Surface,
+};
 use joy_engine::rendering::{
     FormAssetLibrary,
     Shading,
+    ShadingModel,
 };
 use joy_engine::{
     HeadlessOptions,
@@ -102,7 +106,7 @@ fn presets_extremes_and_overrides_evaluate_deterministically() {
     let seeded = |seed: u32| program.evaluate(&json!({"random_seed": seed}), None).unwrap().colors;
     assert_ne!(seeded(42), seeded(43), "the seed changes window tint");
 
-    // A material override reaches the baked PBR vertices.
+    // A material override reaches the layered materials.
     let finish = json!({"kind": "material", "material": {
         "name": "Finish", "baseColor": [0.1, 0.7, 0.3, 1], "metallic": 0.65, "roughness": 0.12, "emissive": [0, 0, 0],
         "alphaMode": "OPAQUE", "alphaCutoff": 0.5,
@@ -112,7 +116,11 @@ fn presets_extremes_and_overrides_evaluate_deterministically() {
     let material = geometry.form_materials().into_iter().find(|material| material.base_color[1] == 0.7).unwrap();
     assert_eq!((material.metallic, material.roughness), (0.65, 0.12));
     let asset = asset_from_evaluation(&geometry).unwrap();
-    assert!(asset.data().vertices.iter().any(|vertex| vertex.surface[0] == 0.65 && vertex.surface[1] == 0.12));
+    let overridden = asset.materials().iter().any(|material| {
+        matches!(&material.material().shading, Shading::Layered(Surface::Layer(layer))
+            if (layer.metallic, layer.roughness) == (0.65, 0.12))
+    });
+    assert!(overridden, "the finish override draws as a layered material");
 }
 
 #[test]
@@ -157,19 +165,23 @@ fn baked_records_and_formlab_documents_reproduce_the_building() {
     let presets = presets();
     let cottage = program.evaluate(&presets["cottage"], None).unwrap();
 
-    // The baked record round trips through JSON with its materials, assignments, and bounds.
-    let record: MeshAssetData =
-        serde_json::from_str(&serde_json::to_string(&mesh_data_from_evaluation(&cottage)).unwrap()).unwrap();
-    let restored = geometry_from_mesh_data(&record);
-    assert_eq!(restored.materials, cottage.materials);
-    assert_eq!(restored.triangle_materials, cottage.triangle_materials);
+    // The baked document round trips through JSON with its materials, slot assignments, and bounds.
+    let baked = document_from_evaluation(&cottage);
+    let record: MeshDocument = serde_json::from_str(&serde_json::to_string(&baked).unwrap()).unwrap();
+    assert_eq!(record, baked);
+    assert_eq!(record.mesh.triangle_slots.as_ref(), Some(&cottage.triangle_materials));
+    assert_eq!(record.materials.len(), cottage.materials.len());
     let original_bounds = asset_from_evaluation(&cottage).unwrap().bounds();
-    assert_eq!(asset_from_evaluation(&restored).unwrap().bounds(), original_bounds);
+    assert_eq!(asset_from_document(&record).unwrap().bounds(), original_bounds);
 
-    // The supplied bake matches a fresh evaluation.
-    let supplied: MeshAssetData = serde_json::from_str(BAKED_COTTAGE).unwrap();
-    assert_eq!(supplied.positions.len(), cottage.positions.len());
-    assert_eq!(asset_from_evaluation(&geometry_from_mesh_data(&supplied)).unwrap().bounds(), original_bounds);
+    // The supplied bake matches a fresh evaluation; `JOY_UPDATE_FIXTURES=1` re-bakes it after a recipe change.
+    if std::env::var_os("JOY_UPDATE_FIXTURES").is_some() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/form-building/assets/cottage.mesh.json");
+        std::fs::write(path, format!("{}\n", serde_json::to_string(&baked).unwrap())).expect("bake written");
+        return;
+    }
+    let supplied: MeshDocument = serde_json::from_str(BAKED_COTTAGE).unwrap();
+    assert_eq!(supplied, baked, "re-bake assets/cottage.mesh.json when the cottage recipe changes");
 
     // FORM LAB documents carry the same source and preset overrides.
     let mut library = FormAssetLibrary::new();
@@ -178,10 +190,11 @@ fn baked_records_and_formlab_documents_reproduce_the_building() {
         ("warehouse", include_str!("../../examples/form-building/assets/warehouse.formlab")),
         ("apartments", include_str!("../../examples/form-building/assets/apartments.formlab")),
     ] {
-        let asset = library.resolve(&format!("assets/{name}.formlab"), text, &Map::new(), Shading::Pbr).unwrap();
+        let asset =
+            library.resolve(&format!("assets/{name}.formlab"), text, &Map::new(), ShadingModel::Layered).unwrap();
         let direct = asset_from_evaluation(&program.evaluate(&presets[name], None).unwrap()).unwrap();
         assert_eq!(asset.bounds(), direct.bounds(), "{name}.formlab");
-        assert_eq!(asset.data().vertices.len(), direct.data().vertices.len(), "{name}.formlab");
+        assert_eq!(asset.vertex_count(), direct.vertex_count(), "{name}.formlab");
     }
 }
 

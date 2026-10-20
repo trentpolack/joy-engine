@@ -17,6 +17,13 @@ const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// Fallback scene format with reduced highlight range, for adapters that cannot render, filter, and blend half floats.
 const LDR_SCENE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
+/// Color targets the deferred G-buffer pass writes at most: scene color, motion, and G-buffer.
+const DEFERRED_COLOR_TARGETS: u32 = 3;
+
+/// Bytes per pixel across those targets: 8 (`Rgba16Float`) + 8 (`Rgba16Float`) + 16 (`Rgba32Uint`), the WebGPU default
+/// limit.
+const DEFERRED_BYTES_PER_SAMPLE: u32 = 32;
+
 /// Which family of graphics APIs to request.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BackendPreference {
@@ -101,6 +108,14 @@ pub struct GpuCapabilities {
     pub hdr: bool,
     /// Largest supported 2D texture dimension in pixels.
     pub max_texture_dimension: u32,
+    /// Whether compute shaders and storage textures are available (every backend but WebGL 2); volumetric fog and the
+    /// adaptive-exposure histogram need them.
+    pub compute: bool,
+    /// Whether GPU timestamp queries are available, so frame profiles include GPU time (not WebGL 2).
+    pub timestamps: bool,
+    /// Whether deferred lighting can run: every backend but WebGL 2, with an HDR scene format and room for the scene
+    /// color, motion, and G-buffer targets in one pass. Without it every surface shades forward.
+    pub deferred: bool,
 }
 
 /// Shared ownership of one wgpu instance, adapter, device, and queue.
@@ -170,10 +185,13 @@ impl GpuContext {
         } else {
             adapter.limits()
         };
+        // Timestamp queries feed the frame profiler; request them where the adapter offers them.
+        let timestamps = backend != GpuBackend::Gl && adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY);
+        let required_features = if timestamps { wgpu::Features::TIMESTAMP_QUERY } else { wgpu::Features::empty() };
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("joy-engine"),
-                required_features: wgpu::Features::empty(),
+                required_features,
                 required_limits,
                 ..Default::default()
             })
@@ -181,12 +199,23 @@ impl GpuContext {
             .map_err(|error| RenderError::DeviceCreation(error.to_string()))?;
 
         let hdr = supports_hdr_scene(&adapter);
+        let compute = backend != GpuBackend::Gl
+            && adapter.get_downlevel_capabilities().flags.contains(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+            && device.limits().max_storage_textures_per_shader_stage >= 1;
+        let limits = device.limits();
+        let deferred = backend != GpuBackend::Gl
+            && hdr
+            && limits.max_color_attachments >= DEFERRED_COLOR_TARGETS
+            && limits.max_color_attachment_bytes_per_sample >= DEFERRED_BYTES_PER_SAMPLE;
         let capabilities = GpuCapabilities {
             backend,
             adapter_name: info.name.clone(),
             scene_format: if hdr { HDR_FORMAT } else { LDR_SCENE_FORMAT },
             hdr,
-            max_texture_dimension: device.limits().max_texture_dimension_2d,
+            max_texture_dimension: limits.max_texture_dimension_2d,
+            compute,
+            timestamps,
+            deferred,
         };
         log::info!("joy-engine: {} on {} (scene format {:?})", backend.label(), info.name, capabilities.scene_format);
 

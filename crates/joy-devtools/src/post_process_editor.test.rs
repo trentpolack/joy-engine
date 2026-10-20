@@ -40,7 +40,7 @@ fn previews_resolve_the_draft_without_changing_it() {
     assert_eq!(editor.preview(&mut volumes, outside).exposure, 2.0);
     editor.perform(&context, Action::Bypass(true));
     let bypassed = editor.preview(&mut volumes, outside);
-    assert_eq!((bypassed.tone_mapper, bypassed.antialias_strength, bypassed.exposure), (ToneMapper::None, 0.0, 1.0));
+    assert_eq!((bypassed.tone_mapper, bypassed.bloom_strength, bypassed.exposure), (ToneMapper::None, 0.0, 1.0));
     assert_eq!(editor.session().settings().exposure, 1.5);
     assert!(!editor.can_save());
 }
@@ -58,10 +58,10 @@ fn invalid_imports_and_edits_report_errors_without_changing_the_draft() {
     editor.perform(&context, Action::Set("exposure", PostProcessValue::Number(-1.0)));
     assert!(!editor.error.is_empty());
     assert_eq!(editor.session().settings().exposure, 2.0);
-    editor.import_text = json!({"unbounded": false, "saturation": 1.2}).to_string();
+    editor.import_text = json!({"unbounded": false, "vignetteStrength": 0.2}).to_string();
     editor.perform(&context, Action::Import);
     assert!(editor.error.is_empty());
-    assert_eq!(editor.session().draft().record().keys().collect::<Vec<_>>(), ["saturation"]);
+    assert_eq!(editor.session().draft().record().keys().collect::<Vec<_>>(), ["vignetteStrength"]);
 }
 
 #[test]

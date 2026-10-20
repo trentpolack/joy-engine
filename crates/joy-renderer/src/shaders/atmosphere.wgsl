@@ -63,9 +63,30 @@ fn cloudNoise(initialPoint: vec2f) -> f32 {
 }
 
 /**
- * Reconstruct a world-space view ray and shade the sky in linear HDR.
+ * The sky alone, for passes that write only the scene color.
  */
 @fragment fn fragmentMain(input: AtmosphereOutput) -> @location(0) vec4f {
+  return skyColor(input);
+}
+
+struct SkyTargets {
+  @location(0) color: vec4f,
+  @location(1) motion: vec4f,
+};
+
+/**
+ * The sky in passes that also write the scene-effect attachment. The sky carries no surface, so it writes the
+ * attachment's cleared value (zero coverage) and effects reproject it from the camera. Writing every target keeps one
+ * write mask for all of them, which WebGL 2 requires (it cannot blend or mask targets independently).
+ */
+@fragment fn fragmentTargets(input: AtmosphereOutput) -> SkyTargets {
+  return SkyTargets(skyColor(input), vec4f(0.0));
+}
+
+/**
+ * Reconstruct a world-space view ray and shade the sky in linear HDR.
+ */
+fn skyColor(input: AtmosphereOutput) -> vec4f {
   let sunDirectionIntensity = atmosphere.environment[0];
   let sunColorRadius = atmosphere.environment[1];
   let moonDirectionIntensity = atmosphere.environment[2];

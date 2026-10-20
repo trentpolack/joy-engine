@@ -16,10 +16,10 @@ use joy_renderer::{
     DirectionalLight,
     EnvironmentLighting,
     FrameInputs,
+    FramePhase,
     GpuContext,
     MAX_POINT_LIGHTS,
     MeshAsset,
-    MeshChannels,
     MeshInstance,
     OffscreenTarget,
     OrbitCamera,
@@ -67,13 +67,7 @@ fn unit_cube(color: [f32; 3]) -> MeshAsset {
         indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
     }
     let colors: Vec<f32> = (0..positions.len() / 3).flat_map(|_| color).collect();
-    MeshAsset::from_channels(MeshChannels {
-        positions: &positions,
-        indices: &indices,
-        colors: &colors,
-        ..Default::default()
-    })
-    .expect("cube geometry is valid")
+    MeshAsset::new(&crate::flat_mesh(&positions, &indices, &colors)).expect("cube geometry is valid")
 }
 
 /// A clear noon sky with the sun high in the south-west.
@@ -334,9 +328,10 @@ fn frames_with_more_point_lights_than_the_cap_draw_the_strongest() {
         range: 6.0,
         casts_shadow: false,
     };
-    let mut lights: Vec<PointLight> = (0..40)
+    let dim = MAX_POINT_LIGHTS + 8;
+    let mut lights: Vec<PointLight> = (0..dim)
         .map(|index| {
-            let angle = index as f32 * std::f32::consts::TAU / 40.0;
+            let angle = index as f32 * std::f32::consts::TAU / dim as f32;
             PointLight {
                 position: Vec3::new(angle.cos() * 2.5, 0.5, angle.sin() * 2.5),
                 color: LinearColor::rgb(0.02, 0.02, 0.05),
@@ -434,4 +429,55 @@ fn scene_nodes_move_and_hide_their_instances() {
     scene.node_mut(node).unwrap().visible = false;
     renderer.render(&scene, &camera, &inputs, target.view()).unwrap();
     assert_eq!((renderer.diagnostics().visible, renderer.diagnostics().culled), (0, 0), "hidden nodes hide children");
+}
+
+/// Profiling reports every phase a frame ran, CPU recording time always, and GPU time once timestamps read back on
+/// devices that have them; turning it off clears the profile and stops recording.
+#[test]
+fn profiling_times_each_frame_phase() {
+    let Some(gpu) = gpu() else {
+        return;
+    };
+    let mut scene = RenderScene::new();
+    scene.insert(MeshInstance::new(unit_cube([0.6, 0.6, 0.6])));
+    let environment = noon();
+    let inputs = FrameInputs {
+        environment: Some(&environment),
+        ..FrameInputs::default()
+    };
+    let target = OffscreenTarget::new(&gpu, WIDTH, HEIGHT).expect("capture target");
+    let mut renderer = Renderer::new(&gpu, joy_renderer::CAPTURE_FORMAT, RendererOptions::default());
+    renderer.resize(WIDTH, HEIGHT, 1.0);
+    renderer.render(&scene, &OrbitCamera::default(), &inputs, target.view()).expect("frame renders");
+    assert!(renderer.frame_profile().is_none(), "profiling starts off");
+
+    renderer.set_profiling(true);
+    let timestamps = gpu.capabilities().timestamps;
+    let mut profile = None;
+    for _ in 0..12 {
+        renderer.render(&scene, &OrbitCamera::default(), &inputs, target.view()).expect("frame renders");
+        // Waiting for the readback here only paces the test; the renderer itself never blocks on it.
+        let _ = gpu.device().poll(wgpu::PollType::wait_indefinitely());
+        profile = renderer.frame_profile().cloned();
+        if profile.as_ref().is_some_and(|profile| profile.gpu_milliseconds.is_some() || !timestamps) {
+            break;
+        }
+    }
+    let profile = profile.expect("a profile completes");
+    let phases: Vec<FramePhase> = profile.phases.iter().map(|timing| timing.phase).collect();
+    let mut expected = vec![FramePhase::Prepare, FramePhase::Shadows, FramePhase::DepthPrepass];
+    if renderer.diagnostics().deferred {
+        expected.extend([FramePhase::GBuffer, FramePhase::Lighting]);
+    }
+    expected.extend([FramePhase::Scene, FramePhase::Post]);
+    assert_eq!(phases, expected);
+    assert!(profile.cpu_milliseconds > 0.0);
+    if timestamps {
+        assert!(profile.gpu_milliseconds.is_some_and(|total| total >= 0.0), "GPU time arrives: {profile:?}");
+        assert!(profile.phases.iter().all(|timing| timing.gpu_milliseconds.is_some()));
+    }
+
+    renderer.set_profiling(false);
+    renderer.render(&scene, &OrbitCamera::default(), &inputs, target.view()).expect("frame renders");
+    assert!(renderer.frame_profile().is_none());
 }

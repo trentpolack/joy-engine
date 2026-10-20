@@ -4,7 +4,9 @@
 //! Image-based lighting: prepares environment maps for the renderer's lighting record. `joy-scene` fills that record
 //! from the environment simulation and [`SkyOptions`](crate::SkyOptions).
 
+mod capture;
 mod image_lighting;
+mod irradiance;
 
 pub use image_lighting::{
     EnvironmentData,
@@ -15,10 +17,6 @@ pub use image_lighting::{
     ImageLighting,
 };
 pub(crate) use image_lighting::{
-    environment_format,
-    image_lighting_group,
+    ImageLightingResources,
     image_lighting_layout,
-    lighting_textures,
-    lighting_views,
-    prepare_environment_map,
 };

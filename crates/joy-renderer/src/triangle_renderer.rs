@@ -12,7 +12,7 @@
 
 use joy_core::math::Vec2;
 
-use crate::materials::{
+use crate::pipelines::{
     DEPTH_FORMAT,
     uniform_entry,
 };
@@ -143,7 +143,7 @@ impl TriangleRenderer {
             entries: &[wgpu::BindGroupEntry { binding: 0, resource: uniform_buffer.as_entire_binding() }],
         });
         let settings = options.post_process.unwrap_or(PostProcessSettings::NEUTRAL);
-        let post = PostProcessor::new(device, scene_format, output_format, settings);
+        let post = PostProcessor::new(device, gpu.queue(), scene_format, output_format, settings);
 
         Ok(Self {
             opaque_pipeline,
@@ -192,7 +192,7 @@ impl TriangleRenderer {
     /// Write for `display` from the next frame; the shell sets it when the surface is configured and as headroom
     /// changes, so it matches the target views passed to [`TriangleRenderer::encode`].
     pub fn set_display_output(&mut self, display: DisplayOutput) {
-        self.post.set_display_output(self.gpu.device(), display);
+        self.post.set_display_output(display);
     }
 
     /// Set the presentation clock for the next frame; `RenderTarget::draw_triangles` copies the shell's clock here.
@@ -221,7 +221,7 @@ impl TriangleRenderer {
         let gpu = self.gpu.clone();
         let (device, queue) = (gpu.device(), gpu.queue());
         let size = (width, height);
-        self.post.prepare(device, queue, size, size, self.presentation_time.time_seconds as f32);
+        self.post.prepare(device, queue, size, size);
         queue.write_buffer(&self.uniform_buffer, 0, frame.uniforms);
 
         // One allocation holds opaque then transparent vertices; incomplete trailing triangles are dropped.

@@ -320,7 +320,8 @@ fn lights_rank_by_luminance_with_stable_ties_and_skip_invalid_particles() {
         effect(&source)
     };
     let runtime = lit("r = index; g = 0; b = 0;", 40);
-    let selected = collect_particle_lights(&runtime, 100);
+    assert_eq!(collect_particle_lights(&runtime, 100).lights.len(), 39, "the black particle emits nothing");
+    let selected = collect_particle_lights(&runtime, 32);
     assert_eq!(selected.lights.len(), 32);
     assert_eq!(selected.omitted, 7);
     let order: Vec<u64> = selected.lights.iter().map(|light| light.particle_index).collect();

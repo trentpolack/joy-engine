@@ -15,10 +15,12 @@ use std::f64::consts::PI;
 use joy_core::math::Vec3;
 use joy_core::math::deterministic;
 use joy_core::{
-    DirectionalLight,
     LinearColor,
-    Skylight,
     smoothstep,
+};
+use joy_render_types::{
+    DirectionalLight,
+    Skylight,
 };
 use serde::{
     Deserialize,

@@ -13,7 +13,7 @@
 //!
 //! | Layer | Modules (crates) | Owns |
 //! | --- | --- | --- |
-//! | foundation | [`core`] (`joy-core`), [`scripting`] (`joy-core`) | Math, transforms, colors, seeded random, primitive shapes, script language information |
+//! | foundation | [`core`] (`joy-core`), [`scripting`] (`joy-core`), [`render_types`] (`joy-render-types`) | Math, transforms, colors, seeded random, primitive shapes, script language information; GPU-free meshes, materials, and lights |
 //! | simulation | [`environment`] (`joy-environment`), [`physics`] (`joy-physics`), [`gameplay`] (`joy-gameplay`) | Solar time and wind, rigid bodies and vehicles, entities, controllers, levels |
 //! | content | [`dcc`] (`joy-dcc-gltf`), [`form`] (`joy-form`), [`particles`] (`joy-fx`), [`project`] (`joy-project`) | GLB and glTF mesh import, the FORM procedural modeling language (renderer-free geometry), `.joyfx` particle documents, scripts, and simulation, project manifests |
 //! | rendering | [`rendering`] (`joy-renderer`, `joy-scene`) | The wgpu renderer every game, tool, and preview draws with, including particle drawing, and the scene presentation of levels, FORM meshes, and effects |
@@ -70,6 +70,8 @@ pub use joy_core as core;
 pub use joy_core::math;
 #[doc(inline)]
 pub use joy_core::scripting;
+#[doc(inline)]
+pub use joy_render_types as render_types;
 
 // Simulation.
 #[doc(inline)]
@@ -220,6 +222,9 @@ pub mod prelude {
         FormAssetLibrary,
         FrameInputs,
         LevelScene,
+        Material,
+        MaterialAsset,
+        Mesh,
         MeshAsset,
         MeshCollection,
         MeshInstance,
@@ -231,6 +236,7 @@ pub mod prelude {
         RenderScene,
         RendererOptions,
         Shading,
+        ShadingModel,
         ShadowOptions,
         ShadowQuality,
         SkyOptions,
