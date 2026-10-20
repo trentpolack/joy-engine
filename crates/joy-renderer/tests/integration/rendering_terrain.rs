@@ -112,7 +112,10 @@ fn difference(left: &[u8], right: &[u8]) -> f32 {
 /// Render one frame of `scene` from `camera` without an environment and return its pixels.
 fn render_view(gpu: &GpuContext, renderer: &mut Renderer, scene: &RenderScene, camera: &OrbitCamera) -> Vec<u8> {
     let target = OffscreenTarget::new(gpu, WIDTH, HEIGHT).expect("capture target");
-    let inputs = FrameInputs { clear_color: BACKGROUND.to_linear(), ..FrameInputs::default() };
+    let inputs = FrameInputs {
+        clear_color: BACKGROUND.to_linear(),
+        ..FrameInputs::default()
+    };
     renderer.render(scene, camera, &inputs, target.view()).expect("terrain frame");
     target.read_rgba(gpu).expect("readback")
 }
@@ -128,7 +131,11 @@ fn scene_terrain_renders_every_diagnostic_mode() {
     let terrain = scene.create_terrain(asset.clone());
     let mut renderer = scene_renderer(&gpu, None);
     let camera = overview(&asset);
-    let ground = OrbitCamera { distance: 100.0, pitch: 0.04, ..camera };
+    let ground = OrbitCamera {
+        distance: 100.0,
+        pitch: 0.04,
+        ..camera
+    };
     let mut render = |scene: &mut RenderScene, camera: &OrbitCamera, diagnostic: TerrainDiagnostic| {
         scene.terrain_mut(terrain).unwrap().diagnostic = diagnostic;
         render_view(&gpu, &mut renderer, scene, camera)
@@ -180,7 +187,11 @@ fn low_sun() -> EnvironmentLighting {
         elapsed_seconds: 0.0,
         time_of_day: 0.35,
         sun,
-        moon: DirectionalLight { direction: -sun.direction, intensity: 0.0, ..sun },
+        moon: DirectionalLight {
+            direction: -sun.direction,
+            intensity: 0.0,
+            ..sun
+        },
         primary: sun,
         skylight: Skylight::uniform(LinearColor::rgb(0.2, 0.36, 0.62), 0.35),
         wind_velocity: Vec3::ZERO,
@@ -233,7 +244,14 @@ fn scene(asset: &TerrainAsset) -> (RenderScene, TerrainInstanceId, Vec3) {
 }
 
 fn scene_camera(focus: Vec3, yaw: f32) -> OrbitCamera {
-    OrbitCamera { target: focus, distance: 70.0, radius: 60.0, pitch: 0.5, yaw, ..OrbitCamera::default() }
+    OrbitCamera {
+        target: focus,
+        distance: 70.0,
+        radius: 60.0,
+        pitch: 0.5,
+        yaw,
+        ..OrbitCamera::default()
+    }
 }
 
 /// Render `frames` scene frames (the camera turns slightly each frame) and return the last frame's pixels.
@@ -248,7 +266,10 @@ fn render_scene(
     let environment = low_sun();
     for frame in 0..frames {
         let step = frame as f32 / 60.0;
-        let inputs = FrameInputs { environment: Some(&environment), ..FrameInputs::default() };
+        let inputs = FrameInputs {
+            environment: Some(&environment),
+            ..FrameInputs::default()
+        };
         renderer.set_presentation_time(PresentationTime::fixed_rate(frame, 1.0 / 60.0));
         renderer.render(scene, &scene_camera(focus, 0.9 + step * 0.2), &inputs, target.view())?;
     }
@@ -256,8 +277,14 @@ fn render_scene(
 }
 
 fn scene_renderer(gpu: &GpuContext, effects: Option<SceneEffectsOptions>) -> Renderer {
-    let mut renderer =
-        Renderer::new(gpu, CAPTURE_FORMAT, RendererOptions { scene_effects: effects, ..RendererOptions::default() });
+    let mut renderer = Renderer::new(
+        gpu,
+        CAPTURE_FORMAT,
+        RendererOptions {
+            scene_effects: effects,
+            ..RendererOptions::default()
+        },
+    );
     renderer.resize(WIDTH, HEIGHT, 1.0);
     renderer
 }
@@ -316,7 +343,10 @@ fn scene_terrain_casts_into_point_light_faces() {
         range: 45.0,
         casts_shadow: true,
     }];
-    let inputs = FrameInputs { lights: &lights, ..FrameInputs::default() };
+    let inputs = FrameInputs {
+        lights: &lights,
+        ..FrameInputs::default()
+    };
     let mut render = |scene: &RenderScene| {
         renderer.render(scene, &scene_camera(focus, 0.9), &inputs, target.view()).expect("frame renders");
         (target.read_rgba(&gpu).expect("readback"), renderer.diagnostics().clone())
@@ -355,7 +385,10 @@ fn scene_terrain_draws_into_effect_attachments() {
     for frame in 0..4 {
         let step = frame as f32 / 60.0;
         scene.terrain_mut(terrain).unwrap().transform.position.x = step * 3.0;
-        let inputs = FrameInputs { environment: Some(&environment), ..FrameInputs::default() };
+        let inputs = FrameInputs {
+            environment: Some(&environment),
+            ..FrameInputs::default()
+        };
         effects.set_presentation_time(PresentationTime::fixed_rate(frame, 1.0 / 60.0));
         effects.render(&scene, &scene_camera(focus, 0.9 + step * 0.2), &inputs, target.view()).expect("frame renders");
     }

@@ -36,7 +36,10 @@ pub struct LayoutPreferences {
 
 impl Default for LayoutPreferences {
     fn default() -> Self {
-        Self { content_browser_width: CONTENT_BROWSER_DEFAULT_WIDTH, content_browser_collapsed: false }
+        Self {
+            content_browser_width: CONTENT_BROWSER_DEFAULT_WIDTH,
+            content_browser_collapsed: false,
+        }
     }
 }
 

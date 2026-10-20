@@ -48,7 +48,9 @@ use joy_core::SeededRandom;
 // ---------------------------------------------------------------------------------------------------------------------
 
 /// Defaults for [`SdfShape::from_triangle_mesh`]: 48 cells along the longest side (about 1.7 MB for a cube-like mesh).
-pub const SDF_BAKE_DEFAULTS: SdfBakeOptions = SdfBakeOptions { resolution: 48 };
+pub const SDF_BAKE_DEFAULTS: SdfBakeOptions = SdfBakeOptions {
+    resolution: 48,
+};
 
 /// Smallest and largest accepted bake resolutions, in cells along the mesh's longest side.
 const MIN_BAKE_RESOLUTION: u32 = 8;
@@ -186,35 +188,83 @@ impl SdfShape {
     /// smaller than its major radius.
     pub fn primitive(primitive: SdfPrimitive) -> Result<Self, PhysicsError> {
         let (field, half_extents, convex) = match primitive {
-            SdfPrimitive::Box { half_extents } => {
+            SdfPrimitive::Box {
+                half_extents,
+            } => {
                 positive(&[half_extents.x, half_extents.y, half_extents.z])?;
                 let half_extents = to_solver_vector(half_extents);
-                (SdfField::Box { half_extents }, half_extents, true)
+                (
+                    SdfField::Box {
+                        half_extents,
+                    },
+                    half_extents,
+                    true,
+                )
             }
-            SdfPrimitive::Sphere { radius } => {
+            SdfPrimitive::Sphere {
+                radius,
+            } => {
                 positive(&[radius])?;
-                (SdfField::Sphere { radius }, Vector::splat(radius), true)
+                (
+                    SdfField::Sphere {
+                        radius,
+                    },
+                    Vector::splat(radius),
+                    true,
+                )
             }
-            SdfPrimitive::Capsule { radius, half_length } => {
+            SdfPrimitive::Capsule {
+                radius,
+                half_length,
+            } => {
                 positive(&[radius, half_length])?;
-                (SdfField::Capsule { radius, half_length }, Vector::new(radius, radius + half_length, radius), true)
+                (
+                    SdfField::Capsule {
+                        radius,
+                        half_length,
+                    },
+                    Vector::new(radius, radius + half_length, radius),
+                    true,
+                )
             }
-            SdfPrimitive::Cylinder { radius, half_height } => {
+            SdfPrimitive::Cylinder {
+                radius,
+                half_height,
+            } => {
                 positive(&[radius, half_height])?;
-                (SdfField::Cylinder { radius, half_height }, Vector::new(radius, half_height, radius), true)
+                (
+                    SdfField::Cylinder {
+                        radius,
+                        half_height,
+                    },
+                    Vector::new(radius, half_height, radius),
+                    true,
+                )
             }
-            SdfPrimitive::Torus { major_radius, minor_radius } => {
+            SdfPrimitive::Torus {
+                major_radius,
+                minor_radius,
+            } => {
                 positive(&[major_radius, minor_radius])?;
                 if minor_radius >= major_radius {
                     return Err(PhysicsError::InvalidSdfShape("torus minor radius must be below its major radius"));
                 }
                 let outer = major_radius + minor_radius;
-                (SdfField::Torus { major_radius, minor_radius }, Vector::new(outer, minor_radius, outer), false)
+                (
+                    SdfField::Torus {
+                        major_radius,
+                        minor_radius,
+                    },
+                    Vector::new(outer, minor_radius, outer),
+                    false,
+                )
             }
         };
         let bounds = Aabb::new(-half_extents, half_extents);
         let data = SdfShapeData::finalize(field, bounds, convex, SurfaceSource::Projection)?;
-        Ok(Self { data: Arc::new(data) })
+        Ok(Self {
+            data: Arc::new(data),
+        })
     }
 
     /// Bake a closed (or nearly closed) triangle mesh into a voxel distance grid.
@@ -239,7 +289,9 @@ impl SdfShape {
         let mesh = TriangleMesh::new(&positions, indices).map_err(PhysicsError::InvalidSdfShape)?;
         let field = SdfField::Voxel(VoxelField::bake(&mesh, options.resolution));
         let data = SdfShapeData::finalize(field, mesh.bounds(), false, SurfaceSource::Mesh(&mesh))?;
-        Ok(Self { data: Arc::new(data) })
+        Ok(Self {
+            data: Arc::new(data),
+        })
     }
 
     /// Signed distance in meters from a local point to the surface; negative inside.
@@ -300,11 +352,24 @@ impl SdfShapeData {
     /// Signed distance and gradient at a local point.
     pub(crate) fn sample(&self, point: Vector) -> FieldSample {
         match &self.field {
-            SdfField::Box { half_extents } => box_field(point, *half_extents),
-            SdfField::Sphere { radius } => sphere_field(point, *radius),
-            SdfField::Capsule { radius, half_length } => capsule_field(point, *radius, *half_length),
-            SdfField::Cylinder { radius, half_height } => cylinder_field(point, *radius, *half_height),
-            SdfField::Torus { major_radius, minor_radius } => torus_field(point, *major_radius, *minor_radius),
+            SdfField::Box {
+                half_extents,
+            } => box_field(point, *half_extents),
+            SdfField::Sphere {
+                radius,
+            } => sphere_field(point, *radius),
+            SdfField::Capsule {
+                radius,
+                half_length,
+            } => capsule_field(point, *radius, *half_length),
+            SdfField::Cylinder {
+                radius,
+                half_height,
+            } => cylinder_field(point, *radius, *half_height),
+            SdfField::Torus {
+                major_radius,
+                minor_radius,
+            } => torus_field(point, *major_radius, *minor_radius),
             SdfField::Voxel(voxel) => voxel.sample(point),
         }
     }

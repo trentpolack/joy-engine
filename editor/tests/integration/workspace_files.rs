@@ -61,7 +61,13 @@ fn project_saves_preserve_bytes_reject_stale_and_concurrent_writes_and_confine_a
     });
     let error = files.save("demo", "assets/form/tree.form", "workspace", &baseline.revision).unwrap_err();
     assert!(error.to_string().contains("changed"), "{error}");
-    assert!(matches!(error, ProjectError::Conflict { during_save: true, .. }));
+    assert!(matches!(
+        error,
+        ProjectError::Conflict {
+            during_save: true,
+            ..
+        }
+    ));
     assert_eq!(std::fs::read_to_string(&asset).unwrap(), "external during save");
     let mut files = ProjectFiles::new(&workspace.root);
     assert!(
@@ -105,7 +111,10 @@ fn manifests_asset_lifecycle_and_recovery_copies_stay_project_owned() {
     assert!(project.external);
     assert_eq!(
         files.list_files(&project.id).unwrap(),
-        [AssetEntry { path: "assets/example.note".into(), kind: "note".into() }]
+        [AssetEntry {
+            path: "assets/example.note".into(),
+            kind: "note".into()
+        }]
     );
     assert!(files.list_projects().unwrap().iter().any(|listed| listed.id == project.id));
 

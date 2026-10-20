@@ -222,8 +222,16 @@ impl GpuContext {
         // Browser wgpu objects are single-threaded, so this `Arc` is never shared across threads there; one shared type
         // keeps native contexts `Send + Sync` without a second browser-only code path.
         #[cfg_attr(target_arch = "wasm32", allow(clippy::arc_with_non_send_sync))]
-        let inner = Arc::new(GpuInner { device, queue, adapter, instance, capabilities });
-        Ok(Self { inner })
+        let inner = Arc::new(GpuInner {
+            device,
+            queue,
+            adapter,
+            instance,
+            capabilities,
+        });
+        Ok(Self {
+            inner,
+        })
     }
 
     /// Create a device without a presentation surface, for offscreen rendering, captures, and tests.

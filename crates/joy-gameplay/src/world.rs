@@ -78,7 +78,11 @@ impl World {
     /// Create a world from an existing entity world (for example one built with
     /// [`EntityWorld::with_component_registry`]) and physics world, taking ownership of both.
     pub fn from_parts(entities: EntityWorld, physics: PhysicsWorld) -> Self {
-        Self { entities, physics, bodies: IndexMap::new() }
+        Self {
+            entities,
+            physics,
+            bodies: IndexMap::new(),
+        }
     }
 
     /// Borrow the entity world and a simulation context built from the other fields.
@@ -99,7 +103,10 @@ impl World {
         let result = entities.update(elapsed_seconds, &mut context);
         self.prune_handles();
         result?;
-        Ok(WorldStep { elapsed_seconds, physics_steps })
+        Ok(WorldStep {
+            elapsed_seconds,
+            physics_steps,
+        })
     }
 
     /// The placement to draw an entity at this frame, or `None` if it is not live.
@@ -114,9 +121,10 @@ impl World {
 
     /// Every live entity with its presentation placement, in insertion order, for scene synchronization.
     pub fn presented_entities(&self) -> impl Iterator<Item = PresentedEntity<'_>> {
-        self.entities
-            .iter()
-            .map(|entity| PresentedEntity { state: &entity.state, transform: self.blended_transform(&entity.state) })
+        self.entities.iter().map(|entity| PresentedEntity {
+            state: &entity.state,
+            transform: self.blended_transform(&entity.state),
+        })
     }
 
     /// Spawn an entity (no physics setup; see `LevelRuntime` for component-driven bodies).
@@ -137,7 +145,11 @@ impl World {
 
     /// Forget handles whose entity was removed or whose body no longer exists.
     pub fn prune_handles(&mut self) {
-        let Self { entities, physics, bodies } = self;
+        let Self {
+            entities,
+            physics,
+            bodies,
+        } = self;
         bodies.retain(|id, body| entities.contains(id) && physics.contains_body(*body));
     }
 

@@ -54,7 +54,11 @@ pub(super) fn euler_from_solver_rotation(rotation: Rotation) -> Vec3 {
 pub(super) fn finite_number(value: f32, name: &'static str, minimum: f64, maximum: f64) -> Result<f32, PhysicsError> {
     let widened = f64::from(value);
     if !widened.is_finite() || widened < minimum || widened > maximum {
-        return Err(PhysicsError::OutOfRange { name, minimum, maximum });
+        return Err(PhysicsError::OutOfRange {
+            name,
+            minimum,
+            maximum,
+        });
     }
     Ok(value)
 }

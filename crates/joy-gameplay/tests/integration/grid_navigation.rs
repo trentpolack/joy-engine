@@ -21,7 +21,9 @@ struct Grid {
 
 impl Grid {
     fn new(rows: &[&str]) -> Self {
-        Self { rows: rows.iter().map(|row| row.chars().collect()).collect() }
+        Self {
+            rows: rows.iter().map(|row| row.chars().collect()).collect(),
+        }
     }
 
     fn width(&self) -> usize {

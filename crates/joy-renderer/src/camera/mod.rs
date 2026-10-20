@@ -107,11 +107,8 @@ impl Default for OrbitCamera {
 impl OrbitCamera {
     /// World-space basis vectors and eye position for the current orbit.
     pub fn basis(&self) -> CameraBasis {
-        let backward = Vec3::new(
-            self.pitch.cos() * self.yaw.sin(),
-            self.pitch.sin(),
-            self.pitch.cos() * self.yaw.cos()
-        );
+        let backward =
+            Vec3::new(self.pitch.cos() * self.yaw.sin(), self.pitch.sin(), self.pitch.cos() * self.yaw.cos());
 
         let right = Vec3::new(self.yaw.cos(), 0.0, -self.yaw.sin());
         let up = backward.cross(right);
@@ -121,7 +118,7 @@ impl OrbitCamera {
             backward,
             right,
             up,
-            eye: self.target + (backward * self.distance)
+            eye: self.target + (backward * self.distance),
         }
     }
 
@@ -200,7 +197,10 @@ impl<'a, C: Camera> ShiftedCamera<'a, C> {
     /// pixels. An empty viewport leaves the image unshifted.
     pub fn between_insets(camera: &'a C, viewport_width: f32, left_inset: f32, right_inset: f32) -> Self {
         let shift = if viewport_width > 0.0 { (left_inset - right_inset) / viewport_width } else { 0.0 };
-        Self { camera, shift: Vec2::new(shift, 0.0) }
+        Self {
+            camera,
+            shift: Vec2::new(shift, 0.0),
+        }
     }
 }
 
@@ -209,7 +209,10 @@ impl<C: Camera> Camera for ShiftedCamera<'_, C> {
         let frame = self.camera.camera_frame(aspect);
         // Translating clip space by `shift * w` moves every projected point by `shift` in normalized device units.
         let lens = Mat4::from_translation(self.shift.extend(0.0));
-        CameraFrame { projection: lens * frame.projection, ..frame }
+        CameraFrame {
+            projection: lens * frame.projection,
+            ..frame
+        }
     }
 }
 
@@ -235,7 +238,12 @@ pub struct RegionCamera<'a, C: Camera> {
 impl<'a, C: Camera> RegionCamera<'a, C> {
     /// Frame `camera` into the region at `region_min` with `region_size` inside a `viewport_size` target.
     pub fn new(camera: &'a C, viewport_size: Vec2, region_min: Vec2, region_size: Vec2) -> Self {
-        Self { camera, viewport_size, region_min, region_size }
+        Self {
+            camera,
+            viewport_size,
+            region_min,
+            region_size,
+        }
     }
 }
 
@@ -259,7 +267,10 @@ impl<C: Camera> Camera for RegionCamera<'_, C> {
         let offset =
             Vec2::new(((center.x / self.viewport_size.x) * 2.0) - 1.0, 1.0 - ((center.y / self.viewport_size.y) * 2.0));
         let lens = Mat4::from_translation(offset.extend(0.0)) * Mat4::from_scale(scale.extend(1.0));
-        CameraFrame { projection: lens * frame.projection, ..frame }
+        CameraFrame {
+            projection: lens * frame.projection,
+            ..frame
+        }
     }
 }
 
@@ -347,7 +358,10 @@ pub fn screen_ray(point: Vec2, view_projection: Mat4, viewport_size: Vec2) -> Op
     if length == 0.0 || !length.is_finite() || !origin.is_finite() {
         return None;
     }
-    Some(WorldRay { origin, direction: delta / length })
+    Some(WorldRay {
+        origin,
+        direction: delta / length,
+    })
 }
 
 /// Intersect a forward ray with the plane `dot(normal, point) + offset = 0`, in world units.

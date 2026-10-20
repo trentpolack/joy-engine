@@ -33,11 +33,16 @@ impl GamepadPoller {
                     None
                 }
             };
-            Self { gilrs, pads: Vec::new() }
+            Self {
+                gilrs,
+                pads: Vec::new(),
+            }
         }
         #[cfg(target_arch = "wasm32")]
         {
-            Self { pads: Vec::new() }
+            Self {
+                pads: Vec::new(),
+            }
         }
     }
 
@@ -91,5 +96,9 @@ fn native_state(pad: &gilrs::Gamepad<'_>) -> GamepadState {
         pad.value(gilrs::Axis::RightStickX),
         -pad.value(gilrs::Axis::RightStickY),
     ];
-    GamepadState { connected: pad.is_connected(), axes, buttons }
+    GamepadState {
+        connected: pad.is_connected(),
+        axes,
+        buttons,
+    }
 }

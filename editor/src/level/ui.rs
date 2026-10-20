@@ -147,8 +147,16 @@ impl LevelUi {
     pub fn new(storage: Option<Storage>) -> Self {
         let options = PanelLayoutOptions {
             storage_key: PANEL_STORAGE_KEY.to_owned(),
-            left: PaneLimits { default_width: 180.0, minimum: 160.0, maximum: 600.0 },
-            right: PaneLimits { default_width: 300.0, minimum: 220.0, maximum: 480.0 },
+            left: PaneLimits {
+                default_width: 180.0,
+                minimum: 160.0,
+                maximum: 600.0,
+            },
+            right: PaneLimits {
+                default_width: 300.0,
+                minimum: 220.0,
+                maximum: 480.0,
+            },
             labels: ["Outliner", "Viewport", "Inspector"],
             ..Default::default()
         };
@@ -822,8 +830,12 @@ impl LevelUi {
         let metadata = level.parameter_metadata().clone();
         let catalog = access.catalog().to_vec();
         let nodes = {
-            let context =
-                PropertyContext { schemas: level.schemas(), issues: &issues, metadata: &metadata, assets: &catalog };
+            let context = PropertyContext {
+                schemas: level.schemas(),
+                issues: &issues,
+                metadata: &metadata,
+                assets: &catalog,
+            };
             build_property_tree(&components, &context)
         };
         let mut actions = Vec::new();
@@ -939,7 +951,9 @@ impl LevelUi {
                                 controls.mark(format!("property:{key}"), response);
                                 apply_number_event(level, draft_key, event, *bounds, current);
                             }
-                            FieldControl::Text { placeholder } => {
+                            FieldControl::Text {
+                                placeholder,
+                            } => {
                                 let draft_key = FieldKey::Property(field.path.clone());
                                 let draft = level.drafts().get(&draft_key).cloned();
                                 let current = field.value.as_str().unwrap_or_default().to_owned();

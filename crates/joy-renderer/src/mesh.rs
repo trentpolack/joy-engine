@@ -164,7 +164,10 @@ impl MeshAsset {
             },
             |bounds, vertex| {
                 let position = Vec3::from_array(vertex.position);
-                Bounds { min: bounds.min.min(position), max: bounds.max.max(position) }
+                Bounds {
+                    min: bounds.min.min(position),
+                    max: bounds.max.max(position),
+                }
             },
         );
         let has_vertex_alpha = vertices.iter().any(|vertex| vertex.color[3] < 1.0);

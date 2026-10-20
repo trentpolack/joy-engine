@@ -147,18 +147,33 @@ impl ParticleParameter {
     /// The serialized parameter type.
     pub fn parameter_type(&self) -> ParticleParameterType {
         match self {
-            Self::Scalar { .. } => ParticleParameterType::Scalar,
-            Self::Vector3 { .. } => ParticleParameterType::Vector3,
-            Self::Color { .. } => ParticleParameterType::Color,
+            Self::Scalar {
+                ..
+            } => ParticleParameterType::Scalar,
+            Self::Vector3 {
+                ..
+            } => ParticleParameterType::Vector3,
+            Self::Color {
+                ..
+            } => ParticleParameterType::Color,
         }
     }
 
     /// The authored default.
     pub fn default_value(&self) -> ParticleParameterValue {
         match self {
-            Self::Scalar { value, .. } => ParticleParameterValue::Scalar(*value),
-            Self::Vector3 { value, .. } => ParticleParameterValue::Vector3(*value),
-            Self::Color { value, .. } => ParticleParameterValue::Color(*value),
+            Self::Scalar {
+                value,
+                ..
+            } => ParticleParameterValue::Scalar(*value),
+            Self::Vector3 {
+                value,
+                ..
+            } => ParticleParameterValue::Vector3(*value),
+            Self::Color {
+                value,
+                ..
+            } => ParticleParameterValue::Color(*value),
         }
     }
 
@@ -171,11 +186,30 @@ impl ParticleParameter {
                 .all(|(value, (min, max))| value.is_finite() && value >= min && value <= max)
         };
         match (self, value) {
-            (Self::Scalar { min, max, .. }, ParticleParameterValue::Scalar(value)) => {
-                within(&[*value], &[*min], &[*max])
-            }
-            (Self::Vector3 { min, max, .. }, ParticleParameterValue::Vector3(values)) => within(values, min, max),
-            (Self::Color { min, max, .. }, ParticleParameterValue::Color(values)) => within(values, min, max),
+            (
+                Self::Scalar {
+                    min,
+                    max,
+                    ..
+                },
+                ParticleParameterValue::Scalar(value),
+            ) => within(&[*value], &[*min], &[*max]),
+            (
+                Self::Vector3 {
+                    min,
+                    max,
+                    ..
+                },
+                ParticleParameterValue::Vector3(values),
+            ) => within(values, min, max),
+            (
+                Self::Color {
+                    min,
+                    max,
+                    ..
+                },
+                ParticleParameterValue::Color(values),
+            ) => within(values, min, max),
             _ => false,
         }
     }
@@ -183,23 +217,41 @@ impl ParticleParameter {
     /// Script input names of this parameter's components (`speed`; `windX`…; `tint.r`…).
     pub fn input_names(&self, name: &str) -> Vec<String> {
         match self {
-            Self::Scalar { .. } => vec![name.to_owned()],
-            Self::Vector3 { .. } => ["X", "Y", "Z"].iter().map(|axis| format!("{name}{axis}")).collect(),
-            Self::Color { .. } => ["r", "g", "b", "a"].iter().map(|channel| format!("{name}.{channel}")).collect(),
+            Self::Scalar {
+                ..
+            } => vec![name.to_owned()],
+            Self::Vector3 {
+                ..
+            } => ["X", "Y", "Z"].iter().map(|axis| format!("{name}{axis}")).collect(),
+            Self::Color {
+                ..
+            } => ["r", "g", "b", "a"].iter().map(|channel| format!("{name}.{channel}")).collect(),
         }
     }
 
     fn to_json(&self) -> Value {
         let mut record = Map::new();
         let (value, min, max): (Vec<f64>, Vec<f64>, Vec<f64>) = match self {
-            Self::Scalar { value, min, max } => {
+            Self::Scalar {
+                value,
+                min,
+                max,
+            } => {
                 record.insert("min".to_owned(), json_number(*min));
                 record.insert("max".to_owned(), json_number(*max));
                 record.insert("value".to_owned(), json_number(*value));
                 return Value::Object(record);
             }
-            Self::Vector3 { value, min, max } => (value.to_vec(), min.to_vec(), max.to_vec()),
-            Self::Color { value, min, max } => (value.to_vec(), min.to_vec(), max.to_vec()),
+            Self::Vector3 {
+                value,
+                min,
+                max,
+            } => (value.to_vec(), min.to_vec(), max.to_vec()),
+            Self::Color {
+                value,
+                min,
+                max,
+            } => (value.to_vec(), min.to_vec(), max.to_vec()),
         };
         record.insert("type".to_owned(), Value::from(self.parameter_type().as_str()));
         record.insert("min".to_owned(), json_numbers(&min));
@@ -518,9 +570,15 @@ pub fn compile_particle_effect(input: &Value) -> Result<CompiledParticleEffect, 
     let containers: Vec<(String, ParticleValueKind)> = parameters
         .iter()
         .filter_map(|(name, parameter)| match parameter {
-            ParticleParameter::Vector3 { .. } => Some((name.clone(), ParticleValueKind::Vector)),
-            ParticleParameter::Color { .. } => Some((name.clone(), ParticleValueKind::Color)),
-            ParticleParameter::Scalar { .. } => None,
+            ParticleParameter::Vector3 {
+                ..
+            } => Some((name.clone(), ParticleValueKind::Vector)),
+            ParticleParameter::Color {
+                ..
+            } => Some((name.clone(), ParticleValueKind::Color)),
+            ParticleParameter::Scalar {
+                ..
+            } => None,
         })
         .collect();
     let unique_inputs: std::collections::HashSet<&str> = inputs.iter().map(String::as_str).collect();
@@ -568,7 +626,10 @@ pub fn compile_particle_effect(input: &Value) -> Result<CompiledParticleEffect, 
         containers.iter().map(|(name, kind)| (name.as_str(), *kind)).collect();
     let mut compiled = Vec::with_capacity(emitters.len());
     for emitter in &emitters {
-        let script_error = |source| ParticleAssetError::Script { emitter: emitter.id.clone(), source };
+        let script_error = |source| ParticleAssetError::Script {
+            emitter: emitter.id.clone(),
+            source,
+        };
         let texture_dimensions = match &emitter.texture {
             Some(texture) => Some(read_particle_texture_source(&texture.source)?),
             None => None,
@@ -591,9 +652,20 @@ pub fn compile_particle_effect(input: &Value) -> Result<CompiledParticleEffect, 
         .iter()
         .flat_map(|emitter| [emitter.spawn_program.slot_count(), emitter.update_program.slot_count()])
         .fold(FIXED_SLOT_COUNT, usize::max);
-    let asset = ParticleEffectAsset { version: PARTICLE_EFFECT_VERSION, name, max_particles, parameters, emitters };
+    let asset = ParticleEffectAsset {
+        version: PARTICLE_EFFECT_VERSION,
+        name,
+        max_particles,
+        parameters,
+        emitters,
+    };
     Ok(CompiledParticleEffect {
-        inner: Arc::new(CompiledEffectInner { asset, emitters: compiled, parameter_inputs: inputs, slot_count }),
+        inner: Arc::new(CompiledEffectInner {
+            asset,
+            emitters: compiled,
+            parameter_inputs: inputs,
+            slot_count,
+        }),
     })
 }
 
@@ -615,7 +687,11 @@ fn read_parameter(parameter: &Map<String, Value>, key: &str) -> Result<ParticleP
         let min = components::<4>(parameter.get("min"), &format!("{key}.min"), &[0.0; 4], &COLOR_PARAMETER_LIMITS)?;
         let max = components::<4>(parameter.get("max"), &format!("{key}.max"), &min, &COLOR_PARAMETER_LIMITS)?;
         let value = components::<4>(parameter.get("value"), &format!("{key}.value"), &min, &max)?;
-        return Ok(ParticleParameter::Color { value, min, max });
+        return Ok(ParticleParameter::Color {
+            value,
+            min,
+            max,
+        });
     }
     let is_vector = kind.and_then(Value::as_str) == Some(ParticleParameterType::Vector3.as_str());
     let is_scalar = kind.and_then(Value::as_str) == Some(ParticleParameterType::Scalar.as_str());
@@ -627,14 +703,22 @@ fn read_parameter(parameter: &Map<String, Value>, key: &str) -> Result<ParticleP
         let min = number(parameter.get("min"), &format!("{key}.min"), -limit, limit, false)?;
         let max = number(parameter.get("max"), &format!("{key}.max"), min, limit, false)?;
         let value = number(parameter.get("value"), &format!("{key}.value"), min, max, false)?;
-        return Ok(ParticleParameter::Scalar { value, min, max });
+        return Ok(ParticleParameter::Scalar {
+            value,
+            min,
+            max,
+        });
     }
     let lower = [-MAXIMUM_PARAMETER_MAGNITUDE; 3];
     let upper = [MAXIMUM_PARAMETER_MAGNITUDE; 3];
     let min = components::<3>(parameter.get("min"), &format!("{key}.min"), &lower, &upper)?;
     let max = components::<3>(parameter.get("max"), &format!("{key}.max"), &min, &upper)?;
     let value = components::<3>(parameter.get("value"), &format!("{key}.value"), &min, &max)?;
-    Ok(ParticleParameter::Vector3 { value, min, max })
+    Ok(ParticleParameter::Vector3 {
+        value,
+        min,
+        max,
+    })
 }
 
 /// Read an `N`-component array with per-component bounds (`must be an XYZ array` or `an RGBA array`).
@@ -673,7 +757,10 @@ fn read_emitter(value: &Value, index: usize) -> Result<ParticleEmitterAsset, Par
         let burst = record(Some(value), &format!("{id}.bursts[{burst_index}]"))?;
         let time = number(burst.get("time"), &format!("{id}.burst.time"), 0.0, duration, false)?;
         let count = number(burst.get("count"), &format!("{id}.burst.count"), 1.0, 4096.0, true)? as u32;
-        bursts.push(ParticleBurst { time, count });
+        bursts.push(ParticleBurst {
+            time,
+            count,
+        });
     }
     bursts.sort_by(|left, right| left.time.total_cmp(&right.time));
 
@@ -716,7 +803,11 @@ fn read_emitter(value: &Value, index: usize) -> Result<ParticleEmitterAsset, Par
             let trail = record(Some(value), &path)?;
             let (emitter, count) = child(trail, &path)?;
             let interval = number(trail.get("interval"), &format!("{path}.interval"), 1.0 / 60.0, 30.0, false)?;
-            Some(ParticleTrail { emitter, count, interval })
+            Some(ParticleTrail {
+                emitter,
+                count,
+                interval,
+            })
         }
     };
     let death = match item.get("death") {
@@ -724,7 +815,10 @@ fn read_emitter(value: &Value, index: usize) -> Result<ParticleEmitterAsset, Par
         Some(value) => {
             let path = format!("{id}.death");
             let (emitter, count) = child(record(Some(value), &path)?, &path)?;
-            Some(ParticleChild { emitter, count })
+            Some(ParticleChild {
+                emitter,
+                count,
+            })
         }
     };
 

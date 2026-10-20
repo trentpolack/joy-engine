@@ -51,9 +51,9 @@ pub struct ShadedShape {
 
 /// Append one vertex at `(x, y, z)`.
 fn push(vertices: &mut Vec<ColorVertex>, x: f64, y: f64, z: f64, color: LinearColor) {
-    vertices.push(ColorVertex { 
+    vertices.push(ColorVertex {
         position: [x as f32, y as f32, z as f32],
-        color: color.to_array()
+        color: color.to_array(),
     });
 }
 
@@ -109,8 +109,7 @@ pub fn add_circle(
     segments: u32,
     z: f32,
 ) {
-    let (x, y, radius, z) =
-        (f64::from(x), f64::from(y), f64::from(radius), f64::from(z));
+    let (x, y, radius, z) = (f64::from(x), f64::from(y), f64::from(radius), f64::from(z));
     let segments_f = f64::from(segments);
 
     for index in 0..segments {
@@ -236,8 +235,7 @@ pub fn add_ring(
     segments: u32,
     z: f32,
 ) {
-    let (x, y, radius, width, z) =
-        (f64::from(x), f64::from(y), f64::from(radius), f64::from(width), f64::from(z));
+    let (x, y, radius, width, z) = (f64::from(x), f64::from(y), f64::from(radius), f64::from(width), f64::from(z));
 
     let inner = (radius - width).max(0.0);
     let outer = radius + width;
@@ -273,7 +271,7 @@ pub fn add_line(
     let (ax, ay, bx, by, width, z) =
         (f64::from(ax), f64::from(ay), f64::from(bx), f64::from(by), f64::from(width), f64::from(z));
 
-        let angle = deterministic::atan2(by - ay, bx - ax) + (PI / 2.0);
+    let angle = deterministic::atan2(by - ay, bx - ax) + (PI / 2.0);
     let offset_x = (deterministic::cos(angle) * width) / 2.0;
     let offset_y = (deterministic::sin(angle) * width) / 2.0;
     let corners = [

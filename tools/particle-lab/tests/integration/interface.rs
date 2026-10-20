@@ -46,7 +46,10 @@ fn live_off_cancels_queued_applies_explicit_apply_works_and_invalid_drafts_stay_
     };
     harness.idle(2);
     let alpha = |harness: &Harness| match &harness.tool.lab().asset().parameters["tint"] {
-        joy_engine::particles::ParticleParameter::Color { value, .. } => value[3],
+        joy_engine::particles::ParticleParameter::Color {
+            value,
+            ..
+        } => value[3],
         _ => unreachable!("tint is a color"),
     };
     let accepted_alpha = |harness: &Harness| match &harness
@@ -57,7 +60,10 @@ fn live_off_cancels_queued_applies_explicit_apply_works_and_invalid_drafts_stay_
         .asset()
         .parameters["tint"]
     {
-        joy_engine::particles::ParticleParameter::Color { value, .. } => value[3],
+        joy_engine::particles::ParticleParameter::Color {
+            value,
+            ..
+        } => value[3],
         _ => unreachable!("tint is a color"),
     };
 
@@ -184,7 +190,10 @@ fn a_slider_drag_is_one_property_undo_and_emitters_are_added_and_selected() {
     }
     harness.frame(vec![crate::support::button(slider + joy_engine::egui::vec2(40.0, 0.0), false)]);
     let power = |harness: &Harness| match &harness.tool.lab().asset().parameters["power"] {
-        joy_engine::particles::ParticleParameter::Scalar { value, .. } => *value,
+        joy_engine::particles::ParticleParameter::Scalar {
+            value,
+            ..
+        } => *value,
         _ => unreachable!(),
     };
     assert!(power(&harness) > 1.2, "{}", power(&harness));
@@ -214,7 +223,9 @@ fn hosted_tabs_hide_their_file_chrome() {
     };
     let area =
         joy_engine::egui::Rect::from_min_size(joy_engine::egui::pos2(0.0, 40.0), joy_engine::egui::vec2(1280.0, 760.0));
-    harness.tool.set_hosting(ToolHosting::Hosted { area });
+    harness.tool.set_hosting(ToolHosting::Hosted {
+        area,
+    });
     harness.idle(4);
     assert!(harness.find("Open").is_none() && harness.find("Save .joyfx ↗").is_none(), "{:?}", harness.names());
     assert!(harness.find("Apply").is_some());

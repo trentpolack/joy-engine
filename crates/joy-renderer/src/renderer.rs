@@ -1020,8 +1020,9 @@ impl Renderer {
         inputs: &FrameInputs<'_>,
         output: &wgpu::TextureView,
     ) -> Result<(), RenderError> {
-        let mut encoder =
-            self.gpu.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("render frame") });
+        let mut encoder = self.gpu.device().create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("render frame"),
+        });
         self.encode(&mut encoder, scene, camera, inputs, output)?;
         self.gpu.queue().submit([encoder.finish()]);
         Ok(())
@@ -1617,7 +1618,10 @@ impl Renderer {
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: self.post.scene_view(),
                 resolve_target: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
                 depth_slice: None,
             })],
             // Transparent surfaces test against the opaque depth; later passes do not read it.
@@ -1945,7 +1949,14 @@ impl Renderer {
             contents: bytemuck::cast_slice(asset.indices()),
             usage: wgpu::BufferUsages::INDEX,
         });
-        self.meshes.insert(asset.id(), GpuMesh { vertices, indices, asset: asset.downgrade() });
+        self.meshes.insert(
+            asset.id(),
+            GpuMesh {
+                vertices,
+                indices,
+                asset: asset.downgrade(),
+            },
+        );
     }
 
     /// Release uploads whose assets no longer exist anywhere.
@@ -2148,7 +2159,10 @@ impl ViewDepth {
     fn new(camera: &CameraFrame) -> Self {
         // The view matrix's third row is the camera's backward axis in world space.
         let backward = camera.view.row(2).truncate();
-        Self { eye: camera.eye, forward: (-backward).try_normalize().unwrap_or(Vec3::NEG_Z) }
+        Self {
+            eye: camera.eye,
+            forward: (-backward).try_normalize().unwrap_or(Vec3::NEG_Z),
+        }
     }
 
     /// Distance of `point` in front of the camera.
@@ -2175,7 +2189,12 @@ impl ShadowPlan {
         let batches = casters.batches_for(matrix, raws);
         self.caster_instances += raws.len() - start;
         let transient = casters.transient.is_some_and(|bounds| !bounds_outside_view(bounds, matrix));
-        self.views.push(ShadowView { matrix, target, batches, transient });
+        self.views.push(ShadowView {
+            matrix,
+            target,
+            batches,
+            transient,
+        });
     }
 }
 
@@ -2476,10 +2495,16 @@ fn validate_frame(inputs: &FrameInputs<'_>) -> Result<(), RenderError> {
 fn triangle_bounds(vertices: &[ColorVertex]) -> Option<Bounds> {
     let mut points = vertices.iter().map(|vertex| Vec3::from(vertex.position));
     let first = points.next()?;
-    Some(points.fold(Bounds { min: first, max: first }, |bounds, point| Bounds {
-        min: bounds.min.min(point),
-        max: bounds.max.max(point),
-    }))
+    Some(points.fold(
+        Bounds {
+            min: first,
+            max: first,
+        },
+        |bounds, point| Bounds {
+            min: bounds.min.min(point),
+            max: bounds.max.max(point),
+        },
+    ))
 }
 
 fn uniform_buffer(device: &wgpu::Device, label: &str, size: usize) -> wgpu::Buffer {
@@ -2624,6 +2649,9 @@ fn single_buffer_group(
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some(label),
         layout,
-        entries: &[wgpu::BindGroupEntry { binding: 0, resource: buffer.as_entire_binding() }],
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: buffer.as_entire_binding(),
+        }],
     })
 }

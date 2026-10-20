@@ -9,7 +9,10 @@ use super::*;
 fn default_texture_is_a_sixteen_pixel_png() {
     assert_eq!(
         read_particle_texture_source(DEFAULT_PARTICLE_TEXTURE),
-        Ok(ParticleTextureDimensions { width: 16, height: 16 })
+        Ok(ParticleTextureDimensions {
+            width: 16,
+            height: 16
+        })
     );
 }
 

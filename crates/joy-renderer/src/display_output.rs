@@ -54,12 +54,20 @@ pub struct DisplayOutput {
 
 impl DisplayOutput {
     /// Standard dynamic range: sRGB-encoded values with no headroom.
-    pub const STANDARD: Self = Self { encoding: OutputEncoding::Standard, headroom: 1.0, sdr_white_level: 1.0 };
+    pub const STANDARD: Self = Self {
+        encoding: OutputEncoding::Standard,
+        headroom: 1.0,
+        sdr_white_level: 1.0,
+    };
 
     /// An extended-range output with `headroom` and `sdr_white_level`, each clamped to `1..=MAX_DISPLAY_HEADROOM`
     /// (non-finite values mean `1.0`).
     pub fn extended(encoding: OutputEncoding, headroom: f32, sdr_white_level: f32) -> Self {
-        Self { encoding, headroom: sanitized_multiple(headroom), sdr_white_level: sanitized_multiple(sdr_white_level) }
+        Self {
+            encoding,
+            headroom: sanitized_multiple(headroom),
+            sdr_white_level: sanitized_multiple(sdr_white_level),
+        }
     }
 
     /// Whether highlights can go above SDR white: an extended signal and a display with headroom.

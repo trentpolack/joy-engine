@@ -120,8 +120,13 @@ fn bloom_and_resolve_translate_for_webgl() {
         let info = wgpu::naga::valid::Validator::new(Default::default(), wgpu::naga::valid::Capabilities::empty())
             .validate(&module)
             .unwrap_or_else(|error| panic!("{entry_point}: {error:?}"));
-        let options =
-            glsl::Options { version: glsl::Version::Embedded { version: 300, is_webgl: true }, ..Default::default() };
+        let options = glsl::Options {
+            version: glsl::Version::Embedded {
+                version: 300,
+                is_webgl: true,
+            },
+            ..Default::default()
+        };
         let pipeline = glsl::PipelineOptions {
             shader_stage: wgpu::naga::ShaderStage::Fragment,
             entry_point: entry_point.into(),

@@ -52,7 +52,10 @@ pub fn parse_glb(bytes: &[u8]) -> ParsedGlb {
     let json_length = word(12);
     let json = joy_engine::serde_json::from_str(std::str::from_utf8(&bytes[20..20 + json_length]).unwrap().trim())
         .expect("GLB JSON parses");
-    ParsedGlb { json, binary: bytes[28 + json_length..].to_vec() }
+    ParsedGlb {
+        json,
+        binary: bytes[28 + json_length..].to_vec(),
+    }
 }
 
 /// Read a float accessor's values (`readAccessor`).

@@ -98,7 +98,12 @@ impl ProjectFiles {
     pub fn with_projects_directory(root: impl Into<PathBuf>, projects_directory: &str) -> Self {
         let root = absolute(root.into());
         let projects_root = root.join(projects_directory);
-        Self { root, projects_root, external: BTreeMap::new(), save_prepared: None }
+        Self {
+            root,
+            projects_root,
+            external: BTreeMap::new(),
+            save_prepared: None,
+        }
     }
 
     /// The hosting workspace root.
@@ -239,7 +244,10 @@ impl ProjectFiles {
         // Check again after preparing the temporary file to catch external editor writes.
         let latest = self.read(project, relative)?;
         if latest.revision != expected_revision {
-            return Err(ProjectError::Conflict { current: latest, during_save: false });
+            return Err(ProjectError::Conflict {
+                current: latest,
+                during_save: false,
+            });
         }
         if let Some(hook) = self.save_prepared.as_mut() {
             hook();
@@ -261,13 +269,19 @@ impl ProjectFiles {
         let replaced = fs::read_to_string(&backup).unwrap_or_default();
         if revision(&replaced) != expected_revision {
             restore(&backup, file)?;
-            return Err(ProjectError::Conflict { current: self.read(project, relative)?, during_save: true });
+            return Err(ProjectError::Conflict {
+                current: self.read(project, relative)?,
+                during_save: true,
+            });
         }
         if let Err(error) = fs::hard_link(temporary, file) {
             // The old file stays in recovery, including late in-place writes.
             let _ = fs::hard_link(&backup, file);
             if error.kind() == ErrorKind::AlreadyExists {
-                return Err(ProjectError::Conflict { current: self.read(project, relative)?, during_save: true });
+                return Err(ProjectError::Conflict {
+                    current: self.read(project, relative)?,
+                    during_save: true,
+                });
             }
             return Err(ProjectError::Io(describe_io(&error)));
         }
@@ -345,7 +359,10 @@ impl ProjectStore for ProjectFiles {
         let file = self.resolve_file(project, path)?;
         let current = self.read(project, path)?;
         if current.revision != expected_revision {
-            return Err(ProjectError::Conflict { current, during_save: false });
+            return Err(ProjectError::Conflict {
+                current,
+                during_save: false,
+            });
         }
         let name = file.file_name().map_or_else(|| "asset".to_owned(), |name| name.to_string_lossy().into_owned());
         let temporary = file.with_file_name(format!("{name}.{}.tmp", unique_suffix()));
@@ -444,7 +461,10 @@ fn visit_assets(
             visit_assets(&entry.path(), &path, formats, files)?;
         } else if kind.is_file() && formats.contains(&extension_of(&name)) {
             let kind = extension_of(&name).trim_start_matches('.').to_owned();
-            files.push(AssetEntry { path, kind });
+            files.push(AssetEntry {
+                path,
+                kind,
+            });
         }
         if files.len() > ASSET_LIMIT {
             return Err(ProjectError::Rejected("Project exceeds the 10,000 asset browsing limit.".to_owned()));
@@ -468,7 +488,10 @@ fn visit_recovery(directory: &Path, relative: &str, copies: &mut Vec<RecoveryCop
                 if copy.file_type().is_ok_and(|kind| kind.is_file()) {
                     let bytes = copy.metadata().map(|metadata| metadata.len()).unwrap_or(0);
                     let copy_name = copy.file_name().to_string_lossy().into_owned();
-                    copies.push(RecoveryCopy { path: format!("{relative}/{name}/{copy_name}"), bytes });
+                    copies.push(RecoveryCopy {
+                        path: format!("{relative}/{name}/{copy_name}"),
+                        bytes,
+                    });
                 }
             }
         } else if kind.is_dir() && !name.starts_with('.') {

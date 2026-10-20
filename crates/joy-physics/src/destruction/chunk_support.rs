@@ -117,12 +117,20 @@ impl ChunkSupportGraph {
                 let stacked = vertical_gap.abs() <= tolerance
                     && HORIZONTAL_AXES.iter().all(|axis| overlaps(source, target, *axis, tolerance));
                 if stacked || shares_side_face(source, target, tolerance) {
-                    edges[source_index].push(SupportEdge { target: target_index, distance: horizontal_distance });
+                    edges[source_index].push(SupportEdge {
+                        target: target_index,
+                        distance: horizontal_distance,
+                    });
                 }
             }
         }
 
-        Ok(Self { ids: chunks.iter().map(|chunk| chunk.id.clone()).collect(), edges, anchors, maximum_distance: span })
+        Ok(Self {
+            ids: chunks.iter().map(|chunk| chunk.id.clone()).collect(),
+            edges,
+            anchors,
+            maximum_distance: span,
+        })
     }
 
     /// Resolve the shortest permitted sideways travel from active ground anchors.

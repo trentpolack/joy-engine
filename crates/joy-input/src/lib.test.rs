@@ -22,7 +22,11 @@ fn manager() -> InputManager {
 fn pad(axes: [f32; 4], south: f32) -> GamepadState {
     let mut buttons = vec![0.0; gamepad::BUTTON_COUNT];
     buttons[usize::from(gamepad::BUTTON_SOUTH)] = south;
-    GamepadState { connected: true, axes: axes.to_vec(), buttons }
+    GamepadState {
+        connected: true,
+        axes: axes.to_vec(),
+        buttons,
+    }
 }
 
 #[test]
@@ -113,7 +117,13 @@ fn gamepads_rescale_dead_zones_and_wait_for_neutral_after_release() {
     assert!((input.axis("steer") - 0.5).abs() < 1e-6);
     assert!(input.pressed("brake"));
     // Sticks inside the dead zone read zero; disconnected pads contribute nothing.
-    input.set_gamepads(&[pad([0.1, 0.0, 0.0, 0.0], 0.0), GamepadState { connected: false, ..pad([1.0; 4], 1.0) }]);
+    input.set_gamepads(&[
+        pad([0.1, 0.0, 0.0, 0.0], 0.0),
+        GamepadState {
+            connected: false,
+            ..pad([1.0; 4], 1.0)
+        },
+    ]);
     input.update();
     assert_eq!(input.axis("steer"), 0.0);
     assert!(input.action("brake").released);

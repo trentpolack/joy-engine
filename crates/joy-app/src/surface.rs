@@ -60,8 +60,12 @@ impl ConfiguredSurface {
         let config = surface
             .get_default_config(gpu.adapter(), width.max(1), height.max(1))
             .ok_or_else(|| RenderError::Surface("the surface is not supported by this adapter".into()))?;
-        let mut configured =
-            Self { surface, config, view_format: wgpu::TextureFormat::Rgba8Unorm, encoding: OutputEncoding::Standard };
+        let mut configured = Self {
+            surface,
+            config,
+            view_format: wgpu::TextureFormat::Rgba8Unorm,
+            encoding: OutputEncoding::Standard,
+        };
 
         let extended = (high_dynamic_range && display_shows_hdr(&configured.surface.display_hdr_info(gpu.adapter())))
             .then(|| extended_color_space(&capabilities))

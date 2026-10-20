@@ -223,7 +223,10 @@ impl CustomFieldKind {
 
 /// Build inspector nodes for `components` (resolved, with display-only parameter defaults filled in).
 pub fn build_property_tree(components: &Map<String, Value>, context: &PropertyContext<'_>) -> Vec<PropertyNode> {
-    let mut builder = TreeBuilder { context, rows: 0 };
+    let mut builder = TreeBuilder {
+        context,
+        rows: 0,
+    };
     components.iter().map(|(name, value)| builder.field(vec![name.clone()], value, None)).collect()
 }
 
@@ -469,8 +472,12 @@ impl TreeBuilder<'_, '_> {
                         .or_else(|| schema.and_then(|schema| if schema.integer { Some(1.0) } else { schema.step })),
                     integer: schema.is_some_and(|schema| schema.integer),
                 }),
-                Value::Null => FieldControl::Text { placeholder: Some("null — enter text to replace".to_owned()) },
-                _ => FieldControl::Text { placeholder: None },
+                Value::Null => FieldControl::Text {
+                    placeholder: Some("null — enter text to replace".to_owned()),
+                },
+                _ => FieldControl::Text {
+                    placeholder: None,
+                },
             }
         };
         PropertyField {

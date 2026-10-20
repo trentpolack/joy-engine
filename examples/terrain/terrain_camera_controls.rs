@@ -71,7 +71,12 @@ pub struct TerrainCameraControls {
 impl TerrainCameraControls {
     /// Controls with the given speeds and limits.
     pub fn new(config: CameraControlsConfig) -> Self {
-        Self { config, drag: None, pointer: Vec2::ZERO, keys: HashSet::new() }
+        Self {
+            config,
+            drag: None,
+            pointer: Vec2::ZERO,
+            keys: HashSet::new(),
+        }
     }
 
     /// Whether the secondary button is flying the camera.

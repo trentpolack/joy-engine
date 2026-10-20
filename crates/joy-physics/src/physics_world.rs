@@ -91,7 +91,11 @@ pub struct PhysicsWorldOptions {
 
 impl Default for PhysicsWorldOptions {
     fn default() -> Self {
-        Self { gravity: DEFAULT_GRAVITY, fixed_step: DEFAULT_FIXED_STEP, max_sub_steps: DEFAULT_MAX_SUB_STEPS }
+        Self {
+            gravity: DEFAULT_GRAVITY,
+            fixed_step: DEFAULT_FIXED_STEP,
+            max_sub_steps: DEFAULT_MAX_SUB_STEPS,
+        }
     }
 }
 
@@ -341,7 +345,10 @@ impl PhysicsWorld {
                 continue;
             }
             closest = Some(RaycastHit {
-                body: BodyHandle { world: self.world_id, raw: handle },
+                body: BodyHandle {
+                    world: self.world_id,
+                    raw: handle,
+                },
                 point: from + ((delta / length) * hit.time_of_impact),
                 normal: from_solver_vector(hit.normal),
                 distance: hit.time_of_impact,

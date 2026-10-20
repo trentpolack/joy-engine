@@ -413,7 +413,12 @@ fn styled_button<'a>(ui: &mut Ui, atoms: impl egui::IntoAtoms<'a>, pressed: bool
 fn accent_panel(ui: &mut Ui, accent: Color32, width: f32, add_contents: impl FnOnce(&mut Ui)) {
     let response = egui::Frame::new()
         .fill(PANEL)
-        .inner_margin(Margin { left: 18, right: 15, top: 14, bottom: 14 })
+        .inner_margin(Margin {
+            left: 18,
+            right: 15,
+            top: 14,
+            bottom: 14,
+        })
         .show(ui, |ui| {
             ui.set_width(width - 33.0);
             ui.spacing_mut().item_spacing.y = 6.0;

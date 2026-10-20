@@ -113,7 +113,10 @@ fn engine_presets_validate_round_trip_and_read() {
     );
     let lamp = entity("lamp", json!({"light": data(component_preset::LIGHT_POINT)}));
     let look = entity("look", json!({"postProcess": data(component_preset::POST_PROCESS_SPHERE)}));
-    let level = LevelData { entities: vec![kart, lamp, look], ..LevelData::new("Presets") };
+    let level = LevelData {
+        entities: vec![kart, lamp, look],
+        ..LevelData::new("Presets")
+    };
     let level = parse_level(&serialize_level(&level)).unwrap();
     assert!(level.entities.iter().all(|entity| catalog.validate_entity(entity).is_empty()));
 
@@ -185,7 +188,12 @@ fn post_process_records_are_read_strictly() {
 
     // Volume fields and settings separate; omitted fields take the component defaults.
     let volume = read(json!({"shape": "box", "halfExtents": [2, 1, 3], "blendDistance": 0.5, "exposure": 2})).unwrap();
-    assert_eq!(volume.shape, PostProcessShape::Box { half_extents: Vec3::new(2.0, 1.0, 3.0) });
+    assert_eq!(
+        volume.shape,
+        PostProcessShape::Box {
+            half_extents: Vec3::new(2.0, 1.0, 3.0)
+        }
+    );
     assert!(volume.enabled && !volume.unbounded);
     assert_eq!((volume.weight, volume.blend_distance), (1.0, 0.5));
     assert_eq!(volume.overrides.record().keys().collect::<Vec<_>>(), ["exposure"]);

@@ -40,14 +40,20 @@ pub(crate) fn box_field(point: Vector, half_extents: Vector) -> FieldSample {
         direction[axis] = sign(point[axis]);
         direction
     };
-    FieldSample { distance: outside_length + inside_distance, gradient }
+    FieldSample {
+        distance: outside_length + inside_distance,
+        gradient,
+    }
 }
 
 /// Sphere centered on the origin.
 pub(crate) fn sphere_field(point: Vector, radius: Real) -> FieldSample {
     let length = point.length();
     let gradient = if length > DIRECTION_EPSILON { point / length } else { Vector::Y };
-    FieldSample { distance: length - radius, gradient }
+    FieldSample {
+        distance: length - radius,
+        gradient,
+    }
 }
 
 /// Capsule along Y: a segment from `-half_length` to `half_length` swept by `radius`.
@@ -74,7 +80,10 @@ pub(crate) fn cylinder_field(point: Vector, radius: Real, half_height: Real) -> 
     } else {
         Vector::new(0.0, sign(point.y), 0.0)
     };
-    FieldSample { distance: outside + radial_offset.max(height_offset).min(0.0), gradient }
+    FieldSample {
+        distance: outside + radial_offset.max(height_offset).min(0.0),
+        gradient,
+    }
 }
 
 /// Torus around Y: a circle of `major_radius` in the XZ plane swept by `minor_radius`.
@@ -89,12 +98,18 @@ pub(crate) fn torus_field(point: Vector, major_radius: Real, minor_radius: Real)
     } else {
         radial_direction
     };
-    FieldSample { distance: length - minor_radius, gradient }
+    FieldSample {
+        distance: length - minor_radius,
+        gradient,
+    }
 }
 
 /// Half-space whose boundary plane passes through the origin with the unit outward `normal`.
 pub(crate) fn half_space_field(point: Vector, normal: Vector) -> FieldSample {
-    FieldSample { distance: point.dot(normal), gradient: normal }
+    FieldSample {
+        distance: point.dot(normal),
+        gradient: normal,
+    }
 }
 
 /// `-1` for negative values and `+1` otherwise, so points on a symmetry plane still receive a direction.

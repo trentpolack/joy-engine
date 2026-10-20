@@ -103,7 +103,12 @@ pub fn viewport_input(ui: &mut Ui, rect: Rect, id: Id) -> ViewportActions {
                 .events
                 .iter()
                 .filter_map(|event| match event {
-                    Event::MouseWheel { unit, delta, modifiers, .. } if !modifiers.ctrl && !modifiers.command => {
+                    Event::MouseWheel {
+                        unit,
+                        delta,
+                        modifiers,
+                        ..
+                    } if !modifiers.ctrl && !modifiers.command => {
                         let scale = match unit {
                             MouseWheelUnit::Point => 1.0,
                             MouseWheelUnit::Line => LINE_HEIGHT_PIXELS,
@@ -124,7 +129,12 @@ pub fn viewport_input(ui: &mut Ui, rect: Rect, id: Id) -> ViewportActions {
         ui.memory_mut(|memory| {
             memory.set_focus_lock_filter(
                 id,
-                EventFilter { horizontal_arrows: true, vertical_arrows: true, escape: false, tab: false },
+                EventFilter {
+                    horizontal_arrows: true,
+                    vertical_arrows: true,
+                    escape: false,
+                    tab: false,
+                },
             )
         });
         ui.input_mut(|input| {
@@ -153,7 +163,13 @@ pub fn viewport_input(ui: &mut Ui, rect: Rect, id: Id) -> ViewportActions {
     let plain = ui.input(|input| input.modifiers.is_none());
     let click =
         (response.clicked_by(PointerButton::Primary) && plain).then(|| response.interact_pointer_pos()).flatten();
-    ViewportActions { response, drag, zoom, shortcuts, click }
+    ViewportActions {
+        response,
+        drag,
+        zoom,
+        shortcuts,
+        click,
+    }
 }
 
 #[cfg(test)]

@@ -98,7 +98,13 @@ impl LightComponent {
         if intensity < 0.0 || range <= 0.0 || color.rgb_array().iter().any(|channel| *channel < 0.0) {
             return Err(ComponentError::InvalidLight);
         }
-        Ok(Self { enabled, color, intensity, range, casts_shadow })
+        Ok(Self {
+            enabled,
+            color,
+            intensity,
+            range,
+            casts_shadow,
+        })
     }
 
     /// Linear radiance: color multiplied by intensity.

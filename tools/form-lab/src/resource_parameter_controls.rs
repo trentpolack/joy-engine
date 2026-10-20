@@ -97,7 +97,11 @@ fn publish(
 ) {
     if let Ok(value) = edited {
         parameter.value = value.clone();
-        actions.push(ParameterAction::Set { name: parameter.name.clone(), value, commit });
+        actions.push(ParameterAction::Set {
+            name: parameter.name.clone(),
+            value,
+            commit,
+        });
     }
 }
 
@@ -118,7 +122,10 @@ fn mesh_controls(
                     if ui.selectable_label(false, preset.label()).clicked() {
                         let value = preset.value();
                         parameter.value = value.clone();
-                        actions.push(ParameterAction::SetMesh { name: parameter.name.clone(), value });
+                        actions.push(ParameterAction::SetMesh {
+                            name: parameter.name.clone(),
+                            value,
+                        });
                     }
                 }
             },

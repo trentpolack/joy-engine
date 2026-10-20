@@ -23,8 +23,13 @@ fn grids_stay_bounded_and_translucent_across_scales() {
     let bound = first.triangles.len();
     for distance in [0.01, 1.0, 10.0, 100.0, 1000.0, 100000.0] {
         for backward in [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.3, -0.8, 0.5]] {
-            let changed =
-                EditorGridView { target: [1000.0, 4.0, -1000.0], backward, distance, height: -120.0, ..view() };
+            let changed = EditorGridView {
+                target: [1000.0, 4.0, -1000.0],
+                backward,
+                distance,
+                height: -120.0,
+                ..view()
+            };
             let frame = grid.frame(&changed).unwrap();
             assert!(!frame.triangles.is_empty() && frame.triangles.len() <= bound, "zoom cannot grow payload");
             assert_eq!(frame.triangles.len() % 3, 0);
@@ -42,13 +47,34 @@ fn invalid_views_fail_without_replacing_the_cache() {
     let mut grid = EditorGrid::new();
     let first = grid.frame(&view()).unwrap().clone();
     let changes = [
-        EditorGridView { distance: 0.0, ..view() },
-        EditorGridView { viewport_height_pixels: -1.0, ..view() },
-        EditorGridView { height: f64::NAN, ..view() },
-        EditorGridView { target: [0.0, f64::INFINITY, 0.0], ..view() },
-        EditorGridView { backward: [0.0; 3], ..view() },
-        EditorGridView { distance: f64::MAX, ..view() },
-        EditorGridView { target: [1e100, 0.0, 0.0], ..view() },
+        EditorGridView {
+            distance: 0.0,
+            ..view()
+        },
+        EditorGridView {
+            viewport_height_pixels: -1.0,
+            ..view()
+        },
+        EditorGridView {
+            height: f64::NAN,
+            ..view()
+        },
+        EditorGridView {
+            target: [0.0, f64::INFINITY, 0.0],
+            ..view()
+        },
+        EditorGridView {
+            backward: [0.0; 3],
+            ..view()
+        },
+        EditorGridView {
+            distance: f64::MAX,
+            ..view()
+        },
+        EditorGridView {
+            target: [1e100, 0.0, 0.0],
+            ..view()
+        },
     ];
     for changed in changes {
         assert!(grid.frame(&changed).is_err(), "{changed:?}");

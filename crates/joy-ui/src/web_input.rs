@@ -118,18 +118,27 @@ impl WebEguiInput {
         let to_points = |x: f64, y: f64| egui::pos2(x as f32 / pixels_per_point, y as f32 / pixels_per_point);
 
         match event {
-            WindowEvent::CursorMoved { position, .. } => {
+            WindowEvent::CursorMoved {
+                position,
+                ..
+            } => {
                 let point = to_points(position.x, position.y);
                 self.pointer = Some(point);
                 self.events.push(egui::Event::PointerMoved(point));
                 false
             }
-            WindowEvent::CursorLeft { .. } => {
+            WindowEvent::CursorLeft {
+                ..
+            } => {
                 self.pointer = None;
                 self.events.push(egui::Event::PointerGone);
                 false
             }
-            WindowEvent::MouseInput { state, button, .. } => {
+            WindowEvent::MouseInput {
+                state,
+                button,
+                ..
+            } => {
                 let (Some(position), Some(button)) = (self.pointer, pointer_button(*button)) else {
                     return false;
                 };
@@ -164,7 +173,11 @@ impl WebEguiInput {
                 }
                 if pressed == Some(true) { claims_press(context, point) } else { context.egui_wants_pointer_input() }
             }
-            WindowEvent::MouseWheel { delta, phase, .. } => {
+            WindowEvent::MouseWheel {
+                delta,
+                phase,
+                ..
+            } => {
                 let (unit, delta) = match delta {
                     MouseScrollDelta::LineDelta(x, y) => (egui::MouseWheelUnit::Line, egui::vec2(*x, *y)),
                     MouseScrollDelta::PixelDelta(position) => (
@@ -178,7 +191,12 @@ impl WebEguiInput {
                     TouchPhase::Ended => egui::TouchPhase::End,
                     TouchPhase::Cancelled => egui::TouchPhase::Cancel,
                 };
-                self.events.push(egui::Event::MouseWheel { unit, delta, phase, modifiers: self.modifiers });
+                self.events.push(egui::Event::MouseWheel {
+                    unit,
+                    delta,
+                    phase,
+                    modifiers: self.modifiers,
+                });
                 context.egui_wants_pointer_input()
             }
             WindowEvent::ModifiersChanged(modifiers) => {
@@ -194,7 +212,10 @@ impl WebEguiInput {
                 self.events.push(egui::Event::ModifiersChanged(self.modifiers));
                 false
             }
-            WindowEvent::KeyboardInput { event, .. } => {
+            WindowEvent::KeyboardInput {
+                event,
+                ..
+            } => {
                 let pressed = event.state == ElementState::Pressed;
                 let key = match &event.physical_key {
                     winit::keyboard::PhysicalKey::Code(code) => {
@@ -253,7 +274,10 @@ impl WebEguiInput {
         if let Some(viewport) = input.viewports.get_mut(&egui::ViewportId::ROOT) {
             viewport.native_pixels_per_point = Some(pixels_per_point);
         } else {
-            let info = egui::ViewportInfo { native_pixels_per_point: Some(pixels_per_point), ..Default::default() };
+            let info = egui::ViewportInfo {
+                native_pixels_per_point: Some(pixels_per_point),
+                ..Default::default()
+            };
             input.viewports.insert(egui::ViewportId::ROOT, info);
         }
         input

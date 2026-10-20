@@ -125,7 +125,11 @@ impl App for TexturedPreview {
 
 #[test]
 fn renders_before_images_are_ready_stay_safe_and_draw_textures_once_committed() {
-    let options = HeadlessOptions { width: 64, height: 64, ..Default::default() };
+    let options = HeadlessOptions {
+        width: 64,
+        height: 64,
+        ..Default::default()
+    };
     let Ok(mut shell) = HeadlessShell::new(options) else {
         eprintln!("skipping GPU test: no adapter");
         return;
@@ -133,7 +137,11 @@ fn renders_before_images_are_ready_stay_safe_and_draw_textures_once_committed() 
     let sources = sources();
     let definition = definition(&[&sources[0]]);
     let effect = ParticleEffect::new(&definition, ParticleEffectOptions::default()).unwrap();
-    let mut preview = TexturedPreview { viewport: ParticleViewport::new(), effect, result: None };
+    let mut preview = TexturedPreview {
+        viewport: ParticleViewport::new(),
+        effect,
+        result: None,
+    };
     preview.viewport.grid_visible = false;
 
     // A resize-time render before the images are committed draws no textured batch and reports no error.

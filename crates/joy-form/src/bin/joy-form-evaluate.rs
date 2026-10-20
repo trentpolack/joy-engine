@@ -118,7 +118,11 @@ fn failure(diagnostic: Diagnostic) -> Value {
 
 /// Report a request that never reached FORM, at the protocol's unlocated position.
 fn transport_failure(message: &str) -> Value {
-    failure(Diagnostic { message: message.to_owned(), line: 1, column: 1 })
+    failure(Diagnostic {
+        message: message.to_owned(),
+        line: 1,
+        column: 1,
+    })
 }
 
 fn write_response(output: &mut impl Write, response: &Value) -> io::Result<()> {

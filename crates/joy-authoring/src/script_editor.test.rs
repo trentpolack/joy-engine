@@ -13,7 +13,11 @@ struct Harness {
 
 impl Harness {
     fn new(editor: ScriptEditor, text: &str) -> Self {
-        Self { context: egui::Context::default(), editor, text: text.to_owned() }
+        Self {
+            context: egui::Context::default(),
+            editor,
+            text: text.to_owned(),
+        }
     }
 
     fn frame(&mut self, events: Vec<egui::Event>) -> ScriptEditorResponse {
@@ -39,7 +43,13 @@ impl Harness {
 }
 
 fn key(key: Key, modifiers: Modifiers) -> egui::Event {
-    egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
+    egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers,
+    }
 }
 
 fn text(value: &str) -> egui::Event {

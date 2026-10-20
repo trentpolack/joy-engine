@@ -43,7 +43,9 @@ impl TempFolder {
         ));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).expect("temporary folder");
-        Self { root: std::fs::canonicalize(&root).expect("canonical temporary folder") }
+        Self {
+            root: std::fs::canonicalize(&root).expect("canonical temporary folder"),
+        }
     }
 
     /// Write `text` at `relative`, creating folders.
@@ -126,7 +128,11 @@ pub const HEIGHT: u32 = 900;
 
 /// A headless shell for UI tests, or `None` (with a note) without a GPU adapter.
 pub fn ui_shell() -> Option<HeadlessShell> {
-    let options = HeadlessOptions { width: WIDTH, height: HEIGHT, ..Default::default() };
+    let options = HeadlessOptions {
+        width: WIDTH,
+        height: HEIGHT,
+        ..Default::default()
+    };
     match HeadlessShell::new(options) {
         Ok(shell) => Some(shell),
         Err(error) => {
@@ -154,7 +160,12 @@ impl Driver {
     /// Start `editor` and lay out two frames so controls have positions.
     pub fn start(mut shell: HeadlessShell, mut editor: JoyEditor) -> Self {
         shell.start(&mut editor).expect("editor starts");
-        let mut driver = Self { shell, editor, events: Vec::new(), pointer: egui::Pos2::ZERO };
+        let mut driver = Self {
+            shell,
+            editor,
+            events: Vec::new(),
+            pointer: egui::Pos2::ZERO,
+        };
         driver.frames(2);
         driver
     }
@@ -162,7 +173,10 @@ impl Driver {
     /// Run `count` frames with the UI phase; queued events go to the first.
     pub fn frames(&mut self, count: u32) {
         for _ in 0..count {
-            let input = egui::RawInput { events: std::mem::take(&mut self.events), ..Default::default() };
+            let input = egui::RawInput {
+                events: std::mem::take(&mut self.events),
+                ..Default::default()
+            };
             self.shell.step_with_ui(&mut self.editor, input).expect("editor frame");
         }
     }
@@ -195,7 +209,12 @@ impl Driver {
     }
 
     fn button(&mut self, button: egui::PointerButton, pressed: bool, modifiers: egui::Modifiers) {
-        self.events.push(egui::Event::PointerButton { pos: self.pointer, button, pressed, modifiers });
+        self.events.push(egui::Event::PointerButton {
+            pos: self.pointer,
+            button,
+            pressed,
+            modifiers,
+        });
     }
 
     /// Click a named control, then run two frames.
@@ -255,7 +274,13 @@ impl Driver {
     fn key_event(&mut self, code: &str, modifiers: egui::Modifiers) {
         let key = key(code);
         for pressed in [true, false] {
-            self.events.push(egui::Event::Key { key, physical_key: Some(key), pressed, repeat: false, modifiers });
+            self.events.push(egui::Event::Key {
+                key,
+                physical_key: Some(key),
+                pressed,
+                repeat: false,
+                modifiers,
+            });
         }
     }
 

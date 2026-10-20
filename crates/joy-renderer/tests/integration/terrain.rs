@@ -160,23 +160,62 @@ fn indexed_grids_share_vertices_with_valid_ranges_at_every_resolution() {
 fn target_detail_lock_fades_continuously() {
     let asset = fixture();
     let base = view([10000.0; 3], [-4.0, 0.0, -4.0], 1.0);
-    let inside = select_terrain(&asset, &TerrainView { target: DVec3::new(1.0 - 1e-6, 0.0, -4.0), ..base }).unwrap();
-    let outside = select_terrain(&asset, &TerrainView { target: DVec3::new(1.0 + 1e-6, 0.0, -4.0), ..base }).unwrap();
+    let inside = select_terrain(
+        &asset,
+        &TerrainView {
+            target: DVec3::new(1.0 - 1e-6, 0.0, -4.0),
+            ..base
+        },
+    )
+    .unwrap();
+    let outside = select_terrain(
+        &asset,
+        &TerrainView {
+            target: DVec3::new(1.0 + 1e-6, 0.0, -4.0),
+            ..base
+        },
+    )
+    .unwrap();
     assert!((inside[0].detail - outside[0].detail).abs() < 0.001);
-    let beyond = select_terrain(&asset, &TerrainView { target: DVec3::new(1.5, 0.0, -4.0), ..base }).unwrap();
+    let beyond = select_terrain(
+        &asset,
+        &TerrainView {
+            target: DVec3::new(1.5, 0.0, -4.0),
+            ..base
+        },
+    )
+    .unwrap();
     assert!(beyond[0].detail > 0.0);
 }
 
 #[test]
 fn invalid_views_fail_before_selection() {
     let asset = fixture();
-    let base = TerrainView { projection_scale: 100.0, ..view([0.0, 10.0, 0.0], [0.0; 3], 1.0) };
+    let base = TerrainView {
+        projection_scale: 100.0,
+        ..view([0.0, 10.0, 0.0], [0.0; 3], 1.0)
+    };
     for invalid in [
-        TerrainView { target_radius: f64::NAN, ..base },
-        TerrainView { target_radius: -1.0, ..base },
-        TerrainView { eye: DVec3::new(0.0, f64::INFINITY, 0.0), ..base },
-        TerrainView { projection_scale: 0.0, ..base },
-        TerrainView { tolerance: 0.0, ..base },
+        TerrainView {
+            target_radius: f64::NAN,
+            ..base
+        },
+        TerrainView {
+            target_radius: -1.0,
+            ..base
+        },
+        TerrainView {
+            eye: DVec3::new(0.0, f64::INFINITY, 0.0),
+            ..base
+        },
+        TerrainView {
+            projection_scale: 0.0,
+            ..base
+        },
+        TerrainView {
+            tolerance: 0.0,
+            ..base
+        },
     ] {
         assert!(matches!(select_terrain(&asset, &invalid), Err(TerrainError::InvalidView)));
     }

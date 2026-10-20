@@ -41,7 +41,14 @@ impl ConfigFile {
         let text = read_document(&path)?;
         let document: Value = serde_json::from_str(&text).map_err(|error| error.to_string())?;
         let values = create_config_document_values(fields, &document).map_err(|error| error.to_string())?;
-        Ok((Self { path, fields: fields.to_vec(), revision: revision_of(&text) }, values))
+        Ok((
+            Self {
+                path,
+                fields: fields.to_vec(),
+                revision: revision_of(&text),
+            },
+            values,
+        ))
     }
 
     /// Write the values that differ from defaults; refuses when the file changed outside this editor.

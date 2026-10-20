@@ -58,7 +58,9 @@ impl CompileOutcome {
     /// The status line FORM LAB shows for an unsuccessful outcome (successes return `None`).
     pub fn failure_message(&self) -> Option<String> {
         match self {
-            Self::Built { .. } => None,
+            Self::Built {
+                ..
+            } => None,
             Self::Rejected(diagnostic) => Some(format!(
                 "Line {}, column {}: {} Previous preview retained.",
                 diagnostic.line, diagnostic.column, diagnostic.message
@@ -122,7 +124,10 @@ impl Compiler {
 
     /// A compiler with custom budgets (tests use short ones).
     pub fn with_budgets(budgets: Budgets) -> Self {
-        Self { job: None, budgets }
+        Self {
+            job: None,
+            budgets,
+        }
     }
 
     /// Start a build, abandoning any current one.
@@ -204,12 +209,20 @@ impl Job {
         if let Err(error) = spawned {
             log_spawn_failure(&error.to_string());
         }
-        Self { requested: Stopwatch::start(), compiling: None, receiver }
+        Self {
+            requested: Stopwatch::start(),
+            compiling: None,
+            receiver,
+        }
     }
 
     #[cfg(target_arch = "wasm32")]
     fn spawn(request: CompileRequest) -> Self {
-        Self { requested: Stopwatch::start(), compiling: None, request: Some(request) }
+        Self {
+            requested: Stopwatch::start(),
+            compiling: None,
+            request: Some(request),
+        }
     }
 
     fn poll(&mut self, budgets: Budgets) -> Option<CompileOutcome> {
@@ -220,7 +233,10 @@ impl Job {
                     // Result delivery may wait behind the UI thread; evaluation time owns the budget.
                     return Some(match *result {
                         Ok(_) if milliseconds > budgets.execution_milliseconds => CompileOutcome::ExecutionExpired,
-                        Ok(data) => CompileOutcome::Built { data: Box::new(data), milliseconds },
+                        Ok(data) => CompileOutcome::Built {
+                            data: Box::new(data),
+                            milliseconds,
+                        },
                         Err(diagnostic) => CompileOutcome::Rejected(diagnostic),
                     });
                 }

@@ -58,7 +58,9 @@ impl Default for BundledProjects {
 impl BundledProjects {
     /// The bundled examples.
     pub fn new() -> Self {
-        Self { manifest: parse_project_manifest_text(MANIFEST).ok() }
+        Self {
+            manifest: parse_project_manifest_text(MANIFEST).ok(),
+        }
     }
 
     fn check_project(project: &str) -> Result<(), ProjectError> {

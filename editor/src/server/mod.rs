@@ -84,7 +84,10 @@ impl DiskDocument {
     pub fn new(text: impl Into<String>) -> Self {
         let text = text.into();
         let revision = revision(&text);
-        Self { text, revision }
+        Self {
+            text,
+            revision,
+        }
     }
 }
 

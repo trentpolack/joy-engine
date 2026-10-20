@@ -136,7 +136,10 @@ impl PhysicsBackend for PhysicsWorld {
         if let Some(last) = self.last_mutation_sequence
             && batch.sequence < last
         {
-            return Err(PhysicsError::StaleMutationBatch { sequence: batch.sequence, last });
+            return Err(PhysicsError::StaleMutationBatch {
+                sequence: batch.sequence,
+                last,
+            });
         }
         if batch.removed_shape_ids.iter().any(String::is_empty) {
             return Err(PhysicsError::InvalidMutationBatch);
@@ -189,7 +192,11 @@ impl PhysicsBackend for PhysicsWorld {
         let resident = self.resident_shapes.values().filter(|body| body.world == self.world_id).map(|body| body.raw);
         let hit = self.raycast_bodies(from, to, resident)?;
         let shape_id = self.resident_shapes.iter().find(|(_, body)| **body == hit.body).map(|(id, _)| id.clone())?;
-        Some(PhysicsQueryHit { shape_id, distance: f64::from(hit.distance), point: hit.point.as_dvec3() })
+        Some(PhysicsQueryHit {
+            shape_id,
+            distance: f64::from(hit.distance),
+            point: hit.point.as_dvec3(),
+        })
     }
 }
 
@@ -220,5 +227,9 @@ fn static_box_options(shape: &PhysicsCollisionShape) -> Result<BodyOptions, Phys
     if !center.is_finite() || !half_extents.is_finite() || half_extents.min_element() <= 0.0 {
         return Err(PhysicsError::InvalidShape(shape.id.clone()));
     }
-    Ok(BodyOptions { position: center, half_extents, ..BodyOptions::new(PrimitiveShape::Box) })
+    Ok(BodyOptions {
+        position: center,
+        half_extents,
+        ..BodyOptions::new(PrimitiveShape::Box)
+    })
 }

@@ -31,7 +31,11 @@ fn numbers_format_like_javascript_and_round_trip_exactly() {
 
 #[test]
 fn drafts_accept_only_finite_numbers_within_rules() {
-    let rules = NumericRules { minimum: Some(0.0), maximum: Some(2.0), integer: false };
+    let rules = NumericRules {
+        minimum: Some(0.0),
+        maximum: Some(2.0),
+        integer: false,
+    };
     assert_eq!(validate_draft(" 1.25 ", &rules), Ok(1.25));
     assert_eq!(validate_draft(".5", &rules), Ok(0.5));
     for text in ["", "abc", "1..2", "Infinity", "inf", "NaN", "1e999", "0x10"] {
@@ -39,7 +43,10 @@ fn drafts_accept_only_finite_numbers_within_rules() {
     }
     assert_eq!(validate_draft("-1", &rules), Err("Value must be greater than or equal to 0.".to_owned()));
     assert_eq!(validate_draft("3", &rules), Err("Value must be less than or equal to 2.".to_owned()));
-    let integer = NumericRules { integer: true, ..NumericRules::default() };
+    let integer = NumericRules {
+        integer: true,
+        ..NumericRules::default()
+    };
     assert_eq!(validate_draft("2.5", &integer), Err("Enter a whole number.".to_owned()));
     assert_eq!(validate_draft("-4", &integer), Ok(-4.0));
 }
@@ -55,7 +62,10 @@ fn arrow_steps_scale_clamp_and_drop_binary_noise() {
         value = stepped_value(value, 0.1, StepScale::Normal, 1.0, &NumericRules::default());
     }
     assert_eq!(value, 0.3, "0.1 + 0.1 + 0.1 without the trailing 4");
-    let integer = NumericRules { integer: true, ..NumericRules::default() };
+    let integer = NumericRules {
+        integer: true,
+        ..NumericRules::default()
+    };
     assert_eq!(stepped_value(4.0, 1.0, StepScale::Fine, 1.0, &integer), 5.0, "integer fine steps stay whole");
     assert_eq!(stepped_value(4.0, 0.0, StepScale::Normal, 1.0, &NumericRules::default()), 4.1);
     assert_eq!(scrubbed_value(1.0, 9.0, 0.1, StepScale::Normal, &rules), 1.4);

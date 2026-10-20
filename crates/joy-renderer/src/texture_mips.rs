@@ -58,7 +58,13 @@ impl MipmapGenerator {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
-        Self { layout, pipeline_layout, module, sampler, pipelines: HashMap::new() }
+        Self {
+            layout,
+            pipeline_layout,
+            module,
+            sampler,
+            pipelines: HashMap::new(),
+        }
     }
 
     /// Upload `asset` as a `format` texture (RGBA8, sRGB or not) with a full mip chain and return it.
@@ -71,7 +77,11 @@ impl MipmapGenerator {
     ) -> wgpu::Texture {
         let device = gpu.device();
         let level_count = mip_level_count(asset.width(), asset.height());
-        let size = wgpu::Extent3d { width: asset.width(), height: asset.height(), depth_or_array_layers: 1 };
+        let size = wgpu::Extent3d {
+            width: asset.width(),
+            height: asset.height(),
+            depth_or_array_layers: 1,
+        };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
             size,
@@ -150,7 +160,9 @@ impl MipmapGenerator {
                 })
             })
             .collect();
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("mipmaps") });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("mipmaps"),
+        });
         for level in 1..level_count as usize {
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("mipmap"),
@@ -160,7 +172,10 @@ impl MipmapGenerator {
                         binding: 0,
                         resource: wgpu::BindingResource::TextureView(&views[level - 1]),
                     },
-                    wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
                 ],
             });
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

@@ -188,7 +188,13 @@ fn malformed_later_components_roll_back_level_setup() {
     let counted_registry = || {
         let mut registry = EntityRegistry::new();
         let counter = destroyed.clone();
-        registry.register("prop", move |_| Box::new(CountedProp { destroyed: counter.clone() })).unwrap();
+        registry
+            .register("prop", move |_| {
+                Box::new(CountedProp {
+                    destroyed: counter.clone(),
+                })
+            })
+            .unwrap();
         registry
     };
 
@@ -207,7 +213,13 @@ fn malformed_later_components_roll_back_level_setup() {
     level.entities.push(prop("ground", -0.5, 0.0, Vec3::new(2.0, 1.0, 2.0)));
     level.entities.push(invalid);
     let error = LevelRuntime::new(&level, counted_registry()).unwrap_err();
-    assert!(matches!(error, GameplayError::PhysicsComponent { source: PhysicsComponentError::InvalidHalfExtents, .. }));
+    assert!(matches!(
+        error,
+        GameplayError::PhysicsComponent {
+            source: PhysicsComponentError::InvalidHalfExtents,
+            ..
+        }
+    ));
     assert_eq!(destroyed.get(), 2, "the failed entity and the earlier ground were both destroyed");
 
     let mut vehicle_only = EntityDefinition::new("cart");
@@ -265,7 +277,10 @@ fn removing_an_entity_inside_an_update_releases_its_physics() {
     let mut registry = registry();
     registry.register("remover", |_| Box::new(Remover)).unwrap();
     let mut level = parse_level(TEST_YARD).unwrap();
-    level.entities.push(EntityDefinition { kind: "remover".to_owned(), ..EntityDefinition::new("remover") });
+    level.entities.push(EntityDefinition {
+        kind: "remover".to_owned(),
+        ..EntityDefinition::new("remover")
+    });
     let mut runtime = LevelRuntime::new(&level, registry).unwrap();
     let crate_body = runtime.body(&EntityId::from("crate")).unwrap();
 

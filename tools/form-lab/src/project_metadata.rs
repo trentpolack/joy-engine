@@ -40,10 +40,18 @@ pub fn project_name_change(source: &str, name: &str) -> Result<TextChange, Strin
         return Err("Declare project metadata only once before renaming.".into());
     }
     let Some(token) = tokens.first() else {
-        return Ok(TextChange { from: 0, to: 0, insert: declaration });
+        return Ok(TextChange {
+            from: 0,
+            to: 0,
+            insert: declaration,
+        });
     };
     let from = byte_offset(source, token.line, token.column).ok_or("Project metadata is outside the script.")?;
-    Ok(TextChange { from, to: from + token.text.len(), insert: quoted })
+    Ok(TextChange {
+        from,
+        to: from + token.text.len(),
+        insert: quoted,
+    })
 }
 
 /// Byte offset of a one-based line and one-based character column, or `None` beyond the text.

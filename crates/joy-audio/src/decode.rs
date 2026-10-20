@@ -33,7 +33,11 @@ fn decode_wav(bytes: &[u8]) -> Result<DecodedSound, String> {
         }
     }
     .map_err(|error| error.to_string())?;
-    decode_pcm(&PcmSound { sample_rate: spec.sample_rate, channels: spec.channels, samples })
+    decode_pcm(&PcmSound {
+        sample_rate: spec.sample_rate,
+        channels: spec.channels,
+        samples,
+    })
 }
 
 fn decode_pcm(sound: &PcmSound) -> Result<DecodedSound, String> {
@@ -58,7 +62,10 @@ fn decode_pcm(sound: &PcmSound) -> Result<DecodedSound, String> {
             [left, frame.get(1).map_or(left, |right| right.clamp(-1.0, 1.0))]
         })
         .collect();
-    Ok(DecodedSound { sample_rate: sound.sample_rate, frames })
+    Ok(DecodedSound {
+        sample_rate: sound.sample_rate,
+        frames,
+    })
 }
 
 #[cfg(test)]

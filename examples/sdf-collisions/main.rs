@@ -22,7 +22,11 @@ use joy_engine::prelude::*;
 
 /// Shell settings: default renderer with drag-to-orbit and the demo's keys.
 fn options() -> ShellOptions {
-    ShellOptions { title: "SDF COLLISIONS".into(), input: input_map(), ..Default::default() }
+    ShellOptions {
+        title: "SDF COLLISIONS".into(),
+        input: input_map(),
+        ..Default::default()
+    }
 }
 
 fn start() {

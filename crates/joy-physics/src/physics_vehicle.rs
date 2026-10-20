@@ -80,8 +80,13 @@ const MIN_WHEEL_RADIUS: f64 = f64::EPSILON;
 
 /// Values a vehicle assumes for omitted options. Forces are newtons and steering is radians. Wheel `friction_slip`
 /// defaults to the vehicle's own value.
-pub const VEHICLE_DEFAULTS: VehicleOptions =
-    VehicleOptions { wheels: Vec::new(), engine_force: 400.0, max_steer: 0.45, brake_force: 20.0, friction_slip: 5.0 };
+pub const VEHICLE_DEFAULTS: VehicleOptions = VehicleOptions {
+    wheels: Vec::new(),
+    engine_force: 400.0,
+    max_steer: 0.45,
+    brake_force: 20.0,
+    friction_slip: 5.0,
+};
 
 /// Values a wheel assumes for omitted options. Lengths are chassis-local meters. The position is a placeholder (the
 /// chassis origin); see [`WheelOptions::new`].
@@ -139,7 +144,10 @@ pub struct WheelOptions {
 impl WheelOptions {
     /// Default wheel tuning at a chassis-space position.
     pub const fn new(position: Vec3) -> Self {
-        Self { position, ..WHEEL_DEFAULTS }
+        Self {
+            position,
+            ..WHEEL_DEFAULTS
+        }
     }
 }
 
@@ -252,7 +260,13 @@ impl PhysicsWorld {
         }
 
         if let Some(record) = self.bodies.get_mut(&handle.raw) {
-            record.vehicle = Some(VehicleRecord { controller, wheels, engine_force, max_steer, brake_force });
+            record.vehicle = Some(VehicleRecord {
+                controller,
+                wheels,
+                engine_force,
+                max_steer,
+                brake_force,
+            });
         }
         Ok(handle)
     }

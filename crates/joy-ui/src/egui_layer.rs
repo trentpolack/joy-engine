@@ -58,7 +58,12 @@ impl EguiLayer {
         });
         let painter_format = if composite.is_some() { INTERFACE_FORMAT } else { output_format };
         let painter = egui_wgpu::Renderer::new(gpu.device(), painter_format, egui_wgpu::RendererOptions::default());
-        Self { context, state, painter, composite }
+        Self {
+            context,
+            state,
+            painter,
+            composite,
+        }
     }
 
     /// Follow a change in the display's SDR white level. The encoding stays the one the layer was created for.
@@ -138,7 +143,10 @@ fn clear_interface(encoder: &mut wgpu::CommandEncoder, interface: &wgpu::Texture
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             view: interface,
             resolve_target: None,
-            ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT), store: wgpu::StoreOp::Store },
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                store: wgpu::StoreOp::Store,
+            },
             depth_slice: None,
         })],
         ..Default::default()
@@ -158,7 +166,10 @@ pub fn paint_output(
 ) {
     let pixels_per_point = full_output.pixels_per_point;
     let primitives = context.tessellate(full_output.shapes, pixels_per_point);
-    let screen = egui_wgpu::ScreenDescriptor { size_in_pixels, pixels_per_point };
+    let screen = egui_wgpu::ScreenDescriptor {
+        size_in_pixels,
+        pixels_per_point,
+    };
     let mut textures = full_output.textures_delta;
     for (id, deltas) in textures.set.drain() {
         for delta in &deltas {
@@ -172,7 +183,10 @@ pub fn paint_output(
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: output,
                 resolve_target: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
                 depth_slice: None,
             })],
             ..Default::default()
@@ -189,7 +203,13 @@ pub fn paint_output(
 /// natively: Cmd (the Meta key) on Apple platforms, Ctrl elsewhere.
 #[cfg(any(test, target_arch = "wasm32"))]
 pub(crate) fn browser_modifiers(alt: bool, ctrl: bool, shift: bool, meta: bool, apple: bool) -> egui::Modifiers {
-    egui::Modifiers { alt, ctrl, shift, mac_cmd: apple && meta, command: if apple { meta } else { ctrl } }
+    egui::Modifiers {
+        alt,
+        ctrl,
+        shift,
+        mac_cmd: apple && meta,
+        command: if apple { meta } else { ctrl },
+    }
 }
 
 /// Whether egui claims a press at `position` (points): a widget already holds the pointer, or an interactable area

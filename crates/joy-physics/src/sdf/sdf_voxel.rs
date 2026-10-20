@@ -98,7 +98,11 @@ impl TriangleMesh {
                 triangle.swap(1, 2);
             }
         }
-        Ok(Self { positions: positions.to_vec(), triangles, bounds })
+        Ok(Self {
+            positions: positions.to_vec(),
+            triangles,
+            bounds,
+        })
     }
 
     /// Tight local bounds of the referenced vertices.
@@ -146,7 +150,13 @@ impl VoxelField {
         let cell = extents.max_element() / resolution as Real;
         let origin = bounds.mins - (Vector::ONE * (GRID_PADDING_CELLS as Real * cell));
         let counts = [0, 1, 2].map(|axis| (extents[axis] / cell).ceil() as usize + 1 + (2 * GRID_PADDING_CELLS));
-        let mut field = Self { origin, cell, counts, distances: Vec::new(), gradients: Vec::new() };
+        let mut field = Self {
+            origin,
+            cell,
+            counts,
+            distances: Vec::new(),
+            gradients: Vec::new(),
+        };
 
         let votes = field.classify_inside(mesh);
         (field.distances, field.gradients) = field.closest_point_samples(mesh, &votes);
@@ -169,7 +179,10 @@ impl VoxelField {
         if outside_length > 0.0 {
             gradient = (gradient + (outside / outside_length)).normalize_or_zero();
         }
-        FieldSample { distance: distance + outside_length, gradient }
+        FieldSample {
+            distance: distance + outside_length,
+            gradient,
+        }
     }
 
     /// Bytes held by the grid.
@@ -185,7 +198,11 @@ impl VoxelField {
         let grid = (clamped - self.origin) / self.cell;
         let cell = [0, 1, 2].map(|axis| (grid[axis] as usize).min(self.counts[axis] - 2));
         let fraction = grid - Vector::new(cell[0] as Real, cell[1] as Real, cell[2] as Real);
-        GridLookup { clamped, base: self.index(cell), fraction }
+        GridLookup {
+            clamped,
+            base: self.index(cell),
+            fraction,
+        }
     }
 
     /// Trilinear interpolation of per-node values around a lookup, as nested lerps along X, then Y, then Z.
@@ -196,7 +213,11 @@ impl VoxelField {
         let lerp = |from: T, to: T, amount: Real| from + ((to - from) * amount);
         let row = self.counts[0];
         let slice = self.counts[0] * self.counts[1];
-        let Vector { x, y, z } = lookup.fraction;
+        let Vector {
+            x,
+            y,
+            z,
+        } = lookup.fraction;
         let at = |offset: usize| value(lookup.base + offset);
         let near = lerp(lerp(at(0), at(1), x), lerp(at(row), at(row + 1), x), y);
         let far = lerp(lerp(at(slice), at(slice + 1), x), lerp(at(slice + row), at(slice + row + 1), x), y);
@@ -291,13 +312,21 @@ impl VoxelField {
                 let mut previous_triangle: Option<usize> = None;
                 for x in 0..self.counts[0] {
                     let point = self.origin + (Vector::new(x as Real, y as Real, z as Real) * self.cell);
-                    let mut best = ClosestPoint { distance_squared: Real::INFINITY, point, triangle: 0 };
+                    let mut best = ClosestPoint {
+                        distance_squared: Real::INFINITY,
+                        point,
+                        triangle: 0,
+                    };
                     if let Some(triangle) = previous_triangle {
                         let [a, b, c] = mesh.vertices(mesh.triangles[triangle]);
                         let closest = closest_point_on_triangle(point, a, b, c);
                         // Slightly loosened so the same triangle is found again by the full search.
                         let distance_squared = ((closest - point).length_squared() * 1.0001) + 1.0e-12;
-                        best = ClosestPoint { distance_squared, point: closest, triangle };
+                        best = ClosestPoint {
+                            distance_squared,
+                            point: closest,
+                            triangle,
+                        };
                     }
                     hierarchy.closest(mesh, point, &mut best);
                     previous_triangle = Some(best.triangle);
@@ -364,7 +393,10 @@ impl TriangleHierarchy {
                 (a + b + c) / 3.0
             })
             .collect();
-        let mut hierarchy = Self { nodes: Vec::new(), order: (0..mesh.triangles.len()).collect() };
+        let mut hierarchy = Self {
+            nodes: Vec::new(),
+            order: (0..mesh.triangles.len()).collect(),
+        };
         hierarchy.build(mesh, &centroids, 0, mesh.triangles.len());
         hierarchy
     }
@@ -375,7 +407,12 @@ impl TriangleHierarchy {
             self.order[range.clone()].iter().flat_map(|triangle| mesh.vertices(mesh.triangles[*triangle])),
         );
         let index = self.nodes.len();
-        self.nodes.push(HierarchyNode { bounds, children: None, first, count });
+        self.nodes.push(HierarchyNode {
+            bounds,
+            children: None,
+            first,
+            count,
+        });
         if count <= BVH_LEAF_TRIANGLES {
             return index;
         }
@@ -414,7 +451,11 @@ impl TriangleHierarchy {
                     let closest = closest_point_on_triangle(point, a, b, c);
                     let distance_squared = (closest - point).length_squared();
                     if distance_squared < best.distance_squared {
-                        *best = ClosestPoint { distance_squared, point: closest, triangle: *triangle };
+                        *best = ClosestPoint {
+                            distance_squared,
+                            point: closest,
+                            triangle: *triangle,
+                        };
                     }
                 }
                 continue;

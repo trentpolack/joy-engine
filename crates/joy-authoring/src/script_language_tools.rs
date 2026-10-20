@@ -104,7 +104,11 @@ impl ScriptSyntax {
 
     /// Read-only JSON: strings, signed numbers, and `true`/`false`/`null`.
     pub fn json() -> Self {
-        Self { strings: true, json: true, ..Self::default() }
+        Self {
+            strings: true,
+            json: true,
+            ..Self::default()
+        }
     }
 
     /// Plain text without highlighting.
@@ -177,7 +181,10 @@ impl ScriptSyntax {
                 component = character == '.';
                 TokenKind::Operator
             };
-            tokens.push(Token { range: start..position, kind });
+            tokens.push(Token {
+                range: start..position,
+                kind,
+            });
         }
         tokens
     }
@@ -400,7 +407,12 @@ pub struct ScriptDiagnostic {
 impl ScriptDiagnostic {
     /// An error at a one-based line and character column.
     pub fn error(line: usize, column: usize, message: impl Into<String>) -> Self {
-        Self { line, column, message: message.into(), severity: DiagnosticSeverity::Error }
+        Self {
+            line,
+            column,
+            message: message.into(),
+            severity: DiagnosticSeverity::Error,
+        }
     }
 
     /// The characters to underline: the word or number at the diagnostic, or one character (the line break at the end

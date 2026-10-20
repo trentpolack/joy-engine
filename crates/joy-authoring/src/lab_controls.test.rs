@@ -37,7 +37,13 @@ fn click(position: Pos2) -> Vec<egui::Event> {
 }
 
 fn key(key: Key, modifiers: egui::Modifiers) -> egui::Event {
-    egui::Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }
+    egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers,
+    }
 }
 
 /// Draw one field, returning its response and rect.
@@ -223,8 +229,12 @@ fn resets_restore_defaults_and_rejected_drafts_block_picker_choices() {
 
     drafts.reject(Id::new("elsewhere"), "abc".to_owned(), "Enter a finite number.".to_owned(), true);
     let mut values = [0.5, 0.5, 0.5, 1.0];
-    let memory =
-        &mut PickerMemory { hsva: picker_color(&values), hex: "#000000".to_owned(), hex_error: None, dragging: false };
+    let memory = &mut PickerMemory {
+        hsva: picker_color(&values),
+        hex: "#000000".to_owned(),
+        hex_error: None,
+        dragging: false,
+    };
     let mut result = (true, EditPhase::Committed);
     pass(&context, vec![], |ui| {
         result = picker_contents(ui, &mut values, &[0.0; 4], &[1.0; 4], &drafts, memory);

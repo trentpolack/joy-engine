@@ -45,7 +45,14 @@ impl ToolRegistry {
         let probe = create();
         let name = probe.tool_name().to_owned();
         let extensions = probe.document_extensions().iter().map(|extension| extension.to_lowercase()).collect();
-        self.tools.insert(0, ToolRegistration { name, extensions, create: Box::new(create) });
+        self.tools.insert(
+            0,
+            ToolRegistration {
+                name,
+                extensions,
+                create: Box::new(create),
+            },
+        );
     }
 
     /// A new tool instance for documents with `extension` (without the dot).
@@ -86,7 +93,14 @@ impl ToolTab {
     /// Host `tool` for `document`; the tool starts with the next frame that has a renderer.
     pub fn new(tool: Box<dyn AuthoringTool>, document: ToolDocument) -> Self {
         let name = tool.tool_name().to_owned();
-        Self { tool, name, started: false, activation_pending: true, area: None, pending: Some(document) }
+        Self {
+            tool,
+            name,
+            started: false,
+            activation_pending: true,
+            area: None,
+            pending: Some(document),
+        }
     }
 
     /// The tool's display name.
@@ -104,7 +118,9 @@ impl ToolTab {
     pub fn prepare(&mut self, context: &mut StartContext<'_>) -> Result<(), String> {
         if !self.started {
             self.started = true;
-            self.tool.set_hosting(ToolHosting::Hosted { area: self.area.unwrap_or(egui::Rect::ZERO) });
+            self.tool.set_hosting(ToolHosting::Hosted {
+                area: self.area.unwrap_or(egui::Rect::ZERO),
+            });
             self.tool.start(context).map_err(|error| error.to_string())?;
             self.activation_pending = true;
         }
@@ -131,7 +147,9 @@ impl ToolTab {
     pub fn set_area(&mut self, area: egui::Rect) {
         if self.area != Some(area) {
             self.area = Some(area);
-            self.tool.set_hosting(ToolHosting::Hosted { area });
+            self.tool.set_hosting(ToolHosting::Hosted {
+                area,
+            });
         }
     }
 

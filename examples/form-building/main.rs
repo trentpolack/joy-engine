@@ -22,7 +22,11 @@ use joy_engine::prelude::*;
 /// Shell settings: default renderer and drag-to-orbit input.
 fn options() -> ShellOptions {
     let input = InputMap::new().action(ORBIT_ACTION, [InputBinding::MouseButton(0)]);
-    ShellOptions { title: "FORM BUILDING".into(), input, ..Default::default() }
+    ShellOptions {
+        title: "FORM BUILDING".into(),
+        input,
+        ..Default::default()
+    }
 }
 
 fn start() {

@@ -299,7 +299,14 @@ impl AssetScene {
         if self.destroyed || stage.generation != self.generation {
             return Ok(false);
         }
-        let AssetSceneStage { entities, meshes, effects, effect_cache, textures, .. } = stage;
+        let AssetSceneStage {
+            entities,
+            meshes,
+            effects,
+            effect_cache,
+            textures,
+            ..
+        } = stage;
 
         // LevelScene validates every record before changing the scene, so presenting first keeps commit atomic.
         self.level.sync_with(scene, &entities, selected, |id, _| Ok(meshes.get(id).cloned()))?;
@@ -464,7 +471,10 @@ impl AssetScene {
         rank_particle_lights(&mut lights);
         lights.truncate(limit);
         let omitted = total - lights.len();
-        ParticleLightSelection { lights, omitted }
+        ParticleLightSelection {
+            lights,
+            omitted,
+        }
     }
 
     /// Every level `light` component followed by the strongest particle lights (at most [`MAX_POINT_LIGHTS`] of them).
@@ -545,23 +555,32 @@ impl AssetScene {
         let mut level = LevelData::new(PRESENTATION_NAME);
         level.entities = entities.to_vec();
         let resolved = resolve_level_objects(&level, &mut *read)?.entities;
-        let mut read_asset =
-            |path: &str| read(path).map_err(|message| AssetSceneError::Read { path: path.to_owned(), message });
+        let mut read_asset = |path: &str| {
+            read(path).map_err(|message| AssetSceneError::Read {
+                path: path.to_owned(),
+                message,
+            })
+        };
 
         let mut meshes = HashMap::new();
         let mut effects = Vec::new();
         let mut effect_cache: HashMap<String, CompiledParticleEffect> = HashMap::new();
         let mut textures: HashMap<Arc<str>, TextureAsset> = HashMap::new();
         for entity in &resolved {
-            let component_error = |source| AssetSceneError::Component { entity: entity.id.clone(), source };
+            let component_error = |source| AssetSceneError::Component {
+                entity: entity.id.clone(),
+                source,
+            };
 
             // Validate presentation records now so commit cannot fail on them.
             if let Some(record) = entity.components.get(component_type::LIGHT) {
                 LightComponent::read(record).map_err(component_error)?;
             }
             if let Some(record) = entity.components.get(component_type::RENDER)
-                && let RenderSource::Mesh { asset, parameters } =
-                    RenderComponent::read(record).map_err(component_error)?.source
+                && let RenderSource::Mesh {
+                    asset,
+                    parameters,
+                } = RenderComponent::read(record).map_err(component_error)?.source
             {
                 let text = read_asset(&asset)?;
                 let mesh = self.library.resolve(&asset, &text, &parameters, ShadingModel::Lit).map_err(|source| {
@@ -590,8 +609,10 @@ impl AssetScene {
             let text = read_asset(&path)?;
             let definition = match effect_cache.get(&text).or_else(|| self.effect_cache.get(&text)) {
                 Some(definition) => definition.clone(),
-                None => parse_particle_effect(&text)
-                    .map_err(|source| AssetSceneError::Effect { path: path.clone(), source })?,
+                None => parse_particle_effect(&text).map_err(|source| AssetSceneError::Effect {
+                    path: path.clone(),
+                    source,
+                })?,
             };
             effect_cache.insert(text.clone(), definition.clone());
             for source in textured_sources(&definition) {
@@ -600,8 +621,10 @@ impl AssetScene {
                 }
                 let texture = match self.textures.get(&source) {
                     Ok(existing) => existing.clone(),
-                    Err(_) => ParticleTextureSet::decode(&source)
-                        .map_err(|error| AssetSceneError::Texture { path: path.clone(), source: error })?,
+                    Err(_) => ParticleTextureSet::decode(&source).map_err(|error| AssetSceneError::Texture {
+                        path: path.clone(),
+                        source: error,
+                    })?,
                 };
                 textures.insert(source, texture);
             }
@@ -614,7 +637,14 @@ impl AssetScene {
             let instance = start_effect(&entity.id, &definition, settings, key)?;
             effects.push((entity.id.clone(), StagedEffect::Created(Box::new(instance))));
         }
-        Ok(AssetSceneStage { generation, entities: resolved, meshes, effects, effect_cache, textures })
+        Ok(AssetSceneStage {
+            generation,
+            entities: resolved,
+            meshes,
+            effects,
+            effect_cache,
+            textures,
+        })
     }
 
     /// Entities that have a running effect, in entity order.
@@ -630,7 +660,10 @@ fn start_effect(
     settings: &serde_json::Map<String, Value>,
     key: String,
 ) -> Result<EffectInstance, AssetSceneError> {
-    let playback = |source| AssetSceneError::Playback { entity: entity.to_owned(), source };
+    let playback = |source| AssetSceneError::Playback {
+        entity: entity.to_owned(),
+        source,
+    };
     let seed = match settings.get("seed") {
         None => EFFECT_COMPONENT_DEFAULTS.seed,
         Some(value) => particle_seed(value.as_f64().unwrap_or(f64::NAN)).map_err(playback)?,
@@ -647,13 +680,25 @@ fn start_effect(
             }
             parameters
         }
-        Some(_) => return Err(AssetSceneError::InvalidParameters { entity: entity.to_owned() }),
+        Some(_) => {
+            return Err(AssetSceneError::InvalidParameters {
+                entity: entity.to_owned(),
+            });
+        }
     };
-    let options = ParticleEffectOptions { seed: i64::from(seed), parameters, ..Default::default() };
+    let options = ParticleEffectOptions {
+        seed: i64::from(seed),
+        parameters,
+        ..Default::default()
+    };
     let mut effect = ParticleEffect::new(definition, options).map_err(playback)?;
     effect.step().map_err(playback)?;
     let looping = settings.get("loop") == Some(&Value::Bool(true));
-    Ok(EffectInstance { effect, key, looping })
+    Ok(EffectInstance {
+        effect,
+        key,
+        looping,
+    })
 }
 
 /// The camera basis expressed in an entity's rotated frame, so attached particles stay camera-facing.

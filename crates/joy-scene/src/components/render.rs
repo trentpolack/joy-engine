@@ -102,7 +102,10 @@ impl RenderComponent {
                 Some(Value::Object(parameters)) => parameters.clone(),
                 Some(_) => return Err(ComponentError::InvalidParameters),
             };
-            RenderSource::Mesh { asset, parameters }
+            RenderSource::Mesh {
+                asset,
+                parameters,
+            }
         } else {
             match record.get("shape").and_then(Value::as_str).and_then(PrimitiveShape::parse) {
                 Some(shape @ (PrimitiveShape::Box | PrimitiveShape::Sphere)) => RenderSource::Primitive(shape),
@@ -111,7 +114,9 @@ impl RenderComponent {
         };
 
         let default_color = match source {
-            RenderSource::Mesh { .. } => RENDER_COMPONENT_DEFAULTS.mesh_tint,
+            RenderSource::Mesh {
+                ..
+            } => RENDER_COMPONENT_DEFAULTS.mesh_tint,
             _ => RENDER_COMPONENT_DEFAULTS.primitive_color,
         };
         let size = record.get("size").and_then(read_vector).unwrap_or(RENDER_COMPONENT_DEFAULTS.size);
@@ -119,7 +124,11 @@ impl RenderComponent {
             .get("color")
             .and_then(read_vector)
             .map_or(default_color, |color| LinearColor::from_rgb_array(color.to_array()));
-        Ok(Self { source, size, color })
+        Ok(Self {
+            source,
+            size,
+            color,
+        })
     }
 }
 

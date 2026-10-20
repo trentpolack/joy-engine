@@ -135,7 +135,12 @@ pub fn run<A: App>(options: ShellOptions, app: A) -> Result<(), ShellError> {
     init_logging();
     let event_loop = EventLoop::new().map_err(|error| ShellError::Window(error.to_string()))?;
     event_loop.set_control_flow(ControlFlow::Wait);
-    let shell = WindowedShell { options, app, phase: Phase::Created, result: Ok(()) };
+    let shell = WindowedShell {
+        options,
+        app,
+        phase: Phase::Created,
+        result: Ok(()),
+    };
 
     #[cfg(not(target_arch = "wasm32"))]
     {
@@ -282,14 +287,19 @@ impl<A: App> ApplicationHandler for WindowedShell<A> {
                 running.renderer.resize(size.width, size.height, display_scale(&running.window));
                 running.next_display_poll = 0.0;
             }
-            WindowEvent::ScaleFactorChanged { .. } => {
+            WindowEvent::ScaleFactorChanged {
+                ..
+            } => {
                 let size = running.window.inner_size();
                 running.renderer.resize(size.width, size.height, display_scale(&running.window));
                 running.next_display_poll = 0.0;
             }
             // A window moved to another display may have different headroom.
             WindowEvent::Moved(_) => running.next_display_poll = 0.0,
-            WindowEvent::KeyboardInput { event, .. } => {
+            WindowEvent::KeyboardInput {
+                event,
+                ..
+            } => {
                 let PhysicalKey::Code(code) = event.physical_key else {
                     return;
                 };
@@ -310,20 +320,29 @@ impl<A: App> ApplicationHandler for WindowedShell<A> {
                     running.input.handle_key(&name, pressed);
                 }
             }
-            WindowEvent::MouseInput { state, button, .. } => {
+            WindowEvent::MouseInput {
+                state,
+                button,
+                ..
+            } => {
                 let pressed = state == ElementState::Pressed;
                 if !pressed || !consumed {
                     running.input.handle_mouse_button(mouse_button_index(button), pressed);
                 }
             }
-            WindowEvent::CursorMoved { position, .. } => {
+            WindowEvent::CursorMoved {
+                position,
+                ..
+            } => {
                 let scale = running.window.scale_factor();
                 running.input.handle_pointer_move(joy_core::math::Vec2::new(
                     (position.x / scale) as f32,
                     (position.y / scale) as f32,
                 ));
             }
-            WindowEvent::CursorLeft { .. } => running.input.handle_pointer_leave(),
+            WindowEvent::CursorLeft {
+                ..
+            } => running.input.handle_pointer_leave(),
             WindowEvent::Touch(touch) => {
                 let scale = running.window.scale_factor();
                 let position =
@@ -364,7 +383,9 @@ impl<A: App> ApplicationHandler for WindowedShell<A> {
             return;
         };
         // Raw motion keeps arriving at the screen edge, so locked pointers read it for mouse look.
-        if let DeviceEvent::MouseMotion { delta } = event
+        if let DeviceEvent::MouseMotion {
+            delta,
+        } = event
             && running.pointer_lock
         {
             let scale = running.window.scale_factor();
@@ -389,7 +410,10 @@ impl<A: App> ApplicationHandler for WindowedShell<A> {
 impl<A: App> WindowedShell<A> {
     /// Create the renderer and UI for a started device, then call the app's start hook.
     fn finish_startup(&mut self, event_loop: &ActiveEventLoop, window: Arc<Window>, startup: Startup) {
-        let Startup { gpu, mut surface } = startup;
+        let Startup {
+            gpu,
+            mut surface,
+        } = startup;
         // Browser canvases can be laid out while the device starts; adopt the current size.
         let size = window.inner_size();
         surface.resize(&gpu, size.width, size.height);
@@ -401,8 +425,15 @@ impl<A: App> WindowedShell<A> {
         let egui = EguiLayer::new(&gpu, &window, surface.view_format, display);
         log::info!("{}: presenting {display}", self.options.title);
 
-        let viewport = Viewport { logical_size: renderer.logical_size(), scale_factor };
-        let mut context = StartContext { capabilities: gpu.capabilities(), renderer: &mut renderer, viewport };
+        let viewport = Viewport {
+            logical_size: renderer.logical_size(),
+            scale_factor,
+        };
+        let mut context = StartContext {
+            capabilities: gpu.capabilities(),
+            renderer: &mut renderer,
+            viewport,
+        };
         if let Err(error) = self.app.start(&mut context) {
             self.fail(event_loop, ShellError::App(error.to_string()));
             return;
@@ -487,8 +518,17 @@ impl<A: App> WindowedShell<A> {
         let lock_held = *pointer_lock && pointer_lock_held(window);
         input.set_pointer_locked(lock_held);
         input.update();
-        let viewport = Viewport { logical_size: renderer.logical_size(), scale_factor: display_scale(window) };
-        let mut frame = Frame { time, viewport, input, dev_tools, requests };
+        let viewport = Viewport {
+            logical_size: renderer.logical_size(),
+            scale_factor: display_scale(window),
+        };
+        let mut frame = Frame {
+            time,
+            viewport,
+            input,
+            dev_tools,
+            requests,
+        };
 
         // Simulation-facing phases.
         app.input(&mut frame)?;
@@ -505,11 +545,13 @@ impl<A: App> WindowedShell<A> {
             wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => return Ok(()),
             wgpu::CurrentSurfaceTexture::Validation => return Err("the presentation surface failed validation".into()),
         };
-        let view = texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor { format: Some(surface.view_format), ..Default::default() });
-        let mut encoder =
-            gpu.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("joy-engine frame") });
+        let view = texture.texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(surface.view_format),
+            ..Default::default()
+        });
+        let mut encoder = gpu.device().create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("joy-engine frame"),
+        });
 
         // Render phase, on the shell's presentation clock.
         renderer.set_presentation_time(PresentationTime {
@@ -620,7 +662,10 @@ async fn start_gpu(
         }
         surface
     };
-    Ok(Startup { gpu, surface })
+    Ok(Startup {
+        gpu,
+        surface,
+    })
 }
 
 /// Native window or browser canvas attributes.
@@ -702,7 +747,10 @@ fn clear(encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             view,
             resolve_target: None,
-            ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                store: wgpu::StoreOp::Store,
+            },
             depth_slice: None,
         })],
         ..Default::default()

@@ -27,7 +27,9 @@ pub struct Controller {
 impl Controller {
     /// Create an unpossessing controller in `world`.
     pub fn new(world: &mut EntityWorld) -> Self {
-        Self { id: world.create_controller() }
+        Self {
+            id: world.create_controller(),
+        }
     }
 
     /// This controller's possession id.

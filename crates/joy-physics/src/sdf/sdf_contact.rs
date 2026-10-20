@@ -218,7 +218,14 @@ pub(crate) fn search_contacts(
         let carried2 = pose12.transform_point(entry.position2);
         let seed = (entry.position1 + carried2) * 0.5;
         let advected = (seed - entry.position1).length();
-        search.add_point(seed, Some(CacheSeed { slot, normal: entry.normal1, advected }));
+        search.add_point(
+            seed,
+            Some(CacheSeed {
+                slot,
+                normal: entry.normal1,
+                advected,
+            }),
+        );
     }
 
     // Alg. 1, lines 12-18: stochastic samples find new contact regions and top the cache back up.
@@ -400,7 +407,10 @@ impl ContactSearch<'_> {
     /// The second shape's field at a point of the first shape's frame, with its gradient in that frame.
     fn sample2(&self, point: Vector) -> FieldSample {
         let sample = self.shape2.sample(self.pose12.inverse_transform_point(point));
-        FieldSample { distance: sample.distance, gradient: self.pose12.transform_vector(sample.gradient) }
+        FieldSample {
+            distance: sample.distance,
+            gradient: self.pose12.transform_vector(sample.gradient),
+        }
     }
 
     /// STOCHASTICSAMPLE (Sec. 3.5.2): a uniformly chosen high-curvature seed of either shape inside the domain, or a
@@ -460,9 +470,15 @@ impl PairShape<'_> {
     fn sample(&self, point: Vector) -> FieldSample {
         match self {
             Self::Sdf(data) => data.sample(point),
-            Self::Cuboid { half_extents } => box_field(point, *half_extents),
-            Self::Ball { radius } => sphere_field(point, *radius),
-            Self::HalfSpace { normal } => half_space_field(point, *normal),
+            Self::Cuboid {
+                half_extents,
+            } => box_field(point, *half_extents),
+            Self::Ball {
+                radius,
+            } => sphere_field(point, *radius),
+            Self::HalfSpace {
+                normal,
+            } => half_space_field(point, *normal),
         }
     }
 
@@ -478,7 +494,15 @@ impl PairShape<'_> {
     fn lipschitz_bound(&self) -> Real {
         match self {
             Self::Sdf(data) => data.lipschitz_bound(),
-            Self::Cuboid { .. } | Self::Ball { .. } | Self::HalfSpace { .. } => 1.0,
+            Self::Cuboid {
+                ..
+            }
+            | Self::Ball {
+                ..
+            }
+            | Self::HalfSpace {
+                ..
+            } => 1.0,
         }
     }
 
@@ -499,9 +523,15 @@ impl PairShape<'_> {
     fn local_bounds(&self) -> Option<Aabb> {
         match self {
             Self::Sdf(data) => Some(data.bounds),
-            Self::Cuboid { half_extents } => Some(Aabb::new(-*half_extents, *half_extents)),
-            Self::Ball { radius } => Some(Aabb::new(Vector::splat(-*radius), Vector::splat(*radius))),
-            Self::HalfSpace { .. } => None,
+            Self::Cuboid {
+                half_extents,
+            } => Some(Aabb::new(-*half_extents, *half_extents)),
+            Self::Ball {
+                radius,
+            } => Some(Aabb::new(Vector::splat(-*radius), Vector::splat(*radius))),
+            Self::HalfSpace {
+                ..
+            } => None,
         }
     }
 
@@ -513,7 +543,15 @@ impl PairShape<'_> {
     fn convex(&self) -> bool {
         match self {
             Self::Sdf(data) => data.convex,
-            Self::Cuboid { .. } | Self::Ball { .. } | Self::HalfSpace { .. } => true,
+            Self::Cuboid {
+                ..
+            }
+            | Self::Ball {
+                ..
+            }
+            | Self::HalfSpace {
+                ..
+            } => true,
         }
     }
 
@@ -521,7 +559,9 @@ impl PairShape<'_> {
     fn for_each_seed(&self, mut visit: impl FnMut(Vector)) {
         match self {
             Self::Sdf(data) => data.seeds.iter().for_each(|seed| visit(*seed)),
-            Self::Cuboid { half_extents } => {
+            Self::Cuboid {
+                half_extents,
+            } => {
                 for corner in 0..8 {
                     let signs = Vector::new(
                         if corner & 1 == 0 { -1.0 } else { 1.0 },
@@ -531,7 +571,12 @@ impl PairShape<'_> {
                     visit(*half_extents * signs);
                 }
             }
-            Self::Ball { .. } | Self::HalfSpace { .. } => {}
+            Self::Ball {
+                ..
+            }
+            | Self::HalfSpace {
+                ..
+            } => {}
         }
     }
 }
@@ -554,8 +599,18 @@ fn search_domain(shape1: &PairShape<'_>, shape2: &PairShape<'_>, pose12: &Pose, 
 
     // A half-space keeps the points with `normal · x <= offset`; the margin lets near contacts in.
     let plane = match (shape1, shape2) {
-        (PairShape::HalfSpace { normal }, _) => Some((*normal, margin)),
-        (_, PairShape::HalfSpace { normal }) => {
+        (
+            PairShape::HalfSpace {
+                normal,
+            },
+            _,
+        ) => Some((*normal, margin)),
+        (
+            _,
+            PairShape::HalfSpace {
+                normal,
+            },
+        ) => {
             let normal = pose12.transform_vector(*normal);
             Some((normal, normal.dot(pose12.translation) + margin))
         }
@@ -681,5 +736,9 @@ fn nelder_mead(
     }
 
     let best = (1..4).fold(0, |best, i| if values[i] < values[best] { i } else { best });
-    Minimum { point: vertices[best], iterations, evaluations }
+    Minimum {
+        point: vertices[best],
+        iterations,
+        evaluations,
+    }
 }

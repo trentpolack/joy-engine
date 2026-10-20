@@ -314,11 +314,19 @@ impl LevelViewport {
         for handle in [GizmoHandle::X, GizmoHandle::Y, GizmoHandle::Z] {
             let axis = handle.axis().unwrap_or(Vec3::X);
             if let Some(end) = self.project(position + (axis * length)) {
-                lines.push(GizmoLine { handle, start, end });
+                lines.push(GizmoLine {
+                    handle,
+                    start,
+                    end,
+                });
             }
         }
         if let Some(end) = self.project(position + (Vec3::new(1.0, 0.0, 1.0) * length * 0.3)) {
-            lines.push(GizmoLine { handle: GizmoHandle::Plane, start, end });
+            lines.push(GizmoLine {
+                handle: GizmoHandle::Plane,
+                start,
+                end,
+            });
         }
         lines
     }
@@ -351,7 +359,13 @@ impl LevelViewport {
         let Some(anchor) = self.drag_anchor(handle, position, point) else {
             return false;
         };
-        self.drag = Some(GizmoDrag { handle, entity, start_position: position, anchor, preview: position });
+        self.drag = Some(GizmoDrag {
+            handle,
+            entity,
+            start_position: position,
+            anchor,
+            preview: position,
+        });
         true
     }
 

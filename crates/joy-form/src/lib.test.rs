@@ -9,7 +9,14 @@ use serde_json::json;
 #[test]
 fn project_name_tokens_locate_the_quoted_name() {
     let tokens = project_name_tokens("# x\nproject meta(info=\"A\", name=\"Old\")").unwrap();
-    assert_eq!(tokens, [SourceToken { text: "\"Old\"".into(), line: 2, column: 29 }]);
+    assert_eq!(
+        tokens,
+        [SourceToken {
+            text: "\"Old\"".into(),
+            line: 2,
+            column: 29
+        }]
+    );
     assert!(project_name_tokens("point(").is_err());
     assert!(project_name_tokens("point(0,0,0)").unwrap().is_empty());
 }

@@ -86,7 +86,11 @@ fn vector_properties_round_trip_and_expose_xyz_script_values() {
     let mut asset = copy_example(0);
     asset.parameters.insert(
         "direction".to_owned(),
-        ParticleParameter::Vector3 { value: [1.0, 2.0, 3.0], min: [-10.0; 3], max: [10.0; 3] },
+        ParticleParameter::Vector3 {
+            value: [1.0, 2.0, 3.0],
+            min: [-10.0; 3],
+            max: [10.0; 3],
+        },
     );
     asset.emitters[0].spawn =
         "vx = directionX; vy = directionY; vz = directionZ; drag = 0; ax = 0; ay = 0; az = 0;".to_owned();
@@ -113,7 +117,11 @@ fn property_snapshots_cover_values_but_never_scripts_or_texture_bytes() {
     let before = property_snapshot(&asset);
     asset.emitters[0].spawn.push_str("\n// a newer script");
     assert_eq!(property_snapshot(&asset), before, "scripts are outside property undo");
-    let ParticleParameter::Scalar { value, .. } = asset.parameters.values_mut().next().unwrap() else {
+    let ParticleParameter::Scalar {
+        value,
+        ..
+    } = asset.parameters.values_mut().next().unwrap()
+    else {
         panic!("Ember Impact starts with the scalar power");
     };
     *value += 0.25;

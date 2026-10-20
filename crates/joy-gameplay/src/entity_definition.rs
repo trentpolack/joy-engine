@@ -72,7 +72,11 @@ pub struct EntityTransform {
 
 impl EntityTransform {
     /// No translation, no rotation, and unit scale.
-    pub const IDENTITY: Self = Self { position: Vec3::ZERO, rotation: Vec3::ZERO, scale: Vec3::ONE };
+    pub const IDENTITY: Self = Self {
+        position: Vec3::ZERO,
+        rotation: Vec3::ZERO,
+        scale: Vec3::ONE,
+    };
 
     /// Whether every component is finite.
     pub fn is_finite(&self) -> bool {
@@ -113,7 +117,11 @@ impl Default for EntityTransform {
 
 impl From<Transform> for EntityTransform {
     fn from(transform: Transform) -> Self {
-        Self { position: transform.position, rotation: transform.rotation, scale: transform.scale }
+        Self {
+            position: transform.position,
+            rotation: transform.rotation,
+            scale: transform.scale,
+        }
     }
 }
 
@@ -251,7 +259,16 @@ impl EntityDefinition {
             Some(value) => EntityTransform::from_json(value)?,
         };
 
-        Ok(Self { id, name, kind, tags, transform, components, template, overrides })
+        Ok(Self {
+            id,
+            name,
+            kind,
+            tags,
+            transform,
+            components,
+            template,
+            overrides,
+        })
     }
 
     /// Serialize in the established document key order. Overrides are written (as `{}` if absent) whenever a template

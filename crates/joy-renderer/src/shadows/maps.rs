@@ -158,7 +158,11 @@ impl CascadeArray {
             dimension: Some(wgpu::TextureViewDimension::D2Array),
             ..Default::default()
         });
-        Self { layers, sampled, _texture: texture }
+        Self {
+            layers,
+            sampled,
+            _texture: texture,
+        }
     }
 }
 

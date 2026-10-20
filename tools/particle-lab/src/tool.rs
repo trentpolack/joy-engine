@@ -115,7 +115,10 @@ impl App for ParticleLabTool {
             .region()
             .filter(|region| region.size.x > 1.0 && region.size.y > 1.0)
             .unwrap_or_else(|| PreviewRegion::full(size));
-        let region = PreviewRegion { viewport_size: size, ..region };
+        let region = PreviewRegion {
+            viewport_size: size,
+            ..region
+        };
         self.lab.frame_pending_effect(region.size.max(Vec2::ONE));
         // The viewport borrows the session's effect read-only while drawing.
         let (viewport, effect) = self.lab.viewport_and_effect();
@@ -131,7 +134,9 @@ impl App for ParticleLabTool {
         }
         let area = match self.hosting {
             ToolHosting::Standalone => context.content_rect(),
-            ToolHosting::Hosted { area } => area,
+            ToolHosting::Hosted {
+                area,
+            } => area,
         };
         self.interface.show(context, &mut self.lab, area);
         if let (Some(message), Some(region)) = (&self.render_error, self.interface.region()) {

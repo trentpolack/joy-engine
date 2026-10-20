@@ -28,12 +28,18 @@ pub struct DataRef {
 }
 impl DataRef {
     pub fn new(value: Json) -> Self {
-        Self { root: Rc::new(value), path: Vec::new() }
+        Self {
+            root: Rc::new(value),
+            path: Vec::new(),
+        }
     }
     pub fn child(&self, name: &str) -> Self {
         let mut path = self.path.clone();
         path.push(name.into());
-        Self { root: self.root.clone(), path }
+        Self {
+            root: self.root.clone(),
+            path,
+        }
     }
 }
 impl std::ops::Deref for DataRef {

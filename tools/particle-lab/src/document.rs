@@ -171,9 +171,15 @@ impl ParameterKind {
     /// The kind of `parameter`.
     pub fn of(parameter: &ParticleParameter) -> Self {
         match parameter {
-            ParticleParameter::Scalar { .. } => Self::Scalar,
-            ParticleParameter::Vector3 { .. } => Self::Vector,
-            ParticleParameter::Color { .. } => Self::Color,
+            ParticleParameter::Scalar {
+                ..
+            } => Self::Scalar,
+            ParticleParameter::Vector3 {
+                ..
+            } => Self::Vector,
+            ParticleParameter::Color {
+                ..
+            } => Self::Color,
         }
     }
 
@@ -198,9 +204,21 @@ impl ParameterKind {
     /// The template a parameter of this kind starts from.
     pub fn template(self) -> ParticleParameter {
         match self {
-            Self::Scalar => ParticleParameter::Scalar { value: 1.0, min: 0.0, max: 2.0 },
-            Self::Vector => ParticleParameter::Vector3 { value: [1.0; 3], min: [0.0; 3], max: [2.0; 3] },
-            Self::Color => ParticleParameter::Color { value: [1.0; 4], min: [0.0; 4], max: [1.0; 4] },
+            Self::Scalar => ParticleParameter::Scalar {
+                value: 1.0,
+                min: 0.0,
+                max: 2.0,
+            },
+            Self::Vector => ParticleParameter::Vector3 {
+                value: [1.0; 3],
+                min: [0.0; 3],
+                max: [2.0; 3],
+            },
+            Self::Color => ParticleParameter::Color {
+                value: [1.0; 4],
+                min: [0.0; 4],
+                max: [1.0; 4],
+            },
         }
     }
 }
@@ -208,11 +226,21 @@ impl ParameterKind {
 /// Mutable views of a parameter's value, minimum, and maximum components.
 pub fn parameter_components(parameter: &mut ParticleParameter) -> (&mut [f64], &mut [f64], &mut [f64]) {
     match parameter {
-        ParticleParameter::Scalar { value, min, max } => {
-            (std::slice::from_mut(value), std::slice::from_mut(min), std::slice::from_mut(max))
-        }
-        ParticleParameter::Vector3 { value, min, max } => (value, min, max),
-        ParticleParameter::Color { value, min, max } => (value, min, max),
+        ParticleParameter::Scalar {
+            value,
+            min,
+            max,
+        } => (std::slice::from_mut(value), std::slice::from_mut(min), std::slice::from_mut(max)),
+        ParticleParameter::Vector3 {
+            value,
+            min,
+            max,
+        } => (value, min, max),
+        ParticleParameter::Color {
+            value,
+            min,
+            max,
+        } => (value, min, max),
     }
 }
 
@@ -220,8 +248,12 @@ pub fn parameter_components(parameter: &mut ParticleParameter) -> (&mut [f64], &
 /// color alpha stays in 0–1; other parameters stay within ±1e6.
 pub fn bound_limits(parameter: &ParticleParameter, component: usize) -> (f64, f64) {
     match parameter {
-        ParticleParameter::Color { .. } if component == COLOR_ALPHA_COMPONENT => (0.0, 1.0),
-        ParticleParameter::Color { .. } => (0.0, MAXIMUM_PARAMETER_MAGNITUDE),
+        ParticleParameter::Color {
+            ..
+        } if component == COLOR_ALPHA_COMPONENT => (0.0, 1.0),
+        ParticleParameter::Color {
+            ..
+        } => (0.0, MAXIMUM_PARAMETER_MAGNITUDE),
         _ => (-MAXIMUM_PARAMETER_MAGNITUDE, MAXIMUM_PARAMETER_MAGNITUDE),
     }
 }
@@ -418,12 +450,23 @@ pub fn set_renderer(emitter: &mut ParticleEmitterAsset, renderer: ParticleRender
 
 /// A texture record for `source` with a single frame at 12 frames per second, looping.
 pub fn default_texture(source: &str) -> ParticleTexture {
-    ParticleTexture { source: source.into(), columns: 1, rows: 1, frames: 1, fps: 12.0, looping: true }
+    ParticleTexture {
+        source: source.into(),
+        columns: 1,
+        rows: 1,
+        frames: 1,
+        fps: 12.0,
+        looping: true,
+    }
 }
 
 /// Turn particle light emission on (intensity 2, range 220, no shadows) or off.
 pub fn set_light_enabled(emitter: &mut ParticleEmitterAsset, enabled: bool) {
-    emitter.light = enabled.then_some(ParticleLight { intensity: 2.0, range: 220.0, casts_shadow: false });
+    emitter.light = enabled.then_some(ParticleLight {
+        intensity: 2.0,
+        range: 220.0,
+        casts_shadow: false,
+    });
 }
 
 /// Which child link an edit changes.
@@ -441,17 +484,27 @@ pub fn set_child_target(emitter: &mut ParticleEmitterAsset, link: ChildLink, tar
         (ChildLink::Trail, None) => emitter.trail = None,
         (ChildLink::Death, None) => emitter.death = None,
         (ChildLink::Trail, Some(target)) => {
-            emitter.trail = Some(ParticleTrail { emitter: target.to_owned(), count: 1, interval: 0.1 });
+            emitter.trail = Some(ParticleTrail {
+                emitter: target.to_owned(),
+                count: 1,
+                interval: 0.1,
+            });
         }
         (ChildLink::Death, Some(target)) => {
-            emitter.death = Some(ParticleChild { emitter: target.to_owned(), count: 1 })
+            emitter.death = Some(ParticleChild {
+                emitter: target.to_owned(),
+                count: 1,
+            })
         }
     }
 }
 
 /// Append a burst of ten particles at time zero.
 pub fn add_burst(emitter: &mut ParticleEmitterAsset) {
-    emitter.bursts.push(ParticleBurst { time: 0.0, count: 10 });
+    emitter.bursts.push(ParticleBurst {
+        time: 0.0,
+        count: 10,
+    });
 }
 
 /// The preview timeline length in seconds. Child chains and scripts can extend well beyond a root emitter's own
@@ -533,15 +586,27 @@ fn lenient_parameter(value: &Value) -> Option<ParticleParameter> {
     match record.get("type").and_then(Value::as_str) {
         Some("vector3") => {
             let array = |key: &str| numbers(key, 3).map(|values| [values[0], values[1], values[2]]);
-            Some(ParticleParameter::Vector3 { value: array("value")?, min: array("min")?, max: array("max")? })
+            Some(ParticleParameter::Vector3 {
+                value: array("value")?,
+                min: array("min")?,
+                max: array("max")?,
+            })
         }
         Some("color") => {
             let array = |key: &str| numbers(key, 4).map(|values| [values[0], values[1], values[2], values[3]]);
-            Some(ParticleParameter::Color { value: array("value")?, min: array("min")?, max: array("max")? })
+            Some(ParticleParameter::Color {
+                value: array("value")?,
+                min: array("min")?,
+                max: array("max")?,
+            })
         }
         _ => {
             let number = |key: &str| record.get(key).and_then(Value::as_f64);
-            Some(ParticleParameter::Scalar { value: number("value")?, min: number("min")?, max: number("max")? })
+            Some(ParticleParameter::Scalar {
+                value: number("value")?,
+                min: number("min")?,
+                max: number("max")?,
+            })
         }
     }
 }
@@ -590,7 +655,10 @@ fn lenient_emitter(record: &Map<String, Value>, index: usize) -> ParticleEmitter
         })
     });
     let death = record.get("death").and_then(Value::as_object).and_then(|death| {
-        Some(ParticleChild { emitter: death.get("emitter")?.as_str()?.to_owned(), count: count(death.get("count")) })
+        Some(ParticleChild {
+            emitter: death.get("emitter")?.as_str()?.to_owned(),
+            count: count(death.get("count")),
+        })
     });
     let mut emitter = ParticleEmitterAsset {
         id: text("id", &template.id),

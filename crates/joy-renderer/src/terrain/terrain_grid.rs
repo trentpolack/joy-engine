@@ -52,8 +52,15 @@ pub fn create_terrain_grid(cells: u32) -> TerrainGrid {
                 indices.extend_from_slice(&[a, d, b, a, c, d]);
             }
         }
-        ranges.push(TerrainIndexRange { first, count: indices.len() as u32 - first });
+        ranges.push(TerrainIndexRange {
+            first,
+            count: indices.len() as u32 - first,
+        });
         stride *= 2;
     }
-    TerrainGrid { positions, indices, ranges }
+    TerrainGrid {
+        positions,
+        indices,
+        ranges,
+    }
 }

@@ -109,7 +109,12 @@ pub struct WindOptions {
 
 impl Default for WindOptions {
     fn default() -> Self {
-        Self { direction_radians: 0.0, speed: 4.0, gust_strength: 0.25, gust_period_seconds: 8.0 }
+        Self {
+            direction_radians: 0.0,
+            speed: 4.0,
+            gust_strength: 0.25,
+            gust_period_seconds: 8.0,
+        }
     }
 }
 
@@ -284,7 +289,11 @@ impl EnvironmentSystem {
     /// Fails with the first out-of-range option, checked in [`EnvironmentOptions::validate`] order.
     pub fn new(options: EnvironmentOptions) -> Result<Self, EnvironmentError> {
         options.validate()?;
-        Ok(Self { options, elapsed_seconds: 0.0, time_of_day: wrap_day(options.time_of_day) })
+        Ok(Self {
+            options,
+            elapsed_seconds: 0.0,
+            time_of_day: wrap_day(options.time_of_day),
+        })
     }
 
     /// Advance the clock by real elapsed seconds and return the new frame.
@@ -418,7 +427,11 @@ fn calculate_wind(elapsed_seconds: f64, options: &WindOptions) -> WindFrame {
     let speed = 0.0_f64.max(options.speed * (1.0 + (gust * options.gust_strength)));
     let direction = [deterministic::sin(options.direction_radians), 0.0, deterministic::cos(options.direction_radians)];
     let velocity = direction.map(|value| value * speed);
-    WindFrame { direction: to_vec3(direction), velocity: to_vec3(velocity), speed: speed as f32 }
+    WindFrame {
+        direction: to_vec3(direction),
+        velocity: to_vec3(velocity),
+        speed: speed as f32,
+    }
 }
 
 /// Build one light record, narrowing the `f64` math to stored `f32` values.
@@ -491,7 +504,11 @@ fn to_linear_color(value: [f64; 3]) -> LinearColor {
 /// Reject non-finite or out-of-range values with the stable range diagnostic.
 fn check_range(value: f64, minimum: f64, maximum: f64, name: &'static str) -> Result<(), EnvironmentError> {
     if !value.is_finite() || value < minimum || value > maximum {
-        return Err(EnvironmentError::OutOfRange { name, minimum, maximum });
+        return Err(EnvironmentError::OutOfRange {
+            name,
+            minimum,
+            maximum,
+        });
     }
     Ok(())
 }

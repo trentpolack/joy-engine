@@ -96,7 +96,11 @@ impl Target {
         }
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
-            size: wgpu::Extent3d { width: width.max(1), height: height.max(1), depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: width.max(1),
+                height: height.max(1),
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -307,22 +311,11 @@ impl PostProcessor {
     ) -> Self {
         let bloom_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("post bloom"),
-            entries: &[
-                uniform_entry(0),
-                texture_entry(1),
-                sampler_entry(2),
-                texture_entry(3)
-            ],
+            entries: &[uniform_entry(0), texture_entry(1), sampler_entry(2), texture_entry(3)],
         });
         let resolve_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("post resolve"),
-            entries: &[
-                uniform_entry(0),
-                texture_entry(1),
-                texture_entry(2),
-                sampler_entry(3),
-                texture_entry(4)
-            ],
+            entries: &[uniform_entry(0), texture_entry(1), texture_entry(2), sampler_entry(3), texture_entry(4)],
         });
 
         let replace = wgpu::BlendState::REPLACE;
@@ -599,41 +592,22 @@ impl PostProcessor {
         // Untone-mapped light shows as it is; only the curves that end at SDR white extend into the headroom.
         let native_peak = matches!(config.tone_mapper, ToneMapper::None);
         let resolve = ResolveUniforms {
-            display: [
-                config.exposure,
-                tone_mapper,
-                look,
-                bloom_strength
-            ],
+            display: [config.exposure, tone_mapper, look, bloom_strength],
             filmic: [
                 config.filmic_contrast,
                 config.filmic_linear_start,
                 config.filmic_linear_length,
                 config.filmic_toe,
             ],
-            vignette: [
-                config.vignette_strength,
-                config.vignette_radius.min(0.999),
-                output_width / output_height, 0.0
-            ],
+            vignette: [config.vignette_strength, config.vignette_radius.min(0.999), output_width / output_height, 0.0],
             output: [
                 self.display.effective_headroom(),
                 if graph.key.upscales() { 1.0 } else { 0.0 },
                 if linear_target { 1.0 } else { 0.0 },
                 self.display.effective_sdr_white_level(),
             ],
-            scene: [
-                scene_width,
-                scene_height,
-                1.0 / scene_width,
-                1.0 / scene_height
-            ],
-            encoding: [
-                dither_amplitude(self.output_format),
-                if native_peak { 1.0 } else { 0.0 },
-                0.0,
-                0.0
-            ],
+            scene: [scene_width, scene_height, 1.0 / scene_width, 1.0 / scene_height],
+            encoding: [dither_amplitude(self.output_format), if native_peak { 1.0 } else { 0.0 }, 0.0, 0.0],
         };
         queue.write_buffer(&graph.resolve.uniforms, 0, bytemuck::bytes_of(&resolve));
     }
@@ -671,7 +645,10 @@ impl PostProcessor {
                 },
             ],
         });
-        Pass { bind_group, uniforms }
+        Pass {
+            bind_group,
+            uniforms,
+        }
     }
 
     fn resolve_pass(&self, device: &wgpu::Device, scene: &wgpu::TextureView, bloom: &wgpu::TextureView) -> Pass {
@@ -702,7 +679,10 @@ impl PostProcessor {
                 },
             ],
         });
-        Pass { bind_group, uniforms }
+        Pass {
+            bind_group,
+            uniforms,
+        }
     }
 }
 

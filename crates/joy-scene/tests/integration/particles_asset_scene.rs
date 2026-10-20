@@ -102,7 +102,11 @@ fn asset_scene_matches_the_recorded_presentation() {
             recorded["camera"][name].as_array().unwrap().iter().map(|value| value.as_f64().unwrap()).collect();
         [values[0], values[1], values[2]]
     };
-    let camera = ParticleCameraBasis { right: axis("right"), up: axis("up"), backward: axis("backward") };
+    let camera = ParticleCameraBasis {
+        right: axis("right"),
+        up: axis("up"),
+        backward: axis("backward"),
+    };
 
     // Frames replay their recorded durations; effects, the reported error, and particle geometry are produced.
     let mut scene = RenderScene::new();

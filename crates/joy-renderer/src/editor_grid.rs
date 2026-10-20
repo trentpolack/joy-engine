@@ -58,7 +58,13 @@ impl EditorGrid {
 
     /// Geometry for `view`. Invalid views fail without replacing the cached frame.
     pub fn frame(&mut self, view: &EditorGridView) -> Result<&EditorGridFrame, RenderError> {
-        let EditorGridView { target, backward, distance, viewport_height_pixels, height } = *view;
+        let EditorGridView {
+            target,
+            backward,
+            distance,
+            viewport_height_pixels,
+            height,
+        } = *view;
         let finite = |vector: [f64; 3]| vector.iter().all(|value| value.is_finite());
         if !distance.is_finite()
             || distance <= 0.0
@@ -129,7 +135,10 @@ impl EditorGrid {
             }
         }
         self.key = Some(key);
-        self.cached = EditorGridFrame { triangles, spacing };
+        self.cached = EditorGridFrame {
+            triangles,
+            spacing,
+        };
         Ok(&self.cached)
     }
 }
@@ -166,7 +175,10 @@ fn append_line(
     let corners = [corner(start, -1.0)?, corner(start, 1.0)?, corner(end, 1.0)?, corner(end, -1.0)?];
     let color = [color[0] as f32, color[1] as f32, color[2] as f32, alpha as f32];
     for index in [0, 1, 2, 0, 2, 3] {
-        out.push(ColorVertex { position: corners[index], color });
+        out.push(ColorVertex {
+            position: corners[index],
+            color,
+        });
     }
     Ok(())
 }

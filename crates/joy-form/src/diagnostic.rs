@@ -26,12 +26,20 @@ pub struct Diagnostic {
 impl Diagnostic {
     /// Create a diagnostic without a meaningful source position.
     pub(crate) fn unlocated(message: impl Into<String>) -> Self {
-        Self { message: message.into(), line: 1, column: 1 }
+        Self {
+            message: message.into(),
+            line: 1,
+            column: 1,
+        }
     }
 
     /// Create a diagnostic at a token's start.
     pub(crate) fn at(message: impl Into<String>, token: &Token) -> Self {
-        Self { message: message.into(), line: token.line, column: token.column }
+        Self {
+            message: message.into(),
+            line: token.line,
+            column: token.column,
+        }
     }
 }
 

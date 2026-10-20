@@ -41,7 +41,10 @@ fn run(lab: &mut ParticleLab, seconds: f64) {
 
 fn power(lab: &mut ParticleLab) -> &mut f64 {
     match lab.asset_mut().parameters.get_mut("power") {
-        Some(ParticleParameter::Scalar { value, .. }) => value,
+        Some(ParticleParameter::Scalar {
+            value,
+            ..
+        }) => value,
         _ => panic!("Ember Impact has a scalar power"),
     }
 }
@@ -232,13 +235,19 @@ fn the_hosting_contract_opens_saves_and_tracks_changes() {
     assert_eq!(tool.tool_name(), "PARTICLE LAB");
     assert_eq!(tool.document_extensions(), ["joyfx"]);
     let before = tool.lab().asset().clone();
-    let refused =
-        tool.open_document(ToolDocument { name: "broken.joyfx".to_owned(), contents: "{\"version\": 2}".to_owned() });
+    let refused = tool.open_document(ToolDocument {
+        name: "broken.joyfx".to_owned(),
+        contents: "{\"version\": 2}".to_owned(),
+    });
     assert!(refused.is_err());
     assert_eq!(tool.lab().asset(), &before, "a refused document leaves the current one");
 
     let solar = write_asset(&copy_example(1));
-    tool.open_document(ToolDocument { name: "solar.joyfx".to_owned(), contents: solar.clone() }).unwrap();
+    tool.open_document(ToolDocument {
+        name: "solar.joyfx".to_owned(),
+        contents: solar.clone(),
+    })
+    .unwrap();
     assert_eq!(tool.lab().asset().name, "Solar Swirl");
     assert!(!tool.has_unsaved_changes());
     tool.lab_mut().asset_mut().name = "Solar Swirl Two".to_owned();

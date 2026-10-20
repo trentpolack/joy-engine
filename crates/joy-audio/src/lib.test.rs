@@ -6,7 +6,14 @@
 use super::*;
 
 fn voices(sounds: &[usize]) -> Vec<VoiceRecord> {
-    sounds.iter().enumerate().map(|(id, sound)| VoiceRecord { id: id as u64, sound: *sound }).collect()
+    sounds
+        .iter()
+        .enumerate()
+        .map(|(id, sound)| VoiceRecord {
+            id: id as u64,
+            sound: *sound,
+        })
+        .collect()
 }
 
 #[test]
@@ -24,8 +31,20 @@ fn stealing_retires_the_oldest_matching_voice_then_the_oldest_voice() {
 
 #[test]
 fn invalid_definitions_are_reported_before_any_output_opens() {
-    let silence = || SoundDefinition::pcm(PcmSound { sample_rate: 8_000, channels: 1, samples: vec![0.0; 8] });
-    let error = AudioBank::new([("blip", silence())], AudioBankOptions { maximum_voices: 0 }).unwrap_err();
+    let silence = || {
+        SoundDefinition::pcm(PcmSound {
+            sample_rate: 8_000,
+            channels: 1,
+            samples: vec![0.0; 8],
+        })
+    };
+    let error = AudioBank::new(
+        [("blip", silence())],
+        AudioBankOptions {
+            maximum_voices: 0,
+        },
+    )
+    .unwrap_err();
     assert_eq!(error, AudioError::InvalidVoiceLimit);
     let error = AudioBank::new([("blip", silence().with_maximum_voices(0))], AudioBankOptions::default());
     assert_eq!(error.unwrap_err(), AudioError::InvalidVoiceLimit);
@@ -38,7 +57,11 @@ fn invalid_definitions_are_reported_before_any_output_opens() {
 
 #[test]
 fn master_volume_clamps_and_ignores_non_finite_values() {
-    let tone = PcmSound { sample_rate: 22_050, channels: 1, samples: vec![0.25; 2_205] };
+    let tone = PcmSound {
+        sample_rate: 22_050,
+        channels: 1,
+        samples: vec![0.25; 2_205],
+    };
     let mut bank = AudioBank::new([("tone", SoundDefinition::pcm(tone))], AudioBankOptions::default()).unwrap();
     assert_eq!(bank.master_volume(), 1.0);
     bank.set_master_volume(0.4);
@@ -53,7 +76,11 @@ fn master_volume_clamps_and_ignores_non_finite_values() {
 
 #[test]
 fn unknown_or_destroyed_sounds_do_not_play() {
-    let tone = PcmSound { sample_rate: 22_050, channels: 1, samples: vec![0.25; 2_205] };
+    let tone = PcmSound {
+        sample_rate: 22_050,
+        channels: 1,
+        samples: vec![0.25; 2_205],
+    };
     let mut bank = AudioBank::new([("tone", SoundDefinition::pcm(tone))], AudioBankOptions::default()).unwrap();
     assert!(bank.contains("tone"));
     assert!(!bank.play("missing"));

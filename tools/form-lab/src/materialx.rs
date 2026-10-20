@@ -371,7 +371,10 @@ mod xml {
 
     /// Parse a document and return its root element.
     pub fn parse(text: &str) -> Result<Element, ()> {
-        let mut reader = Reader { text: text.strip_prefix('\u{feff}').unwrap_or(text), position: 0 };
+        let mut reader = Reader {
+            text: text.strip_prefix('\u{feff}').unwrap_or(text),
+            position: 0,
+        };
         if reader.rest().starts_with("<?xml") {
             reader.instruction()?;
         }
@@ -478,7 +481,11 @@ mod xml {
                 let separated = self.skip_whitespace();
                 if self.rest().starts_with("/>") {
                     self.position += 2;
-                    return Ok(Element { name, attributes, children: Vec::new() });
+                    return Ok(Element {
+                        name,
+                        attributes,
+                        children: Vec::new(),
+                    });
                 }
                 if self.rest().starts_with('>') {
                     self.position += 1;
@@ -519,7 +526,11 @@ mod xml {
                     if closing != name {
                         return Err(());
                     }
-                    return Ok(Element { name, attributes, children });
+                    return Ok(Element {
+                        name,
+                        attributes,
+                        children,
+                    });
                 }
                 if rest.starts_with("<!--") {
                     self.comment()?;

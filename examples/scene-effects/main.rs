@@ -24,7 +24,12 @@ use joy_engine::prelude::*;
 /// Shell settings: the lab's display baseline, effects created off, and drag-to-orbit input.
 fn options() -> ShellOptions {
     let input = InputMap::new().action(ORBIT_ACTION, [InputBinding::MouseButton(0)]);
-    ShellOptions { title: "SCENE EFFECTS".into(), renderer: config::renderer_options(), input, ..Default::default() }
+    ShellOptions {
+        title: "SCENE EFFECTS".into(),
+        renderer: config::renderer_options(),
+        input,
+        ..Default::default()
+    }
 }
 
 fn start() {

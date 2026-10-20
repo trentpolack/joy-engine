@@ -141,7 +141,9 @@ impl PostProcessComponent {
         };
         let shape = if shape == SPHERE_SHAPE {
             let radius = number(record, "radius", defaults.radius, |value| value > 0.0, "must be positive")?;
-            PostProcessShape::Sphere { radius }
+            PostProcessShape::Sphere {
+                radius,
+            }
         } else {
             let half_extents = match record.get("halfExtents") {
                 None => defaults.half_extents,
@@ -152,14 +154,24 @@ impl PostProcessComponent {
                     },
                 )?,
             };
-            PostProcessShape::Box { half_extents }
+            PostProcessShape::Box {
+                half_extents,
+            }
         };
 
         let mut overrides = PostProcessOverrides::new();
         for (key, value) in record.iter().filter(|(key, _)| !VOLUME_FIELDS.contains(&key.as_str())) {
             overrides.set(key, value.clone())?;
         }
-        Ok(Self { enabled, unbounded, priority, weight, blend_distance, shape, overrides })
+        Ok(Self {
+            enabled,
+            unbounded,
+            priority,
+            weight,
+            blend_distance,
+            shape,
+            overrides,
+        })
     }
 }
 
@@ -280,7 +292,10 @@ fn setting_field(control: &PostProcessControl) -> ComponentFieldSchema {
 
 /// Activate a field only for one volume shape.
 fn shape_condition(shape: &str) -> ComponentFieldCondition {
-    ComponentFieldCondition { field: "shape".to_owned(), equals: vec![shape.to_owned()] }
+    ComponentFieldCondition {
+        field: "shape".to_owned(),
+        equals: vec![shape.to_owned()],
+    }
 }
 
 /// An optional boolean volume field.
@@ -288,7 +303,10 @@ fn boolean(record: &JsonRecord, field: &'static str, fallback: bool) -> Result<b
     match record.get(field) {
         None => Ok(fallback),
         Some(Value::Bool(value)) => Ok(*value),
-        Some(_) => Err(ComponentError::InvalidPostProcessField { field, requirement: "must be true or false" }),
+        Some(_) => Err(ComponentError::InvalidPostProcessField {
+            field,
+            requirement: "must be true or false",
+        }),
     }
 }
 
@@ -303,9 +321,10 @@ fn number(
     let Some(value) = record.get(field) else {
         return Ok(fallback);
     };
-    value
-        .as_f64()
-        .map(|value| value as f32)
-        .filter(|value| value.is_finite() && valid(*value))
-        .ok_or(ComponentError::InvalidPostProcessField { field, requirement })
+    value.as_f64().map(|value| value as f32).filter(|value| value.is_finite() && valid(*value)).ok_or(
+        ComponentError::InvalidPostProcessField {
+            field,
+            requirement,
+        },
+    )
 }

@@ -57,7 +57,10 @@ pub fn locate_workspace(
         if !root.is_dir() {
             return Err(format!("The hosting workspace {} is not a folder.", root.display()));
         }
-        return Ok(HostingWorkspace { root: std::fs::canonicalize(&root).unwrap_or(root), source });
+        return Ok(HostingWorkspace {
+            root: std::fs::canonicalize(&root).unwrap_or(root),
+            source,
+        });
     }
     find_workspace_root(current_directory)
         .map(|root| HostingWorkspace { root, source: WorkspaceSource::Config })

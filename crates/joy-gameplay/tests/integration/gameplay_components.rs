@@ -75,7 +75,10 @@ impl EntityComponent for Health {
         _context: &mut SimulationContext<'_>,
     ) -> Result<(), GameplayError> {
         log(&self.events, format!("attach:health:{}:{}", entity.id(), self.starting));
-        self._resource = Some(Resource { name: "health", events: self.events.clone() });
+        self._resource = Some(Resource {
+            name: "health",
+            events: self.events.clone(),
+        });
         Ok(())
     }
 
@@ -167,20 +170,36 @@ impl EntitySystem for HealthSystem {
 fn villager_world(events: &Events) -> World {
     let mut registry = EntityRegistry::new();
     let behavior_events = events.clone();
-    registry.register("villager", move |_| Box::new(Villager { events: behavior_events.clone() })).unwrap();
+    registry
+        .register("villager", move |_| {
+            Box::new(Villager {
+                events: behavior_events.clone(),
+            })
+        })
+        .unwrap();
     let mut components = ComponentRegistry::new();
     let health_events = events.clone();
     components
         .register("health", move |data, _| {
             let starting = data.get("current").and_then(Value::as_f64).unwrap_or(0.0);
-            Box::new(Health { starting, events: health_events.clone(), _resource: None })
+            Box::new(Health {
+                starting,
+                events: health_events.clone(),
+                _resource: None,
+            })
         })
         .unwrap();
     let armor_events = events.clone();
     components
         .register("armor", move |_, _| {
-            let resource = Resource { name: "armor", events: armor_events.clone() };
-            Box::new(Armor { events: armor_events.clone(), _resource: resource })
+            let resource = Resource {
+                name: "armor",
+                events: armor_events.clone(),
+            };
+            Box::new(Armor {
+                events: armor_events.clone(),
+                _resource: resource,
+            })
         })
         .unwrap();
     world(EntityWorld::with_component_registry(registry, components))
@@ -222,7 +241,12 @@ fn systems_see_runtime_components_and_release_before_entities_at_teardown() {
     let mut world = villager_world(&events);
     world.spawn(&definition(json!({"id": "a", "type": "villager", "components": {"health": {"current": 3}}}))).unwrap();
     world.spawn(&definition(json!({"id": "b", "type": "villager"}))).unwrap();
-    world.entities.add_system(Box::new(HealthSystem { events: events.clone() })).unwrap();
+    world
+        .entities
+        .add_system(Box::new(HealthSystem {
+            events: events.clone(),
+        }))
+        .unwrap();
     events.borrow_mut().clear();
 
     world.update(0.1).unwrap();
@@ -248,7 +272,10 @@ impl EntityComponent for Broken {
         _entity: &mut EntityState,
         _context: &mut SimulationContext<'_>,
     ) -> Result<(), GameplayError> {
-        self.resource = Some(Resource { name: "broken", events: self.events.clone() });
+        self.resource = Some(Resource {
+            name: "broken",
+            events: self.events.clone(),
+        });
         Err(GameplayError::Behavior("component setup failed".into()))
     }
 
@@ -265,7 +292,12 @@ fn failed_component_attachment_rolls_back_the_complete_spawn() {
     world
         .entities
         .component_registry_mut()
-        .register("broken", move |_, _| Box::new(Broken { events: broken_events.clone(), resource: None }))
+        .register("broken", move |_, _| {
+            Box::new(Broken {
+                events: broken_events.clone(),
+                resource: None,
+            })
+        })
         .unwrap();
 
     let error = world
@@ -298,13 +330,22 @@ fn runtime_components_can_be_added_and_removed_on_live_entities() {
     events.borrow_mut().clear();
 
     let (entities, mut context) = world.split();
-    let armor =
-        Box::new(Armor { events: events.clone(), _resource: Resource { name: "extra", events: events.clone() } });
+    let armor = Box::new(Armor {
+        events: events.clone(),
+        _resource: Resource {
+            name: "extra",
+            events: events.clone(),
+        },
+    });
     let duplicate = entities.add_component(&id, "armor", armor, &mut context).unwrap_err();
     assert_eq!(duplicate.to_string(), "Entity v already has component armor.");
     assert_eq!(*events.borrow(), ["drop:extra"], "a rejected component is dropped without hooks");
 
-    let health = Box::new(Health { starting: 5.0, events: events.clone(), _resource: None });
+    let health = Box::new(Health {
+        starting: 5.0,
+        events: events.clone(),
+        _resource: None,
+    });
     entities.add_component(&id, "health", health, &mut context).unwrap();
     assert!(entities.get(&id).unwrap().has_component("health"));
     assert!(entities.remove_component(&id, "armor", &mut context));
@@ -312,12 +353,31 @@ fn runtime_components_can_be_added_and_removed_on_live_entities() {
     assert!(entities.get(&id).unwrap().state.component("armor").is_some(), "the authored record is kept");
     assert_eq!(*events.borrow(), ["drop:extra", "attach:health:v:5", "detach:armor", "drop:armor"]);
 
-    let blank =
-        entities.add_component(&id, " ", Box::new(Broken { events: events.clone(), resource: None }), &mut context);
+    let blank = entities.add_component(
+        &id,
+        " ",
+        Box::new(Broken {
+            events: events.clone(),
+            resource: None,
+        }),
+        &mut context,
+    );
     assert_eq!(blank, Err(GameplayError::EmptyComponentType));
     let mut registry = ComponentRegistry::new();
-    registry.register("health", |_, _| Box::new(Broken { events: Rc::default(), resource: None })).unwrap();
-    let again = registry.register("health", |_, _| Box::new(Broken { events: Rc::default(), resource: None }));
+    registry
+        .register("health", |_, _| {
+            Box::new(Broken {
+                events: Rc::default(),
+                resource: None,
+            })
+        })
+        .unwrap();
+    let again = registry.register("health", |_, _| {
+        Box::new(Broken {
+            events: Rc::default(),
+            resource: None,
+        })
+    });
     assert_eq!(again.map(|_| ()), Err(GameplayError::DuplicateComponentType("health".into())));
 }
 
@@ -353,13 +413,19 @@ impl EntitySystem for BlankRequirement {
 fn system_setup_failures_release_the_system_and_removal_runs_on_remove_once() {
     let events: Events = Rc::default();
     let mut entities = EntityWorld::default();
-    let failed = entities.add_system(Box::new(FailingSystem { events: events.clone() }));
+    let failed = entities.add_system(Box::new(FailingSystem {
+        events: events.clone(),
+    }));
     assert_eq!(failed, Err(GameplayError::Behavior("system setup failed".into())));
     assert_eq!(*events.borrow(), ["failing:remove"]);
     assert_eq!(entities.add_system(Box::new(BlankRequirement)), Err(GameplayError::InvalidSystemRequirement));
     assert_eq!(entities.system_count(), 0);
 
-    let system = entities.add_system(Box::new(HealthSystem { events: events.clone() })).unwrap();
+    let system = entities
+        .add_system(Box::new(HealthSystem {
+            events: events.clone(),
+        }))
+        .unwrap();
     assert!(entities.remove_system(system));
     assert!(!entities.remove_system(system));
     assert_eq!(*events.borrow(), ["failing:remove", "system:add", "system:remove"]);

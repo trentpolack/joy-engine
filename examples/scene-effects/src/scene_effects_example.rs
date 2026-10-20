@@ -114,11 +114,20 @@ impl Layout {
     /// The responsive layout: a 310-pixel sidebar, 260 pixels at medium widths, and a stacked sheet on phones.
     fn for_viewport(size: Vec2) -> Self {
         if size.x < NARROW_VIEWPORT {
-            Self { right: 0.0, bottom: (size.y * SHEET_FRACTION).round() }
+            Self {
+                right: 0.0,
+                bottom: (size.y * SHEET_FRACTION).round(),
+            }
         } else if size.x <= MEDIUM_VIEWPORT {
-            Self { right: SIDEBAR_WIDTH_MEDIUM, bottom: 0.0 }
+            Self {
+                right: SIDEBAR_WIDTH_MEDIUM,
+                bottom: 0.0,
+            }
         } else {
-            Self { right: SIDEBAR_WIDTH, bottom: 0.0 }
+            Self {
+                right: SIDEBAR_WIDTH,
+                bottom: 0.0,
+            }
         }
     }
 }
@@ -284,7 +293,10 @@ impl SceneEffectsExample {
         match command {
             LabCommand::Baseline => self.controls.select_preset(EffectPreset::Off),
             LabCommand::Combined => self.controls.select_preset(EffectPreset::Combined),
-            LabCommand::Motion { object, camera } => self.set_motion(object, camera),
+            LabCommand::Motion {
+                object,
+                camera,
+            } => self.set_motion(object, camera),
             LabCommand::Paused(paused) => self.set_paused(paused),
             LabCommand::Time(seconds) => self.set_time(seconds),
             LabCommand::Step => self.step(),
@@ -302,7 +314,10 @@ impl SceneEffectsExample {
         } else {
             Vec2::ZERO
         };
-        ShiftedCamera { camera: &self.camera, shift }
+        ShiftedCamera {
+            camera: &self.camera,
+            shift,
+        }
     }
 
     fn refresh_stats(&mut self) {
@@ -376,7 +391,10 @@ impl SceneEffectsExample {
             let object_changed = ui.checkbox(&mut object, "Moving object").changed();
             let camera_changed = ui.checkbox(&mut camera, "Camera motion").changed();
             if object_changed || camera_changed {
-                commands.push(LabCommand::Motion { object, camera });
+                commands.push(LabCommand::Motion {
+                    object,
+                    camera,
+                });
             }
             let mut paused = self.paused;
             if ui.checkbox(&mut paused, "Fixed simulation time").changed() {

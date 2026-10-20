@@ -100,7 +100,11 @@ pub struct FormDocument {
 impl FormDocument {
     /// A document for raw script source, as FORM LAB opens `.form` files: no overrides, palette, or variants.
     pub fn from_script(name: &str, source: &str) -> Self {
-        Self { name: name.to_owned(), source: source.to_owned(), ..Self::default() }
+        Self {
+            name: name.to_owned(),
+            source: source.to_owned(),
+            ..Self::default()
+        }
     }
 
     /// The document as the JSON value [`serialize_document`] writes, with keys in the stable document order.
@@ -156,7 +160,13 @@ pub fn read_document_value(value: &Json) -> Result<FormDocument, DocumentError> 
         .map(|materials| read_materials(Some(materials)).map_err(|error| DocumentError::Materials(error.0)))
         .transpose()?
         .map(|materials| materials.into_iter().map(integral_numbers_as_integers).collect());
-    Ok(FormDocument { name: name.to_owned(), source: source.to_owned(), overrides, materials, variants })
+    Ok(FormDocument {
+        name: name.to_owned(),
+        source: source.to_owned(),
+        overrides,
+        materials,
+        variants,
+    })
 }
 
 /// Copy and validate overrides at document and variant ownership boundaries.
@@ -195,7 +205,10 @@ pub fn read_variants(value: &Json) -> Result<Vec<ParameterVariant>, DocumentErro
                 return Err(invalid_name());
             }
             let overrides = read_overrides(entry.get("overrides").unwrap_or(&Json::Null))?;
-            Ok(ParameterVariant { name: trimmed.to_owned(), overrides })
+            Ok(ParameterVariant {
+                name: trimmed.to_owned(),
+                overrides,
+            })
         })
         .collect()
 }

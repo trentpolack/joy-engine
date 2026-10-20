@@ -114,7 +114,14 @@ impl TextureAsset {
             )));
         }
         let id = NEXT_TEXTURE_ID.fetch_add(1, Ordering::Relaxed);
-        Ok(Self { inner: Arc::new(TextureAssetInner { id, width, height, pixels }) })
+        Ok(Self {
+            inner: Arc::new(TextureAssetInner {
+                id,
+                width,
+                height,
+                pixels,
+            }),
+        })
     }
 
     /// Decode a PNG file into RGBA8 without color-space conversion or alpha premultiplication.

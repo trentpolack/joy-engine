@@ -108,7 +108,11 @@ fn daylight(intensity: f32) -> EnvironmentLighting {
         elapsed_seconds: 0.0,
         time_of_day: 0.5,
         sun,
-        moon: DirectionalLight { direction: -sun.direction, intensity: 0.0, ..sun },
+        moon: DirectionalLight {
+            direction: -sun.direction,
+            intensity: 0.0,
+            ..sun
+        },
         primary: sun,
         skylight: Skylight::uniform(LinearColor::rgb(0.2, 0.42, 0.8), 0.09 * intensity),
         wind_velocity: Vec3::ZERO,
@@ -464,7 +468,10 @@ fn preview_controls_commit_presets_to_the_renderer() {
     let mut controls = SceneEffectsControls::new();
     controls.apply(&mut renderer);
     assert!(renderer.scene_effects().is_none(), "syncing must not touch the renderer");
-    let resolved = PostProcessSettings { bloom_strength: 0.3, ..PostProcessSettings::DEFAULT };
+    let resolved = PostProcessSettings {
+        bloom_strength: 0.3,
+        ..PostProcessSettings::DEFAULT
+    };
     assert_eq!(controls.with_bloom_choice(resolved.clone()), resolved, "no choice yet passes settings through");
 
     controls.select_preset(EffectPreset::Atmosphere);

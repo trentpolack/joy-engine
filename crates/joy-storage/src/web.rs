@@ -21,23 +21,26 @@ fn local_storage() -> Result<web_sys::Storage, StorageError> {
 
 /// Read a value.
 pub(crate) fn load(key: &str) -> Result<Option<String>, StorageError> {
-    local_storage()?
-        .get_item(key)
-        .map_err(|error| StorageError::Read { key: key.to_owned(), message: describe(&error) })
+    local_storage()?.get_item(key).map_err(|error| StorageError::Read {
+        key: key.to_owned(),
+        message: describe(&error),
+    })
 }
 
 /// Write a value.
 pub(crate) fn save(key: &str, text: &str) -> Result<(), StorageError> {
-    local_storage()?
-        .set_item(key, text)
-        .map_err(|error| StorageError::Write { key: key.to_owned(), message: describe(&error) })
+    local_storage()?.set_item(key, text).map_err(|error| StorageError::Write {
+        key: key.to_owned(),
+        message: describe(&error),
+    })
 }
 
 /// Delete a value.
 pub(crate) fn remove(key: &str) -> Result<(), StorageError> {
-    local_storage()?
-        .remove_item(key)
-        .map_err(|error| StorageError::Write { key: key.to_owned(), message: describe(&error) })
+    local_storage()?.remove_item(key).map_err(|error| StorageError::Write {
+        key: key.to_owned(),
+        message: describe(&error),
+    })
 }
 
 /// A readable description of a thrown JavaScript value (for example a `QuotaExceededError`).

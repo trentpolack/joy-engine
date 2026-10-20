@@ -152,8 +152,16 @@ impl Interface {
     pub fn new(storage: Option<Storage>, hosted: bool) -> Self {
         let options = PanelLayoutOptions {
             storage_key: PANEL_LAYOUT_KEY.to_owned(),
-            left: PaneLimits { default_width: 320.0, minimum: 160.0, maximum: 600.0 },
-            right: PaneLimits { default_width: 260.0, minimum: 220.0, maximum: 480.0 },
+            left: PaneLimits {
+                default_width: 320.0,
+                minimum: 160.0,
+                maximum: 600.0,
+            },
+            right: PaneLimits {
+                default_width: 260.0,
+                minimum: 220.0,
+                maximum: 480.0,
+            },
             maximize_mode: MaximizeMode::Workspace,
             ..PanelLayoutOptions::default()
         };
@@ -245,7 +253,13 @@ impl Interface {
             (Some(DialogPurpose::UploadTexture), FileDialogEvent::Opened(file)) => {
                 let _ = lab.upload_texture(file.contents.as_bytes());
             }
-            (_, FileDialogEvent::Saved { location, .. }) => {
+            (
+                _,
+                FileDialogEvent::Saved {
+                    location,
+                    ..
+                },
+            ) => {
                 lab.mark_saved();
                 self.notice = Some(format!("Saved {location}"));
             }

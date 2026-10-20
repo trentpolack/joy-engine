@@ -135,7 +135,11 @@ impl ArtifactDialog {
         }
         self.error = None;
         self.writing = true;
-        Some(ArtifactRequest { kind, format, name })
+        Some(ArtifactRequest {
+            kind,
+            format,
+            name,
+        })
     }
 
     /// Draw the dialog when open; returns a confirmed request. `export_note` describes the build exports use.

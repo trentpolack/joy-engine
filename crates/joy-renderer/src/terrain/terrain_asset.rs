@@ -230,8 +230,10 @@ pub fn decode_terrain(manifest: TerrainManifest, binary: &[u8]) -> Result<Terrai
     let maximum = manifest.patches.iter().map(|patch| patch.max).fold(f64::NEG_INFINITY, f64::max);
     let half_x = (manifest.extent[0] * 0.5) as f32;
     let half_z = (manifest.extent[1] * 0.5) as f32;
-    let bounds =
-        Bounds { min: Vec3::new(-half_x, minimum as f32, -half_z), max: Vec3::new(half_x, maximum as f32, half_z) };
+    let bounds = Bounds {
+        min: Vec3::new(-half_x, minimum as f32, -half_z),
+        max: Vec3::new(half_x, maximum as f32, half_z),
+    };
 
     let inner = TerrainAssetInner {
         id: NEXT_TERRAIN_ID.fetch_add(1, Ordering::Relaxed),
@@ -241,7 +243,9 @@ pub fn decode_terrain(manifest: TerrainManifest, binary: &[u8]) -> Result<Terrai
         max_lod,
         bounds,
     };
-    Ok(TerrainAsset { inner: Arc::new(inner) })
+    Ok(TerrainAsset {
+        inner: Arc::new(inner),
+    })
 }
 
 /// Stable collision and gameplay height, independent of camera and render topology.

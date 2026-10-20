@@ -469,8 +469,12 @@ impl App for BuildingExample {
             target.renderer().reset_history();
         }
         let lights = [LIGHT];
-        let inputs =
-            FrameInputs { lights: &lights, ambient: Some(AMBIENT), clear_color: CLEAR_COLOR, ..FrameInputs::default() };
+        let inputs = FrameInputs {
+            lights: &lights,
+            ambient: Some(AMBIENT),
+            clear_color: CLEAR_COLOR,
+            ..FrameInputs::default()
+        };
         let camera = self.view_camera(frame.viewport.logical_size);
         let stopwatch = Stopwatch::start();
         target.draw(&self.scene, &camera, &inputs)?;

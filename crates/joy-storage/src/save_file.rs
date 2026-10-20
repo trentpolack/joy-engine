@@ -39,7 +39,10 @@ fn save_file(file_name: &str, bytes: &[u8], text: bool) -> Result<String, SaveFi
     if file_name.is_empty() || file_name == "." || file_name == ".." || file_name.contains(['/', '\\']) {
         return Err(SaveFileError::InvalidName(file_name.to_owned()));
     }
-    let failed = |message: String| SaveFileError::Failed { name: file_name.to_owned(), message };
+    let failed = |message: String| SaveFileError::Failed {
+        name: file_name.to_owned(),
+        message,
+    };
 
     #[cfg(target_arch = "wasm32")]
     {

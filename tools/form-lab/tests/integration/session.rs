@@ -27,7 +27,11 @@ fn built() -> Session {
 /// Finish the outstanding build and accept it as the preview would.
 fn accept(session: &mut Session) {
     match session.finish_build() {
-        Some(SessionEvent::BuildReady { data, milliseconds, .. }) => session.accept_build(*data, milliseconds),
+        Some(SessionEvent::BuildReady {
+            data,
+            milliseconds,
+            ..
+        }) => session.accept_build(*data, milliseconds),
         other => panic!("unexpected {other:?}"),
     }
 }

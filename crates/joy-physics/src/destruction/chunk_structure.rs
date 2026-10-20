@@ -134,7 +134,11 @@ impl ChunkStructure {
             if chunks.contains_key(&definition.id) {
                 return Err(DestructionError::DuplicateChunk(definition.id.clone()));
             }
-            let state = ChunkState { definition: definition.clone(), hit_points: definition.hit_points, active: true };
+            let state = ChunkState {
+                definition: definition.clone(),
+                hit_points: definition.hit_points,
+                active: true,
+            };
             chunks.insert(definition.id.clone(), state);
         }
 
@@ -145,8 +149,13 @@ impl ChunkStructure {
                 Some(ChunkSupportGraph::new(&all, options)?)
             }
         };
-        let mut structure =
-            Self { chunks, queued_damage: Vec::new(), revision: 0, support, support_snapshot: Vec::new() };
+        let mut structure = Self {
+            chunks,
+            queued_damage: Vec::new(),
+            revision: 0,
+            support,
+            support_snapshot: Vec::new(),
+        };
         structure.refresh_support();
         Ok(structure)
     }
@@ -203,7 +212,12 @@ impl ChunkStructure {
         if !removed.is_empty() {
             self.revision += 1;
         }
-        ChunkChangeSet { revision: self.revision, removed, detached, active_chunk_count: self.active_chunk_count() }
+        ChunkChangeSet {
+            revision: self.revision,
+            removed,
+            detached,
+            active_chunk_count: self.active_chunk_count(),
+        }
     }
 
     /// Restore original health and activity, discarding uncommitted hits, and re-evaluate support.
@@ -295,7 +309,11 @@ impl ChunkStructure {
                 continue;
             }
             let point = origin + (direction * distance);
-            nearest = Some(ChunkRaycastHit { chunk, distance, point });
+            nearest = Some(ChunkRaycastHit {
+                chunk,
+                distance,
+                point,
+            });
         }
         Ok(nearest)
     }

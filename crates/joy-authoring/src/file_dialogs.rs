@@ -28,7 +28,10 @@ pub struct FileFilter {
 impl FileFilter {
     /// A filter named `name` for `extensions` (without dots).
     pub fn new(name: impl Into<String>, extensions: &[&str]) -> Self {
-        Self { name: name.into(), extensions: extensions.iter().map(|extension| (*extension).to_owned()).collect() }
+        Self {
+            name: name.into(),
+            extensions: extensions.iter().map(|extension| (*extension).to_owned()).collect(),
+        }
     }
 
     /// Whether `file_name` has one of the filter's extensions (case-insensitive).
@@ -108,12 +111,20 @@ pub struct OpenRequest {
 impl OpenRequest {
     /// Open a text file matching `filter`.
     pub fn text(title: impl Into<String>, filter: FileFilter) -> Self {
-        Self { title: title.into(), filters: vec![filter], binary: false, maximum_bytes: DEFAULT_MAXIMUM_OPEN_BYTES }
+        Self {
+            title: title.into(),
+            filters: vec![filter],
+            binary: false,
+            maximum_bytes: DEFAULT_MAXIMUM_OPEN_BYTES,
+        }
     }
 
     /// Open a binary file matching `filter`.
     pub fn binary(title: impl Into<String>, filter: FileFilter) -> Self {
-        Self { binary: true, ..Self::text(title, filter) }
+        Self {
+            binary: true,
+            ..Self::text(title, filter)
+        }
     }
 
     /// Refuse files larger than `bytes`.
@@ -216,7 +227,10 @@ impl FileDialogs {
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            self.pending = Some(Pending::Open { future: native::pick_file(&request), request });
+            self.pending = Some(Pending::Open {
+                future: native::pick_file(&request),
+                request,
+            });
         }
         #[cfg(target_arch = "wasm32")]
         {
@@ -241,7 +255,10 @@ impl FileDialogs {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let future = native::save_file(&request);
-            self.pending = Some(Pending::Save { future, contents: request.contents });
+            self.pending = Some(Pending::Save {
+                future,
+                contents: request.contents,
+            });
         }
         #[cfg(target_arch = "wasm32")]
         {
@@ -250,7 +267,10 @@ impl FileDialogs {
                 FileContents::Binary(bytes) => joy_storage::save_binary_file(&name, bytes),
             };
             self.events.push_back(match saved {
-                Ok(location) => FileDialogEvent::Saved { name, location },
+                Ok(location) => FileDialogEvent::Saved {
+                    name,
+                    location,
+                },
                 Err(error) => FileDialogEvent::Failed(error.to_string()),
             });
         }
@@ -264,7 +284,10 @@ impl FileDialogs {
         }
         let event = match self.pending.as_mut()? {
             #[cfg(not(target_arch = "wasm32"))]
-            Pending::Open { future, request } => {
+            Pending::Open {
+                future,
+                request,
+            } => {
                 let chosen = native::poll(future)?;
                 Some(match chosen {
                     None => FileDialogEvent::Cancelled,
@@ -272,7 +295,10 @@ impl FileDialogs {
                 })
             }
             #[cfg(not(target_arch = "wasm32"))]
-            Pending::Save { future, contents } => {
+            Pending::Save {
+                future,
+                contents,
+            } => {
                 let chosen = native::poll(future)?;
                 Some(match chosen {
                     None => FileDialogEvent::Cancelled,
@@ -343,7 +369,10 @@ fn read_file(path: &std::path::Path, binary: bool, maximum_bytes: usize) -> File
         .map_err(|error| format!("Cannot read {name}: {error}"))
         .and_then(|bytes| decode_contents(&name, bytes, binary))
     {
-        Ok(contents) => FileDialogEvent::Opened(OpenedFile { name, contents }),
+        Ok(contents) => FileDialogEvent::Opened(OpenedFile {
+            name,
+            contents,
+        }),
         Err(message) => FileDialogEvent::Failed(message),
     }
 }
@@ -352,7 +381,10 @@ fn read_file(path: &std::path::Path, binary: bool, maximum_bytes: usize) -> File
 fn write_file(path: &std::path::Path, contents: &FileContents) -> FileDialogEvent {
     let name = path.file_name().map_or_else(|| path.display().to_string(), |name| name.to_string_lossy().into_owned());
     match std::fs::write(path, contents.as_bytes()) {
-        Ok(()) => FileDialogEvent::Saved { name, location: path.display().to_string() },
+        Ok(()) => FileDialogEvent::Saved {
+            name,
+            location: path.display().to_string(),
+        },
         Err(error) => FileDialogEvent::Failed(format!("Could not save {name}: {error}")),
     }
 }
@@ -425,7 +457,10 @@ mod tests {
         let path = directory.join("effect.joyfx");
         assert_eq!(
             write_file(&path, &FileContents::Text("{\"version\": 1}\n".to_owned())),
-            FileDialogEvent::Saved { name: "effect.joyfx".to_owned(), location: path.display().to_string() }
+            FileDialogEvent::Saved {
+                name: "effect.joyfx".to_owned(),
+                location: path.display().to_string()
+            }
         );
         let opened = read_file(&path, false, 1024);
         assert_eq!(

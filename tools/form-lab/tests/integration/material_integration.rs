@@ -57,7 +57,10 @@ fn document_materials_survive_saves_and_malformed_records_are_rejected() {
 fn point_markers_preserve_material_tint_emission_and_alpha_modes() {
     let source = "material(Steel); color(1,1,1,0.5); point(0,0,0)";
     let camera = OrbitCamera::default();
-    let marker_camera = MarkerCamera { basis: camera.basis(), distance: camera.distance };
+    let marker_camera = MarkerCamera {
+        basis: camera.basis(),
+        distance: camera.distance,
+    };
     let preview = |material: Json| {
         point_batch(&compile(source, json!({}), Some(json!([material]))), false, &marker_camera, 2.0, 800.0)
     };

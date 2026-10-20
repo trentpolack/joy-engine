@@ -39,7 +39,9 @@ impl SeededRandom {
     /// modulo 2^32).
     pub fn new(seed: i64) -> Self {
         let normalized = seed.rem_euclid(1_i64 << 32) as u32;
-        Self { state: normalized }
+        Self {
+            state: normalized,
+        }
     }
 
     /// Current 32-bit sequence state, useful for saving and restoring a stream.

@@ -69,14 +69,23 @@ pub fn evaluate(
     overrides: &Json,
     materials: Option<&Json>,
 ) -> std::result::Result<GeometryData, Diagnostic> {
-    let root = Token { text: String::new(), line: 1, column: 1 };
+    let root = Token {
+        text: String::new(),
+        line: 1,
+        column: 1,
+    };
     if !overrides.is_object() {
         return Err(Diagnostic::at("Parameter overrides must be an object.", &root));
     }
     let budget = Rc::new(RefCell::new(Budget::default()));
     let geometry = Builder::new(materials, budget.clone()).map_err(|message| Diagnostic::at(message, &root))?;
-    let mut runtime =
-        Runtime { overrides, geometry, random: 1, budget: budget.clone(), procedural: Procedural::new(budget) };
+    let mut runtime = Runtime {
+        overrides,
+        geometry,
+        random: 1,
+        budget: budget.clone(),
+        procedural: Procedural::new(budget),
+    };
     let mut scope = Scope::from([
         ("pi".into(), Value::Number(std::f64::consts::PI)),
         ("tau".into(), Value::Number(std::f64::consts::TAU)),
@@ -106,7 +115,10 @@ impl Runtime<'_> {
     }
     fn statement(&mut self, statement: &Statement, scope: &mut Scope, top_level: bool) -> Result<()> {
         match &statement.kind {
-            StmtKind::Project { fields: project, .. } => {
+            StmtKind::Project {
+                fields: project,
+                ..
+            } => {
                 if !top_level || self.geometry.data.project.is_some() {
                     return Err("Declare project metadata once, outside repeat blocks.".to_string().into());
                 }
@@ -120,7 +132,12 @@ impl Runtime<'_> {
                 self.geometry.user_data = previous;
                 result?;
             }
-            StmtKind::Wrangle { domain, expression, binding, body } => {
+            StmtKind::Wrangle {
+                domain,
+                expression,
+                binding,
+                body,
+            } => {
                 let value = self.expression(expression, scope)?;
                 let count = self.procedural.begin_wrangle(domain, &value)?;
                 let result = (|| -> Result<()> {
@@ -140,7 +157,11 @@ impl Runtime<'_> {
                 result?;
                 end?;
             }
-            StmtKind::BindingAttribute { binding, name, expression } => {
+            StmtKind::BindingAttribute {
+                binding,
+                name,
+                expression,
+            } => {
                 if !matches!(scope.get(binding), Some(Value::Element(_))) {
                     return Err(format!("Unknown wrangle binding '{binding}'.").into());
                 }
@@ -156,7 +177,11 @@ impl Runtime<'_> {
                 let value = self.expression(expression, scope)?;
                 scope.insert(name.clone(), value);
             }
-            StmtKind::Param { name, values, metadata } => {
+            StmtKind::Param {
+                name,
+                values,
+                metadata,
+            } => {
                 if !top_level {
                     return Err("Parameters must be declared outside repeat blocks.".to_string().into());
                 }
@@ -179,7 +204,11 @@ impl Runtime<'_> {
                 self.geometry.data.parameters.push(parameter);
                 scope.insert(name.clone(), value);
             }
-            StmtKind::Repeat { name, expression, body } => {
+            StmtKind::Repeat {
+                name,
+                expression,
+                body,
+            } => {
                 let count = integer_range(self.expression(expression, scope)?.scalar()?, 0.0, 150_000.0)?;
                 for index in 0..count {
                     self.spend(&statement.token)?;
@@ -353,7 +382,11 @@ impl Runtime<'_> {
                 self.geometry.material_index = self.geometry.bind_material(&value)?;
                 return Ok(());
             }
-            let material_name = if let Some(Expression { kind: ExprKind::Variable(name), .. }) = expressions.first() {
+            let material_name = if let Some(Expression {
+                kind: ExprKind::Variable(name),
+                ..
+            }) = expressions.first()
+            {
                 name.as_str()
             } else {
                 DEFAULT_MATERIAL_NAME

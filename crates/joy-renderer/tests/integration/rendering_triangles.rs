@@ -82,12 +82,20 @@ fn custom_shader_draws_opaque_depth_then_blended_transparency() {
         return;
     };
     let target = OffscreenTarget::new(&gpu, WIDTH, HEIGHT).unwrap();
-    let options = TriangleRendererOptions { shader: SHADER.to_owned(), uniform_size: 80, post_process: None };
+    let options = TriangleRendererOptions {
+        shader: SHADER.to_owned(),
+        uniform_size: 80,
+        post_process: None,
+    };
     let mut renderer = TriangleRenderer::new(&gpu, CAPTURE_FORMAT, options).unwrap();
     renderer.resize(WIDTH, HEIGHT, 1.0);
 
     // Logical world: 200×100 units centered on (100, 50); the camera sits at z = 100.
-    let camera = TopDownCamera { height: 100.0, near: 1.0, far: 201.0 };
+    let camera = TopDownCamera {
+        height: 100.0,
+        near: 1.0,
+        far: 201.0,
+    };
     let matrix = top_down_orthographic(WIDTH as f32, HEIGHT as f32, Vec2::new(100.0, 50.0), camera).unwrap();
     let mut uniforms = matrix.to_cols_array().to_vec();
     uniforms.extend([0.0, 0.0, 0.0, 0.0]); // frame: seconds, flash, padding
@@ -137,6 +145,9 @@ fn custom_shader_draws_opaque_depth_then_blended_transparency() {
     assert!(blended[0] > blended[1] && blended[1] > 100 && blended[2] > 100, "blended white over red, got {blended:?}");
 
     // Wrong uniform sizes are reported, not uploaded.
-    let short = TriangleFrame { uniforms: &[0; 16], ..frame };
+    let short = TriangleFrame {
+        uniforms: &[0; 16],
+        ..frame
+    };
     assert!(renderer.render(target.view(), &short).is_err());
 }

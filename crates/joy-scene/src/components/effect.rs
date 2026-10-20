@@ -35,8 +35,11 @@ pub struct EffectComponentDefaults {
 }
 
 /// Engine defaults for `effect` components.
-pub const EFFECT_COMPONENT_DEFAULTS: EffectComponentDefaults =
-    EffectComponentDefaults { enabled: true, looping: false, seed: 7777 };
+pub const EFFECT_COMPONENT_DEFAULTS: EffectComponentDefaults = EffectComponentDefaults {
+    enabled: true,
+    looping: false,
+    seed: 7777,
+};
 
 /// Particle effect simulated per entity by `AssetScene`.
 pub(super) fn effect_schema() -> ComponentSchema {

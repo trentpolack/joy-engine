@@ -166,7 +166,10 @@ impl PostProcessSession {
             return;
         }
         if (self.dirty() || self.saving) && !overrides.same_values(&self.draft) {
-            self.conflict = Some(PostProcessConflict { overrides, revision: revision.to_owned() });
+            self.conflict = Some(PostProcessConflict {
+                overrides,
+                revision: revision.to_owned(),
+            });
             return;
         }
         self.adopt_disk(overrides, revision.to_owned());

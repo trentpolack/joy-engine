@@ -86,10 +86,19 @@ pub(crate) fn build_transparent_queue(
                     elements.push((key, Element::Colored(triangle)));
                 }
             }
-            TransparentDraw::Textured { texture, vertices } => {
+            TransparentDraw::Textured {
+                texture,
+                vertices,
+            } => {
                 for triangle in vertices.as_chunks::<3>().0 {
                     let key = depth(triangle.each_ref().map(|vertex| vertex.position));
-                    elements.push((key, Element::Textured { texture: texture.id(), triangle }));
+                    elements.push((
+                        key,
+                        Element::Textured {
+                            texture: texture.id(),
+                            triangle,
+                        },
+                    ));
                 }
             }
         }
@@ -116,17 +125,24 @@ pub(crate) fn build_transparent_queue(
                     _ => queue.steps.push(TransparentStep::Colored(start..end)),
                 }
             }
-            Element::Textured { texture, triangle } => {
+            Element::Textured {
+                texture,
+                triangle,
+            } => {
                 let start = queue.textured_vertices.len() as u32;
                 queue.textured_vertices.extend_from_slice(triangle);
                 let end = queue.textured_vertices.len() as u32;
                 match queue.steps.last_mut() {
-                    Some(TransparentStep::Textured { texture: current, vertices })
-                        if *current == texture && vertices.end == start =>
-                    {
+                    Some(TransparentStep::Textured {
+                        texture: current,
+                        vertices,
+                    }) if *current == texture && vertices.end == start => {
                         vertices.end = end;
                     }
-                    _ => queue.steps.push(TransparentStep::Textured { texture, vertices: start..end }),
+                    _ => queue.steps.push(TransparentStep::Textured {
+                        texture,
+                        vertices: start..end,
+                    }),
                 }
             }
         }

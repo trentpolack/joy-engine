@@ -77,7 +77,13 @@ where
     Candidates: IntoIterator<Item = Cell>,
     StepCost: FnMut(&Cell, &Cell) -> Option<f64>,
 {
-    let GridSearchOptions { start, budget, mut neighbors, mut step_cost, cell_limit } = options;
+    let GridSearchOptions {
+        start,
+        budget,
+        mut neighbors,
+        mut step_cost,
+        cell_limit,
+    } = options;
     if budget.is_nan() || budget < 0.0 {
         return Err(GridSearchError::InvalidBudget);
     }
@@ -87,12 +93,22 @@ where
 
     // Best known routes, including tentative frontier entries.
     let mut known: IndexMap<Cell, GridRoute<Cell>> = IndexMap::new();
-    known.insert(start.clone(), GridRoute { cost: 0.0, previous: None });
+    known.insert(
+        start.clone(),
+        GridRoute {
+            cost: 0.0,
+            previous: None,
+        },
+    );
     // Settled routes in settle order; this becomes the result.
     let mut settled: GridRoutes<Cell> = IndexMap::new();
     let mut frontier = FrontierHeap::default();
     let mut order: u64 = 0;
-    frontier.push(FrontierEntry { cell: start, cost: 0.0, order });
+    frontier.push(FrontierEntry {
+        cell: start,
+        cost: 0.0,
+        order,
+    });
     order += 1;
 
     while let Some(entry) = frontier.pop() {
@@ -131,8 +147,18 @@ where
             if known.get(&next).is_some_and(|existing| existing.cost <= cost) {
                 continue;
             }
-            known.insert(next.clone(), GridRoute { cost, previous: Some(entry.cell.clone()) });
-            frontier.push(FrontierEntry { cell: next, cost, order });
+            known.insert(
+                next.clone(),
+                GridRoute {
+                    cost,
+                    previous: Some(entry.cell.clone()),
+                },
+            );
+            frontier.push(FrontierEntry {
+                cell: next,
+                cost,
+                order,
+            });
             order += 1;
         }
     }
@@ -181,7 +207,9 @@ struct FrontierHeap<Cell> {
 
 impl<Cell> Default for FrontierHeap<Cell> {
     fn default() -> Self {
-        Self { entries: Vec::new() }
+        Self {
+            entries: Vec::new(),
+        }
     }
 }
 

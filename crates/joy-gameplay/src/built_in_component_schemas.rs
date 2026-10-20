@@ -298,7 +298,10 @@ fn wheel_number(name: &str, label: &str, unit: Option<&str>, step: f64, default:
 
 /// Activate a field only for one collider shape.
 fn shape_condition(shape: PrimitiveShape) -> ComponentFieldCondition {
-    ComponentFieldCondition { field: "shape".to_owned(), equals: vec![shape.as_str().to_owned()] }
+    ComponentFieldCondition {
+        field: "shape".to_owned(),
+        equals: vec![shape.as_str().to_owned()],
+    }
 }
 
 /// A preset whose data is a JSON object literal.
@@ -307,7 +310,11 @@ fn preset(id: &str, label: &str, data: Value) -> ComponentPreset {
         Value::Object(record) => record,
         _ => JsonRecord::new(),
     };
-    ComponentPreset { id: id.to_owned(), label: label.to_owned(), data }
+    ComponentPreset {
+        id: id.to_owned(),
+        label: label.to_owned(),
+        data,
+    }
 }
 
 /// Optional owned text.

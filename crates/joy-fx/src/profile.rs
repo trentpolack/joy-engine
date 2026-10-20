@@ -46,7 +46,10 @@ pub fn create_particle_profile(definition: &CompiledParticleEffect, enabled: boo
         emitters: definition
             .emitters()
             .iter()
-            .map(|emitter| ParticleProfileRow { id: emitter.asset.id.clone(), ..Default::default() })
+            .map(|emitter| ParticleProfileRow {
+                id: emitter.asset.id.clone(),
+                ..Default::default()
+            })
             .collect(),
         steps: 0,
         simulation_ms: 0.0,
@@ -59,7 +62,10 @@ pub fn reset_particle_profile(profile: &mut ParticleProfile) {
     profile.simulation_ms = 0.0;
     for row in &mut profile.emitters {
         let id = std::mem::take(&mut row.id);
-        *row = ParticleProfileRow { id, ..Default::default() };
+        *row = ParticleProfileRow {
+            id,
+            ..Default::default()
+        };
     }
 }
 

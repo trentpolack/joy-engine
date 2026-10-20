@@ -88,7 +88,10 @@ impl App for KitTool {
     }
 
     fn render(&mut self, _frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
-        let camera = OrbitCamera { distance: 6.0, ..Default::default() };
+        let camera = OrbitCamera {
+            distance: 6.0,
+            ..Default::default()
+        };
         Ok(target.draw(&self.scene, &camera, &FrameInputs::default())?)
     }
 
@@ -164,12 +167,19 @@ fn button(position: egui::Pos2, pressed: bool) -> egui::Event {
 }
 
 fn input(events: Vec<egui::Event>) -> egui::RawInput {
-    egui::RawInput { events, ..Default::default() }
+    egui::RawInput {
+        events,
+        ..Default::default()
+    }
 }
 
 #[test]
 fn kit_widgets_paint_and_respond_to_synthetic_input() {
-    let options = HeadlessOptions { width: WIDTH, height: HEIGHT, ..Default::default() };
+    let options = HeadlessOptions {
+        width: WIDTH,
+        height: HEIGHT,
+        ..Default::default()
+    };
     let mut shell = match HeadlessShell::new(options) {
         Ok(shell) => shell,
         Err(error) => {

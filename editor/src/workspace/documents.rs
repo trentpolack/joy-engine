@@ -52,7 +52,10 @@ impl WorkspaceDocument {
 
     /// Capture source and revision together so edits made during a save stay dirty.
     pub fn snapshot(&self) -> DiskDocument {
-        DiskDocument { text: self.text.clone(), revision: self.revision.clone() }
+        DiskDocument {
+            text: self.text.clone(),
+            revision: self.revision.clone(),
+        }
     }
 
     /// Advance the baseline to the submitted snapshot, preserving any newer local text.

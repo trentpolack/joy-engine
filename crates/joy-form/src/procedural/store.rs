@@ -26,7 +26,12 @@ pub struct Store {
 
 impl Store {
     pub fn new(budget: SharedBudget) -> Self {
-        Self { budget, points: 0, faces: 0, components: 0 }
+        Self {
+            budget,
+            points: 0,
+            faces: 0,
+            components: 0,
+        }
     }
 
     fn reserve(&mut self, points: usize, faces: usize, components: usize) -> Result<(), String> {

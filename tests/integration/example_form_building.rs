@@ -200,7 +200,11 @@ fn baked_records_and_formlab_documents_reproduce_the_building() {
 
 #[test]
 fn presets_and_baked_mode_render() {
-    let options = HeadlessOptions { width: 640, height: 400, ..Default::default() };
+    let options = HeadlessOptions {
+        width: 640,
+        height: 400,
+        ..Default::default()
+    };
     let mut shell = match HeadlessShell::new(options) {
         Ok(shell) => shell,
         Err(error) => {

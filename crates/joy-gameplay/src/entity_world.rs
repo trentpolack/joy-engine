@@ -134,7 +134,15 @@ impl EntityWorld {
         let serial = self.next_serial;
         self.next_serial += 1;
         let state = EntityState::from_definition(definition);
-        self.entities.insert(id.clone(), Entity { state, behavior, components: IndexMap::new(), serial });
+        self.entities.insert(
+            id.clone(),
+            Entity {
+                state,
+                behavior,
+                components: IndexMap::new(),
+                serial,
+            },
+        );
 
         if let Err(error) = self.attach_registered_components(&id, context) {
             self.remove(&id, context);
@@ -503,11 +511,18 @@ impl EntityWorld {
     ) -> Result<(), GameplayError> {
         let entity = self.entities.get_mut(id).ok_or_else(|| GameplayError::UnknownEntity(id.clone()))?;
         if entity.components.contains_key(kind) {
-            return Err(GameplayError::DuplicateComponent { entity: id.clone(), kind: kind.to_owned() });
+            return Err(GameplayError::DuplicateComponent {
+                entity: id.clone(),
+                kind: kind.to_owned(),
+            });
         }
         entity.components.insert(kind.to_owned(), component);
 
-        let Entity { state, components, .. } = entity;
+        let Entity {
+            state,
+            components,
+            ..
+        } = entity;
         let attached = components.get_mut(kind).expect("the component was inserted above");
         if let Err(error) = attached.on_attach(state, context) {
             if let Some(mut failed) = components.shift_remove(kind) {

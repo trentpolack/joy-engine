@@ -56,7 +56,15 @@ impl SaveSlot {
             Ok(text) => (None, text.clone()),
             Err(_) => (Some(SaveGuard::ReadFailed), None),
         };
-        (Self { storage, key, guard, stored }, loaded)
+        (
+            Self {
+                storage,
+                key,
+                guard,
+                stored,
+            },
+            loaded,
+        )
     }
 
     /// Record that the game could not use the text it read; ordinary writes leave it in place from now on.

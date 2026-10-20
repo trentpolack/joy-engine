@@ -15,7 +15,10 @@ use joy_core::math::{
 use crate::mesh::Bounds;
 
 /// Bounds that contain nothing: transforming any point into them widens them to that point.
-pub(crate) const EMPTY_BOUNDS: Bounds = Bounds { min: Vec3::splat(f32::INFINITY), max: Vec3::splat(f32::NEG_INFINITY) };
+pub(crate) const EMPTY_BOUNDS: Bounds = Bounds {
+    min: Vec3::splat(f32::INFINITY),
+    max: Vec3::splat(f32::NEG_INFINITY),
+};
 
 /// Whether local `bounds` transformed by `model` lie entirely outside one of `view_projection`'s six clip planes.
 pub(crate) fn outside_frustum(bounds: Bounds, model: Mat4, view_projection: Mat4) -> bool {
@@ -60,7 +63,10 @@ pub(crate) fn sphere_touches_bounds(center: Vec3, radius: f32, bounds: Bounds) -
 pub(crate) fn world_bounds(bounds: Bounds, model: Mat4) -> Bounds {
     bounds.corners().iter().fold(EMPTY_BOUNDS, |result, corner| {
         let point = model.transform_point3(*corner);
-        Bounds { min: result.min.min(point), max: result.max.max(point) }
+        Bounds {
+            min: result.min.min(point),
+            max: result.max.max(point),
+        }
     })
 }
 

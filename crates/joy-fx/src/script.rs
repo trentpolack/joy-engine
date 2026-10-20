@@ -171,7 +171,11 @@ impl ParticleScript {
         let mut parser = Parser::new(source, parameters, containers)?;
         let statements = parser.block(false)?;
         let parameter_slots = parameters.iter().map(|name| parser.slot(name)).collect();
-        Ok(Self { statements, slot_names: parser.slot_names, parameter_slots })
+        Ok(Self {
+            statements,
+            slot_names: parser.slot_names,
+            parameter_slots,
+        })
     }
 
     /// Run against a named numeric record, `values`.
@@ -213,7 +217,11 @@ impl ParticleScript {
         random: &mut dyn RandomSource,
         budget: &mut i64,
     ) -> Result<(), ParticleScriptError> {
-        let mut machine = Machine { slots, random, budget };
+        let mut machine = Machine {
+            slots,
+            random,
+            budget,
+        };
         run_statements(&self.statements, &mut machine)
     }
 }
@@ -430,7 +438,10 @@ struct Token<'a> {
 
 impl Token<'_> {
     fn location(&self) -> Location {
-        Location { line: self.line, column: self.column }
+        Location {
+            line: self.line,
+            column: self.column,
+        }
     }
 
     fn is_end(&self) -> bool {
@@ -439,7 +450,11 @@ impl Token<'_> {
 }
 
 fn error_at(message: impl Into<String>, line: u32, column: u32) -> ParticleScriptError {
-    ParticleScriptError { message: message.into(), line, column }
+    ParticleScriptError {
+        message: message.into(),
+        line,
+        column,
+    }
 }
 
 fn error(message: impl Into<String>, token: &Token<'_>) -> ParticleScriptError {
@@ -491,7 +506,11 @@ fn tokenize(source: &str) -> Result<Vec<Token<'_>>, ParticleScriptError> {
         let Some(length) = match_token(&source.as_bytes()[offset..]) else {
             return Err(error_at(format!("Unexpected character '{character}'"), line, column));
         };
-        tokens.push(Token { text: &source[offset..offset + length], line, column });
+        tokens.push(Token {
+            text: &source[offset..offset + length],
+            line,
+            column,
+        });
         if tokens.len() > MAXIMUM_SCRIPT_TOKENS {
             return Err(error("Script exceeds 2,000 tokens", &tokens[tokens.len() - 1]));
         }
@@ -499,7 +518,11 @@ fn tokenize(source: &str) -> Result<Vec<Token<'_>>, ParticleScriptError> {
         // Tokens are ASCII, so their byte length is their character count.
         column += length as u32;
     }
-    tokens.push(Token { text: END_TOKEN, line, column });
+    tokens.push(Token {
+        text: END_TOKEN,
+        line,
+        column,
+    });
     Ok(tokens)
 }
 
@@ -594,15 +617,27 @@ impl<'a> Parser<'a> {
         for name in PARTICLE_FIELDS.iter().chain(PARTICLE_INPUTS.iter()) {
             let slot = parser.slot(name);
             let writable = PARTICLE_FIELDS.contains(name);
-            parser
-                .references
-                .insert((*name).to_owned(), Reference { kind: ParticleValueKind::Scalar, slots: vec![slot], writable });
+            parser.references.insert(
+                (*name).to_owned(),
+                Reference {
+                    kind: ParticleValueKind::Scalar,
+                    slots: vec![slot],
+                    writable,
+                },
+            );
         }
         for (name, fields) in PARTICLE_CONTAINERS {
             let kind = if name == "color" { ParticleValueKind::Color } else { ParticleValueKind::Vector };
             let slots = fields.iter().map(|field| parser.slot(field)).collect();
             let writable = name != "origin" && name != "parentVelocity";
-            parser.references.insert(name.to_owned(), Reference { kind, slots, writable });
+            parser.references.insert(
+                name.to_owned(),
+                Reference {
+                    kind,
+                    slots,
+                    writable,
+                },
+            );
         }
 
         // Version-1 parameter names keep precedence over the newer built-in container names.
@@ -610,7 +645,11 @@ impl<'a> Parser<'a> {
             let slot = parser.slot(name);
             parser.references.insert(
                 (*name).to_owned(),
-                Reference { kind: ParticleValueKind::Scalar, slots: vec![slot], writable: false },
+                Reference {
+                    kind: ParticleValueKind::Scalar,
+                    slots: vec![slot],
+                    writable: false,
+                },
             );
         }
         parser.shadowable = PARTICLE_CONTAINERS
@@ -626,7 +665,14 @@ impl<'a> Parser<'a> {
                 ["r", "g", "b", "a"].iter().map(|channel| format!("{name}.{channel}")).collect()
             };
             let slots = fields.iter().map(|field| parser.slot(field)).collect();
-            parser.references.insert((*name).to_owned(), Reference { kind: *kind, slots, writable: false });
+            parser.references.insert(
+                (*name).to_owned(),
+                Reference {
+                    kind: *kind,
+                    slots,
+                    writable: false,
+                },
+            );
         }
         Ok(parser)
     }
@@ -704,7 +750,11 @@ impl<'a> Parser<'a> {
                 self.expect("{")?;
                 no = self.block(true)?;
             }
-            return Ok(Statement::If { condition, yes, no });
+            return Ok(Statement::If {
+                condition,
+                yes,
+                no,
+            });
         }
 
         let declare = self.take("let");
@@ -747,7 +797,11 @@ impl<'a> Parser<'a> {
                     let components = expression.kind.component_names();
                     components.iter().map(|component| self.slot(&format!("{name}.{component}"))).collect()
                 };
-                Reference { kind: expression.kind, slots, writable: true }
+                Reference {
+                    kind: expression.kind,
+                    slots,
+                    writable: true,
+                }
             }
         };
         match operator {
@@ -764,7 +818,12 @@ impl<'a> Parser<'a> {
             self.references.insert(name.to_owned(), target.clone());
             self.shadowable.remove(name);
         }
-        Ok(Statement::Assign { location: token.location(), operator, expression, target })
+        Ok(Statement::Assign {
+            location: token.location(),
+            operator,
+            expression,
+            target,
+        })
     }
 
     /// Resolve a declared name and an optional valid component letter.
@@ -812,7 +871,13 @@ impl<'a> Parser<'a> {
                     _ => UnaryOperator::Not,
                 };
                 let kind = operand.kind;
-                (Node::Unary { operator, operand: Box::new(operand) }, kind)
+                (
+                    Node::Unary {
+                        operator,
+                        operand: Box::new(operand),
+                    },
+                    kind,
+                )
             }
             "(" => {
                 let inner = self.expression(0)?;
@@ -856,10 +921,18 @@ impl<'a> Parser<'a> {
             let right_minimum = precedence + u32::from(operator != BinaryOperator::Power);
             let right = self.expression(right_minimum)?;
             kind = binary_kind(operator_token.text, operator, kind, right.kind, &operator_token)?;
-            node = Node::Binary { operator, left: Box::new(node), right: Box::new(right) };
+            node = Node::Binary {
+                operator,
+                left: Box::new(node),
+                right: Box::new(right),
+            };
         }
         self.depth -= 1;
-        Ok(Expr { location: token.location(), kind, node })
+        Ok(Expr {
+            location: token.location(),
+            kind,
+            node,
+        })
     }
 
     /// Type-check a call to a constructor (`vector`, `rgba`), component `mix`, or scalar built-in.
@@ -897,7 +970,13 @@ impl<'a> Parser<'a> {
         for argument in &arguments {
             require_kind(argument, ParticleValueKind::Scalar, token)?;
         }
-        Ok((Node::Call { function, arguments }, ParticleValueKind::Scalar))
+        Ok((
+            Node::Call {
+                function,
+                arguments,
+            },
+            ParticleValueKind::Scalar,
+        ))
     }
 }
 
@@ -967,7 +1046,10 @@ struct Value {
 
 impl Value {
     fn scalar(value: f64) -> Self {
-        Self { length: 1, components: [value, 0.0, 0.0, 0.0] }
+        Self {
+            length: 1,
+            components: [value, 0.0, 0.0, 0.0],
+        }
     }
 
     fn first(&self) -> f64 {
@@ -992,7 +1074,10 @@ impl Machine<'_> {
         if reference.kind == ParticleValueKind::Scalar {
             return Value::scalar(read(reference.slots[0]));
         }
-        let mut value = Value { length: reference.slots.len().min(4), components: [0.0; 4] };
+        let mut value = Value {
+            length: reference.slots.len().min(4),
+            components: [0.0; 4],
+        };
         for (component, slot) in value.components.iter_mut().zip(&reference.slots) {
             *component = read(*slot);
         }
@@ -1003,11 +1088,20 @@ impl Machine<'_> {
 fn run_statements(statements: &[Statement], machine: &mut Machine<'_>) -> Result<(), ParticleScriptError> {
     for statement in statements {
         match statement {
-            Statement::If { condition, yes, no } => {
+            Statement::If {
+                condition,
+                yes,
+                no,
+            } => {
                 let value = evaluate(condition, machine)?;
                 run_statements(if is_true(value.first()) { yes } else { no }, machine)?;
             }
-            Statement::Assign { location, operator, expression, target } => {
+            Statement::Assign {
+                location,
+                operator,
+                expression,
+                target,
+            } => {
                 // Evaluate first so swaps and self-references cannot observe partial writes.
                 let value = evaluate(expression, machine)?;
                 let result = match operator {
@@ -1045,7 +1139,10 @@ fn evaluate_node(node: &Node, machine: &mut Machine<'_>) -> Result<Value, Partic
     Ok(match node {
         Node::Literal(value) => Value::scalar(*value),
         Node::Read(reference) => machine.read(reference),
-        Node::Unary { operator, operand } => {
+        Node::Unary {
+            operator,
+            operand,
+        } => {
             let value = evaluate(operand, machine)?;
             match operator {
                 UnaryOperator::Negate => calculate(BinaryOperator::Multiply, value, Value::scalar(-1.0)),
@@ -1055,7 +1152,10 @@ fn evaluate_node(node: &Node, machine: &mut Machine<'_>) -> Result<Value, Partic
         }
         Node::Group(inner) => evaluate(inner, machine)?,
         Node::Construct(arguments) => {
-            let mut value = Value { length: arguments.len().min(4), components: [0.0; 4] };
+            let mut value = Value {
+                length: arguments.len().min(4),
+                components: [0.0; 4],
+            };
             for (component, argument) in value.components.iter_mut().zip(arguments) {
                 *component = evaluate(argument, machine)?.first();
             }
@@ -1069,14 +1169,21 @@ fn evaluate_node(node: &Node, machine: &mut Machine<'_>) -> Result<Value, Partic
             let difference = calculate(BinaryOperator::Subtract, b, a);
             calculate(BinaryOperator::Add, a, calculate(BinaryOperator::Multiply, difference, t))
         }
-        Node::Call { function, arguments } => {
+        Node::Call {
+            function,
+            arguments,
+        } => {
             let mut values = [0.0; 3];
             for (value, argument) in values.iter_mut().zip(arguments) {
                 *value = evaluate(argument, machine)?.first();
             }
             Value::scalar(function.call(&values[..arguments.len().min(3)], machine.random))
         }
-        Node::Binary { operator, left, right } => {
+        Node::Binary {
+            operator,
+            left,
+            right,
+        } => {
             let value = evaluate_node(left, machine)?;
             match operator {
                 BinaryOperator::And => {

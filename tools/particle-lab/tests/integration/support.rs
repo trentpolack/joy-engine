@@ -32,7 +32,11 @@ pub struct Harness {
 
 impl Harness {
     pub fn new() -> Option<Self> {
-        let options = HeadlessOptions { width: WIDTH, height: HEIGHT, ..Default::default() };
+        let options = HeadlessOptions {
+            width: WIDTH,
+            height: HEIGHT,
+            ..Default::default()
+        };
         let mut shell = match HeadlessShell::new(options) {
             Ok(shell) => shell,
             Err(error) => {
@@ -43,14 +47,21 @@ impl Harness {
         let mut tool = ParticleLabTool::with_storage(None);
         shell.start(&mut tool).expect("tool starts");
         shell.ui_context().enable_accesskit();
-        let mut harness = Self { shell, tool, widgets: Vec::new() };
+        let mut harness = Self {
+            shell,
+            tool,
+            widgets: Vec::new(),
+        };
         harness.idle(3);
         Some(harness)
     }
 
     /// Run one frame with `events`.
     pub fn frame(&mut self, events: Vec<Event>) {
-        let input = egui::RawInput { events, ..Default::default() };
+        let input = egui::RawInput {
+            events,
+            ..Default::default()
+        };
         let output = self.shell.step_with_ui(&mut self.tool, input).expect("frame runs");
         if let Some(update) = output.accesskit_update {
             self.widgets = update
@@ -115,7 +126,13 @@ impl Harness {
 
     /// Press `key` with `modifiers`.
     pub fn key(&mut self, key: Key, modifiers: Modifiers) {
-        self.frame(vec![Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers }]);
+        self.frame(vec![Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }]);
     }
 
     /// Save the latest frame as `name` when `JOY_RENDER_CAPTURE_DIR` is set.
@@ -135,5 +152,10 @@ impl Harness {
 }
 
 pub fn button(position: Pos2, pressed: bool) -> Event {
-    Event::PointerButton { pos: position, button: PointerButton::Primary, pressed, modifiers: Modifiers::NONE }
+    Event::PointerButton {
+        pos: position,
+        button: PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    }
 }

@@ -61,12 +61,20 @@ pub struct SoundDefinition {
 impl SoundDefinition {
     /// A sound from a WAV file's bytes (for example `include_bytes!`) at full volume.
     pub fn wav(bytes: impl Into<Cow<'static, [u8]>>) -> Self {
-        Self { source: SoundSource::Wav(bytes.into()), volume: 1.0, maximum_voices: None }
+        Self {
+            source: SoundSource::Wav(bytes.into()),
+            volume: 1.0,
+            maximum_voices: None,
+        }
     }
 
     /// A sound from raw samples at full volume.
     pub fn pcm(sound: PcmSound) -> Self {
-        Self { source: SoundSource::Pcm(sound), volume: 1.0, maximum_voices: None }
+        Self {
+            source: SoundSource::Pcm(sound),
+            volume: 1.0,
+            maximum_voices: None,
+        }
     }
 
     /// Replace the volume.
@@ -91,7 +99,9 @@ pub struct AudioBankOptions {
 
 impl Default for AudioBankOptions {
     fn default() -> Self {
-        Self { maximum_voices: DEFAULT_MAXIMUM_VOICES }
+        Self {
+            maximum_voices: DEFAULT_MAXIMUM_VOICES,
+        }
     }
 }
 
@@ -187,8 +197,10 @@ impl AudioBank {
         let mut decoded = Vec::with_capacity(definitions.len());
         let mut sounds = HashMap::with_capacity(definitions.len());
         for (name, definition) in definitions {
-            let sound =
-                decode::decode(&definition.source).map_err(|reason| AudioError::Load { name: name.clone(), reason })?;
+            let sound = decode::decode(&definition.source).map_err(|reason| AudioError::Load {
+                name: name.clone(),
+                reason,
+            })?;
             let slot = SoundSlot {
                 index: decoded.len(),
                 volume: definition.volume,
@@ -201,7 +213,13 @@ impl AudioBank {
             name: decoded.get(index).map_or_else(String::new, |(name, _)| name.clone()),
             reason,
         })?;
-        Ok(Self { sounds, maximum_voices: options.maximum_voices, master_volume: 1.0, output, destroyed: false })
+        Ok(Self {
+            sounds,
+            maximum_voices: options.maximum_voices,
+            master_volume: 1.0,
+            output,
+            destroyed: false,
+        })
     }
 
     /// Ask the output to run; call it from input handling after a gesture. Returns whether audio runs now (browsers

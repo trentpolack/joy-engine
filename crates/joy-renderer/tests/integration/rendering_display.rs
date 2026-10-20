@@ -5,7 +5,7 @@
 //! triangle renderer pass through the display transform into a half-float target, as an HDR surface would receive
 //! them, and are read back as floats. Normally lit content must match standard output on every encoding, highlights
 //! must rise into the display's headroom and never beyond it, extended linear (scRGB) output must carry the same image
-//! as light scaled to the display's SDR white, and the filmic curve must keep middle gray. Skips without a 
+//! as light scaled to the display's SDR white, and the filmic curve must keep middle gray. Skips without a
 //! GPU adapter or an HDR scene format; native only (browsers cannot block on readback).
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -107,8 +107,11 @@ fn band_renderer(
     settings: &PostProcessSettings,
     display: DisplayOutput,
 ) -> TriangleRenderer {
-    let options =
-        TriangleRendererOptions { shader: SHADER.to_owned(), uniform_size: 80, post_process: Some(settings.clone()) };
+    let options = TriangleRendererOptions {
+        shader: SHADER.to_owned(),
+        uniform_size: 80,
+        post_process: Some(settings.clone()),
+    };
     let mut renderer = TriangleRenderer::new(gpu, format, options).expect("renderer");
     renderer.resize(WIDTH, HEIGHT, 1.0);
     renderer.set_display_output(display);
@@ -118,7 +121,11 @@ fn band_renderer(
 /// Draw the bands of `colors` into `output`.
 fn draw_bands(renderer: &mut TriangleRenderer, output: &wgpu::TextureView, colors: &[[f32; 3]; 4]) {
     let (width, height) = (WIDTH as f32, HEIGHT as f32);
-    let camera = TopDownCamera { height: 10.0, near: 1.0, far: 20.0 };
+    let camera = TopDownCamera {
+        height: 10.0,
+        near: 1.0,
+        far: 20.0,
+    };
     let matrix = top_down_orthographic(width, height, Vec2::new(width * 0.5, height * 0.5), camera).unwrap();
     let mut uniforms = matrix.to_cols_array().to_vec();
     uniforms.extend([0.0; 4]);
@@ -128,7 +135,10 @@ fn draw_bands(renderer: &mut TriangleRenderer, output: &wgpu::TextureView, color
         let (left, right) = ((index as u32 * BAND_WIDTH) as f32, ((index as u32 + 1) * BAND_WIDTH) as f32);
         let color = [light[0], light[1], light[2], 1.0];
         for (x, y) in [(left, 0.0), (right, 0.0), (right, height), (left, 0.0), (right, height), (left, height)] {
-            vertices.push(ColorVertex { position: [x, y, 0.0], color });
+            vertices.push(ColorVertex {
+                position: [x, y, 0.0],
+                color,
+            });
         }
     }
     let frame = TriangleFrame {
@@ -163,7 +173,11 @@ fn extended_colors(
 ) -> [[f32; 3]; 4] {
     let texture = gpu.device().create_texture(&wgpu::TextureDescriptor {
         label: Some("extended output"),
-        size: wgpu::Extent3d { width: WIDTH, height: HEIGHT, depth_or_array_layers: 1 },
+        size: wgpu::Extent3d {
+            width: WIDTH,
+            height: HEIGHT,
+            depth_or_array_layers: 1,
+        },
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
@@ -195,7 +209,9 @@ fn read_half_floats(gpu: &GpuContext, texture: &wgpu::Texture) -> Vec<f32> {
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
-    let mut encoder = gpu.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    let mut encoder = gpu.device().create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: None,
+    });
     encoder.copy_texture_to_buffer(
         texture.as_image_copy(),
         wgpu::TexelCopyBufferInfo {
@@ -206,7 +222,11 @@ fn read_half_floats(gpu: &GpuContext, texture: &wgpu::Texture) -> Vec<f32> {
                 rows_per_image: Some(HEIGHT),
             },
         },
-        wgpu::Extent3d { width: WIDTH, height: HEIGHT, depth_or_array_layers: 1 },
+        wgpu::Extent3d {
+            width: WIDTH,
+            height: HEIGHT,
+            depth_or_array_layers: 1,
+        },
     );
 
     gpu.queue().submit([encoder.finish()]);
@@ -217,10 +237,7 @@ fn read_half_floats(gpu: &GpuContext, texture: &wgpu::Texture) -> Vec<f32> {
 
     let mapped = slice.get_mapped_range().expect("mapped range");
     let (mapped_range, _) = mapped.as_chunks::<2>();
-    mapped_range
-        .iter()
-        .map(|bits| half_to_f32(u16::from_le_bytes([bits[0], bits[1]])))
-        .collect()
+    mapped_range.iter().map(|bits| half_to_f32(u16::from_le_bytes([bits[0], bits[1]]))).collect()
 }
 
 /// Decode an IEEE 754 half-precision value.

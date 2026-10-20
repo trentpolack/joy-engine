@@ -41,7 +41,10 @@ fn more_lights_than_the_cap_keep_the_strongest_in_view_instead_of_failing() {
     lights.push(light(-1.0, 8.0, 50.0));
     lights.push(light(1.0, 8.0, 40.0));
     lights.push(light(0.0, 30.0, 1000.0));
-    lights.push(PointLight { range: 0.0, ..light(0.0, 0.0, 10.0) });
+    lights.push(PointLight {
+        range: 0.0,
+        ..light(0.0, 0.0, 10.0)
+    });
 
     let selected = select_point_lights(&lights, &camera);
     assert_eq!(selected.lights.len(), MAX_POINT_LIGHTS);

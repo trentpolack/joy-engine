@@ -63,8 +63,12 @@ const HEIGHT: u32 = 400;
 
 /// A headless shell with the lab's renderer settings, or `None` (with a note) without an adapter.
 fn shell() -> Option<HeadlessShell> {
-    let options =
-        HeadlessOptions { width: WIDTH, height: HEIGHT, renderer: config::renderer_options(), ..Default::default() };
+    let options = HeadlessOptions {
+        width: WIDTH,
+        height: HEIGHT,
+        renderer: config::renderer_options(),
+        ..Default::default()
+    };
     match HeadlessShell::new(options) {
         Ok(shell) => Some(shell),
         Err(error) => {
@@ -311,7 +315,10 @@ fn capture_mask_shadow(
         elapsed_seconds: 0.0,
         time_of_day: 0.5,
         sun,
-        moon: DirectionalLight { intensity: 0.0, ..sun },
+        moon: DirectionalLight {
+            intensity: 0.0,
+            ..sun
+        },
         primary: sun,
         skylight: Skylight::default(),
         wind_velocity: Vec3::ZERO,
@@ -320,11 +327,18 @@ fn capture_mask_shadow(
         cloud_shape_and_shafts: [1800.0, 700.0, 0.0, 0.94],
         shaft_exposure_and_occlusion: [0.0, 1.0, 7.0],
     };
-    let options = RendererOptions { atmosphere: false, ..RendererOptions::default() };
+    let options = RendererOptions {
+        atmosphere: false,
+        ..RendererOptions::default()
+    };
     let mut renderer = Renderer::new(gpu, CAPTURE_FORMAT, options);
     let target = OffscreenTarget::new(gpu, FIXTURE_SIZE, FIXTURE_SIZE).expect("capture target");
     renderer.resize(FIXTURE_SIZE, FIXTURE_SIZE, 1.0);
-    let inputs = FrameInputs { environment: Some(&environment), ambient: Some(0.02), ..FrameInputs::default() };
+    let inputs = FrameInputs {
+        environment: Some(&environment),
+        ambient: Some(0.02),
+        ..FrameInputs::default()
+    };
     renderer.render(&scene, &camera, &inputs, target.view()).expect("fixture renders");
     let pixels = target.read_rgba(gpu).expect("readback");
     if let Ok(directory) = std::env::var("JOY_RENDER_CAPTURE_DIR") {

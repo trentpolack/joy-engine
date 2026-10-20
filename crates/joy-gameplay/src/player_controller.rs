@@ -50,7 +50,10 @@ impl IntentController {
         world: &mut EntityWorld,
         sampler: impl FnMut(f32, &EntityState) -> Result<ControlIntent, GameplayError> + 'static,
     ) -> Self {
-        Self { id: world.create_controller(), sampler: Box::new(sampler) }
+        Self {
+            id: world.create_controller(),
+            sampler: Box::new(sampler),
+        }
     }
 
     /// This controller's possession id.

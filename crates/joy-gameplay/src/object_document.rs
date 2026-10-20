@@ -53,7 +53,11 @@ impl ObjectDocument {
         if entity.template.is_some() || entity.overrides.is_some() {
             return Err(ObjectError::NestedTemplate);
         }
-        Ok(Self { version: OBJECT_VERSION, name, entity })
+        Ok(Self {
+            version: OBJECT_VERSION,
+            name,
+            entity,
+        })
     }
 
     /// Serialize as `{version, name, entity}`.
@@ -147,8 +151,10 @@ pub fn resolve_level_objects<E: Display>(
         };
         let path = asset_path(&template, &[OBJECT_EXTENSION])?.to_owned();
         if !sources.contains_key(&path) {
-            let text =
-                read(&path).map_err(|error| ObjectError::Read { path: path.clone(), message: error.to_string() })?;
+            let text = read(&path).map_err(|error| ObjectError::Read {
+                path: path.clone(),
+                message: error.to_string(),
+            })?;
             sources.insert(path.clone(), parse_object(&text)?);
         }
         if let Some(source) = sources.get(&path) {

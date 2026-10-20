@@ -29,7 +29,12 @@ const BYTE_ORDER_MARK: char = '\u{feff}';
 /// Parse FORM without executing authored code. Locations are one-based lines and
 /// character columns, so editors place diagnostics directly.
 pub(crate) fn parse(source: &str) -> Result<Vec<Statement>, Diagnostic> {
-    Parser { tokens: tokenize(source)?, cursor: 0, depth: 0 }.block(false)
+    Parser {
+        tokens: tokenize(source)?,
+        cursor: 0,
+        depth: 0,
+    }
+    .block(false)
 }
 
 struct Parser {
@@ -107,7 +112,12 @@ impl Parser {
             self.expect("as")?;
             let binding = self.name()?;
             self.expect("{")?;
-            StmtKind::Wrangle { domain, expression, binding: Some(binding), body: self.block(true)? }
+            StmtKind::Wrangle {
+                domain,
+                expression,
+                binding: Some(binding),
+                body: self.block(true)?,
+            }
         } else if self.take("if") {
             let expression = self.expression(0)?;
             self.expect("{")?;
@@ -123,7 +133,11 @@ impl Parser {
             self.expect("as")?;
             let name = self.name()?;
             self.expect("{")?;
-            StmtKind::Repeat { name, expression, body: self.block(true)? }
+            StmtKind::Repeat {
+                name,
+                expression,
+                body: self.block(true)?,
+            }
         } else if self.tokens.get(self.cursor + 1).map(|next| next.text.as_str()) == Some(".")
             && self.tokens.get(self.cursor + 3).map(|next| next.text.as_str()) == Some("=")
         {
@@ -131,11 +145,18 @@ impl Parser {
             self.expect(".")?;
             let name = self.name()?;
             self.expect("=")?;
-            StmtKind::BindingAttribute { binding, name, expression: self.expression(0)? }
+            StmtKind::BindingAttribute {
+                binding,
+                name,
+                expression: self.expression(0)?,
+            }
         } else {
             StmtKind::Command(self.expression(0)?)
         };
-        Ok(Statement { kind, token })
+        Ok(Statement {
+            kind,
+            token,
+        })
     }
 
     fn parameter(&mut self, token: Token) -> Result<Statement, Diagnostic> {
@@ -170,7 +191,14 @@ impl Parser {
                 self.expect(")")?;
             }
         }
-        Ok(Statement { kind: StmtKind::Param { name, values, metadata }, token })
+        Ok(Statement {
+            kind: StmtKind::Param {
+                name,
+                values,
+                metadata,
+            },
+            token,
+        })
     }
 
     fn project(&mut self, token: Token) -> Result<Statement, Diagnostic> {
@@ -211,7 +239,13 @@ impl Parser {
         let Some(name) = name_token else {
             return Err(Diagnostic::at("Project metadata requires a name.", &token));
         };
-        Ok(Statement { kind: StmtKind::Project { fields: serde_json::Value::Object(fields), name }, token })
+        Ok(Statement {
+            kind: StmtKind::Project {
+                fields: serde_json::Value::Object(fields),
+                name,
+            },
+            token,
+        })
     }
 
     fn expression(&mut self, minimum: i32) -> Result<Expression, Diagnostic> {
@@ -222,8 +256,14 @@ impl Parser {
         let token = self.current().clone();
         self.cursor += 1;
         let mut left = match token.text.as_str() {
-            "{" => Expression { kind: ExprKind::Record(self.record_fields()?), token: token.clone() },
-            "[" => Expression { kind: ExprKind::Array(self.arguments("]")?), token: token.clone() },
+            "{" => Expression {
+                kind: ExprKind::Record(self.record_fields()?),
+                token: token.clone(),
+            },
+            "[" => Expression {
+                kind: ExprKind::Array(self.arguments("]")?),
+                token: token.clone(),
+            },
             "true" | "false" | "null" => Expression {
                 kind: ExprKind::Literal(match token.text.as_str() {
                     "true" => serde_json::Value::Bool(true),
@@ -243,7 +283,10 @@ impl Parser {
             }
             text if text.starts_with('"') => {
                 let text = serde_json::from_str(text).map_err(|_| Diagnostic::at("Invalid quoted text.", &token))?;
-                Expression { kind: ExprKind::Text(text), token: token.clone() }
+                Expression {
+                    kind: ExprKind::Text(text),
+                    token: token.clone(),
+                }
             }
             text if starts_number(text.as_bytes()) => Expression {
                 // Tokenization already enforces the decimal/exponent grammar.
@@ -256,7 +299,10 @@ impl Parser {
                 } else {
                     ExprKind::Variable(text.to_owned())
                 };
-                Expression { kind, token: token.clone() }
+                Expression {
+                    kind,
+                    token: token.clone(),
+                }
             }
             _ => {
                 return Err(Diagnostic::at(format!("Expected an expression, found '{}'.", token.text), &token));
@@ -399,7 +445,11 @@ fn starts_number(bytes: &[u8]) -> bool {
 
 fn tokenize(source: &str) -> Result<Vec<Token>, Diagnostic> {
     if source.chars().count() > SOURCE_LIMIT {
-        return Err(Diagnostic { message: "Script size limit is 200,000 characters.".into(), line: 1, column: 1 });
+        return Err(Diagnostic {
+            message: "Script size limit is 200,000 characters.".into(),
+            line: 1,
+            column: 1,
+        });
     }
     // A leading byte-order mark is an encoding artifact, not source; it takes no column.
     let source = source.strip_prefix(BYTE_ORDER_MARK).unwrap_or(source);
@@ -434,17 +484,29 @@ fn tokenize(source: &str) -> Result<Vec<Token>, Diagnostic> {
             });
         }
         let Some(length) = token_length(remaining) else {
-            return Err(Diagnostic { message: format!("Unexpected character '{character}'."), line, column });
+            return Err(Diagnostic {
+                message: format!("Unexpected character '{character}'."),
+                line,
+                column,
+            });
         };
         let text = &remaining[..length];
-        tokens.push(Token { text: text.to_owned(), line, column });
+        tokens.push(Token {
+            text: text.to_owned(),
+            line,
+            column,
+        });
         if tokens.len() > TOKEN_LIMIT {
             return Err(Diagnostic::at("Token limit exceeded.", tokens.last().unwrap()));
         }
         offset += length;
         column += text.chars().count();
     }
-    tokens.push(Token { text: "<end>".into(), line, column });
+    tokens.push(Token {
+        text: "<end>".into(),
+        line,
+        column,
+    });
     Ok(tokens)
 }
 

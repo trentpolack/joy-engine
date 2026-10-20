@@ -123,7 +123,12 @@ pub struct ControlResponse {
 
 impl ControlResponse {
     fn idle(response: Response) -> Self {
-        Self { response, changed: false, phase: EditPhase::Idle, component: None }
+        Self {
+            response,
+            changed: false,
+            phase: EditPhase::Idle,
+            component: None,
+        }
     }
 
     /// Whether history should record now.
@@ -203,7 +208,14 @@ impl NumericDrafts {
     }
 
     fn reject(&mut self, id: Id, text: String, message: String, confirmed: bool) {
-        self.rejected.insert(id, RejectedDraft { text, message, confirmed });
+        self.rejected.insert(
+            id,
+            RejectedDraft {
+                text,
+                message,
+                confirmed,
+            },
+        );
     }
 }
 
@@ -337,8 +349,23 @@ impl<'a> NumberField<'a> {
 
     /// Draw the field and apply the author's edits.
     pub fn show(self, ui: &mut Ui, drafts: &mut NumericDrafts) -> ControlResponse {
-        let NumberField { id_salt, value, rules, step, default, width, align, label, check } = self;
-        let spec = FieldSpec { rules, step, width, align };
+        let NumberField {
+            id_salt,
+            value,
+            rules,
+            step,
+            default,
+            width,
+            align,
+            label,
+            check,
+        } = self;
+        let spec = FieldSpec {
+            rules,
+            step,
+            width,
+            align,
+        };
         let id = ui.make_persistent_id(id_salt);
         let text_id = id.with("text");
         let mut memory: FieldMemory = ui.data(|data| data.get_temp(id)).unwrap_or_default();
@@ -479,9 +506,12 @@ fn show_editing(
         let presses = ui.input_mut(|input| {
             let mut presses = Vec::new();
             input.events.retain(|event| match event {
-                egui::Event::Key { key: key @ (Key::ArrowUp | Key::ArrowDown), pressed: true, modifiers, .. }
-                    if !modifiers.command && !modifiers.ctrl =>
-                {
+                egui::Event::Key {
+                    key: key @ (Key::ArrowUp | Key::ArrowDown),
+                    pressed: true,
+                    modifiers,
+                    ..
+                } if !modifiers.command && !modifiers.ctrl => {
                     presses
                         .push((if *key == Key::ArrowUp { 1.0 } else { -1.0 }, StepScale::from_modifiers(*modifiers)));
                     false
@@ -560,7 +590,12 @@ fn show_editing(
     if let Some(rejected) = drafts.rejected(id).filter(|rejected| rejected.confirmed).cloned() {
         show_draft_error(ui, &rejected.message, size.x);
     }
-    ControlResponse { response, changed, phase, component: None }
+    ControlResponse {
+        response,
+        changed,
+        phase,
+        component: None,
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -664,7 +699,18 @@ impl<'a> ScalarControl<'a> {
 
     /// Draw the control and apply edits.
     pub fn show(self, ui: &mut Ui, drafts: &mut NumericDrafts) -> ControlResponse {
-        let Self { id_salt, value, rules, step, slider_step, default, label, name, slider, field_width } = self;
+        let Self {
+            id_salt,
+            value,
+            rules,
+            step,
+            slider_step,
+            default,
+            label,
+            name,
+            slider,
+            field_width,
+        } = self;
         let name = name.or_else(|| label.clone());
         ui.push_id(id_salt, |ui| {
             ui.horizontal(|ui| {
@@ -921,7 +967,12 @@ fn slider_control(
     } else {
         EditPhase::Idle
     };
-    ControlResponse { response, changed, phase, component: None }
+    ControlResponse {
+        response,
+        changed,
+        phase,
+        component: None,
+    }
 }
 
 /// The lab range slider: a thin rail with an accent fill up to the value and a round accent thumb. Pressing or dragging
@@ -958,8 +1009,13 @@ pub fn lab_slider(
     }
     if response.has_focus() && span > 0.0 {
         ui.memory_mut(|memory| {
-            memory
-                .set_focus_lock_filter(response.id, egui::EventFilter { horizontal_arrows: true, ..Default::default() })
+            memory.set_focus_lock_filter(
+                response.id,
+                egui::EventFilter {
+                    horizontal_arrows: true,
+                    ..Default::default()
+                },
+            )
         });
         let (decrease, increase) =
             ui.input(|input| (input.num_presses(Key::ArrowLeft), input.num_presses(Key::ArrowRight)));
@@ -1025,7 +1081,13 @@ pub struct ColorControl<'a> {
 impl<'a> ColorControl<'a> {
     /// A swatch for linear `values` (RGB or RGBA) with per-channel bounds that picker choices respect.
     pub fn new(id_salt: impl egui::AsId, values: &'a mut [f64], minimums: &'a [f64], maximums: &'a [f64]) -> Self {
-        Self { id_salt: Id::new(id_salt), values, minimums, maximums, label: String::new() }
+        Self {
+            id_salt: Id::new(id_salt),
+            values,
+            minimums,
+            maximums,
+            label: String::new(),
+        }
     }
 
     /// Name for hover help, for example the parameter name.

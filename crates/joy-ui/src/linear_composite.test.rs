@@ -36,15 +36,30 @@ fn ui_lands_on_sdr_white_and_blends_over_the_scene() {
         }
     };
     let sdr_white_level = 2.5;
-    let scene = wgpu::Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+    let scene = wgpu::Color {
+        r: 1.0,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    };
 
     // Opaque UI white over the scene shows at the SDR white level.
-    let white = wgpu::Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+    let white = wgpu::Color {
+        r: 1.0,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    };
     let opaque = composite_over(&gpu, sdr_white_level, white, scene);
     assert!((opaque - sdr_white_level).abs() < 0.01, "opaque UI white is {opaque}");
 
     // Half-covered UI (premultiplied quarter-bright light) adds its scaled light to half the scene behind it.
-    let translucent = wgpu::Color { r: 0.25, g: 0.25, b: 0.25, a: 0.5 };
+    let translucent = wgpu::Color {
+        r: 0.25,
+        g: 0.25,
+        b: 0.25,
+        a: 0.5,
+    };
     let blended = composite_over(&gpu, sdr_white_level, translucent, scene);
     let expected = (0.25 * sdr_white_level) + 0.5;
     assert!((blended - expected).abs() < 0.02, "translucent UI composites to {blended}, expected {expected}");
@@ -58,7 +73,11 @@ fn composite_over(gpu: &GpuContext, sdr_white_level: f32, interface: wgpu::Color
     let mut composite = LinearComposite::new(device, gpu.queue(), OUTPUT_FORMAT, sdr_white_level);
     let output = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("scRGB output"),
-        size: wgpu::Extent3d { width: WIDTH, height: 1, depth_or_array_layers: 1 },
+        size: wgpu::Extent3d {
+            width: WIDTH,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
@@ -68,7 +87,9 @@ fn composite_over(gpu: &GpuContext, sdr_white_level: f32, interface: wgpu::Color
     });
     let output_view = output.create_view(&wgpu::TextureViewDescriptor::default());
 
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: None,
+    });
     clear(&mut encoder, composite.interface_view(device, [WIDTH, 1]), interface);
     clear(&mut encoder, &output_view, scene);
     composite.composite(&mut encoder, &output_view);
@@ -82,9 +103,17 @@ fn composite_over(gpu: &GpuContext, sdr_white_level: f32, interface: wgpu::Color
         output.as_image_copy(),
         wgpu::TexelCopyBufferInfo {
             buffer: &readback,
-            layout: wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(WIDTH * 8), rows_per_image: Some(1) },
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(WIDTH * 8),
+                rows_per_image: Some(1),
+            },
         },
-        wgpu::Extent3d { width: WIDTH, height: 1, depth_or_array_layers: 1 },
+        wgpu::Extent3d {
+            width: WIDTH,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
     );
     gpu.queue().submit([encoder.finish()]);
 
@@ -102,7 +131,10 @@ fn clear(encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView, color: wg
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             view,
             resolve_target: None,
-            ops: wgpu::Operations { load: wgpu::LoadOp::Clear(color), store: wgpu::StoreOp::Store },
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(color),
+                store: wgpu::StoreOp::Store,
+            },
             depth_slice: None,
         })],
         ..Default::default()

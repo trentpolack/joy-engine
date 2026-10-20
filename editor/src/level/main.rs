@@ -398,7 +398,11 @@ impl LevelEditor {
         if self.object_mode
             && let Some(entity) = level.entities.first()
         {
-            let object = ObjectDocument { version: 1, name: level.name.clone(), entity: entity.clone() };
+            let object = ObjectDocument {
+                version: 1,
+                name: level.name.clone(),
+                entity: entity.clone(),
+            };
             if let Ok(text) = serialize_object(&object) {
                 return text;
             }
@@ -929,7 +933,11 @@ impl LevelEditor {
         definition.transform.position = Vec3::ZERO;
         definition.template = None;
         definition.overrides = None;
-        let object = ObjectDocument { version: 1, name: entity.name.clone(), entity: definition };
+        let object = ObjectDocument {
+            version: 1,
+            name: entity.name.clone(),
+            entity: definition,
+        };
         let text = serialize_object(&object).map_err(|error| error.to_string())?;
         access.create(&path, &text)?;
         self.objects.insert(path.clone(), object);
@@ -1132,20 +1140,32 @@ impl LevelEditor {
         {
             for (name, parameter) in &effect.asset().parameters {
                 let entry = match parameter {
-                    ParticleParameter::Scalar { value, min, max } => (json_number(*value), Some(*min), Some(*max)),
-                    ParticleParameter::Vector3 { value, .. } => {
-                        (Value::from(value.map(json_number).to_vec()), None, None)
-                    }
-                    ParticleParameter::Color { value, .. } => {
-                        (Value::from(value.map(json_number).to_vec()), None, None)
-                    }
+                    ParticleParameter::Scalar {
+                        value,
+                        min,
+                        max,
+                    } => (json_number(*value), Some(*min), Some(*max)),
+                    ParticleParameter::Vector3 {
+                        value,
+                        ..
+                    } => (Value::from(value.map(json_number).to_vec()), None, None),
+                    ParticleParameter::Color {
+                        value,
+                        ..
+                    } => (Value::from(value.map(json_number).to_vec()), None, None),
                 };
                 found.push((component_type::EFFECT.to_owned(), name.clone(), entry.0, entry.1, entry.2));
             }
         }
         for (component, name, value, min, max) in found {
-            self.metadata
-                .insert(format!("{component}.parameters.{name}"), FieldMetadata { min, max, ..Default::default() });
+            self.metadata.insert(
+                format!("{component}.parameters.{name}"),
+                FieldMetadata {
+                    min,
+                    max,
+                    ..Default::default()
+                },
+            );
             self.parameter_defaults.push((component, name, value));
         }
     }
@@ -1262,5 +1282,8 @@ pub fn set_path(root: &mut Value, path: &[String], value: Option<Value>) {
 
 /// Bounds for transform channels: finite values only.
 pub fn transform_bounds(field: TransformField) -> NumberBounds {
-    NumberBounds { step: Some(field.step()), ..Default::default() }
+    NumberBounds {
+        step: Some(field.step()),
+        ..Default::default()
+    }
 }

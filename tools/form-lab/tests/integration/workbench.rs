@@ -47,7 +47,10 @@ pub fn lab(name: &str) -> FormLab {
 
 /// UI input carrying `events`.
 pub fn input(events: Vec<egui::Event>) -> egui::RawInput {
-    egui::RawInput { events, ..Default::default() }
+    egui::RawInput {
+        events,
+        ..Default::default()
+    }
 }
 
 /// Run UI frames until builds settle (at most `limit` frames), finishing outstanding builds between frames.
@@ -118,7 +121,12 @@ pub fn drag(
     to: egui::Pos2,
     button: egui::PointerButton,
 ) {
-    let event = |pos, pressed| egui::Event::PointerButton { pos, button, pressed, modifiers: egui::Modifiers::NONE };
+    let event = |pos, pressed| egui::Event::PointerButton {
+        pos,
+        button,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
     shell.step_with_ui(lab, input(vec![egui::Event::PointerMoved(from)])).unwrap();
     shell.step_with_ui(lab, input(vec![event(from, true)])).unwrap();
     for step in 1..=10 {
@@ -130,7 +138,13 @@ pub fn drag(
 
 /// Press a key with modifiers.
 pub fn key(shell: &mut HeadlessShell, lab: &mut FormLab, key: egui::Key, modifiers: egui::Modifiers) {
-    let event = |pressed| egui::Event::Key { key, physical_key: None, pressed, repeat: false, modifiers };
+    let event = |pressed| egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers,
+    };
     shell.step_with_ui(lab, input(vec![event(true)])).unwrap();
     shell.step_with_ui(lab, input(vec![event(false)])).unwrap();
 }
@@ -371,7 +385,12 @@ fn browser_recovery_restores_the_study_with_replacement_protection() {
     let second = FormLab::with_storage(ToolHosting::Standalone, storage());
     assert_eq!(second.session().overrides().get("height"), Some(&joy_engine::serde_json::json!(3)));
     assert!(second.session().has_edits(), "recovery may be the only copy");
-    let hosted = FormLab::with_storage(ToolHosting::Hosted { area: egui::Rect::NOTHING }, storage());
+    let hosted = FormLab::with_storage(
+        ToolHosting::Hosted {
+            area: egui::Rect::NOTHING,
+        },
+        storage(),
+    );
     assert!(!hosted.session().recovers(), "hosted tools leave files to the editor");
     let _ = std::fs::remove_dir_all(&directory);
 }

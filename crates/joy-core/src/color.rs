@@ -108,7 +108,12 @@ impl Color {
 
     /// A color from encoded channels and straight alpha.
     pub const fn new(red: f32, green: f32, blue: f32, alpha: f32) -> Self {
-        Self { red, green, blue, alpha }
+        Self {
+            red,
+            green,
+            blue,
+            alpha,
+        }
     }
 
     /// An opaque color from encoded channels.
@@ -152,7 +157,10 @@ impl Color {
 
     /// This color with a replacement alpha.
     pub const fn with_alpha(self, alpha: f32) -> Self {
-        Self { alpha, ..self }
+        Self {
+            alpha,
+            ..self
+        }
     }
 
     /// Decode to linear light; alpha is copied unchanged.
@@ -204,7 +212,12 @@ impl LinearColor {
 
     /// A color from linear channels and straight alpha.
     pub const fn new(red: f32, green: f32, blue: f32, alpha: f32) -> Self {
-        Self { red, green, blue, alpha }
+        Self {
+            red,
+            green,
+            blue,
+            alpha,
+        }
     }
 
     /// An opaque color from linear channels.
@@ -224,7 +237,10 @@ impl LinearColor {
 
     /// This color with a replacement alpha.
     pub const fn with_alpha(self, alpha: f32) -> Self {
-        Self { alpha, ..self }
+        Self {
+            alpha,
+            ..self
+        }
     }
 
     /// RGB multiplied by `factor` (for example a light's intensity); alpha is unchanged.

@@ -276,7 +276,11 @@ pub struct SimulationContext<'a> {
 impl<'a> SimulationContext<'a> {
     /// Borrow simulation services for one call.
     pub fn new(physics: &'a mut PhysicsWorld, bodies: &'a IndexMap<EntityId, BodyHandle>) -> Self {
-        Self { physics, bodies, commands: Vec::new() }
+        Self {
+            physics,
+            bodies,
+            commands: Vec::new(),
+        }
     }
 
     /// The live body owned by an entity, if any. Vehicle operations take a vehicle entity's body.

@@ -274,7 +274,10 @@ impl Session {
             live: true,
             pending_since: None,
             should_frame: true,
-            status: Status { message: "Preparing your workspace…".into(), state: StatusState::Busy },
+            status: Status {
+                message: "Preparing your workspace…".into(),
+                state: StatusState::Busy,
+            },
             error_location: None,
             preview: PreviewState::Pending,
             export_stale: true,
@@ -706,9 +709,14 @@ impl Session {
             self.set_status("Building geometry…", StatusState::Busy);
         }
         match outcome? {
-            CompileOutcome::Built { data, milliseconds } => {
-                Some(SessionEvent::BuildReady { data, milliseconds, frame: self.should_frame })
-            }
+            CompileOutcome::Built {
+                data,
+                milliseconds,
+            } => Some(SessionEvent::BuildReady {
+                data,
+                milliseconds,
+                frame: self.should_frame,
+            }),
             outcome => {
                 self.preview = PreviewState::Failed;
                 let message = outcome.failure_message().unwrap_or_default();
@@ -794,7 +802,10 @@ impl Session {
     /// Replace the status line and clear Go to error.
     pub fn set_status(&mut self, message: impl Into<String>, state: StatusState) {
         self.error_location = None;
-        self.status = Status { message: message.into(), state };
+        self.status = Status {
+            message: message.into(),
+            state,
+        };
     }
 
     // -----------------------------------------------------------------------------------------------------------------

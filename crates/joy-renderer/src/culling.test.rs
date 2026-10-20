@@ -23,8 +23,14 @@ fn spheres_and_bounds_are_culled_only_when_wholly_outside_a_view() {
     assert!(!sphere_outside_view(Vec3::new(0.0, 0.0, -52.0), 3.0, view_projection), "reaches back past the far plane");
 
     // Boxes straddling a plane stay; boxes beyond the far plane go.
-    let straddling = Bounds { min: Vec3::new(-100.0, -1.0, -20.0), max: Vec3::new(100.0, 1.0, -10.0) };
-    let beyond = Bounds { min: Vec3::new(-1.0, -1.0, -80.0), max: Vec3::new(1.0, 1.0, -60.0) };
+    let straddling = Bounds {
+        min: Vec3::new(-100.0, -1.0, -20.0),
+        max: Vec3::new(100.0, 1.0, -10.0),
+    };
+    let beyond = Bounds {
+        min: Vec3::new(-1.0, -1.0, -80.0),
+        max: Vec3::new(1.0, 1.0, -60.0),
+    };
     assert!(!bounds_outside_view(straddling, view_projection));
     assert!(bounds_outside_view(beyond, view_projection));
     assert!(sphere_touches_bounds(Vec3::new(0.0, 3.0, -15.0), 2.0, straddling));
@@ -33,7 +39,10 @@ fn spheres_and_bounds_are_culled_only_when_wholly_outside_a_view() {
 
 #[test]
 fn frustum_culling_rejects_geometry_behind_the_camera() {
-    let bounds = Bounds { min: Vec3::splat(-0.5), max: Vec3::splat(0.5) };
+    let bounds = Bounds {
+        min: Vec3::splat(-0.5),
+        max: Vec3::splat(0.5),
+    };
     let view_projection = perspective(1.0, 1.0, 0.1, 100.0) * look_at(Vec3::new(0.0, 0.0, 10.0), Vec3::ZERO, Vec3::Y);
     assert!(!outside_frustum(bounds, Mat4::IDENTITY, view_projection));
     assert!(outside_frustum(bounds, Mat4::from_translation(Vec3::new(0.0, 0.0, 20.0)), view_projection));

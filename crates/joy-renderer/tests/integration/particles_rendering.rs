@@ -44,8 +44,14 @@ fn single(renderer: &str, texture: Option<Value>, spawn: &str) -> Value {
 
 fn runtime(document: &Value) -> ParticleEffect {
     let definition = compile_particle_effect(document).unwrap();
-    ParticleEffect::new(&definition, ParticleEffectOptions { position: [10.0, 20.0, 30.0], ..Default::default() })
-        .unwrap()
+    ParticleEffect::new(
+        &definition,
+        ParticleEffectOptions {
+            position: [10.0, 20.0, 30.0],
+            ..Default::default()
+        },
+    )
+    .unwrap()
 }
 
 fn texture(options: Value) -> Value {
@@ -58,7 +64,10 @@ fn texture(options: Value) -> Value {
 
 fn textured_vertices(batch: &ParticleBatch) -> &[joy_renderer::TexturedVertex] {
     match batch {
-        ParticleBatch::Textured { vertices, .. } => vertices,
+        ParticleBatch::Textured {
+            vertices,
+            ..
+        } => vertices,
         ParticleBatch::Colored(_) => panic!("expected a textured batch"),
     }
 }
@@ -68,7 +77,11 @@ fn billboards_follow_camera_axes_and_streaks_keep_view_depth() {
     let spawn = "size = 2; vx = 12; vy = 18; vz = 60; az = 6;";
     let soft = runtime(&single("soft", None, spawn));
     let before = soft.particles().to_vec();
-    let side = OrbitCamera { yaw: std::f32::consts::FRAC_PI_2, pitch: 0.0, ..OrbitCamera::default() };
+    let side = OrbitCamera {
+        yaw: std::f32::consts::FRAC_PI_2,
+        pitch: 0.0,
+        ..OrbitCamera::default()
+    };
     let mut vertices = Vec::new();
     append_particle_effect(&mut vertices, &soft, &ParticleCameraBasis::from(side.basis())).unwrap();
     let xs: Vec<f32> = vertices.iter().map(|vertex| vertex.position[0]).collect();
@@ -81,7 +94,11 @@ fn billboards_follow_camera_axes_and_streaks_keep_view_depth() {
     assert_eq!(soft.particles(), before.as_slice(), "rendering never mutates the simulation");
 
     let streak = runtime(&single("streak", None, spawn));
-    let front = OrbitCamera { yaw: 0.0, pitch: 0.0, ..OrbitCamera::default() };
+    let front = OrbitCamera {
+        yaw: 0.0,
+        pitch: 0.0,
+        ..OrbitCamera::default()
+    };
     let mut vertices = Vec::new();
     append_particle_effect(&mut vertices, &streak, &ParticleCameraBasis::from(front.basis())).unwrap();
     let nearest = vertices.iter().map(|vertex| vertex.position[2]).fold(f32::MAX, f32::min);
@@ -98,11 +115,20 @@ fn textures_normalize_and_validate_sources() {
         (normalized.columns, normalized.rows, normalized.frames, normalized.fps, normalized.looping),
         (2, 2, 4, 0.0, true)
     );
-    assert_eq!(definition.emitters()[0].texture_dimensions, Some(ParticleTextureDimensions { width: 16, height: 16 }));
+    assert_eq!(
+        definition.emitters()[0].texture_dimensions,
+        Some(ParticleTextureDimensions {
+            width: 16,
+            height: 16
+        })
+    );
     assert!(definition.asset().to_json()["emitters"][0].get("textureDimensions").is_none());
     assert_eq!(
         read_particle_texture_source(DEFAULT_PARTICLE_TEXTURE),
-        Ok(ParticleTextureDimensions { width: 16, height: 16 })
+        Ok(ParticleTextureDimensions {
+            width: 16,
+            height: 16
+        })
     );
 
     // Oversized headers and payloads are rejected before decoding.
@@ -183,7 +209,10 @@ fn mixed_materials_keep_global_depth_order_and_merge_adjacent_runs() {
             .iter()
             .map(|batch| match batch {
                 ParticleBatch::Colored(vertices) => vertices[0].position[2],
-                ParticleBatch::Textured { vertices, .. } => vertices[0].position[2],
+                ParticleBatch::Textured {
+                    vertices,
+                    ..
+                } => vertices[0].position[2],
             })
             .collect()
     };
@@ -191,14 +220,23 @@ fn mixed_materials_keep_global_depth_order_and_merge_adjacent_runs() {
     let sources: Vec<bool> = first.iter().map(|batch| batch.source().is_some()).collect();
     assert_eq!(sources, [true, false, true]);
     assert_eq!(create_particle_effect_batches(&effect, &PARTICLE_XY_BASIS, None, &[]).unwrap(), first);
-    let reverse = ParticleCameraBasis { backward: [0.0, 0.0, -1.0], ..PARTICLE_XY_BASIS };
+    let reverse = ParticleCameraBasis {
+        backward: [0.0, 0.0, -1.0],
+        ..PARTICLE_XY_BASIS
+    };
     assert_eq!(leading_z(&create_particle_effect_batches(&effect, &reverse, None, &[]).unwrap()), [10.0, 0.0, -10.0]);
 
     // Reference triangles interleave at their depth for either view direction.
-    let corner = |x: f32, y: f32| ColorVertex { position: [x, y, 5.0], color: [0.2, 0.3, 0.4, 0.5] };
+    let corner = |x: f32, y: f32| ColorVertex {
+        position: [x, y, 5.0],
+        color: [0.2, 0.3, 0.4, 0.5],
+    };
     let reference = [corner(-1.0, -1.0), corner(1.0, -1.0), corner(0.0, 1.0)];
     for backward in [[0.0, 0.0, 1.0], [0.0, 0.0, -1.0]] {
-        let camera = ParticleCameraBasis { backward, ..PARTICLE_XY_BASIS };
+        let camera = ParticleCameraBasis {
+            backward,
+            ..PARTICLE_XY_BASIS
+        };
         let mut metrics = create_particle_render_metrics(effect.definition());
         let mixed = create_particle_effect_batches(&effect, &camera, Some(&mut metrics), &reference).unwrap();
         let depths: Vec<f64> = mixed
@@ -207,9 +245,10 @@ fn mixed_materials_keep_global_depth_order_and_merge_adjacent_runs() {
                 ParticleBatch::Colored(vertices) => {
                     vertices.chunks(3).map(|triangle| f64::from(triangle[0].position[2])).collect::<Vec<_>>()
                 }
-                ParticleBatch::Textured { vertices, .. } => {
-                    vertices.chunks(3).map(|triangle| f64::from(triangle[0].position[2])).collect()
-                }
+                ParticleBatch::Textured {
+                    vertices,
+                    ..
+                } => vertices.chunks(3).map(|triangle| f64::from(triangle[0].position[2])).collect(),
             })
             .map(|z| z * backward[2])
             .collect();

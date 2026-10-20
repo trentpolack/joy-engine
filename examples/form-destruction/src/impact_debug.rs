@@ -35,7 +35,10 @@ impl Default for ImpactDebugDraw {
 impl ImpactDebugDraw {
     /// Markers visible according to the configured default.
     pub fn new() -> Self {
-        Self { markers: Vec::new(), enabled: IMPACT_DEBUG.enabled }
+        Self {
+            markers: Vec::new(),
+            enabled: IMPACT_DEBUG.enabled,
+        }
     }
 
     /// Mark a hit at `point` (meters) for a unit incoming `direction` and damage `radius`; the oldest marker is replaced
@@ -62,7 +65,10 @@ impl ImpactDebugDraw {
         mesh.pass = RenderPassKind::Transparent;
         mesh.casts_shadow = false;
         let mesh = scene.insert(mesh);
-        self.markers.push(Marker { mesh, age_seconds: 0.0 });
+        self.markers.push(Marker {
+            mesh,
+            age_seconds: 0.0,
+        });
         Ok(())
     }
 

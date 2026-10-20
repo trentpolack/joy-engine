@@ -111,8 +111,14 @@ impl WebOutput {
 
     pub(crate) fn play(&mut self, sound: usize, volume: f32, sound_limit: usize, bank_limit: usize) -> bool {
         self.reap();
-        let records: Vec<VoiceRecord> =
-            self.voices.iter().map(|voice| VoiceRecord { id: voice.id, sound: voice.sound }).collect();
+        let records: Vec<VoiceRecord> = self
+            .voices
+            .iter()
+            .map(|voice| VoiceRecord {
+                id: voice.id,
+                sound: voice.sound,
+            })
+            .collect();
         for id in voices_to_steal(&records, sound, sound_limit, bank_limit) {
             if let Some(index) = self.voices.iter().position(|voice| voice.id == id) {
                 release(self.voices.remove(index), true);
@@ -170,7 +176,13 @@ impl WebOutput {
         let scheduled: &AudioScheduledSourceNode = &source;
         scheduled.set_onended(Some(on_ended.as_ref().unchecked_ref()));
         scheduled.start()?;
-        Ok(WebVoice { id, sound, source, gain, _on_ended: on_ended })
+        Ok(WebVoice {
+            id,
+            sound,
+            source,
+            gain,
+            _on_ended: on_ended,
+        })
     }
 
     /// Retire voices whose sources ended since the last call.

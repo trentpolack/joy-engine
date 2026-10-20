@@ -66,7 +66,13 @@ pub struct PostProcessEditorOptions {
 
 impl Default for PostProcessEditorOptions {
     fn default() -> Self {
-        Self { title: String::new(), level: Value::Null, entity: None, file: None, pause_shortcut: true }
+        Self {
+            title: String::new(),
+            level: Value::Null,
+            entity: None,
+            file: None,
+            pause_shortcut: true,
+        }
     }
 }
 

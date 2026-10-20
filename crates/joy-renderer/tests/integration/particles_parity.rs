@@ -128,7 +128,11 @@ fn basis(record: &Value) -> ParticleCameraBasis {
         let values = numbers(&record[name]);
         [values[0], values[1], values[2]]
     };
-    ParticleCameraBasis { right: axis("right"), up: axis("up"), backward: axis("backward") }
+    ParticleCameraBasis {
+        right: axis("right"),
+        up: axis("up"),
+        backward: axis("backward"),
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -153,7 +157,10 @@ fn flatten(batch: &ParticleBatch) -> Vec<f32> {
         ParticleBatch::Colored(vertices) => {
             vertices.iter().flat_map(|vertex| vertex.position.iter().chain(&vertex.color).copied()).collect()
         }
-        ParticleBatch::Textured { vertices, .. } => vertices
+        ParticleBatch::Textured {
+            vertices,
+            ..
+        } => vertices
             .iter()
             .flat_map(|vertex| vertex.position.iter().chain(&vertex.color).chain(&vertex.uv).copied())
             .collect(),
@@ -277,7 +284,9 @@ fn write_script_outcome(case: &mut Value) {
             let mut values: IndexMap<String, f64> =
                 initial.as_object().unwrap().iter().map(|(name, value)| (name.clone(), number(value))).collect();
             let mut random = SeededRandom::new(case["seed"].as_i64().unwrap());
-            let mut budget = ParticleScriptBudget { remaining: case["budget"].as_i64().unwrap() };
+            let mut budget = ParticleScriptBudget {
+                remaining: case["budget"].as_i64().unwrap(),
+            };
             let result = script.run(&mut values, &mut random, &mut budget);
             let values = json!(values);
             match result {
@@ -326,7 +335,11 @@ fn asset_diagnostic_record(document: &Value) -> Map<String, Value> {
         }
         Err(error) => {
             record.insert("message".to_owned(), json!(error.to_string()));
-            if let ParticleAssetError::Script { source, .. } = &error {
+            if let ParticleAssetError::Script {
+                source,
+                ..
+            } = &error
+            {
                 record.insert("line".to_owned(), json!(source.line));
                 record.insert("column".to_owned(), json!(source.column));
             }
@@ -351,7 +364,12 @@ fn runtime_diagnostic(case: &Value) -> String {
         let parameters = options.get("parameters").map(parameter_values).unwrap_or_default();
         let mut effect = ParticleEffect::new(
             &definition,
-            ParticleEffectOptions { seed, position, parameters, ..Default::default() },
+            ParticleEffectOptions {
+                seed,
+                position,
+                parameters,
+                ..Default::default()
+            },
         )?;
         for _ in 0..case["steps"].as_u64().unwrap() {
             effect.step()?;

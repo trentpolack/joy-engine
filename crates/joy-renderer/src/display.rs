@@ -15,7 +15,10 @@ pub struct BackingLimits {
 impl Default for BackingLimits {
     /// Ratio 2 and a 3840×2160 pixel budget.
     fn default() -> Self {
-        Self { maximum_pixel_ratio: 2.0, maximum_backing_pixels: 3840.0 * 2160.0 }
+        Self {
+            maximum_pixel_ratio: 2.0,
+            maximum_backing_pixels: 3840.0 * 2160.0,
+        }
     }
 }
 

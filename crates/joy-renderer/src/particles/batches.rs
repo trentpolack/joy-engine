@@ -62,13 +62,20 @@ pub struct ParticleCameraBasis {
 }
 
 /// Fixed-plane basis for orthographic XY games: right +X, up +Y, viewer on +Z.
-pub const PARTICLE_XY_BASIS: ParticleCameraBasis =
-    ParticleCameraBasis { right: [1.0, 0.0, 0.0], up: [0.0, 1.0, 0.0], backward: [0.0, 0.0, 1.0] };
+pub const PARTICLE_XY_BASIS: ParticleCameraBasis = ParticleCameraBasis {
+    right: [1.0, 0.0, 0.0],
+    up: [0.0, 1.0, 0.0],
+    backward: [0.0, 0.0, 1.0],
+};
 
 impl From<CameraBasis> for ParticleCameraBasis {
     fn from(basis: CameraBasis) -> Self {
         let widen = |vector: joy_core::math::Vec3| [f64::from(vector.x), f64::from(vector.y), f64::from(vector.z)];
-        Self { right: widen(basis.right), up: widen(basis.up), backward: widen(basis.backward) }
+        Self {
+            right: widen(basis.right),
+            up: widen(basis.up),
+            backward: widen(basis.backward),
+        }
     }
 }
 
@@ -91,7 +98,10 @@ impl ParticleBatch {
     pub fn source(&self) -> Option<&str> {
         match self {
             Self::Colored(_) => None,
-            Self::Textured { source, .. } => Some(source),
+            Self::Textured {
+                source,
+                ..
+            } => Some(source),
         }
     }
 
@@ -99,7 +109,10 @@ impl ParticleBatch {
     pub fn vertex_count(&self) -> usize {
         match self {
             Self::Colored(vertices) => vertices.len(),
-            Self::Textured { vertices, .. } => vertices.len(),
+            Self::Textured {
+                vertices,
+                ..
+            } => vertices.len(),
         }
     }
 }
@@ -132,7 +145,10 @@ pub fn create_particle_render_metrics(definition: &CompiledParticleEffect) -> Pa
         emitters: definition
             .emitters()
             .iter()
-            .map(|emitter| ParticleRenderMetricsRow { id: emitter.asset.id.clone(), ..Default::default() })
+            .map(|emitter| ParticleRenderMetricsRow {
+                id: emitter.asset.id.clone(),
+                ..Default::default()
+            })
             .collect(),
         sort_ms: 0.0,
     }
@@ -212,7 +228,10 @@ pub fn create_particle_effect_batches(
         if !finite {
             return Err(ParticleRenderError::NonFiniteGeometry);
         }
-        triangles.push(ParticleTriangle { corners, source: None });
+        triangles.push(ParticleTriangle {
+            corners,
+            source: None,
+        });
     }
 
     let sort_started = metrics.as_ref().map(|_| web_time::Instant::now());
@@ -316,7 +335,10 @@ pub fn collect_particle_triangles(
                     uv,
                 }
             };
-            triangles.push(ParticleTriangle { corners: [corner(0), corner(1), corner(2)], source: source.clone() });
+            triangles.push(ParticleTriangle {
+                corners: [corner(0), corner(1), corner(2)],
+                source: source.clone(),
+            });
         }
 
         if let (Some(metrics), Some(started)) = (metrics.as_deref_mut(), started)
@@ -341,13 +363,22 @@ pub fn batch_particle_triangles(triangles: Vec<ParticleTriangle>, depths: Vec<f6
         let triangle = &triangles[index];
         let same_material = match (batches.last(), &triangle.source) {
             (Some(ParticleBatch::Colored(_)), None) => true,
-            (Some(ParticleBatch::Textured { source, .. }), Some(next)) => source.as_ref() == next.as_ref(),
+            (
+                Some(ParticleBatch::Textured {
+                    source,
+                    ..
+                }),
+                Some(next),
+            ) => source.as_ref() == next.as_ref(),
             _ => false,
         };
         if !same_material {
             batches.push(match &triangle.source {
                 None => ParticleBatch::Colored(Vec::new()),
-                Some(source) => ParticleBatch::Textured { source: source.clone(), vertices: Vec::new() },
+                Some(source) => ParticleBatch::Textured {
+                    source: source.clone(),
+                    vertices: Vec::new(),
+                },
             });
         }
         match batches.last_mut() {
@@ -357,7 +388,10 @@ pub fn batch_particle_triangles(triangles: Vec<ParticleTriangle>, depths: Vec<f6
                     color: corner.color.map(|value| value as f32),
                 }));
             }
-            Some(ParticleBatch::Textured { vertices, .. }) => {
+            Some(ParticleBatch::Textured {
+                vertices,
+                ..
+            }) => {
                 vertices.extend(triangle.corners.iter().map(|corner| TexturedVertex {
                     position: corner.position.map(|value| value as f32),
                     color: corner.color.map(|value| value as f32),

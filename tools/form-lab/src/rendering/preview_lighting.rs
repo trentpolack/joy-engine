@@ -108,13 +108,55 @@ pub struct LightingField {
 
 /// The numeric controls in inspector order (`PREVIEW_LIGHTING_FIELDS`).
 pub const PREVIEW_LIGHTING_FIELDS: [LightingField; 9] = [
-    LightingField { key: LightingKey::DirectionX, title: "Direction X", minimum: -1.0, maximum: 1.0, step: 0.05 },
-    LightingField { key: LightingKey::DirectionY, title: "Direction Y", minimum: -1.0, maximum: 1.0, step: 0.05 },
-    LightingField { key: LightingKey::DirectionZ, title: "Direction Z", minimum: -1.0, maximum: 1.0, step: 0.05 },
-    LightingField { key: LightingKey::ColorR, title: "Light red", minimum: 0.0, maximum: 4.0, step: 0.05 },
-    LightingField { key: LightingKey::ColorG, title: "Light green", minimum: 0.0, maximum: 4.0, step: 0.05 },
-    LightingField { key: LightingKey::ColorB, title: "Light blue", minimum: 0.0, maximum: 4.0, step: 0.05 },
-    LightingField { key: LightingKey::Intensity, title: "Direct intensity", minimum: 0.0, maximum: 12.0, step: 0.1 },
+    LightingField {
+        key: LightingKey::DirectionX,
+        title: "Direction X",
+        minimum: -1.0,
+        maximum: 1.0,
+        step: 0.05,
+    },
+    LightingField {
+        key: LightingKey::DirectionY,
+        title: "Direction Y",
+        minimum: -1.0,
+        maximum: 1.0,
+        step: 0.05,
+    },
+    LightingField {
+        key: LightingKey::DirectionZ,
+        title: "Direction Z",
+        minimum: -1.0,
+        maximum: 1.0,
+        step: 0.05,
+    },
+    LightingField {
+        key: LightingKey::ColorR,
+        title: "Light red",
+        minimum: 0.0,
+        maximum: 4.0,
+        step: 0.05,
+    },
+    LightingField {
+        key: LightingKey::ColorG,
+        title: "Light green",
+        minimum: 0.0,
+        maximum: 4.0,
+        step: 0.05,
+    },
+    LightingField {
+        key: LightingKey::ColorB,
+        title: "Light blue",
+        minimum: 0.0,
+        maximum: 4.0,
+        step: 0.05,
+    },
+    LightingField {
+        key: LightingKey::Intensity,
+        title: "Direct intensity",
+        minimum: 0.0,
+        maximum: 12.0,
+        step: 0.1,
+    },
     LightingField {
         key: LightingKey::EnvironmentIntensity,
         title: "Environment intensity",

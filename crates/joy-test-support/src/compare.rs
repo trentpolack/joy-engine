@@ -28,7 +28,10 @@ impl Tolerance {
 
     /// Numbers may differ by `relative` times the larger of one and the recorded magnitude.
     pub fn relative(relative: f64) -> Self {
-        Self { relative, keys: Vec::new() }
+        Self {
+            relative,
+            keys: Vec::new(),
+        }
     }
 
     /// Use `relative` for every number beneath an object key named `key`, at any depth, such as a looser tolerance
@@ -87,7 +90,12 @@ fn compare_into(
     if mismatches.len() >= MAX_MISMATCHES {
         return;
     }
-    let mut differ = |detail: String| mismatches.push(Mismatch { path: path.to_owned(), detail });
+    let mut differ = |detail: String| {
+        mismatches.push(Mismatch {
+            path: path.to_owned(),
+            detail,
+        })
+    };
 
     match (actual, recorded) {
         (Value::Number(actual), Value::Number(recorded)) => {
@@ -107,7 +115,10 @@ fn compare_into(
         }
         (Value::Object(actual), Value::Object(recorded)) => {
             for key in recorded.keys().filter(|key| !actual.contains_key(*key)) {
-                mismatches.push(Mismatch { path: format!("{path}.{key}"), detail: "recorded but not produced".into() });
+                mismatches.push(Mismatch {
+                    path: format!("{path}.{key}"),
+                    detail: "recorded but not produced".into(),
+                });
             }
             for (key, actual) in actual {
                 let child = format!("{path}.{key}");
@@ -116,7 +127,10 @@ fn compare_into(
                         let relative = tolerance.for_key(key, relative);
                         compare_into(actual, recorded, &child, tolerance, relative, mismatches);
                     }
-                    None => mismatches.push(Mismatch { path: child, detail: "produced but not recorded".into() }),
+                    None => mismatches.push(Mismatch {
+                        path: child,
+                        detail: "produced but not recorded".into(),
+                    }),
                 }
             }
         }

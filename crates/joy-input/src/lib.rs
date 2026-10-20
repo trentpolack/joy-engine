@@ -279,7 +279,11 @@ impl Default for InputAxis {
 impl InputAxis {
     /// An axis from a positive and a negative action in the gameplay context.
     pub fn new(positive: &str, negative: &str) -> Self {
-        Self { positive: Some(positive.to_owned()), negative: Some(negative.to_owned()), ..Self::default() }
+        Self {
+            positive: Some(positive.to_owned()),
+            negative: Some(negative.to_owned()),
+            ..Self::default()
+        }
     }
 
     /// Also read a standard-mapping gamepad axis.
@@ -485,7 +489,10 @@ impl InputManager {
 
     /// Record the pointer position in logical pixels.
     pub fn handle_pointer_move(&mut self, position: Vec2) {
-        self.pointer = PointerState { position, active: true };
+        self.pointer = PointerState {
+            position,
+            active: true,
+        };
     }
 
     /// Record relative pointer motion in logical pixels: raw mouse movement, which keeps arriving at the screen edge

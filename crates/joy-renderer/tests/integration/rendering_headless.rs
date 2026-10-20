@@ -152,10 +152,17 @@ fn sunlit_scene_renders_sky_ground_and_shadow() {
     )));
 
     // View from the side of the sun's direction so the shadow is not hidden behind the crate.
-    let camera =
-        OrbitCamera { distance: 14.0, pitch: 0.55, yaw: 0.72 + std::f32::consts::FRAC_PI_2, ..OrbitCamera::default() };
+    let camera = OrbitCamera {
+        distance: 14.0,
+        pitch: 0.55,
+        yaw: 0.72 + std::f32::consts::FRAC_PI_2,
+        ..OrbitCamera::default()
+    };
     let environment = noon();
-    let inputs = FrameInputs { environment: Some(&environment), ..FrameInputs::default() };
+    let inputs = FrameInputs {
+        environment: Some(&environment),
+        ..FrameInputs::default()
+    };
     let pixels = render(&gpu, &scene, &camera, &inputs, "sunlit-scene");
 
     // The top rows show sky: bright and blue-dominant.
@@ -202,9 +209,16 @@ fn shadow_views_draw_only_the_casters_inside_them() {
         Vec3::ZERO,
         Vec3::splat(2.0),
     )));
-    let camera = OrbitCamera { distance: 14.0, pitch: 0.55, ..OrbitCamera::default() };
+    let camera = OrbitCamera {
+        distance: 14.0,
+        pitch: 0.55,
+        ..OrbitCamera::default()
+    };
     let environment = noon();
-    let inputs = FrameInputs { environment: Some(&environment), ..FrameInputs::default() };
+    let inputs = FrameInputs {
+        environment: Some(&environment),
+        ..FrameInputs::default()
+    };
 
     let target = OffscreenTarget::new(&gpu, WIDTH, HEIGHT).expect("capture target");
     let mut renderer = Renderer::new(&gpu, joy_renderer::CAPTURE_FORMAT, RendererOptions::default());
@@ -238,9 +252,16 @@ fn reduced_render_scale_upscales_into_the_full_output() {
         Vec3::ZERO,
         Vec3::splat(2.0),
     )));
-    let camera = OrbitCamera { distance: 14.0, pitch: 0.55, ..OrbitCamera::default() };
+    let camera = OrbitCamera {
+        distance: 14.0,
+        pitch: 0.55,
+        ..OrbitCamera::default()
+    };
     let environment = noon();
-    let inputs = FrameInputs { environment: Some(&environment), ..FrameInputs::default() };
+    let inputs = FrameInputs {
+        environment: Some(&environment),
+        ..FrameInputs::default()
+    };
     let crate_center = Vec3::new(0.0, 1.0, 0.0);
 
     let target = OffscreenTarget::new(&gpu, WIDTH, HEIGHT).expect("capture target");
@@ -286,9 +307,16 @@ fn point_lights_illuminate_without_an_environment() {
         Vec3::ZERO,
         Vec3::new(10.0, 0.2, 10.0),
     )));
-    let camera = OrbitCamera { distance: 8.0, pitch: 0.9, ..OrbitCamera::default() };
+    let camera = OrbitCamera {
+        distance: 8.0,
+        pitch: 0.9,
+        ..OrbitCamera::default()
+    };
 
-    let dark = FrameInputs { ambient: Some(0.0), ..FrameInputs::default() };
+    let dark = FrameInputs {
+        ambient: Some(0.0),
+        ..FrameInputs::default()
+    };
     let dark_pixels = render(&gpu, &scene, &camera, &dark, "point-light-off");
     let lights = [PointLight {
         position: Vec3::new(0.0, 1.5, 0.0),
@@ -296,7 +324,11 @@ fn point_lights_illuminate_without_an_environment() {
         range: 6.0,
         casts_shadow: false,
     }];
-    let lit = FrameInputs { ambient: Some(0.0), lights: &lights, ..FrameInputs::default() };
+    let lit = FrameInputs {
+        ambient: Some(0.0),
+        lights: &lights,
+        ..FrameInputs::default()
+    };
     let lit_pixels = render(&gpu, &scene, &camera, &lit, "point-light-on");
 
     let center = (WIDTH / 2, HEIGHT / 2);
@@ -319,7 +351,11 @@ fn frames_with_more_point_lights_than_the_cap_draw_the_strongest() {
         Vec3::ZERO,
         Vec3::new(10.0, 0.2, 10.0),
     )));
-    let camera = OrbitCamera { distance: 8.0, pitch: 0.9, ..OrbitCamera::default() };
+    let camera = OrbitCamera {
+        distance: 8.0,
+        pitch: 0.9,
+        ..OrbitCamera::default()
+    };
 
     // The warm light over the slab, forty dim lights in a ring around it, and one invalid light.
     let warm = PointLight {
@@ -341,12 +377,19 @@ fn frames_with_more_point_lights_than_the_cap_draw_the_strongest() {
         })
         .collect();
     lights.push(warm);
-    lights.push(PointLight { range: f32::NAN, ..warm });
+    lights.push(PointLight {
+        range: f32::NAN,
+        ..warm
+    });
 
     let target = OffscreenTarget::new(&gpu, WIDTH, HEIGHT).expect("capture target");
     let mut renderer = Renderer::new(&gpu, joy_renderer::CAPTURE_FORMAT, RendererOptions::default());
     renderer.resize(WIDTH, HEIGHT, 1.0);
-    let inputs = FrameInputs { ambient: Some(0.0), lights: &lights, ..FrameInputs::default() };
+    let inputs = FrameInputs {
+        ambient: Some(0.0),
+        lights: &lights,
+        ..FrameInputs::default()
+    };
     renderer.render(&scene, &camera, &inputs, target.view()).expect("extra lights never fail a frame");
     let diagnostics = renderer.diagnostics();
     assert_eq!(diagnostics.point_lights, MAX_POINT_LIGHTS);
@@ -375,7 +418,11 @@ fn point_lights_cast_soft_shadows_from_every_face() {
         Vec3::ZERO,
         Vec3::splat(0.8),
     )));
-    let camera = OrbitCamera { distance: 11.0, pitch: 1.1, ..OrbitCamera::default() };
+    let camera = OrbitCamera {
+        distance: 11.0,
+        pitch: 1.1,
+        ..OrbitCamera::default()
+    };
     let frame = joy_renderer::Camera::camera_frame(&camera, WIDTH as f32 / HEIGHT as f32);
     let size = joy_core::math::Vec2::new(WIDTH as f32, HEIGHT as f32);
 
@@ -385,9 +432,17 @@ fn point_lights_cast_soft_shadows_from_every_face() {
     ] {
         let mut colors = [[0_u8; 3]; 2];
         for (casts_shadow, color) in [false, true].into_iter().zip(&mut colors) {
-            let lights =
-                [PointLight { position: light, color: LinearColor::rgb(6.0, 6.0, 6.0), range: 12.0, casts_shadow }];
-            let inputs = FrameInputs { ambient: Some(0.0), lights: &lights, ..FrameInputs::default() };
+            let lights = [PointLight {
+                position: light,
+                color: LinearColor::rgb(6.0, 6.0, 6.0),
+                range: 12.0,
+                casts_shadow,
+            }];
+            let inputs = FrameInputs {
+                ambient: Some(0.0),
+                lights: &lights,
+                ..FrameInputs::default()
+            };
             let pixels = render(&gpu, &scene, &camera, &inputs, &format!("{name}-{casts_shadow}"));
             let point = joy_renderer::project_to_viewport(shadowed_point, frame.view_projection(), size)
                 .expect("shadowed floor is on screen");
@@ -409,13 +464,22 @@ fn scene_nodes_move_and_hide_their_instances() {
     };
     let mut scene = RenderScene::new();
     // The node starts far off-screen; its child sits at the node's origin.
-    let away =
-        SceneNode { transform: Transform::new(Vec3::new(500.0, 0.0, 0.0), Vec3::ZERO, Vec3::ONE), visible: true };
+    let away = SceneNode {
+        transform: Transform::new(Vec3::new(500.0, 0.0, 0.0), Vec3::ZERO, Vec3::ONE),
+        visible: true,
+    };
     let node = scene.insert_node(away, None).unwrap();
     let crate_box = scene.create_mesh(unit_cube([1.0, 0.4, 0.1]));
     scene.set_parent(crate_box, Some(node)).unwrap();
-    let camera = OrbitCamera { distance: 8.0, pitch: 0.6, ..OrbitCamera::default() };
-    let inputs = FrameInputs { ambient: Some(1.0), ..FrameInputs::default() };
+    let camera = OrbitCamera {
+        distance: 8.0,
+        pitch: 0.6,
+        ..OrbitCamera::default()
+    };
+    let inputs = FrameInputs {
+        ambient: Some(1.0),
+        ..FrameInputs::default()
+    };
     let target = OffscreenTarget::new(&gpu, WIDTH, HEIGHT).expect("capture target");
     let mut renderer = Renderer::new(&gpu, joy_renderer::CAPTURE_FORMAT, RendererOptions::default());
     renderer.resize(WIDTH, HEIGHT, 1.0);

@@ -64,7 +64,10 @@ pub struct MemoryAccess {
 impl MemoryAccess {
     pub fn with(mut self, path: &str, text: &str) -> Self {
         let kind = path.rsplit('.').next().unwrap_or_default().to_owned();
-        self.files.push(AssetEntry { path: path.to_owned(), kind });
+        self.files.push(AssetEntry {
+            path: path.to_owned(),
+            kind,
+        });
         self.texts.insert(path.to_owned(), text.to_owned());
         self
     }
@@ -203,7 +206,10 @@ fn advanced_source_commits_only_valid_component_records() {
 fn schema_driven_properties_add_fields_dim_inactive_fields_and_show_issues() {
     let mut level = editor();
     level.select(Some("box"));
-    let assets = [AssetEntry { path: "assets/kart.form".into(), kind: "form".into() }];
+    let assets = [AssetEntry {
+        path: "assets/kart.form".into(),
+        kind: "form".into(),
+    }];
     level.add_component(&ComponentChoice::Preset("physics.sphere".into()), None, &assets);
     level.add_component(&ComponentChoice::Preset("light.point".into()), None, &assets);
     level.change_property(&path(&["light", "range"]), Some(json!(0))).unwrap();
@@ -216,7 +222,12 @@ fn schema_driven_properties_add_fields_dim_inactive_fields_and_show_issues() {
     let issues = level.selected_issues();
     let metadata = HashMap::new();
     let schemas = engine_component_catalog();
-    let context = PropertyContext { schemas: &schemas, issues: &issues, metadata: &metadata, assets: &assets };
+    let context = PropertyContext {
+        schemas: &schemas,
+        issues: &issues,
+        metadata: &metadata,
+        assets: &assets,
+    };
     let tree = build_property_tree(&components, &context);
     let group = |name: &str| {
         tree.iter()
@@ -311,7 +322,12 @@ fn asset_selectors_keep_missing_references_and_expose_parameter_defaults() {
     components.insert("render".into(), json!({"asset": "assets/gone.form"}));
     let issues = Vec::new();
     let metadata = HashMap::new();
-    let context = PropertyContext { schemas: &schemas, issues: &issues, metadata: &metadata, assets: &catalog };
+    let context = PropertyContext {
+        schemas: &schemas,
+        issues: &issues,
+        metadata: &metadata,
+        assets: &catalog,
+    };
     let tree = build_property_tree(&components, &context);
     let PropertyNode::Group(render) = &tree[0] else { panic!("render group") };
     let PropertyNode::Field(asset) = &render.children[0] else { panic!("asset field") };
@@ -403,9 +419,15 @@ fn picking_tests_rotated_scaled_primitives_in_their_local_frames() {
 #[test]
 fn the_viewport_frames_its_camera_into_the_panel_region() {
     let mut viewport = LevelViewport::new();
-    viewport.camera = OrbitCamera { distance: 10.0, ..Default::default() };
+    viewport.camera = OrbitCamera {
+        distance: 10.0,
+        ..Default::default()
+    };
     viewport.viewport_size = Vec2::new(1600.0, 1000.0);
-    viewport.region = ViewRegion { origin: Vec2::new(400.0, 100.0), size: Vec2::new(800.0, 600.0) };
+    viewport.region = ViewRegion {
+        origin: Vec2::new(400.0, 100.0),
+        size: Vec2::new(800.0, 600.0),
+    };
     let target = viewport.project(viewport.camera.target).unwrap();
     assert!((target - viewport.region.center()).length() < 0.01, "{target}");
     // The region's own aspect keeps proportions: a point one unit right projects like on an 800 x 600 canvas.

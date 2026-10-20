@@ -119,7 +119,10 @@ fn live_overrides_replace_cached_results_and_failed_syncs_keep_the_previous_volu
 
     let invalid = level(json!([volume("broken", [0.0, 0.0, 0.0], [1.0, 1.0, 1.0], json!({"exposure": "bright"}))]));
     match volumes.sync(&invalid.entities) {
-        Err(LevelSceneError::Component { entity, .. }) => assert_eq!(entity, "broken"),
+        Err(LevelSceneError::Component {
+            entity,
+            ..
+        }) => assert_eq!(entity, "broken"),
         other => panic!("expected a component error, got {other:?}"),
     }
     assert_eq!(volumes.len(), 3);

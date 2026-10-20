@@ -111,7 +111,11 @@ pub struct OutputInspection {
 impl OutputInspection {
     /// An empty inspector awaiting a build.
     pub fn new() -> Self {
-        Self { pending: true, kind: "Awaiting valid build", ..Self::default() }
+        Self {
+            pending: true,
+            kind: "Awaiting valid build",
+            ..Self::default()
+        }
     }
 
     /// Forget every build (a new document); the preview keeps drawing its last accepted mesh until the next build.
@@ -519,10 +523,26 @@ fn generated_geometry(data: &GeometryData) -> InspectedGeometry {
     InspectedGeometry {
         faces: data.triangles.chunks(3).map(|face| face.iter().map(|index| *index as usize).collect()).collect(),
         points: vec![
-            AttributeColumn { name: "position".into(), size: 3, values: data.positions.clone() },
-            AttributeColumn { name: "normal".into(), size: 3, values: data.normals.clone() },
-            AttributeColumn { name: "color".into(), size: 4, values: colors },
-            AttributeColumn { name: "uv".into(), size: 3, values: uvs },
+            AttributeColumn {
+                name: "position".into(),
+                size: 3,
+                values: data.positions.clone(),
+            },
+            AttributeColumn {
+                name: "normal".into(),
+                size: 3,
+                values: data.normals.clone(),
+            },
+            AttributeColumn {
+                name: "color".into(),
+                size: 4,
+                values: colors,
+            },
+            AttributeColumn {
+                name: "uv".into(),
+                size: 3,
+                values: uvs,
+            },
         ],
         faces_attributes: Vec::new(),
         corners: Vec::new(),
@@ -552,7 +572,11 @@ fn inspected_value(value: &Json) -> InspectedGeometry {
                                     .collect()
                             })
                             .unwrap_or_default();
-                        AttributeColumn { name: name.clone(), size, values }
+                        AttributeColumn {
+                            name: name.clone(),
+                            size,
+                            values,
+                        }
                     })
                     .collect()
             })

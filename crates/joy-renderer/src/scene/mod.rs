@@ -169,7 +169,10 @@ pub struct SceneNode {
 
 impl Default for SceneNode {
     fn default() -> Self {
-        Self { transform: Transform::IDENTITY, visible: true }
+        Self {
+            transform: Transform::IDENTITY,
+            visible: true,
+        }
     }
 }
 
@@ -222,10 +225,19 @@ impl RenderScene {
         if let Some(index) = self.free.pop() {
             let slot = &mut self.slots[index as usize];
             slot.instance = Some(instance);
-            return MeshInstanceId { index, generation: slot.generation };
+            return MeshInstanceId {
+                index,
+                generation: slot.generation,
+            };
         }
-        self.slots.push(Slot { generation: 0, instance: Some(instance) });
-        MeshInstanceId { index: (self.slots.len() - 1) as u32, generation: 0 }
+        self.slots.push(Slot {
+            generation: 0,
+            instance: Some(instance),
+        });
+        MeshInstanceId {
+            index: (self.slots.len() - 1) as u32,
+            generation: 0,
+        }
     }
 
     /// Convenience: add an untransformed instance of `asset`.
@@ -295,9 +307,15 @@ impl RenderScene {
     /// Live instances with their handles, in slot order.
     pub fn iter(&self) -> impl Iterator<Item = (MeshInstanceId, &MeshInstance)> {
         self.slots.iter().enumerate().filter_map(|(index, slot)| {
-            slot.instance
-                .as_ref()
-                .map(|instance| (MeshInstanceId { index: index as u32, generation: slot.generation }, instance))
+            slot.instance.as_ref().map(|instance| {
+                (
+                    MeshInstanceId {
+                        index: index as u32,
+                        generation: slot.generation,
+                    },
+                    instance,
+                )
+            })
         })
     }
 
@@ -306,10 +324,19 @@ impl RenderScene {
         if let Some(index) = self.terrain_free.pop() {
             let slot = &mut self.terrain_slots[index as usize];
             slot.instance = Some(instance);
-            return TerrainInstanceId { index, generation: slot.generation };
+            return TerrainInstanceId {
+                index,
+                generation: slot.generation,
+            };
         }
-        self.terrain_slots.push(Slot { generation: 0, instance: Some(instance) });
-        TerrainInstanceId { index: (self.terrain_slots.len() - 1) as u32, generation: 0 }
+        self.terrain_slots.push(Slot {
+            generation: 0,
+            instance: Some(instance),
+        });
+        TerrainInstanceId {
+            index: (self.terrain_slots.len() - 1) as u32,
+            generation: 0,
+        }
     }
 
     /// Convenience: add an untransformed terrain instance of `asset` with default LOD policy.
@@ -345,9 +372,15 @@ impl RenderScene {
     /// Live terrain instances with their handles, in slot order.
     pub fn terrains(&self) -> impl Iterator<Item = (TerrainInstanceId, &TerrainInstance)> {
         self.terrain_slots.iter().enumerate().filter_map(|(index, slot)| {
-            slot.instance
-                .as_ref()
-                .map(|instance| (TerrainInstanceId { index: index as u32, generation: slot.generation }, instance))
+            slot.instance.as_ref().map(|instance| {
+                (
+                    TerrainInstanceId {
+                        index: index as u32,
+                        generation: slot.generation,
+                    },
+                    instance,
+                )
+            })
         })
     }
 
@@ -369,10 +402,20 @@ impl RenderScene {
             let slot = &mut self.node_slots[index as usize];
             slot.node = Some(node);
             slot.parent = parent;
-            return Ok(SceneNodeId { index, generation: slot.generation });
+            return Ok(SceneNodeId {
+                index,
+                generation: slot.generation,
+            });
         }
-        self.node_slots.push(NodeSlot { generation: 0, node: Some(node), parent });
-        Ok(SceneNodeId { index: (self.node_slots.len() - 1) as u32, generation: 0 })
+        self.node_slots.push(NodeSlot {
+            generation: 0,
+            node: Some(node),
+            parent,
+        });
+        Ok(SceneNodeId {
+            index: (self.node_slots.len() - 1) as u32,
+            generation: 0,
+        })
     }
 
     /// Borrow a live node.
@@ -518,7 +561,10 @@ impl RenderScene {
         while changed {
             changed = false;
             for (index, slot) in self.node_slots.iter().enumerate() {
-                let id = SceneNodeId { index: index as u32, generation: slot.generation };
+                let id = SceneNodeId {
+                    index: index as u32,
+                    generation: slot.generation,
+                };
                 if slot.node.is_some()
                     && !members.contains(&id)
                     && slot.parent.is_some_and(|parent| members.contains(&parent))

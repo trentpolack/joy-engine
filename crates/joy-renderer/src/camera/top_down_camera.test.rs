@@ -9,7 +9,11 @@ use super::*;
 
 #[test]
 fn top_down_matrix_frames_the_viewport_and_maps_depth() {
-    let camera = TopDownCamera { height: 100.0, near: 1.0, far: 201.0 };
+    let camera = TopDownCamera {
+        height: 100.0,
+        near: 1.0,
+        far: 201.0,
+    };
     let matrix = top_down_orthographic(800.0, 600.0, Vec2::new(400.0, 300.0), camera).unwrap();
     // The center lands at clip origin; the top-left corner at (-1, 1).
     let center = matrix * Vec4::new(400.0, 300.0, 0.0, 1.0);
@@ -24,7 +28,12 @@ fn top_down_matrix_frames_the_viewport_and_maps_depth() {
 
 #[test]
 fn transparent_triangles_sort_by_centroid_depth() {
-    let triangle = |z: f32| [ColorVertex { position: [0.0, 0.0, z], color: [1.0; 4] }; 3];
+    let triangle = |z: f32| {
+        [ColorVertex {
+            position: [0.0, 0.0, z],
+            color: [1.0; 4],
+        }; 3]
+    };
     let vertices: Vec<ColorVertex> = [triangle(5.0), triangle(-3.0), triangle(1.0)].concat();
     let order: Vec<f32> = sort_top_down_transparent_triangles(&vertices).chunks(3).map(|t| t[0].position[2]).collect();
     assert_eq!(order, [-3.0, 1.0, 5.0]);

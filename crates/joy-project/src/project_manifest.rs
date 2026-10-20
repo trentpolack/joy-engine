@@ -145,7 +145,13 @@ pub fn parse_project_manifest(value: &Value) -> Result<ProjectManifest, ProjectM
         capabilities.push(capability);
     }
 
-    Ok(ProjectManifest { schema, schema_version: PROJECT_SCHEMA_VERSION, name, preview, capabilities })
+    Ok(ProjectManifest {
+        schema,
+        schema_version: PROJECT_SCHEMA_VERSION,
+        name,
+        preview,
+        capabilities,
+    })
 }
 
 /// Validate one capability entry against those already accepted.
@@ -175,7 +181,14 @@ fn parse_capability(
         _ => IndexMap::new(),
     };
     let label = required_text(item.get("label"), &format!("capability {id} label"))?;
-    Ok(ProjectCapability { id, label, extensions, asset_root, renderer, features })
+    Ok(ProjectCapability {
+        id,
+        label,
+        extensions,
+        asset_root,
+        renderer,
+        features,
+    })
 }
 
 /// Trim required text, reporting the field when it is missing, not a string, or blank.
@@ -204,7 +217,10 @@ fn normalize_extension(value: &Value, id: &str) -> Result<String, ProjectManifes
         !rest.is_empty() && rest.chars().all(|character| character.is_ascii_lowercase() || character.is_ascii_digit())
     });
     if !valid {
-        return Err(ProjectManifestError::InvalidExtension { capability: id.to_owned(), extension });
+        return Err(ProjectManifestError::InvalidExtension {
+            capability: id.to_owned(),
+            extension,
+        });
     }
     Ok(extension)
 }

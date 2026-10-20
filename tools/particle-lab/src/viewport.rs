@@ -102,7 +102,11 @@ pub struct PreviewRegion {
 impl PreviewRegion {
     /// A region covering the whole target.
     pub fn full(size: Vec2) -> Self {
-        Self { viewport_size: size, min: Vec2::ZERO, size }
+        Self {
+            viewport_size: size,
+            min: Vec2::ZERO,
+            size,
+        }
     }
 }
 
@@ -211,9 +215,17 @@ impl Default for ParticleViewport {
 impl ParticleViewport {
     /// A viewport with the lab's starting camera, the grid on, the receiver off, and the slate background.
     pub fn new() -> Self {
-        let camera = OrbitCamera { distance: 650.0, radius: 250.0, ..OrbitCamera::default() };
+        let camera = OrbitCamera {
+            distance: 650.0,
+            radius: 250.0,
+            ..OrbitCamera::default()
+        };
         Self {
-            home: CameraHome { target: camera.target, distance: camera.distance, radius: camera.radius },
+            home: CameraHome {
+                target: camera.target,
+                distance: camera.distance,
+                radius: camera.radius,
+            },
             camera,
             grid: EditorGrid::new(),
             grid_spacing: None,
@@ -360,15 +372,21 @@ impl ParticleViewport {
         self.camera.frame_positions(&positions);
         self.camera.distance *= (region_size.y / region_size.x.max(1.0)).max(1.0);
         if remember_as_home {
-            self.home =
-                CameraHome { target: self.camera.target, distance: self.camera.distance, radius: self.camera.radius };
+            self.home = CameraHome {
+                target: self.camera.target,
+                distance: self.camera.distance,
+                radius: self.camera.radius,
+            };
         }
     }
 
     /// The matte receiver surface's two triangles.
     pub fn receiver_geometry() -> Vec<ColorVertex> {
         let height = PREVIEW_RECEIVER_HEIGHT as f32;
-        let corner = |x: f32, z: f32| ColorVertex { position: [x, height, z], color: RECEIVER_COLOR };
+        let corner = |x: f32, z: f32| ColorVertex {
+            position: [x, height, z],
+            color: RECEIVER_COLOR,
+        };
         let size = RECEIVER_HALF_SIZE;
         vec![
             corner(-size, -size),
@@ -441,7 +459,10 @@ impl ParticleViewport {
                 .iter()
                 .map(|batch| match batch {
                     ParticleBatch::Colored(vertices) => vertices.len() * std::mem::size_of::<ColorVertex>(),
-                    ParticleBatch::Textured { vertices, .. } => vertices.len() * 36,
+                    ParticleBatch::Textured {
+                        vertices,
+                        ..
+                    } => vertices.len() * 36,
                 })
                 .sum::<usize>();
         let hdr = target.renderer().diagnostics().hdr;

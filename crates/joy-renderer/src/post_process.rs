@@ -425,7 +425,10 @@ fn validate_value(control: &PostProcessControl, value: &Value) -> Result<(), Pos
     if !control.choices.is_empty() {
         let accepted = value.as_str().is_some_and(|text| control.choices.contains(&text));
         if !accepted {
-            return Err(PostProcessError::InvalidChoice { key: control.key, choices: control.choices.join(", ") });
+            return Err(PostProcessError::InvalidChoice {
+                key: control.key,
+                choices: control.choices.join(", "),
+            });
         }
         return Ok(());
     }
@@ -437,13 +440,20 @@ fn validate_value(control: &PostProcessControl, value: &Value) -> Result<(), Pos
         let exclusive = control.exclusive_minimum;
         let below = if exclusive { number <= minimum } else { number < minimum };
         if below {
-            return Err(PostProcessError::BelowMinimum { key: control.key, minimum, exclusive });
+            return Err(PostProcessError::BelowMinimum {
+                key: control.key,
+                minimum,
+                exclusive,
+            });
         }
     }
     if let Some(maximum) = control.maximum
         && number > maximum
     {
-        return Err(PostProcessError::AboveMaximum { key: control.key, maximum });
+        return Err(PostProcessError::AboveMaximum {
+            key: control.key,
+            maximum,
+        });
     }
     Ok(())
 }

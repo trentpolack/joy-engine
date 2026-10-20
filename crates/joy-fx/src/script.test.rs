@@ -9,7 +9,9 @@ use joy_core::SeededRandom;
 fn run(source: &str, values: &[(&str, f64)]) -> Result<IndexMap<String, f64>, ParticleScriptError> {
     let script = ParticleScript::compile(source, &[], &[])?;
     let mut record: IndexMap<String, f64> = values.iter().map(|(name, value)| ((*name).to_owned(), *value)).collect();
-    let mut budget = ParticleScriptBudget { remaining: 1_000 };
+    let mut budget = ParticleScriptBudget {
+        remaining: 1_000,
+    };
     script.run(&mut record, &mut SeededRandom::new(1), &mut budget)?;
     Ok(record)
 }

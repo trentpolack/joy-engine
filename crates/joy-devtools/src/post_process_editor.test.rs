@@ -15,8 +15,12 @@ fn level() -> Value {
 }
 
 fn editor() -> PostProcessEditor {
-    PostProcessEditor::new(PostProcessEditorOptions { title: "Test".into(), level: level(), ..Default::default() })
-        .unwrap()
+    PostProcessEditor::new(PostProcessEditorOptions {
+        title: "Test".into(),
+        level: level(),
+        ..Default::default()
+    })
+    .unwrap()
 }
 
 fn volumes() -> PostProcessVolumes {

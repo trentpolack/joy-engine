@@ -82,7 +82,10 @@ pub struct MaterialControls {
 impl MaterialControls {
     /// Controls with Default selected.
     pub fn new() -> Self {
-        Self { selected: "Default".into(), ..Self::default() }
+        Self {
+            selected: "Default".into(),
+            ..Self::default()
+        }
     }
 
     /// Select Default and clear messages (a new document).
@@ -310,7 +313,10 @@ impl MaterialControls {
         let source = material["textures"][field].as_str().map(str::to_owned);
         let label = if source.is_some() { "Replace Texture" } else { "Choose Texture" };
         if ui.small_button(label).clicked() {
-            actions.push(MaterialAction::ChooseTexture { material: name.to_owned(), field });
+            actions.push(MaterialAction::ChooseTexture {
+                material: name.to_owned(),
+                field,
+            });
         }
         if ui.add_enabled(source.is_some(), egui::Button::new("Clear").small()).clicked() {
             material["textures"][field] = Json::Null;

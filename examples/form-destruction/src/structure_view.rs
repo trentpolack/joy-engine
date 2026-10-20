@@ -36,8 +36,10 @@ pub fn create_structure_mesh_data(structure: &ChunkStructure, view: StructureVie
     let mut colors = Vec::new();
 
     for chunk in structure.active_chunks() {
-        let inset =
-            DestructibleChunkDefinition { size: chunk.size.map(|size| size * INTEGRITY.mesh_inset), ..chunk.clone() };
+        let inset = DestructibleChunkDefinition {
+            size: chunk.size.map(|size| size * INTEGRITY.mesh_inset),
+            ..chunk.clone()
+        };
         let geometry = create_chunk_mesh_data([&inset]);
         let vertex_offset = positions.len() as u32;
         let mut color = integrity_color(health.get(&chunk.id).copied().unwrap_or(chunk.hit_points));

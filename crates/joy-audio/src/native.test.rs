@@ -9,12 +9,28 @@ use super::*;
 fn mixing_resamples_sums_clamps_and_retires_finished_voices() {
     let mut mixer = Mixer {
         sounds: vec![
-            DecodedSound { sample_rate: 24_000, frames: vec![[0.0, 0.0], [1.0, -1.0]] },
-            DecodedSound { sample_rate: 48_000, frames: vec![[0.75, 0.75]; 3] },
+            DecodedSound {
+                sample_rate: 24_000,
+                frames: vec![[0.0, 0.0], [1.0, -1.0]],
+            },
+            DecodedSound {
+                sample_rate: 48_000,
+                frames: vec![[0.75, 0.75]; 3],
+            },
         ],
         voices: vec![
-            MixVoice { id: 0, sound: 0, position: 0.0, gain: 1.0 },
-            MixVoice { id: 1, sound: 1, position: 0.0, gain: 0.5 },
+            MixVoice {
+                id: 0,
+                sound: 0,
+                position: 0.0,
+                gain: 1.0,
+            },
+            MixVoice {
+                id: 1,
+                sound: 1,
+                position: 0.0,
+                gain: 0.5,
+            },
         ],
         output_rate: 48_000.0,
         next_id: 2,

@@ -203,10 +203,12 @@ fn vehicle_playground_capture() {
     let Ok(checkout) = std::env::var("JOY_EDITOR_JOYGAMES") else {
         return;
     };
-    let Some(shell) =
-        joy_engine::HeadlessShell::new(joy_engine::HeadlessOptions { width: 1600, height: 1000, ..Default::default() })
-            .ok()
-    else {
+    let Some(shell) = joy_engine::HeadlessShell::new(joy_engine::HeadlessOptions {
+        width: 1600,
+        height: 1000,
+        ..Default::default()
+    })
+    .ok() else {
         return;
     };
     let storage = TempFolder::new("playground-storage");

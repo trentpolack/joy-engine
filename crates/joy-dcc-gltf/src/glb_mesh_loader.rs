@@ -233,7 +233,10 @@ impl GltfAsset {
         let declared = document.get("buffers").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
         let buffers =
             declared.iter().enumerate().map(|(index, buffer)| resolve_buffer(buffer, index, binary)).collect();
-        Ok(Self { document, buffers })
+        Ok(Self {
+            document,
+            buffers,
+        })
     }
 
     /// Reject assets that are not glTF 2.0 or that require geometry extensions.
@@ -278,7 +281,12 @@ impl GltfAsset {
             .and_then(element_components)
             .ok_or_else(|| invalid("unknown accessor type"))?;
         let count = as_index(accessor.get("count")).ok_or_else(|| invalid("missing count"))?;
-        Ok(Some(AccessorLayout { index, component_type, components, count }))
+        Ok(Some(AccessorLayout {
+            index,
+            component_type,
+            components,
+            count,
+        }))
     }
 
     /// Decode every component of an accessor, applying strides and sparse substitution.
@@ -372,7 +380,12 @@ impl GltfAsset {
             .checked_add(length)
             .filter(|end| *end <= data.len())
             .ok_or_else(|| invalid("buffer view outside its buffer"))?;
-        Ok(BufferView { data, offset, end, stride: as_index(view.get("byteStride")).filter(|stride| *stride > 0) })
+        Ok(BufferView {
+            data,
+            offset,
+            end,
+            stride: as_index(view.get("byteStride")).filter(|stride| *stride > 0),
+        })
     }
 
     /// An object from a top-level array, by index.

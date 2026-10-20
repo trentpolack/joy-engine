@@ -94,7 +94,12 @@ impl DestructionDebris {
         geometry.colors = None;
         let mesh = MeshInstance::new(MeshAsset::new(&geometry)?).with_tint(GROUND.tint);
         let ground_mesh = scene.insert(mesh);
-        Ok(Self { world, ground_mesh, pieces: Vec::new(), static_chunks: Vec::new() })
+        Ok(Self {
+            world,
+            ground_mesh,
+            pieces: Vec::new(),
+            static_chunks: Vec::new(),
+        })
     }
 
     /// Release chunks as debris: copies of their meshes on world-owned box bodies. Chunks already released are skipped.
@@ -148,7 +153,13 @@ impl DestructionDebris {
             let asset = MeshAsset::new(&create_chunk_mesh_data([&local]))?;
             let mesh = MeshInstance::new(asset).with_transform(Transform::new(center, Vec3::ZERO, Vec3::ONE));
             let mesh = scene.insert(mesh);
-            self.pieces.push((chunk.id.clone(), DebrisPiece { body, mesh }));
+            self.pieces.push((
+                chunk.id.clone(),
+                DebrisPiece {
+                    body,
+                    mesh,
+                },
+            ));
         }
         Ok(())
     }

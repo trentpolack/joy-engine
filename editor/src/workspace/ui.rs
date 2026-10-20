@@ -307,7 +307,9 @@ impl WorkspaceView {
                     if cfg!(not(target_arch = "wasm32")) {
                         let open = button(ui, "Open Folder");
                         if self.controls.mark("open-folder", open).clicked() {
-                            self.dialog = Some(Dialog::OpenFolder { text: String::new() });
+                            self.dialog = Some(Dialog::OpenFolder {
+                                text: String::new(),
+                            });
                         }
                     }
 
@@ -698,7 +700,10 @@ impl WorkspaceView {
         self.asset_menu = None;
         if workspace.check_modifiable(path, "renaming").is_ok() {
             let text = path.strip_prefix("assets/").unwrap_or(path).to_owned();
-            self.dialog = Some(Dialog::Rename { path: path.to_owned(), text });
+            self.dialog = Some(Dialog::Rename {
+                path: path.to_owned(),
+                text,
+            });
         }
     }
 
@@ -917,7 +922,12 @@ impl WorkspaceView {
             let Some(tab) = workspace.tab_mut(path) else {
                 return;
             };
-            let TabContent::Source(SourceView { text, message, .. }) = &mut tab.content else {
+            let TabContent::Source(SourceView {
+                text,
+                message,
+                ..
+            }) = &mut tab.content
+            else {
                 return;
             };
             let inner = rect.shrink(14.0);
@@ -1052,7 +1062,10 @@ impl WorkspaceView {
                             }
                         });
                     }
-                    Dialog::Rename { path, text } => {
+                    Dialog::Rename {
+                        path,
+                        text,
+                    } => {
                         ui.set_max_width(420.0);
                         ui.label(RichText::new(format!("Rename {path} to:")).size(13.0));
                         let field = TextEdit::singleline(text)
@@ -1078,7 +1091,9 @@ impl WorkspaceView {
                             }
                         });
                     }
-                    Dialog::OpenFolder { text } => {
+                    Dialog::OpenFolder {
+                        text,
+                    } => {
                         ui.set_max_width(460.0);
                         ui.label(
                             RichText::new("Open a Joy project folder (one with a project.joyproject manifest):")
@@ -1159,7 +1174,10 @@ impl WorkspaceView {
                     None => workspace.set_status(format!("{} is not a text asset.", file.name)),
                 },
                 FileDialogEvent::Failed(message) => workspace.set_status(message),
-                FileDialogEvent::Cancelled | FileDialogEvent::Saved { .. } => {}
+                FileDialogEvent::Cancelled
+                | FileDialogEvent::Saved {
+                    ..
+                } => {}
             }
         }
     }

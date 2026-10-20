@@ -181,7 +181,14 @@ fn material_palette_converts_to_typed_records_with_document_spelling_and_default
     let edited = FormMaterial::from_json(
         &json!({"name": "Edited", "metallic": 0.5, "roughness": 3, "alphaMode": "opaque", "emissive": [1, 0]}),
     );
-    assert_eq!(edited, FormMaterial { name: "Edited".into(), metallic: 0.5, ..FormMaterial::default() });
+    assert_eq!(
+        edited,
+        FormMaterial {
+            name: "Edited".into(),
+            metallic: 0.5,
+            ..FormMaterial::default()
+        }
+    );
 }
 
 #[test]

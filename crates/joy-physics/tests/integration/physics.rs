@@ -68,8 +68,13 @@ fn make_vehicle(world: &mut PhysicsWorld) -> BodyHandle {
             });
         }
     }
-    let options =
-        VehicleOptions { wheels, engine_force: 400.0, max_steer: 0.4, brake_force: 20.0, ..Default::default() };
+    let options = VehicleOptions {
+        wheels,
+        engine_force: 400.0,
+        max_steer: 0.4,
+        brake_force: 20.0,
+        ..Default::default()
+    };
     world.create_vehicle(chassis_options(), options).unwrap()
 }
 
@@ -139,10 +144,19 @@ fn dynamic_box_rests_on_static_ground_and_queries_copy_state() {
 
 #[test]
 fn fixed_stepping_bounds_catch_up_and_rejects_invalid_configuration() {
-    let options = PhysicsWorldOptions { gravity: Vec3::ZERO, fixed_step: 1.0 / 60.0, max_sub_steps: 3 };
+    let options = PhysicsWorldOptions {
+        gravity: Vec3::ZERO,
+        fixed_step: 1.0 / 60.0,
+        max_sub_steps: 3,
+    };
     let mut world = PhysicsWorld::new(options).unwrap();
-    let body =
-        world.create_body(BodyOptions { radius: 1.0, mass: 1.0, ..BodyOptions::new(PrimitiveShape::Sphere) }).unwrap();
+    let body = world
+        .create_body(BodyOptions {
+            radius: 1.0,
+            mass: 1.0,
+            ..BodyOptions::new(PrimitiveShape::Sphere)
+        })
+        .unwrap();
     world.set_body_velocity(body, Vec3::new(0.0, 0.0, 1.0)).unwrap();
     assert_eq!(world.step(1.0 / 120.0).unwrap(), 0);
     assert!((world.interpolation() - 0.5).abs() < 1e-4);
@@ -156,8 +170,12 @@ fn fixed_stepping_bounds_catch_up_and_rejects_invalid_configuration() {
     assert!(solved > 0.01 && (presented - (solved * 0.25)).abs() < 1e-5, "{presented} of {solved}");
 
     // A teleport is a cut: the body is presented at its new pose rather than sweeping across the jump.
-    let post =
-        world.create_body(BodyOptions { position: Vec3::X * 10.0, ..BodyOptions::new(PrimitiveShape::Box) }).unwrap();
+    let post = world
+        .create_body(BodyOptions {
+            position: Vec3::X * 10.0,
+            ..BodyOptions::new(PrimitiveShape::Box)
+        })
+        .unwrap();
     world.set_body_transform(post, Some(Vec3::X * 20.0), None).unwrap();
     assert_eq!(world.interpolated_body_transform(post).unwrap().position, Vec3::X * 20.0);
 
@@ -167,14 +185,39 @@ fn fixed_stepping_bounds_catch_up_and_rejects_invalid_configuration() {
 
     for value in [f32::NAN, f32::INFINITY, -1.0] {
         assert!(world.step(value).is_err());
-        assert!(world.create_body(BodyOptions { mass: value, ..BodyOptions::new(PrimitiveShape::Sphere) }).is_err());
+        assert!(
+            world
+                .create_body(BodyOptions {
+                    mass: value,
+                    ..BodyOptions::new(PrimitiveShape::Sphere)
+                })
+                .is_err()
+        );
     }
-    let flat = BodyOptions { half_extents: Vec3::new(0.0, 1.0, 1.0), ..BodyOptions::new(PrimitiveShape::Box) };
+    let flat = BodyOptions {
+        half_extents: Vec3::new(0.0, 1.0, 1.0),
+        ..BodyOptions::new(PrimitiveShape::Box)
+    };
     assert_eq!(world.create_body(flat), Err(PhysicsError::NonPositiveHalfExtents));
-    let heavy_plane = BodyOptions { mass: 1.0, ..BodyOptions::new(PrimitiveShape::Plane) };
+    let heavy_plane = BodyOptions {
+        mass: 1.0,
+        ..BodyOptions::new(PrimitiveShape::Plane)
+    };
     assert_eq!(world.create_body(heavy_plane), Err(PhysicsError::DynamicPlane));
-    assert!(PhysicsWorld::new(PhysicsWorldOptions { fixed_step: 0.0, ..Default::default() }).is_err());
-    assert!(PhysicsWorld::new(PhysicsWorldOptions { max_sub_steps: 1_000_000, ..Default::default() }).is_err());
+    assert!(
+        PhysicsWorld::new(PhysicsWorldOptions {
+            fixed_step: 0.0,
+            ..Default::default()
+        })
+        .is_err()
+    );
+    assert!(
+        PhysicsWorld::new(PhysicsWorldOptions {
+            max_sub_steps: 1_000_000,
+            ..Default::default()
+        })
+        .is_err()
+    );
     assert!(world.set_body_transform(body, Some(Vec3::new(0.0, f32::INFINITY, 0.0)), None).is_err());
     assert!(world.apply_force(body, Vec3::new(0.0, f32::NAN, 0.0), None).is_err());
     assert_eq!(world.body_count(), 2);
@@ -182,10 +225,17 @@ fn fixed_stepping_bounds_catch_up_and_rejects_invalid_configuration() {
 
 #[test]
 fn forces_apply_for_exactly_one_fixed_step() {
-    let options = PhysicsWorldOptions { gravity: Vec3::ZERO, ..Default::default() };
+    let options = PhysicsWorldOptions {
+        gravity: Vec3::ZERO,
+        ..Default::default()
+    };
     let mut world = PhysicsWorld::new(options).unwrap();
     let body = world
-        .create_body(BodyOptions { mass: 1.0, linear_damping: 0.0, ..BodyOptions::new(PrimitiveShape::Sphere) })
+        .create_body(BodyOptions {
+            mass: 1.0,
+            linear_damping: 0.0,
+            ..BodyOptions::new(PrimitiveShape::Sphere)
+        })
         .unwrap();
     world.apply_force(body, Vec3::new(60.0, 0.0, 0.0), None).unwrap();
     simulate(&mut world, 0.5);
@@ -202,7 +252,10 @@ fn vehicles_are_bodies_that_validate_atomically_and_leave_with_their_chassis() {
     let vehicle = make_vehicle(&mut first);
     let floor = ground(&mut first);
     let wheels = vec![WheelOptions::new(Vec3::ZERO)];
-    let one_wheel = VehicleOptions { wheels: wheels.clone(), ..Default::default() };
+    let one_wheel = VehicleOptions {
+        wheels: wheels.clone(),
+        ..Default::default()
+    };
 
     // A vehicle is a body: body queries apply to it, and only vehicle bodies answer vehicle queries.
     assert!(first.is_vehicle(vehicle) && !first.is_vehicle(floor));
@@ -219,22 +272,38 @@ fn vehicles_are_bodies_that_validate_atomically_and_leave_with_their_chassis() {
         (
             chassis_options(),
             VehicleOptions {
-                wheels: vec![WheelOptions { radius: f32::NAN, ..WheelOptions::new(Vec3::ZERO) }],
+                wheels: vec![WheelOptions {
+                    radius: f32::NAN,
+                    ..WheelOptions::new(Vec3::ZERO)
+                }],
                 ..Default::default()
             },
         ),
         (
             chassis_options(),
             VehicleOptions {
-                wheels: vec![WheelOptions { suspension_stiffness: f32::INFINITY, ..WheelOptions::new(Vec3::ZERO) }],
+                wheels: vec![WheelOptions {
+                    suspension_stiffness: f32::INFINITY,
+                    ..WheelOptions::new(Vec3::ZERO)
+                }],
                 ..Default::default()
             },
         ),
         (
             chassis_options(),
-            VehicleOptions { wheels: wheels.clone(), engine_force: f32::INFINITY, ..Default::default() },
+            VehicleOptions {
+                wheels: wheels.clone(),
+                engine_force: f32::INFINITY,
+                ..Default::default()
+            },
         ),
-        (chassis_options(), VehicleOptions { wheels: Vec::new(), ..Default::default() }),
+        (
+            chassis_options(),
+            VehicleOptions {
+                wheels: Vec::new(),
+                ..Default::default()
+            },
+        ),
     ];
     for (chassis, options) in invalid {
         assert!(first.create_vehicle(chassis, options).is_err());
@@ -242,20 +311,38 @@ fn vehicles_are_bodies_that_validate_atomically_and_leave_with_their_chassis() {
         assert_eq!(first.vehicle_count(), 1);
     }
     assert_eq!(
-        first.create_vehicle(BodyOptions { mass: 0.0, ..chassis_options() }, one_wheel.clone()),
+        first.create_vehicle(
+            BodyOptions {
+                mass: 0.0,
+                ..chassis_options()
+            },
+            one_wheel.clone()
+        ),
         Err(PhysicsError::InvalidChassis)
     );
 
     // Drive limits retune live within the creation bounds; invalid values change nothing.
     let replacement = first.create_vehicle(chassis_options(), one_wheel).unwrap();
     let tuning = first.vehicle_tuning(replacement).unwrap();
-    let retuned = VehicleTuning { engine_force: 900.0, ..tuning };
+    let retuned = VehicleTuning {
+        engine_force: 900.0,
+        ..tuning
+    };
     first.set_vehicle_tuning(replacement, retuned).unwrap();
     assert_eq!(first.vehicle_tuning(replacement), Some(retuned));
     for invalid in [
-        VehicleTuning { max_steer: 2.0, ..tuning },
-        VehicleTuning { brake_force: -1.0, ..tuning },
-        VehicleTuning { engine_force: f32::NAN, ..tuning },
+        VehicleTuning {
+            max_steer: 2.0,
+            ..tuning
+        },
+        VehicleTuning {
+            brake_force: -1.0,
+            ..tuning
+        },
+        VehicleTuning {
+            engine_force: f32::NAN,
+            ..tuning
+        },
     ] {
         assert!(matches!(first.set_vehicle_tuning(replacement, invalid), Err(PhysicsError::OutOfRange { .. })));
     }
@@ -266,7 +353,13 @@ fn vehicles_are_bodies_that_validate_atomically_and_leave_with_their_chassis() {
     assert!(first.remove_body(replacement));
     assert!(!first.is_vehicle(replacement));
     assert_eq!(
-        first.set_vehicle_input(replacement, VehicleInput { throttle: 1.0, ..Default::default() }),
+        first.set_vehicle_input(
+            replacement,
+            VehicleInput {
+                throttle: 1.0,
+                ..Default::default()
+            }
+        ),
         Err(PhysicsError::UnknownBody)
     );
     assert_eq!(first.vehicle_count(), 1);
@@ -283,13 +376,29 @@ fn raycast_wheels_provide_traction_steering_and_braking() {
     assert_eq!(straight_world.grounded_wheel_count(vehicle), 4, "every wheel rests on the ground");
     let resting = straight_world.body_transform(vehicle).unwrap().position;
 
-    straight_world.set_vehicle_input(vehicle, VehicleInput { throttle: 1.0, ..Default::default() }).unwrap();
+    straight_world
+        .set_vehicle_input(
+            vehicle,
+            VehicleInput {
+                throttle: 1.0,
+                ..Default::default()
+            },
+        )
+        .unwrap();
     simulate(&mut straight_world, 2.0);
     let driven = straight_world.body_transform(vehicle).unwrap().position;
     assert!(driven.z - resting.z > 2.0, "positive throttle drives local +Z: {driven}");
     assert!(driven.x.abs() < 0.25, "straight drive does not drift: {driven}");
     let unbraked_speed = straight_world.vehicle_speed(vehicle);
-    straight_world.set_vehicle_input(vehicle, VehicleInput { brake: 1.0, ..Default::default() }).unwrap();
+    straight_world
+        .set_vehicle_input(
+            vehicle,
+            VehicleInput {
+                brake: 1.0,
+                ..Default::default()
+            },
+        )
+        .unwrap();
     simulate(&mut straight_world, 1.0);
     assert!(straight_world.vehicle_speed(vehicle) < unbraked_speed * 0.5);
 
@@ -298,13 +407,30 @@ fn raycast_wheels_provide_traction_steering_and_braking() {
     ground(&mut turning_world);
     let vehicle = make_vehicle(&mut turning_world);
     simulate(&mut turning_world, 1.0);
-    turning_world.set_vehicle_input(vehicle, VehicleInput { throttle: 1.0, steer: 1.0, brake: 0.0 }).unwrap();
+    turning_world
+        .set_vehicle_input(
+            vehicle,
+            VehicleInput {
+                throttle: 1.0,
+                steer: 1.0,
+                brake: 0.0,
+            },
+        )
+        .unwrap();
     simulate(&mut turning_world, 2.0);
     let turned = turning_world.body_transform(vehicle).unwrap();
     assert!(turned.position.x > 0.5, "{turned:?}");
     assert!(turned.rotation.y > 0.1, "heading turns toward +X: {turned:?}");
     assert!(
-        turning_world.set_vehicle_input(vehicle, VehicleInput { throttle: f32::NAN, ..Default::default() }).is_err()
+        turning_world
+            .set_vehicle_input(
+                vehicle,
+                VehicleInput {
+                    throttle: f32::NAN,
+                    ..Default::default()
+                }
+            )
+            .is_err()
     );
 
     // Wheels without driven or steering flags ignore input.
@@ -312,10 +438,26 @@ fn raycast_wheels_provide_traction_steering_and_braking() {
     ground(&mut passive_world);
     let wheels =
         [-1.0, 1.0].into_iter().flat_map(|z| [-0.8, 0.8].map(|x| WheelOptions::new(Vec3::new(x, 0.0, z)))).collect();
-    let passive =
-        passive_world.create_vehicle(chassis_options(), VehicleOptions { wheels, ..Default::default() }).unwrap();
+    let passive = passive_world
+        .create_vehicle(
+            chassis_options(),
+            VehicleOptions {
+                wheels,
+                ..Default::default()
+            },
+        )
+        .unwrap();
     simulate(&mut passive_world, 1.0);
-    passive_world.set_vehicle_input(passive, VehicleInput { throttle: 1.0, steer: 1.0, brake: 0.0 }).unwrap();
+    passive_world
+        .set_vehicle_input(
+            passive,
+            VehicleInput {
+                throttle: 1.0,
+                steer: 1.0,
+                brake: 0.0,
+            },
+        )
+        .unwrap();
     simulate(&mut passive_world, 1.0);
     assert!(passive_world.body_transform(passive).unwrap().position.z.abs() < 0.01);
 }
@@ -330,12 +472,23 @@ fn colliders_and_wheels_follow_the_x_then_y_then_z_rotation_convention() {
         Vec3::new(0.6, std::f32::consts::FRAC_PI_2, -0.3),
         Vec3::new(-0.9, -std::f32::consts::FRAC_PI_2, 1.1),
     ];
-    let plane =
-        world.create_body(BodyOptions { rotation: rotations[0], ..BodyOptions::new(PrimitiveShape::Plane) }).unwrap();
+    let plane = world
+        .create_body(BodyOptions {
+            rotation: rotations[0],
+            ..BodyOptions::new(PrimitiveShape::Plane)
+        })
+        .unwrap();
     let chassis = world
         .create_vehicle(
-            BodyOptions { mass: 180.0, position: Vec3::new(100.0, 0.0, 0.0), ..BodyOptions::new(PrimitiveShape::Box) },
-            VehicleOptions { wheels: vec![WheelOptions::new(Vec3::ZERO)], ..Default::default() },
+            BodyOptions {
+                mass: 180.0,
+                position: Vec3::new(100.0, 0.0, 0.0),
+                ..BodyOptions::new(PrimitiveShape::Box)
+            },
+            VehicleOptions {
+                wheels: vec![WheelOptions::new(Vec3::ZERO)],
+                ..Default::default()
+            },
         )
         .unwrap();
 
@@ -368,16 +521,39 @@ fn colliders_and_wheels_follow_the_x_then_y_then_z_rotation_convention() {
 fn sdf_bodies_rest_stack_and_answer_raycasts() {
     let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
     ground(&mut world);
-    let crate_shape = SdfShape::primitive(SdfPrimitive::Box { half_extents: Vec3::splat(0.5) }).unwrap();
-    let ring_shape = SdfShape::primitive(SdfPrimitive::Torus { major_radius: 0.5, minor_radius: 0.15 }).unwrap();
+    let crate_shape = SdfShape::primitive(SdfPrimitive::Box {
+        half_extents: Vec3::splat(0.5),
+    })
+    .unwrap();
+    let ring_shape = SdfShape::primitive(SdfPrimitive::Torus {
+        major_radius: 0.5,
+        minor_radius: 0.15,
+    })
+    .unwrap();
     let (positions, indices) = box_mesh(Vec3::new(0.6, 0.3, 0.4), true);
-    let baked = SdfShape::from_triangle_mesh(&positions, &indices, SdfBakeOptions { resolution: 16 }).unwrap();
+    let baked = SdfShape::from_triangle_mesh(
+        &positions,
+        &indices,
+        SdfBakeOptions {
+            resolution: 16,
+        },
+    )
+    .unwrap();
 
     // A three-high SDF stack, a non-convex ring, and a baked mesh, all dropped onto a primitive box ground.
     let stack: Vec<BodyHandle> = (0..3)
         .map(|level| {
             let position = Vec3::new(-3.0, 0.55 + (level as f32 * 1.02), 0.0);
-            world.create_sdf_body(&crate_shape, BodyOptions { mass: 1.0, position, ..BodyOptions::default() }).unwrap()
+            world
+                .create_sdf_body(
+                    &crate_shape,
+                    BodyOptions {
+                        mass: 1.0,
+                        position,
+                        ..BodyOptions::default()
+                    },
+                )
+                .unwrap()
         })
         .collect();
     let ring = world
@@ -394,7 +570,11 @@ fn sdf_bodies_rest_stack_and_answer_raycasts() {
     let tray = world
         .create_sdf_body(
             &baked,
-            BodyOptions { mass: 1.0, position: Vec3::new(3.0, 1.0, 0.0), ..BodyOptions::default() },
+            BodyOptions {
+                mass: 1.0,
+                position: Vec3::new(3.0, 1.0, 0.0),
+                ..BodyOptions::default()
+            },
         )
         .unwrap();
     simulate(&mut world, 4.0);
@@ -428,17 +608,28 @@ fn sdf_bodies_rest_stack_and_answer_raycasts() {
 #[test]
 fn sdf_shapes_validate_input_and_bake_open_meshes() {
     let invalid = [
-        SdfPrimitive::Box { half_extents: Vec3::new(0.5, 0.0, 0.5) },
-        SdfPrimitive::Sphere { radius: f32::NAN },
-        SdfPrimitive::Torus { major_radius: 0.2, minor_radius: 0.3 },
+        SdfPrimitive::Box {
+            half_extents: Vec3::new(0.5, 0.0, 0.5),
+        },
+        SdfPrimitive::Sphere {
+            radius: f32::NAN,
+        },
+        SdfPrimitive::Torus {
+            major_radius: 0.2,
+            minor_radius: 0.3,
+        },
     ];
     for primitive in invalid {
         assert!(matches!(SdfShape::primitive(primitive), Err(PhysicsError::InvalidSdfShape(_))), "{primitive:?}");
     }
     let (positions, indices) = box_mesh(Vec3::splat(0.5), false);
-    let coarse = SdfBakeOptions { resolution: 4 };
+    let coarse = SdfBakeOptions {
+        resolution: 4,
+    };
     assert!(matches!(SdfShape::from_triangle_mesh(&positions, &indices, coarse), Err(PhysicsError::OutOfRange { .. })));
-    let options = SdfBakeOptions { resolution: 16 };
+    let options = SdfBakeOptions {
+        resolution: 16,
+    };
     assert!(SdfShape::from_triangle_mesh(&positions, &indices[..4], options).is_err());
     assert!(SdfShape::from_triangle_mesh(&positions, &[0, 1, 99], options).is_err());
     let flat = [Vec3::ZERO, Vec3::X, Vec3::Z];
@@ -476,9 +667,20 @@ fn identical_worlds_produce_bit_identical_results() {
             .unwrap();
 
         // SDF contacts sample seeded random streams; tumbling non-convex bodies exercise them every step.
-        let ring = SdfShape::primitive(SdfPrimitive::Torus { major_radius: 0.4, minor_radius: 0.12 }).unwrap();
+        let ring = SdfShape::primitive(SdfPrimitive::Torus {
+            major_radius: 0.4,
+            minor_radius: 0.12,
+        })
+        .unwrap();
         let (positions, indices) = box_mesh(Vec3::new(0.3, 0.2, 0.25), true);
-        let tray = SdfShape::from_triangle_mesh(&positions, &indices, SdfBakeOptions { resolution: 12 }).unwrap();
+        let tray = SdfShape::from_triangle_mesh(
+            &positions,
+            &indices,
+            SdfBakeOptions {
+                resolution: 12,
+            },
+        )
+        .unwrap();
         let tumbling = [
             world
                 .create_sdf_body(
@@ -505,7 +707,11 @@ fn identical_worlds_produce_bit_identical_results() {
         ];
         let mut trace = Vec::new();
         for frame in 0..240 {
-            let input = VehicleInput { throttle: 1.0, steer: if frame > 90 { 0.6 } else { 0.0 }, brake: 0.0 };
+            let input = VehicleInput {
+                throttle: 1.0,
+                steer: if frame > 90 { 0.6 } else { 0.0 },
+                brake: 0.0,
+            };
             world.set_vehicle_input(vehicle, input).unwrap();
             world.step(1.0 / 60.0).unwrap();
             for body in [vehicle, crate_box, tumbling[0], tumbling[1]] {

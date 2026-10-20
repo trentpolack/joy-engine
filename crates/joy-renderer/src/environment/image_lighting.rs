@@ -114,7 +114,9 @@ pub(crate) fn image_lighting_layout(device: &wgpu::Device) -> wgpu::BindGroupLay
         binding,
         visibility: wgpu::ShaderStages::FRAGMENT,
         ty: wgpu::BindingType::Texture {
-            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+            sample_type: wgpu::TextureSampleType::Float {
+                filterable: true,
+            },
             view_dimension,
             multisampled: false,
         },

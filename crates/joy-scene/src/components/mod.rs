@@ -104,7 +104,11 @@ fn preset(id: &str, label: &str, data: Value) -> ComponentPreset {
         Value::Object(record) => record,
         _ => JsonRecord::new(),
     };
-    ComponentPreset { id: id.to_owned(), label: label.to_owned(), data }
+    ComponentPreset {
+        id: id.to_owned(),
+        label: label.to_owned(),
+        data,
+    }
 }
 
 /// Optional owned text.

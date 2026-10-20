@@ -106,7 +106,9 @@ pub(crate) struct SdfQueryDispatcher {
 
 impl SdfQueryDispatcher {
     pub(crate) fn new(counters: Arc<SdfCollisionCounters>) -> Self {
-        Self { counters }
+        Self {
+            counters,
+        }
     }
 }
 
@@ -271,13 +273,19 @@ fn pair_shape(shape: &dyn Shape) -> Option<PairShape<'_>> {
         return Some(PairShape::Sdf(sdf.data()));
     }
     if let Some(cuboid) = any.downcast_ref::<Cuboid>() {
-        return Some(PairShape::Cuboid { half_extents: cuboid.half_extents });
+        return Some(PairShape::Cuboid {
+            half_extents: cuboid.half_extents,
+        });
     }
     if let Some(ball) = any.downcast_ref::<Ball>() {
-        return Some(PairShape::Ball { radius: ball.radius });
+        return Some(PairShape::Ball {
+            radius: ball.radius,
+        });
     }
     if let Some(half_space) = any.downcast_ref::<HalfSpace>() {
-        return Some(PairShape::HalfSpace { normal: half_space.normal });
+        return Some(PairShape::HalfSpace {
+            normal: half_space.normal,
+        });
     }
     None
 }
@@ -286,7 +294,10 @@ fn pair_shape(shape: &dyn Shape) -> Option<PairShape<'_>> {
 fn pair_workspace(workspace: &mut Option<ContactManifoldsWorkspace>) -> &mut SdfPairWorkspace {
     let ours = workspace.as_ref().is_some_and(|existing| existing.0.is::<SdfPairWorkspace>());
     if !ours {
-        let fresh = SdfPairWorkspace { random: SeededRandom::new(PAIR_RANDOM_SEED), cache: Vec::new() };
+        let fresh = SdfPairWorkspace {
+            random: SeededRandom::new(PAIR_RANDOM_SEED),
+            cache: Vec::new(),
+        };
         *workspace = Some(ContactManifoldsWorkspace(Box::new(fresh)));
     }
     workspace

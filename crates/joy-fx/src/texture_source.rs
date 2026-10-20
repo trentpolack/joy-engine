@@ -106,7 +106,10 @@ fn read_png_header(bytes: &[u8]) -> Result<ParticleTextureDimensions, ParticleTe
     if !valid.contains(&width) || !valid.contains(&height) {
         return Err(ParticleTextureError::InvalidDimensions);
     }
-    Ok(ParticleTextureDimensions { width, height })
+    Ok(ParticleTextureDimensions {
+        width,
+        height,
+    })
 }
 
 /// Decode canonical base64 (`(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?`), or `None` when the

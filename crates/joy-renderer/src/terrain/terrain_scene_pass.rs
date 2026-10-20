@@ -113,7 +113,12 @@ pub(crate) struct SceneTerrain {
 impl SceneTerrain {
     /// An empty collection whose caster pipeline will use `bias`.
     pub(crate) fn new(bias: CasterBias) -> Self {
-        Self { passes: HashMap::new(), frame: Vec::new(), pipelines: None, bias }
+        Self {
+            passes: HashMap::new(),
+            frame: Vec::new(),
+            pipelines: None,
+            bias,
+        }
     }
 
     /// Prepare every terrain instance in `scene` before any pass opens; records compute into `encoder`.
@@ -325,7 +330,11 @@ impl TerrainScenePass {
         let previous = self.previous_model.unwrap_or(model);
         self.geometry.write_model(
             queue,
-            &ModelUniforms { model: model.to_cols_array_2d(), previous_model: previous.to_cols_array_2d(), flags },
+            &ModelUniforms {
+                model: model.to_cols_array_2d(),
+                previous_model: previous.to_cols_array_2d(),
+                flags,
+            },
         );
         Ok(())
     }
@@ -360,7 +369,11 @@ impl TerrainPipelines {
             &[],
             depth_state(
                 SHADOW_FORMAT,
-                wgpu::DepthBiasState { constant: bias.constant, slope_scale: bias.slope_scale, clamp: 0.0 },
+                wgpu::DepthBiasState {
+                    constant: bias.constant,
+                    slope_scale: bias.slope_scale,
+                    clamp: 0.0,
+                },
             ),
         );
         let depth = terrain_pipeline(
@@ -462,7 +475,10 @@ fn terrain_pipeline(
             compilation_options: Default::default(),
             buffers: &buffers,
         },
-        primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
+        primitive: wgpu::PrimitiveState {
+            cull_mode: None,
+            ..Default::default()
+        },
         depth_stencil: Some(depth),
         multisample: wgpu::MultisampleState::default(),
         fragment: fragment_entry.map(|entry| wgpu::FragmentState {

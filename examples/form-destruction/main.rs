@@ -20,7 +20,11 @@ use joy_engine::prelude::*;
 
 /// Shell settings: default renderer with click-or-drag input, reset, and cancel.
 fn options() -> ShellOptions {
-    ShellOptions { title: "FORM DESTRUCTION".into(), input: input_map(), ..Default::default() }
+    ShellOptions {
+        title: "FORM DESTRUCTION".into(),
+        input: input_map(),
+        ..Default::default()
+    }
 }
 
 fn start() {

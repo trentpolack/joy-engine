@@ -140,7 +140,10 @@ impl TriangleRenderer {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("triangle uniforms"),
             layout: &layout,
-            entries: &[wgpu::BindGroupEntry { binding: 0, resource: uniform_buffer.as_entire_binding() }],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
         });
         let settings = options.post_process.unwrap_or(PostProcessSettings::NEUTRAL);
         let post = PostProcessor::new(device, gpu.queue(), scene_format, output_format, settings);
@@ -243,14 +246,22 @@ impl TriangleRenderer {
                     view: self.post.scene_view(),
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color { r: red, g: green, b: blue, a: alpha }),
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: red,
+                            g: green,
+                            b: blue,
+                            a: alpha,
+                        }),
                         store: wgpu::StoreOp::Store,
                     },
                     depth_slice: None,
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: self.post.depth_view(),
-                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
                     stencil_ops: None,
                 }),
                 ..Default::default()
@@ -278,8 +289,9 @@ impl TriangleRenderer {
 
     /// Record and submit one frame into `output`.
     pub fn render(&mut self, output: &wgpu::TextureView, frame: &TriangleFrame<'_>) -> Result<(), RenderError> {
-        let mut encoder =
-            self.gpu.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("triangle frame") });
+        let mut encoder = self.gpu.device().create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("triangle frame"),
+        });
         self.encode(&mut encoder, output, frame)?;
         self.gpu.queue().submit([encoder.finish()]);
         Ok(())
@@ -332,7 +344,10 @@ fn triangle_pipeline(
                 attributes: &attributes,
             })],
         },
-        primitive: wgpu::PrimitiveState { cull_mode: None, ..Default::default() },
+        primitive: wgpu::PrimitiveState {
+            cull_mode: None,
+            ..Default::default()
+        },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: DEPTH_FORMAT,
             depth_write_enabled: Some(write_depth),
@@ -345,7 +360,11 @@ fn triangle_pipeline(
             module,
             entry_point: Some("fragmentMain"),
             compilation_options: Default::default(),
-            targets: &[Some(wgpu::ColorTargetState { format, blend, write_mask: wgpu::ColorWrites::ALL })],
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
         }),
         multiview_mask: None,
         cache: None,

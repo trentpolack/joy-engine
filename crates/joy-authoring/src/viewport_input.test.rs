@@ -25,7 +25,12 @@ fn frame(context: &egui::Context, events: Vec<Event>) -> ViewportActions {
 }
 
 fn button(pos: Pos2, button: PointerButton, pressed: bool, modifiers: Modifiers) -> Event {
-    Event::PointerButton { pos, button, pressed, modifiers }
+    Event::PointerButton {
+        pos,
+        button,
+        pressed,
+        modifiers,
+    }
 }
 
 #[test]
@@ -62,7 +67,13 @@ fn drags_orbit_or_pan_wheels_zoom_and_focused_keys_shortcut() {
         }],
     );
     assert_eq!(wheel.zoom, 32.0, "two lines toward the author zoom out by 32 page pixels");
-    let key = |key| Event::Key { key, physical_key: None, pressed: true, repeat: false, modifiers: Modifiers::NONE };
+    let key = |key| Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    };
     let keys = frame(&context, vec![key(Key::F), key(Key::ArrowLeft), key(Key::Num0)]);
     assert_eq!(keys.shortcuts, vec![ViewportShortcut::Frame, ViewportShortcut::Reset, ViewportShortcut::Left]);
 

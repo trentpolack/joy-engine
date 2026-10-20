@@ -17,7 +17,10 @@ fn partial_authored_records_keep_defaults_and_reject_invalid_values() {
     let nested = SkyOptions::from_json(&serde_json::json!({"clouds": {"coverage": 2}})).unwrap_err();
     assert_eq!(nested.to_string(), "clouds.coverage must be finite and between 0 and 1.");
     let positive = SkyOptions {
-        ambient_occlusion: AmbientOcclusionOptions { radius: 0.0, ..Default::default() },
+        ambient_occlusion: AmbientOcclusionOptions {
+            radius: 0.0,
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert!(positive.validate().unwrap_err().to_string().contains("ambientOcclusion.radius"));

@@ -103,7 +103,12 @@ impl ParameterPanel {
                         }
                         *draft = name.clone();
                     }
-                    if let ParticleParameter::Color { value, min, max } = parameter {
+                    if let ParticleParameter::Color {
+                        value,
+                        min,
+                        max,
+                    } = parameter
+                    {
                         let response =
                             ColorControl::new("swatch", value, min, max).label(name.as_str()).show(ui, drafts);
                         changed |= response.changed;
@@ -127,17 +132,29 @@ impl ParameterPanel {
                 } else {
                     // Values.
                     let response = match parameter {
-                        ParticleParameter::Scalar { value, min, max } => ScalarControl::new("value", value)
+                        ParticleParameter::Scalar {
+                            value,
+                            min,
+                            max,
+                        } => ScalarControl::new("value", value)
                             .range(*min, *max)
                             .step(0.1)
                             .name(name.as_str())
                             .show(ui, drafts),
-                        ParticleParameter::Vector3 { value, min, max } => ComponentGroup::xyz("value", value)
+                        ParticleParameter::Vector3 {
+                            value,
+                            min,
+                            max,
+                        } => ComponentGroup::xyz("value", value)
                             .bounds(min, max)
                             .step(0.1)
                             .name(name.as_str())
                             .show(ui, drafts),
-                        ParticleParameter::Color { value, min, max } => ComponentGroup::rgba("value", value)
+                        ParticleParameter::Color {
+                            value,
+                            min,
+                            max,
+                        } => ComponentGroup::rgba("value", value)
                             .bounds(min, max)
                             .step(0.1)
                             .name(name.as_str())
@@ -259,14 +276,22 @@ impl ParameterPanel {
 pub fn parameter_summary(parameter: &ParticleParameter) -> String {
     let rounded = |value: f64| format_number((value * 1000.0).round() / 1000.0);
     match parameter {
-        ParticleParameter::Scalar { value, .. } => rounded(*value),
-        ParticleParameter::Vector3 { value, .. } => ["X", "Y", "Z"]
+        ParticleParameter::Scalar {
+            value,
+            ..
+        } => rounded(*value),
+        ParticleParameter::Vector3 {
+            value,
+            ..
+        } => ["X", "Y", "Z"]
             .iter()
             .zip(value)
             .map(|(axis, value)| format!("{axis} {}", rounded(*value)))
             .collect::<Vec<_>>()
             .join(" · "),
-        ParticleParameter::Color { .. } => String::new(),
+        ParticleParameter::Color {
+            ..
+        } => String::new(),
     }
 }
 

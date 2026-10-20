@@ -81,8 +81,10 @@ impl PostProcessVolumes {
             let Some(record) = entity.entity_component(component_type::POST_PROCESS) else {
                 continue;
             };
-            let component = PostProcessComponent::read(record)
-                .map_err(|source| LevelSceneError::Component { entity: entity.entity_id().to_owned(), source })?;
+            let component = PostProcessComponent::read(record).map_err(|source| LevelSceneError::Component {
+                entity: entity.entity_id().to_owned(),
+                source,
+            })?;
             let transform = entity.entity_transform();
             let placement = Transform::new(transform.position, transform.rotation, Vec3::ONE);
             volumes.push(PlacedVolume {
@@ -174,11 +176,15 @@ fn contribution(volume: &PlacedVolume, view_point: Vec3) -> f32 {
     // Distance from the point to the shape's surface, inside it, in world meters; negative outside.
     let local = volume.world_to_local.transform_point3(view_point);
     let depth = match component.shape {
-        PostProcessShape::Box { half_extents } => {
+        PostProcessShape::Box {
+            half_extents,
+        } => {
             let half_extents = half_extents * volume.scale.abs();
             (half_extents - local.abs()).min_element()
         }
-        PostProcessShape::Sphere { radius } => (radius * volume.scale.abs().max_element()) - local.length(),
+        PostProcessShape::Sphere {
+            radius,
+        } => (radius * volume.scale.abs().max_element()) - local.length(),
     };
     if depth < 0.0 {
         return 0.0;

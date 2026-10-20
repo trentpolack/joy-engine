@@ -107,7 +107,12 @@ fn textured_and_colored_particles_blend_over_the_scene_with_depth_testing() {
     textures.activate(Some(&definition));
 
     // Camera on +Z looking at the origin; an unlit white block sits between it and the right-hand sprite.
-    let camera = OrbitCamera { distance: 10.0, yaw: 0.0, pitch: 0.0, ..OrbitCamera::default() };
+    let camera = OrbitCamera {
+        distance: 10.0,
+        yaw: 0.0,
+        pitch: 0.0,
+        ..OrbitCamera::default()
+    };
     let basis = ParticleCameraBasis::from(camera.basis());
     let batches = create_particle_effect_batches(&effect, &basis, None, &[]).unwrap();
     let draws = textures.transparent_draws(&batches).unwrap();

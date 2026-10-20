@@ -43,7 +43,11 @@ pub struct NumericRules {
 impl NumericRules {
     /// Rules with inclusive bounds.
     pub fn bounded(minimum: f64, maximum: f64) -> Self {
-        Self { minimum: Some(minimum), maximum: Some(maximum), integer: false }
+        Self {
+            minimum: Some(minimum),
+            maximum: Some(maximum),
+            integer: false,
+        }
     }
 
     /// Clamp `value` into the bounds (non-finite bounds are ignored).

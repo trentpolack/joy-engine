@@ -111,8 +111,16 @@ impl Default for PanelLayoutOptions {
     fn default() -> Self {
         Self {
             storage_key: "joy-editor-panels-v2".to_owned(),
-            left: PaneLimits { default_width: 280.0, minimum: 160.0, maximum: 600.0 },
-            right: PaneLimits { default_width: 260.0, minimum: 220.0, maximum: 480.0 },
+            left: PaneLimits {
+                default_width: 280.0,
+                minimum: 160.0,
+                maximum: 600.0,
+            },
+            right: PaneLimits {
+                default_width: 260.0,
+                minimum: 220.0,
+                maximum: 480.0,
+            },
             left_fraction: 0.36,
             center_minimum: 280.0,
             center_collapsible: false,
@@ -255,7 +263,11 @@ impl PanelLayout {
     /// saved preferences.
     pub fn panes(&self, area: Rect) -> PanelRects {
         if self.maximized && self.options.maximize_mode == MaximizeMode::Viewport {
-            return PanelRects { left: None, center: Some(area), right: None };
+            return PanelRects {
+                left: None,
+                center: Some(area),
+                right: None,
+            };
         }
         let width = area.width();
         let left = (self.left_width.min(width * self.options.left_fraction)).max(self.options.left.minimum);
@@ -275,8 +287,16 @@ impl PanelLayout {
                         right: Some(column(split, area.right())),
                     }
                 }
-                (false, true) => PanelRects { left: Some(area), center: None, right: None },
-                _ => PanelRects { left: None, center: None, right: Some(area) },
+                (false, true) => PanelRects {
+                    left: Some(area),
+                    center: None,
+                    right: None,
+                },
+                _ => PanelRects {
+                    left: None,
+                    center: None,
+                    right: Some(area),
+                },
             };
         }
         let center_left = area.left() + left;
@@ -374,7 +394,13 @@ impl PanelLayout {
         }
         if response.has_focus() {
             ui.memory_mut(|memory| {
-                memory.set_focus_lock_filter(id, egui::EventFilter { horizontal_arrows: true, ..Default::default() })
+                memory.set_focus_lock_filter(
+                    id,
+                    egui::EventFilter {
+                        horizontal_arrows: true,
+                        ..Default::default()
+                    },
+                )
             });
             let (left_presses, right_presses) =
                 ui.input(|input| (input.num_presses(Key::ArrowLeft), input.num_presses(Key::ArrowRight)));
@@ -469,7 +495,10 @@ mod tests {
     #[test]
     fn preferences_persist_and_never_collapse_every_pane() {
         let (storage, directory) = storage("persist");
-        let options = PanelLayoutOptions { storage_key: "joy-editor-panels-test-v2".to_owned(), ..Default::default() };
+        let options = PanelLayoutOptions {
+            storage_key: "joy-editor-panels-test-v2".to_owned(),
+            ..Default::default()
+        };
         let mut layout = PanelLayout::new(options.clone(), Some(storage.clone()));
         layout.set_widths(900.0, 300.0);
         assert!(layout.toggle(PaneSide::Left));
@@ -482,7 +511,10 @@ mod tests {
         let saved = storage.load("joy-editor-panels-test-v2").unwrap().unwrap();
         assert!(saved.contains("\"leftCollapsed\":true"), "camelCase document key names: {saved}");
 
-        let collapsible = PanelLayoutOptions { center_collapsible: true, ..options.clone() };
+        let collapsible = PanelLayoutOptions {
+            center_collapsible: true,
+            ..options.clone()
+        };
         let mut layout = PanelLayout::new(collapsible, None);
         assert!(layout.toggle(PaneSide::Left) && layout.toggle(PaneSide::Right));
         assert!(!layout.set_collapsed(PaneSide::Center, true), "the last visible pane stays");

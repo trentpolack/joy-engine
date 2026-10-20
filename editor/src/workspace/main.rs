@@ -493,11 +493,19 @@ impl Workspace {
             }
         };
         let content = self.content_for(path, &disk.text);
-        if let TabContent::Source(SourceView { message: Some(message), .. }) = &content {
+        if let TabContent::Source(SourceView {
+            message: Some(message),
+            ..
+        }) = &content
+        {
             self.status = format!("{path}: {message}");
         }
         let document = WorkspaceDocument::new(&self.project, path, disk);
-        self.tabs.push(Tab { document, content, captured_generation: 0 });
+        self.tabs.push(Tab {
+            document,
+            content,
+            captured_generation: 0,
+        });
         self.activate(path);
         Ok(())
     }
@@ -597,7 +605,11 @@ impl Workspace {
                 self.notify_assets(path);
             }
             Err(error) => {
-                if let ProjectError::Conflict { current, .. } = &error {
+                if let ProjectError::Conflict {
+                    current,
+                    ..
+                } = &error
+                {
                     self.tabs[index].document.conflict = Some(current.clone());
                 }
                 self.status = error.to_string();
@@ -844,8 +856,11 @@ impl Workspace {
             if let Err(message) = tool.prepare(context) {
                 let path = self.tabs[index].document.path.clone();
                 let text = self.tabs[index].document.text.clone();
-                self.tabs[index].content =
-                    TabContent::Source(SourceView { text, message: Some(message.clone()), retry: AssetEditor::Tool });
+                self.tabs[index].content = TabContent::Source(SourceView {
+                    text,
+                    message: Some(message.clone()),
+                    retry: AssetEditor::Tool,
+                });
                 self.status = format!("{path}: {message}");
             }
         }
@@ -950,7 +965,13 @@ impl Workspace {
             AssetEditor::Tool => match self.tools.create(&extension) {
                 Some(tool) => {
                     let name = path.rsplit('/').next().unwrap_or(path).to_owned();
-                    TabContent::Tool(Box::new(ToolTab::new(tool, ToolDocument { name, contents: text.to_owned() })))
+                    TabContent::Tool(Box::new(ToolTab::new(
+                        tool,
+                        ToolDocument {
+                            name,
+                            contents: text.to_owned(),
+                        },
+                    )))
                 }
                 None => TabContent::Source(SourceView {
                     text: text.to_owned(),
@@ -960,9 +981,11 @@ impl Workspace {
                     retry: AssetEditor::Tool,
                 }),
             },
-            AssetEditor::Source => {
-                TabContent::Source(SourceView { text: text.to_owned(), message: None, retry: AssetEditor::Source })
-            }
+            AssetEditor::Source => TabContent::Source(SourceView {
+                text: text.to_owned(),
+                message: None,
+                retry: AssetEditor::Source,
+            }),
         }
     }
 
@@ -973,7 +996,10 @@ impl Workspace {
         let result = match &mut self.tabs[index].content {
             TabContent::Level(level) => level.reload(text).map_err(|message| (message, AssetEditor::Level)),
             TabContent::Tool(tool) => tool
-                .open(ToolDocument { name, contents: text.to_owned() })
+                .open(ToolDocument {
+                    name,
+                    contents: text.to_owned(),
+                })
                 .map_err(|message| (message, AssetEditor::Tool)),
             TabContent::Source(view) => {
                 view.text = text.to_owned();
@@ -985,8 +1011,11 @@ impl Workspace {
         };
         if let Err((message, retry)) = result {
             self.status = format!("{path}: {message}");
-            self.tabs[index].content =
-                TabContent::Source(SourceView { text: text.to_owned(), message: Some(message), retry });
+            self.tabs[index].content = TabContent::Source(SourceView {
+                text: text.to_owned(),
+                message: Some(message),
+                retry,
+            });
         }
         if let TabContent::Level(level) = &self.tabs[index].content {
             self.tabs[index].captured_generation = level.generation();
@@ -1004,8 +1033,16 @@ impl Workspace {
             return;
         }
         match self.content_for(&path, &text) {
-            TabContent::Source(SourceView { message: Some(message), retry, .. }) => {
-                self.tabs[index].content = TabContent::Source(SourceView { text, message: Some(message), retry });
+            TabContent::Source(SourceView {
+                message: Some(message),
+                retry,
+                ..
+            }) => {
+                self.tabs[index].content = TabContent::Source(SourceView {
+                    text,
+                    message: Some(message),
+                    retry,
+                });
             }
             content => {
                 self.tabs[index].content = content;

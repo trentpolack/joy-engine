@@ -32,7 +32,9 @@ impl EntityRegistry {
         for kind in [entity_type::ENTITY, entity_type::CHARACTER, entity_type::PLAYER_CHARACTER] {
             factories.insert(kind.to_owned(), None);
         }
-        Self { factories }
+        Self {
+            factories,
+        }
     }
 
     /// Register a trusted behavior factory for an entity type.

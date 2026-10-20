@@ -40,7 +40,11 @@ pub struct NumberBounds {
 impl NumberBounds {
     /// The kit's validation rules for these bounds.
     pub fn rules(&self) -> NumericRules {
-        NumericRules { minimum: self.min, maximum: self.max, integer: self.integer }
+        NumericRules {
+            minimum: self.min,
+            maximum: self.max,
+            integer: self.integer,
+        }
     }
 }
 
@@ -96,7 +100,9 @@ pub struct FieldDrafts<Key: Ord + Clone> {
 
 impl<Key: Ord + Clone> Default for FieldDrafts<Key> {
     fn default() -> Self {
-        Self { drafts: BTreeMap::new() }
+        Self {
+            drafts: BTreeMap::new(),
+        }
     }
 }
 
@@ -113,12 +119,26 @@ impl<Key: Ord + Clone> FieldDrafts<Key> {
 
     /// Record typed text for a text field; a new edit clears the previous error.
     pub fn set(&mut self, key: Key, text: impl Into<String>) {
-        self.drafts.insert(key, Draft { text: text.into(), number: None, error: None });
+        self.drafts.insert(
+            key,
+            Draft {
+                text: text.into(),
+                number: None,
+                error: None,
+            },
+        );
     }
 
     /// Record typed text for a numeric field validated by `bounds`.
     pub fn set_number(&mut self, key: Key, text: impl Into<String>, bounds: NumberBounds) {
-        self.drafts.insert(key, Draft { text: text.into(), number: Some(bounds), error: None });
+        self.drafts.insert(
+            key,
+            Draft {
+                text: text.into(),
+                number: Some(bounds),
+                error: None,
+            },
+        );
     }
 
     /// Mark a draft invalid with a message, keeping its text visible.

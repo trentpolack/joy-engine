@@ -90,9 +90,13 @@ impl ParticleTextureSet {
             .iter()
             .map(|batch| match batch {
                 ParticleBatch::Colored(vertices) => Ok(TransparentDraw::Colored(vertices)),
-                ParticleBatch::Textured { source, vertices } => {
-                    Ok(TransparentDraw::Textured { texture: self.get(source)?, vertices })
-                }
+                ParticleBatch::Textured {
+                    source,
+                    vertices,
+                } => Ok(TransparentDraw::Textured {
+                    texture: self.get(source)?,
+                    vertices,
+                }),
             })
             .collect()
     }
@@ -101,7 +105,10 @@ impl ParticleTextureSet {
     #[doc(hidden)]
     pub fn from_textures(textures: HashMap<Arc<str>, TextureAsset>) -> Self {
         let active = textures.keys().cloned().collect();
-        Self { textures, active }
+        Self {
+            textures,
+            active,
+        }
     }
 
     /// Decode one embedded PNG source.

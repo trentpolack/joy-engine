@@ -14,7 +14,11 @@ use form_lab::compiler::{
 use joy_engine::serde_json::json;
 
 fn request(source: &str) -> CompileRequest {
-    CompileRequest { source: source.to_owned(), overrides: json!({}), materials: None }
+    CompileRequest {
+        source: source.to_owned(),
+        overrides: json!({}),
+        materials: None,
+    }
 }
 
 #[test]
@@ -24,7 +28,10 @@ fn builds_report_geometry_or_located_diagnostics() {
     compiler.start(request("box(0,0,0,1,1,1)"));
     assert_ne!(compiler.phase(), CompilePhase::Idle);
     match compiler.finish() {
-        Some(CompileOutcome::Built { data, milliseconds }) => {
+        Some(CompileOutcome::Built {
+            data,
+            milliseconds,
+        }) => {
             assert_eq!(data.positions.len(), 24);
             assert!(milliseconds >= 0.0);
         }
@@ -42,14 +49,20 @@ fn builds_report_geometry_or_located_diagnostics() {
 
 #[test]
 fn execution_and_startup_budgets_expire_builds() {
-    let mut compiler = Compiler::with_budgets(Budgets { startup_milliseconds: 10_000.0, execution_milliseconds: 0.0 });
+    let mut compiler = Compiler::with_budgets(Budgets {
+        startup_milliseconds: 10_000.0,
+        execution_milliseconds: 0.0,
+    });
     compiler.start(request("repeat 2000 as i { point(i, 0, 0) }"));
     assert_eq!(compiler.finish(), Some(CompileOutcome::ExecutionExpired));
     assert_eq!(
         CompileOutcome::ExecutionExpired.failure_message().unwrap(),
         "Build exceeded 2 seconds. Reduce loops or resolution. Previous preview retained."
     );
-    let mut stalled = Compiler::with_budgets(Budgets { startup_milliseconds: -1.0, execution_milliseconds: 2_000.0 });
+    let mut stalled = Compiler::with_budgets(Budgets {
+        startup_milliseconds: -1.0,
+        execution_milliseconds: 2_000.0,
+    });
     stalled.start(request("point(0,0,0)"));
     assert_eq!(stalled.poll(), Some(CompileOutcome::StartupExpired));
 }
@@ -60,7 +73,10 @@ fn a_newer_request_abandons_the_older_build() {
     compiler.start(request("repeat 100000 as i { point(i, 0, 0) }"));
     compiler.start(request("point(1,2,3)"));
     match compiler.finish() {
-        Some(CompileOutcome::Built { data, .. }) => assert_eq!(data.positions, [1.0, 2.0, 3.0]),
+        Some(CompileOutcome::Built {
+            data,
+            ..
+        }) => assert_eq!(data.positions, [1.0, 2.0, 3.0]),
         other => panic!("unexpected {other:?}"),
     }
     compiler.start(request("point(0,0,0)"));

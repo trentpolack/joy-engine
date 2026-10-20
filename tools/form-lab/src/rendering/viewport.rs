@@ -336,7 +336,10 @@ impl Viewport {
         let viewport = renderer.logical_size();
         self.viewport = viewport;
         let Some(pane) = self.pane else {
-            let inputs = FrameInputs { clear_color: EDITOR_BACKGROUND, ..FrameInputs::default() };
+            let inputs = FrameInputs {
+                clear_color: EDITOR_BACKGROUND,
+                ..FrameInputs::default()
+            };
             return target.draw(&RenderScene::new(), &self.camera, &inputs).map_err(|error| error.to_string());
         };
 
@@ -351,7 +354,10 @@ impl Viewport {
         renderer.set_shadow_options(Some(shadows));
 
         let basis = self.camera.basis();
-        let marker_camera = MarkerCamera { basis, distance: self.camera.distance };
+        let marker_camera = MarkerCamera {
+            basis,
+            distance: self.camera.distance,
+        };
         let height = pane.size.y;
         let mut markers = match &self.data {
             Some(data) => point_batch(data, self.mode == ViewMode::Points, &marker_camera, self.point_size, height),

@@ -134,7 +134,10 @@ impl TransparentDraw<'_> {
     pub fn triangle_count(&self) -> usize {
         match self {
             Self::Colored(vertices) => vertices.len() / 3,
-            Self::Textured { vertices, .. } => vertices.len() / 3,
+            Self::Textured {
+                vertices,
+                ..
+            } => vertices.len() / 3,
         }
     }
 }

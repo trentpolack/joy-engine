@@ -135,7 +135,10 @@ pub fn append_recipe(source: &str, recipe: &Recipe) -> AppendedRecipe {
         serial += 1;
     }
     let addition = format!("\n\n# {}\n{}\n", recipe.title.to_uppercase(), recipe.code_for(&format!("recipe_{serial}")));
-    AppendedRecipe { source: format!("{source}{addition}"), cursor: source.len() + 2 }
+    AppendedRecipe {
+        source: format!("{source}{addition}"),
+        cursor: source.len() + 2,
+    }
 }
 
 /// Indexes of the recipes whose title, description, or code contains `query` (trimmed, ignoring case).

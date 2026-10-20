@@ -161,7 +161,10 @@ fn preset_records_round_trip_and_run_in_the_engine_runtimes() {
         "components": {"physics": physics, "vehicle": data(component_preset::VEHICLE_FOUR_WHEEL)}
     }))
     .unwrap();
-    let level = LevelData { entities: vec![kart], ..LevelData::new("Presets") };
+    let level = LevelData {
+        entities: vec![kart],
+        ..LevelData::new("Presets")
+    };
     let level = parse_level(&serialize_level(&level)).unwrap();
     assert!(level.entities.iter().all(|entity| catalog.validate_entity(entity).is_empty()));
     let runtime = LevelRuntime::new(&level, EntityRegistry::new()).unwrap();

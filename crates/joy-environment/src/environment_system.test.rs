@@ -21,10 +21,16 @@ fn partial_authored_records_keep_defaults_and_reject_unknown_fields() {
 
 #[test]
 fn invalid_policy_and_steps_leave_state_unchanged() {
-    let options = EnvironmentOptions { time_of_day: 1.0, ..Default::default() };
+    let options = EnvironmentOptions {
+        time_of_day: 1.0,
+        ..Default::default()
+    };
     assert_eq!(EnvironmentSystem::new(options).unwrap_err(), EnvironmentError::TimeOfDayNotBelowOne);
     let gusts = EnvironmentOptions {
-        wind: WindOptions { gust_period_seconds: 0.0, ..Default::default() },
+        wind: WindOptions {
+            gust_period_seconds: 0.0,
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert!(EnvironmentSystem::new(gusts).unwrap_err().to_string().contains("gustPeriodSeconds"));
@@ -40,7 +46,11 @@ fn invalid_policy_and_steps_leave_state_unchanged() {
 
 #[test]
 fn paused_day_still_advances_wind_time() {
-    let options = EnvironmentOptions { time_of_day: 0.5, day_length_seconds: 0.0, ..Default::default() };
+    let options = EnvironmentOptions {
+        time_of_day: 0.5,
+        day_length_seconds: 0.0,
+        ..Default::default()
+    };
     let mut environment = EnvironmentSystem::new(options).unwrap();
     let frame = environment.step(60.0).unwrap();
     assert_eq!(frame.time_of_day, 0.5);

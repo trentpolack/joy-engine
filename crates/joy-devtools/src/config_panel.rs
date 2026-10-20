@@ -315,13 +315,21 @@ impl ConfigEditor {
                         .with_save(Box::new(move |values: &ConfigValues| file.save(values)));
                     // The document is the development source of truth; games apply it on the first frame.
                     session.mark_changed();
-                    return Ok(Self { session, panel, restart_requested: false });
+                    return Ok(Self {
+                        session,
+                        panel,
+                        restart_requested: false,
+                    });
                 }
                 Err(error) => panel.set_status(format!("Cannot load config: {error}"), true),
             }
         }
         let session = ConfigSession::new(&options.fields, &options.values)?;
-        Ok(Self { session, panel, restart_requested: false })
+        Ok(Self {
+            session,
+            panel,
+            restart_requested: false,
+        })
     }
 
     /// The editing session.

@@ -15,12 +15,17 @@ fn asset() -> MeshAsset {
 fn nodes_compose_transforms_and_visibility() {
     use joy_core::math::Vec3;
     let mut scene = RenderScene::new();
-    let moved =
-        SceneNode { transform: Transform::new(Vec3::new(10.0, 0.0, 0.0), Vec3::ZERO, Vec3::splat(2.0)), visible: true };
+    let moved = SceneNode {
+        transform: Transform::new(Vec3::new(10.0, 0.0, 0.0), Vec3::ZERO, Vec3::splat(2.0)),
+        visible: true,
+    };
     let root = scene.insert_node(moved, None).unwrap();
     let child = scene
         .insert_node(
-            SceneNode { transform: Transform::new(Vec3::Y, Vec3::ZERO, Vec3::ONE), ..SceneNode::default() },
+            SceneNode {
+                transform: Transform::new(Vec3::Y, Vec3::ZERO, Vec3::ONE),
+                ..SceneNode::default()
+            },
             Some(root),
         )
         .unwrap();

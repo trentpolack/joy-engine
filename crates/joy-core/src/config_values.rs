@@ -278,10 +278,16 @@ fn validate_value(field: &ConfigField, value: f64) -> Result<(), ConfigError> {
         return Err(ConfigError::NonFiniteValue(field.key.clone()));
     }
     if value < field.min {
-        return Err(ConfigError::BelowMinimum { key: field.key.clone(), minimum: field.min });
+        return Err(ConfigError::BelowMinimum {
+            key: field.key.clone(),
+            minimum: field.min,
+        });
     }
     if value > field.max {
-        return Err(ConfigError::AboveMaximum { key: field.key.clone(), maximum: field.max });
+        return Err(ConfigError::AboveMaximum {
+            key: field.key.clone(),
+            maximum: field.max,
+        });
     }
     if field.step == INTEGER_STEP && value.fract() != 0.0 {
         return Err(ConfigError::NotAnInteger(field.key.clone()));

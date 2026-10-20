@@ -29,7 +29,9 @@ pub struct Stopwatch {
 impl Stopwatch {
     /// Start timing now.
     pub fn start() -> Self {
-        Self { started: web_time::Instant::now() }
+        Self {
+            started: web_time::Instant::now(),
+        }
     }
 
     /// Milliseconds since [`start`](Self::start); never negative.
@@ -71,8 +73,11 @@ impl FrameClock {
             None => 0.0,
         };
         self.previous_seconds = Some(now_seconds);
-        let time =
-            FrameTime { elapsed_seconds: elapsed, time_seconds: now_seconds - start, frame_index: self.frame_index };
+        let time = FrameTime {
+            elapsed_seconds: elapsed,
+            time_seconds: now_seconds - start,
+            frame_index: self.frame_index,
+        };
         self.frame_index += 1;
         time
     }

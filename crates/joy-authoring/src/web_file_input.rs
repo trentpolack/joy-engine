@@ -63,7 +63,10 @@ impl FileInputRequest {
                             value.as_string().unwrap_or_default().into_bytes()
                         };
                         match decode_contents(&name, bytes, binary) {
-                            Ok(contents) => FileDialogEvent::Opened(OpenedFile { name, contents }),
+                            Ok(contents) => FileDialogEvent::Opened(OpenedFile {
+                                name,
+                                contents,
+                            }),
                             Err(message) => FileDialogEvent::Failed(message),
                         }
                     }
@@ -83,7 +86,10 @@ impl FileInputRequest {
         });
         input.add_event_listener_with_callback("cancel", on_cancel.unchecked_ref()).map_err(describe)?;
         input.click();
-        Ok(Self { result, _input: input })
+        Ok(Self {
+            result,
+            _input: input,
+        })
     }
 
     /// The result once the file was read or the picker dismissed.

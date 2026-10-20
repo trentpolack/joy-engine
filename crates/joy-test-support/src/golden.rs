@@ -68,7 +68,10 @@ impl GoldenFile {
         // Hold the lock so a test re-recording a shared file on another thread never shows a half-written one.
         let _guard = WRITE_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let (recording, _) = read(&path);
-        Self { path, recording }
+        Self {
+            path,
+            recording,
+        }
     }
 
     /// The parsed recording, for the inputs a test replays.
@@ -180,7 +183,10 @@ fn read(path: &Path) -> (Value, Layout) {
 fn layout(text: &str) -> Layout {
     let body = text.trim_end_matches('\n');
     let indent = body.lines().nth(1).map_or(0, |line| line.len() - line.trim_start_matches(' ').len());
-    Layout { indent, final_newline: text.ends_with('\n') }
+    Layout {
+        indent,
+        final_newline: text.ends_with('\n'),
+    }
 }
 
 /// Write a recording with `layout`.

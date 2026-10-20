@@ -71,7 +71,9 @@ impl Storage {
             } else {
                 Err(format!("\"{application}\" is not a valid application folder name"))
             };
-            Self { directory }
+            Self {
+                directory,
+            }
         }
         #[cfg(target_arch = "wasm32")]
         {
@@ -83,7 +85,9 @@ impl Storage {
     /// Native storage in an explicit folder, for tools and tests. The folder is created on the first save.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn in_directory(directory: impl Into<PathBuf>) -> Self {
-        Self { directory: Ok(directory.into()) }
+        Self {
+            directory: Ok(directory.into()),
+        }
     }
 
     /// The stored text for `key`, or `None` when nothing was saved.
@@ -94,7 +98,10 @@ impl Storage {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let path = self.directory.as_ref().map_err(|message| StorageError::Unavailable(message.clone()))?.join(key);
-            let read_error = |message: String| StorageError::Read { key: key.to_owned(), message };
+            let read_error = |message: String| StorageError::Read {
+                key: key.to_owned(),
+                message,
+            };
             match std::fs::metadata(&path) {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
                 Err(error) => return Err(read_error(error.to_string())),
@@ -123,8 +130,10 @@ impl Storage {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let directory = self.directory.as_ref().map_err(|message| StorageError::Unavailable(message.clone()))?;
-            write_atomically(directory, key, text)
-                .map_err(|error| StorageError::Write { key: key.to_owned(), message: error.to_string() })
+            write_atomically(directory, key, text).map_err(|error| StorageError::Write {
+                key: key.to_owned(),
+                message: error.to_string(),
+            })
         }
         #[cfg(target_arch = "wasm32")]
         {
@@ -143,7 +152,10 @@ impl Storage {
             match std::fs::remove_file(path) {
                 Ok(()) => Ok(()),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                Err(error) => Err(StorageError::Write { key: key.to_owned(), message: error.to_string() }),
+                Err(error) => Err(StorageError::Write {
+                    key: key.to_owned(),
+                    message: error.to_string(),
+                }),
             }
         }
         #[cfg(target_arch = "wasm32")]
@@ -230,7 +242,9 @@ mod tests {
         let large = "x".repeat(MAXIMUM_STORAGE_BYTES + 1);
         assert_eq!(storage.save("large", &large), Err(StorageError::TooLarge("large".to_owned())));
 
-        let unavailable = Storage { directory: Err("no home".to_owned()) };
+        let unavailable = Storage {
+            directory: Err("no home".to_owned()),
+        };
         assert_eq!(unavailable.load("key"), Err(StorageError::Unavailable("no home".to_owned())));
         assert!(matches!(Storage::new("../escape").save("key", "x"), Err(StorageError::Unavailable(_))));
     }

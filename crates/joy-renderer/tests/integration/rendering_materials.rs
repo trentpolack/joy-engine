@@ -180,7 +180,12 @@ fn luminance(color: [u8; 3]) -> f32 {
 }
 
 fn top_down() -> OrbitCamera {
-    OrbitCamera { distance: 5.0, pitch: 1.45, yaw: 0.0, ..OrbitCamera::default() }
+    OrbitCamera {
+        distance: 5.0,
+        pitch: 1.45,
+        yaw: 0.0,
+        ..OrbitCamera::default()
+    }
 }
 
 #[test]
@@ -199,7 +204,10 @@ fn base_color_maps_sample_by_uv() {
     scene.insert(MeshInstance::new(asset(&quad(0.0, material(maps)), &textures)));
     let camera = top_down();
     let mut renderer = Renderer::new(&gpu, CAPTURE_FORMAT, RendererOptions::default());
-    let inputs = FrameInputs { ambient: Some(1.0), ..FrameInputs::default() };
+    let inputs = FrameInputs {
+        ambient: Some(1.0),
+        ..FrameInputs::default()
+    };
     let pixels = render(&gpu, &mut renderer, &scene, &camera, &inputs, "material-base-color");
     let left = pixel_at(&pixels, &camera, Vec3::new(-0.5, 0.0, 0.0));
     let right = pixel_at(&pixels, &camera, Vec3::new(0.5, 0.0, 0.0));
@@ -235,9 +243,15 @@ fn minified_textures_average_through_their_mips() {
     scene.insert(MeshInstance::new(asset(&quad(0.0, material(maps)), &textures)));
 
     // From forty units away the two-unit quad spans about a dozen pixels, so each pixel covers roughly ten texels.
-    let camera = OrbitCamera { distance: 40.0, ..top_down() };
+    let camera = OrbitCamera {
+        distance: 40.0,
+        ..top_down()
+    };
     let mut renderer = Renderer::new(&gpu, CAPTURE_FORMAT, RendererOptions::default());
-    let inputs = FrameInputs { ambient: Some(1.0), ..FrameInputs::default() };
+    let inputs = FrameInputs {
+        ambient: Some(1.0),
+        ..FrameInputs::default()
+    };
     let pixels = render(&gpu, &mut renderer, &scene, &camera, &inputs, "material-minified-checker");
     let center = pixel_at(&pixels, &camera, Vec3::ZERO);
     let mut block = Vec::new();
@@ -276,7 +290,11 @@ fn normal_maps_tilt_shading_toward_their_direction() {
         range: 20.0,
         casts_shadow: false,
     }];
-    let inputs = FrameInputs { ambient: Some(0.0), lights: &lights, ..FrameInputs::default() };
+    let inputs = FrameInputs {
+        ambient: Some(0.0),
+        lights: &lights,
+        ..FrameInputs::default()
+    };
     let mut brightness = Vec::new();
     for (name, material) in [("material-normal-flat", flat_material), ("material-normal-tilted", mapped_material)] {
         let mut scene = RenderScene::new();
@@ -308,7 +326,11 @@ fn pbr_surfaces_flip_normals_only_on_back_faces() {
         range: 20.0,
         casts_shadow: false,
     }];
-    let inputs = FrameInputs { ambient: Some(0.0), lights: &lights, ..FrameInputs::default() };
+    let inputs = FrameInputs {
+        ambient: Some(0.0),
+        lights: &lights,
+        ..FrameInputs::default()
+    };
     let mut brightness = Vec::new();
     for (name, mesh) in [("facing-front", upward), ("facing-away", away), ("facing-back", back_facing)] {
         let mut scene = RenderScene::new();
@@ -337,10 +359,18 @@ fn image_lighting_lights_surfaces_by_orientation() {
         }
     }
     let mut renderer = Renderer::new(&gpu, CAPTURE_FORMAT, RendererOptions::default());
-    let pixels = EnvironmentPixels { width, height, data: EnvironmentData::Float(&data) };
+    let pixels = EnvironmentPixels {
+        width,
+        height,
+        data: EnvironmentData::Float(&data),
+    };
     let map =
         renderer.prepare_environment_map(&pixels, &EnvironmentMapOptions::default()).expect("environment prepares");
-    let bad = EnvironmentPixels { width, height, data: EnvironmentData::Float(&data[4..]) };
+    let bad = EnvironmentPixels {
+        width,
+        height,
+        data: EnvironmentData::Float(&data[4..]),
+    };
     assert!(renderer.prepare_environment_map(&bad, &EnvironmentMapOptions::default()).is_err());
 
     let mut scene = RenderScene::new();
@@ -357,7 +387,11 @@ fn image_lighting_lights_surfaces_by_orientation() {
     };
     let lit = FrameInputs {
         ambient: Some(0.0),
-        image_lighting: Some(ImageLighting { map: &map, intensity: 1.0, rotation: 0.0 }),
+        image_lighting: Some(ImageLighting {
+            map: &map,
+            intensity: 1.0,
+            rotation: 0.0,
+        }),
         ..FrameInputs::default()
     };
     let unlit_pixels = render(&gpu, &mut renderer, &scene, &camera, &dark, "material-ibl-off");
@@ -413,7 +447,10 @@ fn masked_materials_cast_shadows_with_holes() {
         elapsed_seconds: 0.0,
         time_of_day: 0.5,
         sun,
-        moon: DirectionalLight { intensity: 0.0, ..sun },
+        moon: DirectionalLight {
+            intensity: 0.0,
+            ..sun
+        },
         primary: sun,
         skylight: Skylight::default(),
         wind_velocity: Vec3::ZERO,
@@ -422,10 +459,22 @@ fn masked_materials_cast_shadows_with_holes() {
         cloud_shape_and_shafts: [1800.0, 700.0, 0.0, 0.94],
         shaft_exposure_and_occlusion: [0.0, 1.0, 7.0],
     };
-    let camera = OrbitCamera { distance: 7.0, pitch: 1.2, yaw: 0.0, ..OrbitCamera::default() };
-    let options = RendererOptions { atmosphere: false, ..RendererOptions::default() };
+    let camera = OrbitCamera {
+        distance: 7.0,
+        pitch: 1.2,
+        yaw: 0.0,
+        ..OrbitCamera::default()
+    };
+    let options = RendererOptions {
+        atmosphere: false,
+        ..RendererOptions::default()
+    };
     let mut renderer = Renderer::new(&gpu, CAPTURE_FORMAT, options);
-    let inputs = FrameInputs { environment: Some(&environment), ambient: Some(0.05), ..FrameInputs::default() };
+    let inputs = FrameInputs {
+        environment: Some(&environment),
+        ambient: Some(0.05),
+        ..FrameInputs::default()
+    };
     let pixels = render(&gpu, &mut renderer, &scene, &camera, &inputs, "material-masked-shadow");
     // In the shadow's visible strip, floor under the transparent half matches open floor; under the opaque half it is dark.
     let under_hole = luminance(pixel_at(&pixels, &camera, Vec3::new(0.5, 0.0, 1.6)));
@@ -459,7 +508,10 @@ fn sky_and_shadow_settings_change_between_frames() {
         elapsed_seconds: 0.0,
         time_of_day: 0.5,
         sun,
-        moon: DirectionalLight { intensity: 0.0, ..sun },
+        moon: DirectionalLight {
+            intensity: 0.0,
+            ..sun
+        },
         primary: sun,
         skylight: Skylight::default(),
         wind_velocity: Vec3::ZERO,
@@ -469,7 +521,12 @@ fn sky_and_shadow_settings_change_between_frames() {
         shaft_exposure_and_occlusion: [0.0, 1.0, 7.0],
     };
     // Looking almost straight down keeps the sky out of the floor samples but in the corners when it draws.
-    let camera = OrbitCamera { distance: 9.0, pitch: 0.35, yaw: 0.0, ..OrbitCamera::default() };
+    let camera = OrbitCamera {
+        distance: 9.0,
+        pitch: 0.35,
+        yaw: 0.0,
+        ..OrbitCamera::default()
+    };
     let mut renderer = Renderer::new(&gpu, CAPTURE_FORMAT, RendererOptions::default());
     let background = LinearColor::new(0.04, 0.05, 0.065, 1.0);
     let inputs = FrameInputs {

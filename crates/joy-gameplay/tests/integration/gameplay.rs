@@ -39,7 +39,10 @@ fn world(registry: EntityRegistry) -> World {
 }
 
 fn definition(id: &str, kind: &str) -> EntityDefinition {
-    EntityDefinition { kind: kind.to_owned(), ..EntityDefinition::new(id) }
+    EntityDefinition {
+        kind: kind.to_owned(),
+        ..EntityDefinition::new(id)
+    }
 }
 
 /// Counts `reset_control` calls so possession hooks are observable.
@@ -155,7 +158,14 @@ fn updates_follow_insertion_order_and_frame_spawns_wait_for_the_next_update() {
     let events = Rc::new(RefCell::new(Vec::new()));
     let mut registry = EntityRegistry::new();
     let log = events.clone();
-    registry.register("actor", move |_| Box::new(Actor { events: log.clone(), spawned: false })).unwrap();
+    registry
+        .register("actor", move |_| {
+            Box::new(Actor {
+                events: log.clone(),
+                spawned: false,
+            })
+        })
+        .unwrap();
     let mut world = world(registry);
     world.spawn(&definition("first", "actor")).unwrap();
     world.spawn(&definition("second", "actor")).unwrap();
@@ -193,9 +203,18 @@ fn failed_spawns_roll_back_and_invalid_definitions_change_nothing() {
     let destroyed = Rc::new(Cell::new(0));
     let mut registry = EntityRegistry::new();
     let counter = destroyed.clone();
-    registry.register("broken", move |_| Box::new(Broken { destroyed: counter.clone() })).unwrap();
+    registry
+        .register("broken", move |_| {
+            Box::new(Broken {
+                destroyed: counter.clone(),
+            })
+        })
+        .unwrap();
     assert!(matches!(
-        registry.register("broken", |_| Box::new(Actor { events: Default::default(), spawned: false })),
+        registry.register("broken", |_| Box::new(Actor {
+            events: Default::default(),
+            spawned: false
+        })),
         Err(GameplayError::DuplicateEntityType(_))
     ));
     assert!(matches!(registry.register_plain(entity_type::ENTITY), Err(GameplayError::DuplicateEntityType(_))));
@@ -255,7 +274,12 @@ fn systems_match_components_in_stable_order_and_defer_frame_spawns() {
     let authored_only = EntityDefinition::from_json(&json!({"id": "authored", "components": {"other": {}}})).unwrap();
     world.spawn(&authored_only).unwrap();
     let updates = Rc::new(RefCell::new(Vec::new()));
-    let system = world.entities.add_system(Box::new(MarkerSystem { updates: updates.clone() })).unwrap();
+    let system = world
+        .entities
+        .add_system(Box::new(MarkerSystem {
+            updates: updates.clone(),
+        }))
+        .unwrap();
 
     assert_eq!(
         world.entities.query(&["marker"]).iter().map(|entity| entity.id().as_str()).collect::<Vec<_>>(),
@@ -273,9 +297,19 @@ fn systems_match_components_in_stable_order_and_defer_frame_spawns() {
 
 #[test]
 fn world_steps_physics_before_entities_and_rejects_invalid_deltas() {
-    let options = PhysicsWorldOptions { fixed_step: 0.25, max_sub_steps: 2, ..Default::default() };
+    let options = PhysicsWorldOptions {
+        fixed_step: 0.25,
+        max_sub_steps: 2,
+        ..Default::default()
+    };
     let mut world = World::new(EntityRegistry::new(), options).unwrap();
-    assert_eq!(world.update(0.5).unwrap(), WorldStep { elapsed_seconds: 0.5, physics_steps: 2 });
+    assert_eq!(
+        world.update(0.5).unwrap(),
+        WorldStep {
+            elapsed_seconds: 0.5,
+            physics_steps: 2
+        }
+    );
     assert!(matches!(world.update(f32::NAN), Err(GameplayError::InvalidDelta(_))));
     assert!(matches!(world.update(-1.0), Err(GameplayError::InvalidDelta(_))));
 }

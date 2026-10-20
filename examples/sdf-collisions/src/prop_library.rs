@@ -46,18 +46,33 @@ pub struct PropDefinition {
 
 /// The authored props, in spawn-table order.
 pub const PROPS: [PropDefinition; 5] = [
-    PropDefinition { name: "Chair", source: include_str!("../assets/chair.form"), collider: ColliderSource::BakedMesh },
-    PropDefinition { name: "Jack", source: include_str!("../assets/jack.form"), collider: ColliderSource::BakedMesh },
+    PropDefinition {
+        name: "Chair",
+        source: include_str!("../assets/chair.form"),
+        collider: ColliderSource::BakedMesh,
+    },
+    PropDefinition {
+        name: "Jack",
+        source: include_str!("../assets/jack.form"),
+        collider: ColliderSource::BakedMesh,
+    },
     PropDefinition {
         name: "Staple",
         source: include_str!("../assets/staple.form"),
         collider: ColliderSource::BakedMesh,
     },
-    PropDefinition { name: "I-beam", source: include_str!("../assets/beam.form"), collider: ColliderSource::BakedMesh },
+    PropDefinition {
+        name: "I-beam",
+        source: include_str!("../assets/beam.form"),
+        collider: ColliderSource::BakedMesh,
+    },
     PropDefinition {
         name: "Ring",
         source: include_str!("../assets/ring.form"),
-        collider: ColliderSource::Torus { major_radius: 0.36, minor_radius: 0.1 },
+        collider: ColliderSource::Torus {
+            major_radius: 0.36,
+            minor_radius: 0.1,
+        },
     },
 ];
 
@@ -89,7 +104,9 @@ impl PropLibrary {
     /// Evaluate and bake every prop. Fails if a bundled FORM source or its geometry is invalid.
     pub fn load() -> AppResult<Self> {
         let props = PROPS.iter().map(build_prop).collect::<AppResult<Vec<Prop>>>()?;
-        Ok(Self { props })
+        Ok(Self {
+            props,
+        })
     }
 
     /// The props in spawn-table order.
@@ -123,9 +140,13 @@ fn build_prop(definition: &PropDefinition) -> AppResult<Prop> {
         ColliderSource::BakedMesh => {
             SdfShape::from_triangle_mesh(&positions(&geometry), &geometry.triangles, PHYSICS.bake)?
         }
-        ColliderSource::Torus { major_radius, minor_radius } => {
-            SdfShape::primitive(SdfPrimitive::Torus { major_radius, minor_radius })?
-        }
+        ColliderSource::Torus {
+            major_radius,
+            minor_radius,
+        } => SdfShape::primitive(SdfPrimitive::Torus {
+            major_radius,
+            minor_radius,
+        })?,
     };
     let collider_milliseconds = stopwatch.elapsed_milliseconds();
 

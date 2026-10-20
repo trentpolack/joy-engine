@@ -86,8 +86,12 @@ fn frames_match_the_recording() {
 
 #[test]
 fn clock_is_deterministic_and_wraps_into_the_next_day() {
-    let options =
-        EnvironmentOptions { time_of_day: 0.25, day_length_seconds: 100.0, time_scale: 2.0, ..Default::default() };
+    let options = EnvironmentOptions {
+        time_of_day: 0.25,
+        day_length_seconds: 100.0,
+        time_scale: 2.0,
+        ..Default::default()
+    };
     let mut first = EnvironmentSystem::new(options).unwrap();
     let mut second = EnvironmentSystem::new(options).unwrap();
     let frame = first.step(10.0).unwrap();
@@ -95,7 +99,11 @@ fn clock_is_deterministic_and_wraps_into_the_next_day() {
     assert_eq!(frame, second.step(10.0).unwrap());
     assert_eq!(frame.primary_light.kind, CelestialBody::Sun);
 
-    let options = EnvironmentOptions { time_of_day: 0.95, day_length_seconds: 10.0, ..Default::default() };
+    let options = EnvironmentOptions {
+        time_of_day: 0.95,
+        day_length_seconds: 10.0,
+        ..Default::default()
+    };
     let mut wrapping = EnvironmentSystem::new(options).unwrap();
     assert_eq!(wrapping.step(1.0).unwrap().time_of_day, 0.050000000000000044);
     assert_eq!(wrapping.sample().primary_light.kind, CelestialBody::Moon);

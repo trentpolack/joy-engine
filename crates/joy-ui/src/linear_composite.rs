@@ -58,7 +58,9 @@ impl LinearComposite {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        sample_type: wgpu::TextureSampleType::Float {
+                            filterable: false,
+                        },
                         view_dimension: wgpu::TextureViewDimension::D2,
                         multisampled: false,
                     },
@@ -106,7 +108,12 @@ impl LinearComposite {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let composite = Self { pipeline, layout, uniforms, target: None };
+        let composite = Self {
+            pipeline,
+            layout,
+            uniforms,
+            target: None,
+        };
         composite.set_sdr_white_level(queue, sdr_white_level);
         composite
     }
@@ -137,7 +144,10 @@ impl LinearComposite {
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: output,
                 resolve_target: None,
-                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
                 depth_slice: None,
             })],
             ..Default::default()
@@ -151,7 +161,11 @@ impl LinearComposite {
     fn create_target(&self, device: &wgpu::Device, size: [u32; 2]) -> InterfaceTarget {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("ui intermediate"),
-            size: wgpu::Extent3d { width: size[0], height: size[1], depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: size[0],
+                height: size[1],
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -164,11 +178,21 @@ impl LinearComposite {
             label: Some("ui composite"),
             layout: &self.layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: self.uniforms.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&view) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.uniforms.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
             ],
         });
-        InterfaceTarget { size, view, bind_group }
+        InterfaceTarget {
+            size,
+            view,
+            bind_group,
+        }
     }
 }
 

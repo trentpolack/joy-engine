@@ -47,7 +47,11 @@ pub struct LevelData {
 impl LevelData {
     /// An empty level with a name.
     pub fn new(name: impl Into<String>) -> Self {
-        Self { version: LEVEL_VERSION, name: name.into(), entities: Vec::new() }
+        Self {
+            version: LEVEL_VERSION,
+            name: name.into(),
+            entities: Vec::new(),
+        }
     }
 
     /// Validate a parsed JSON level and return an owned copy.
@@ -80,7 +84,11 @@ impl LevelData {
         if record.contains_key(RETIRED_POST_PROCESSING_KEY) {
             return Err(LevelError::LevelPostProcessingMoved);
         }
-        Ok(Self { version: LEVEL_VERSION, name, entities })
+        Ok(Self {
+            version: LEVEL_VERSION,
+            name,
+            entities,
+        })
     }
 
     /// Serialize in the format's key order: `version`, `name`, then `entities`.
@@ -151,7 +159,13 @@ impl LevelDocument {
     pub fn new(level: &LevelData) -> Result<Self, LevelError> {
         let level = canonical_level(level)?;
         let level_text = level_fingerprint(&level);
-        Ok(Self { level, level_text, past: VecDeque::new(), future: Vec::new(), selected_id: None })
+        Ok(Self {
+            level,
+            level_text,
+            past: VecDeque::new(),
+            future: Vec::new(),
+            selected_id: None,
+        })
     }
 
     /// An owned copy suitable for rendering, simulation, or editing.

@@ -37,7 +37,10 @@ pub(crate) fn select_point_lights(lights: &[PointLight], camera: &CameraFrame) -
     ranked.sort_by(|left, right| right.0.total_cmp(&left.0));
     ranked.truncate(MAX_POINT_LIGHTS);
     let selected: Vec<PointLight> = ranked.into_iter().map(|(_, light)| light).collect();
-    SelectedLights { omitted: lights.len() - selected.len(), lights: selected }
+    SelectedLights {
+        omitted: lights.len() - selected.len(),
+        lights: selected,
+    }
 }
 
 /// How strongly a light can light the view: its luminance, scaled down by the camera's distance from its reach

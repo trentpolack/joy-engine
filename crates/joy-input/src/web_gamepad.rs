@@ -25,6 +25,10 @@ pub(crate) fn poll(pads: &mut Vec<GamepadState>) {
             .iter()
             .map(|button| button.dyn_into::<web_sys::GamepadButton>().map_or(0.0, |button| button.value() as f32))
             .collect();
-        pads.push(GamepadState { connected: pad.connected(), axes, buttons });
+        pads.push(GamepadState {
+            connected: pad.connected(),
+            axes,
+            buttons,
+        });
     }
 }

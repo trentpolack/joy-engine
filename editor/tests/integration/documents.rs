@@ -7,7 +7,10 @@ use joy_editor::server::DiskDocument;
 use joy_editor::workspace::documents::WorkspaceDocument;
 
 fn disk(text: &str, revision: &str) -> DiskDocument {
-    DiskDocument { text: text.to_owned(), revision: revision.to_owned() }
+    DiskDocument {
+        text: text.to_owned(),
+        revision: revision.to_owned(),
+    }
 }
 
 #[test]

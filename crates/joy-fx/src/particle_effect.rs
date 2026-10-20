@@ -729,7 +729,14 @@ impl ParticleEffect {
                 Some(random) => random.as_mut(),
                 None => owned_random,
             };
-            let mut runner = ScriptRunner { parameter_values, random, budget, scratch, profile, time };
+            let mut runner = ScriptRunner {
+                parameter_values,
+                random,
+                budget,
+                scratch,
+                profile,
+                time,
+            };
 
             for particle in particles.iter_mut() {
                 let emitter_index = particle.emitter_index;
@@ -811,7 +818,14 @@ impl ParticleEffect {
         };
         let timed = profile.enabled;
         let started = if timed { profile_clock() } else { 0.0 };
-        let mut runner = ScriptRunner { parameter_values, random, budget, scratch, profile, time };
+        let mut runner = ScriptRunner {
+            parameter_values,
+            random,
+            budget,
+            scratch,
+            profile,
+            time,
+        };
 
         let capacity = i64::from(definition.asset().max_particles) - particles.len() as i64;
         let remaining_spawns = MAXIMUM_TOTAL_SPAWNS as i64 - *emitted as i64;
@@ -897,7 +911,11 @@ impl ScriptRunner<'_> {
         {
             row.operations += before - *self.budget;
         }
-        result.map_err(|fault| ParticleEffectError::Emitter { emitter: emitter.asset.id.clone(), phase, fault })
+        result.map_err(|fault| ParticleEffectError::Emitter {
+            emitter: emitter.asset.id.clone(),
+            phase,
+            fault,
+        })
     }
 }
 
@@ -923,10 +941,18 @@ fn update_particle(
             && particle.age + TIME_EPSILON >= particle.next_trail
         {
             particle.next_trail += trail.interval;
-            children.push(ChildRequest { emitter_index: index, count: u64::from(trail.count), parent });
+            children.push(ChildRequest {
+                emitter_index: index,
+                count: u64::from(trail.count),
+                parent,
+            });
         }
         if let (false, Some(death), Some(index)) = (alive, &emitter.asset.death, emitter.death_index) {
-            children.push(ChildRequest { emitter_index: index, count: u64::from(death.count), parent });
+            children.push(ChildRequest {
+                emitter_index: index,
+                count: u64::from(death.count),
+                parent,
+            });
         }
     }
     Ok(alive)

@@ -215,7 +215,10 @@ impl FormDestructionDemo {
             self.hud.notice = "No structure at this point".to_owned();
             return Ok(());
         };
-        let impact = Impact { chunk_id: hit.chunk.id.clone(), point: hit.point };
+        let impact = Impact {
+            chunk_id: hit.chunk.id.clone(),
+            point: hit.point,
+        };
         self.impact_debug.add(&mut self.scene, impact.point, ray.direction, self.damage_radius as f32)?;
         self.structure.queue_damage(RadialDamage {
             center: impact.point,
@@ -412,7 +415,11 @@ impl FormDestructionDemo {
         let pointer = frame.input.pointer();
         if action.pressed && self.gesture.is_none() && pointer.active {
             let position = pointer.position;
-            self.gesture = Some(PointerGesture { start: position, last: position, dragged: false });
+            self.gesture = Some(PointerGesture {
+                start: position,
+                last: position,
+                dragged: false,
+            });
         }
         let Some(mut gesture) = self.gesture else {
             return Ok(());

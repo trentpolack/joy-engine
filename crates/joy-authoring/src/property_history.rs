@@ -35,14 +35,22 @@ pub struct PropertyHistory<Snapshot> {
 
 impl<Snapshot> Default for PropertyHistory<Snapshot> {
     fn default() -> Self {
-        Self { baseline: None, past: Vec::new(), future: Vec::new(), limit: PROPERTY_HISTORY_LIMIT }
+        Self {
+            baseline: None,
+            past: Vec::new(),
+            future: Vec::new(),
+            limit: PROPERTY_HISTORY_LIMIT,
+        }
     }
 }
 
 impl<Snapshot: Clone + PartialEq> PropertyHistory<Snapshot> {
     /// An empty history whose baseline is `snapshot` (the document as opened).
     pub fn new(snapshot: Snapshot) -> Self {
-        Self { baseline: Some(snapshot), ..Self::default() }
+        Self {
+            baseline: Some(snapshot),
+            ..Self::default()
+        }
     }
 
     /// Keep at most `limit` entries (at least one).
@@ -73,7 +81,10 @@ impl<Snapshot: Clone + PartialEq> PropertyHistory<Snapshot> {
         let before = self.baseline.replace(snapshot.clone());
         match before {
             Some(before) if before != snapshot => {
-                self.past.push(HistoryEntry { before, after: snapshot });
+                self.past.push(HistoryEntry {
+                    before,
+                    after: snapshot,
+                });
                 if self.past.len() > self.limit {
                     let excess = self.past.len() - self.limit;
                     self.past.drain(..excess);

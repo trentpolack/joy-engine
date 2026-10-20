@@ -86,7 +86,10 @@ impl LevelRuntime {
             return Err(GameplayError::UnresolvedTemplate(EntityId::new(linked.id.clone())));
         }
 
-        let mut runtime = Self { level: level.clone(), world: World::new(registry, physics)? };
+        let mut runtime = Self {
+            level: level.clone(),
+            world: World::new(registry, physics)?,
+        };
         let definitions = runtime.level.entities.clone();
         for definition in &definitions {
             if let Err(error) = runtime.spawn(definition) {
@@ -104,7 +107,10 @@ impl LevelRuntime {
         let id = self.world.spawn(definition)?;
         if let Err(source) = self.attach_physics(&id) {
             self.world.remove(&id);
-            return Err(GameplayError::PhysicsComponent { entity: id, source });
+            return Err(GameplayError::PhysicsComponent {
+                entity: id,
+                source,
+            });
         }
         Ok(id)
     }
@@ -246,7 +252,12 @@ fn body_options(
         .and_then(Value::as_str)
         .and_then(PrimitiveShape::parse)
         .ok_or(PhysicsComponentError::InvalidShape)?;
-    let mut options = BodyOptions { shape, position, rotation, ..BODY_DEFAULTS };
+    let mut options = BodyOptions {
+        shape,
+        position,
+        rotation,
+        ..BODY_DEFAULTS
+    };
 
     // Shape dimensions are checked before material values, so the first failure reported is stable.
     match shape {

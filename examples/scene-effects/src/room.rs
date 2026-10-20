@@ -70,5 +70,9 @@ pub fn create_room(alternate: bool) -> Room {
             3.5,
         ));
     }
-    Room { scene, moving, lights }
+    Room {
+        scene,
+        moving,
+        lights,
+    }
 }

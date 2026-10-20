@@ -8,12 +8,19 @@ use crate::texture::TextureAsset;
 
 /// A small triangle centered `depth` units in front of a camera at the origin looking down -Z.
 fn colored(depth: f32) -> [ColorVertex; 3] {
-    let vertex = |x: f32, y: f32| ColorVertex { position: [x, y, -depth], color: [1.0; 4] };
+    let vertex = |x: f32, y: f32| ColorVertex {
+        position: [x, y, -depth],
+        color: [1.0; 4],
+    };
     [vertex(-0.1, 0.0), vertex(0.1, 0.0), vertex(0.0, 0.1)]
 }
 
 fn textured(depth: f32) -> [TexturedVertex; 3] {
-    colored(depth).map(|vertex| TexturedVertex { position: vertex.position, color: vertex.color, uv: [0.0; 2] })
+    colored(depth).map(|vertex| TexturedVertex {
+        position: vertex.position,
+        color: vertex.color,
+        uv: [0.0; 2],
+    })
 }
 
 #[test]
@@ -22,7 +29,10 @@ fn particles_behind_and_in_front_of_a_glass_mesh_sort_around_it() {
     let far_particle = textured(15.0);
     let near_particle = textured(5.0);
     let particles = [far_particle, near_particle].concat();
-    let draws = [TransparentDraw::Textured { texture: &sprite, vertices: &particles }];
+    let draws = [TransparentDraw::Textured {
+        texture: &sprite,
+        vertices: &particles,
+    }];
     let smoke = colored(12.0);
 
     // One glass pane ten units away, between the two particles.
@@ -33,10 +43,16 @@ fn particles_behind_and_in_front_of_a_glass_mesh_sort_around_it() {
     assert_eq!(
         queue.steps,
         [
-            TransparentStep::Textured { texture, vertices: 0..3 },
+            TransparentStep::Textured {
+                texture,
+                vertices: 0..3
+            },
             TransparentStep::Colored(0..3),
             TransparentStep::Mesh(0),
-            TransparentStep::Textured { texture, vertices: 3..6 },
+            TransparentStep::Textured {
+                texture,
+                vertices: 3..6
+            },
         ]
     );
     assert_eq!(queue.mesh_order, [0]);

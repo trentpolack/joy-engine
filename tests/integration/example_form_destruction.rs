@@ -57,7 +57,13 @@ fn identical_seeds_reproduce_the_structure_and_reset_restores_collision() {
     assert_eq!(generate_structure(DESTRUCTION.seed).len(), 126);
     let mut structure = ChunkStructure::new(&generate_structure(42), None).unwrap();
     for _ in 0..6 {
-        structure.queue_damage(RadialDamage { center: DVec3::new(0.0, 1.0, 0.0), radius: 1.3, damage: 1.0 }).unwrap();
+        structure
+            .queue_damage(RadialDamage {
+                center: DVec3::new(0.0, 1.0, 0.0),
+                radius: 1.3,
+                damage: 1.0,
+            })
+            .unwrap();
         structure.commit();
     }
     let query = DVec3::new(0.34, 0.82, 0.34);
@@ -71,7 +77,10 @@ fn released_chunks_land_persist_and_release_on_reset() {
     let mut scene = RenderScene::new();
     let mut debris = DestructionDebris::new(&mut scene).unwrap();
     let chunks = generate_structure(DESTRUCTION.seed);
-    let chunk = DestructibleChunkDefinition { center: DVec3::new(0.0, 4.0, 0.0), ..chunks[0].clone() };
+    let chunk = DestructibleChunkDefinition {
+        center: DVec3::new(0.0, 4.0, 0.0),
+        ..chunks[0].clone()
+    };
     debris.spawn(&mut scene, [&chunk], true).unwrap();
     for _ in 0..60 {
         debris.update(&mut scene, STEP).unwrap();
@@ -130,8 +139,11 @@ fn support_released_chunks_rest_on_surviving_structure_and_fractures_escape() {
         material: "masonry".to_owned(),
         hit_points: 6.0,
     };
-    let upper =
-        DestructibleChunkDefinition { id: "upper".to_owned(), center: DVec3::new(0.0, 4.0, 0.0), ..foot.clone() };
+    let upper = DestructibleChunkDefinition {
+        id: "upper".to_owned(),
+        center: DVec3::new(0.0, 4.0, 0.0),
+        ..foot.clone()
+    };
     debris.synchronize_structure([&foot]).unwrap();
     debris.spawn(&mut scene, [&upper], false).unwrap();
     assert_eq!(debris.snapshot().pieces[0].velocity, Vec3::ZERO, "support failures fall without an impulse");
@@ -153,7 +165,11 @@ fn support_released_chunks_rest_on_surviving_structure_and_fractures_escape() {
     let mut structure = ChunkStructure::new(&generate_structure(DESTRUCTION.seed), Some(SUPPORT.options())).unwrap();
     for _ in 0..6 {
         structure
-            .queue_damage(RadialDamage { center: DVec3::new(-2.0, 2.5, 0.275), radius: 1.15, damage: 1.0 })
+            .queue_damage(RadialDamage {
+                center: DVec3::new(-2.0, 2.5, 0.275),
+                radius: 1.15,
+                damage: 1.0,
+            })
             .unwrap();
     }
     let changes = structure.commit();
@@ -242,7 +258,12 @@ fn screen_point(world: Vec3) -> Vec2 {
 
 #[test]
 fn the_demo_breaks_supports_and_keeps_debris_through_real_input() {
-    let options = HeadlessOptions { width: 640, height: 400, input: input_map(), ..Default::default() };
+    let options = HeadlessOptions {
+        width: 640,
+        height: 400,
+        input: input_map(),
+        ..Default::default()
+    };
     let shell = match HeadlessShell::new(options) {
         Ok(shell) => shell,
         Err(error) => {
@@ -250,7 +271,10 @@ fn the_demo_breaks_supports_and_keeps_debris_through_real_input() {
             return;
         }
     };
-    let mut driver = Driver { shell, demo: FormDestructionDemo::new().unwrap() };
+    let mut driver = Driver {
+        shell,
+        demo: FormDestructionDemo::new().unwrap(),
+    };
     driver.shell.start(&mut driver.demo).unwrap();
     driver.frames(2);
     let intact = driver.capture("example-form-destruction-integrity");

@@ -449,7 +449,14 @@ impl ScriptEditor {
         }
 
         let line_count = script_language_tools::line_count(text.as_str());
-        ScriptEditorResponse { response, changed: changed && !read_only, run_requested, line, column, line_count }
+        ScriptEditorResponse {
+            response,
+            changed: changed && !read_only,
+            run_requested,
+            line,
+            column,
+            line_count,
+        }
     }
 
     /// Update or close the completion list after this frame's edit.
@@ -482,7 +489,11 @@ impl ScriptEditor {
             .as_ref()
             .filter(|completion| completion.start == start)
             .map_or(0, |completion| completion.selected.min(matches.len() - 1));
-        self.completion = Some(CompletionState { start, matches, selected });
+        self.completion = Some(CompletionState {
+            start,
+            matches,
+            selected,
+        });
     }
 
     /// Draw the completion list at `position`; returns a clicked item.
@@ -635,20 +646,31 @@ fn paint_squiggle(painter: &egui::Painter, rect: Rect, color: Color32) {
 
 /// Build the highlighted layout job for `source`.
 fn highlight_job(syntax: &ScriptSyntax, source: &str, font: &FontId) -> LayoutJob {
-    let mut job = LayoutJob { text: source.to_owned(), ..Default::default() };
+    let mut job = LayoutJob {
+        text: source.to_owned(),
+        ..Default::default()
+    };
     job.wrap.max_width = f32::INFINITY;
     for token in syntax.tokenize(source) {
         job.sections.push(egui::text::LayoutSection {
             leading_space: 0.0,
             byte_range: ByteIndex(token.range.start)..ByteIndex(token.range.end),
-            format: TextFormat { font_id: font.clone(), color: token_color(token.kind), ..Default::default() },
+            format: TextFormat {
+                font_id: font.clone(),
+                color: token_color(token.kind),
+                ..Default::default()
+            },
         });
     }
     if job.sections.is_empty() {
         job.sections.push(egui::text::LayoutSection {
             leading_space: 0.0,
             byte_range: ByteIndex(0)..ByteIndex(0),
-            format: TextFormat { font_id: font.clone(), color: tokens::TEXT, ..Default::default() },
+            format: TextFormat {
+                font_id: font.clone(),
+                color: tokens::TEXT,
+                ..Default::default()
+            },
         });
     }
     job

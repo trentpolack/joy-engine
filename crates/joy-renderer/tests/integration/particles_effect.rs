@@ -177,7 +177,10 @@ impl RandomSource for CountingRandom {
 #[test]
 fn borrowed_random_streams_continue_across_reset() {
     let calls = Rc::new(Cell::new(0));
-    let options = ParticleEffectOptions { random: Some(Box::new(CountingRandom(calls.clone()))), ..Default::default() };
+    let options = ParticleEffectOptions {
+        random: Some(Box::new(CountingRandom(calls.clone()))),
+        ..Default::default()
+    };
     let mut runtime = ParticleEffect::new(&compile(&document(json!({}))), options).unwrap();
     assert_eq!(calls.get(), 2);
     assert_eq!(runtime.particles()[0].size, 2.5);
@@ -188,7 +191,10 @@ fn borrowed_random_streams_continue_across_reset() {
 #[test]
 fn owners_cull_oldest_particles_and_rescale_positions_atomically() {
     let definition = compile(&document(json!({})));
-    let options = ParticleEffectOptions { position: [10.0, 20.0, 3.0], ..Default::default() };
+    let options = ParticleEffectOptions {
+        position: [10.0, 20.0, 3.0],
+        ..Default::default()
+    };
     let mut runtime = ParticleEffect::new(&definition, options).unwrap();
     runtime.step().unwrap();
     let newest = runtime.particles()[1].clone();
@@ -213,7 +219,10 @@ fn vector_and_color_parameters_are_typed_read_only_inputs() {
     });
     let definition = compile(&source);
     let tint = ParticleParameterValue::Color([0.8, 0.7, 0.6, 0.5]);
-    let options = || ParticleEffectOptions { parameters: vec![("tint".to_owned(), tint)], ..Default::default() };
+    let options = || ParticleEffectOptions {
+        parameters: vec![("tint".to_owned(), tint)],
+        ..Default::default()
+    };
     let mut runtime = ParticleEffect::new(&definition, options()).unwrap();
     let particle = &runtime.particles()[0];
     assert_eq!([particle.r, particle.alpha, particle.size, particle.vy], [0.8, 0.5, 3.5, 2.0]);
@@ -225,7 +234,10 @@ fn vector_and_color_parameters_are_typed_read_only_inputs() {
     let out_of_range = ParticleParameterValue::Color([1.0, 0.0, 0.0, 2.0]);
     let wrong_shape = ParticleParameterValue::Scalar(1.0);
     for value in [out_of_range, wrong_shape] {
-        let options = ParticleEffectOptions { parameters: vec![("tint".to_owned(), value)], ..Default::default() };
+        let options = ParticleEffectOptions {
+            parameters: vec![("tint".to_owned(), value)],
+            ..Default::default()
+        };
         let error = ParticleEffect::new(&definition, options).unwrap_err();
         assert_eq!(error.to_string(), "Invalid value for effect parameter 'tint'.");
     }
@@ -302,7 +314,10 @@ fn profiling_preserves_trajectories_and_counts_work() {
     let child = json!({"id": "child", "enabled": true, "root": false, "duration": 0, "rate": 0, "bursts": [],
         "lifetime": 1, "renderer": "soft", "spawn": "x=1;", "update": "x+=1;"});
     limited["emitters"].as_array_mut().unwrap().push(child);
-    let options = ParticleEffectOptions { profiling: true, ..Default::default() };
+    let options = ParticleEffectOptions {
+        profiling: true,
+        ..Default::default()
+    };
     let mut runtime = ParticleEffect::new(&compile(&limited), options).unwrap();
     assert_eq!(runtime.profile().emitters[0].operations, 2);
     runtime.step().unwrap();

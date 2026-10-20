@@ -110,7 +110,10 @@ pub fn form_language_catalog() -> ScriptLanguageCatalog {
             writable: None,
         }
     });
-    ScriptLanguageCatalog { id: "form".to_owned(), symbols: keywords.chain(commands).collect() }
+    ScriptLanguageCatalog {
+        id: "form".to_owned(),
+        symbols: keywords.chain(commands).collect(),
+    }
 }
 
 #[cfg(test)]

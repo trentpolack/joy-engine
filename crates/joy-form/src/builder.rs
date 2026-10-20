@@ -47,7 +47,10 @@ pub struct Builder {
 impl Builder {
     pub fn new(materials: Option<&Json>, budget: SharedBudget) -> Result<Self, String> {
         Ok(Self {
-            data: GeometryData { materials: read_materials(materials)?, ..GeometryData::default() },
+            data: GeometryData {
+                materials: read_materials(materials)?,
+                ..GeometryData::default()
+            },
             color: vec![0.929, 0.424, 0.224, 1.0],
             normal: vec![0.0, 0.0, 0.0],
             uv: vec![0.0, 0.0],

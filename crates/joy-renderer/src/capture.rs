@@ -34,7 +34,11 @@ impl OffscreenTarget {
         }
         let texture = gpu.device().create_texture(&wgpu::TextureDescriptor {
             label: Some("offscreen capture"),
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -43,7 +47,12 @@ impl OffscreenTarget {
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        Ok(Self { view, texture, width, height })
+        Ok(Self {
+            view,
+            texture,
+            width,
+            height,
+        })
     }
 
     /// The view to pass as the renderer's output.
@@ -70,8 +79,9 @@ impl OffscreenTarget {
             mapped_at_creation: false,
         });
 
-        let mut encoder =
-            gpu.device().create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("capture copy") });
+        let mut encoder = gpu.device().create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("capture copy"),
+        });
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
                 texture: &self.texture,
@@ -87,7 +97,11 @@ impl OffscreenTarget {
                     rows_per_image: Some(self.height),
                 },
             },
-            wgpu::Extent3d { width: self.width, height: self.height, depth_or_array_layers: 1 },
+            wgpu::Extent3d {
+                width: self.width,
+                height: self.height,
+                depth_or_array_layers: 1,
+            },
         );
         gpu.queue().submit([encoder.finish()]);
 

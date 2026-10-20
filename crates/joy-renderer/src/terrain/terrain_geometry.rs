@@ -166,7 +166,9 @@ pub(crate) fn terrain_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGrou
                 binding: 1,
                 visibility: wgpu::ShaderStages::VERTEX,
                 ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    sample_type: wgpu::TextureSampleType::Float {
+                        filterable: false,
+                    },
                     view_dimension: wgpu::TextureViewDimension::D2,
                     multisampled: false,
                 },
@@ -183,7 +185,11 @@ pub(crate) const GRID_ATTRIBUTES: [wgpu::VertexAttribute; 1] = wgpu::vertex_attr
 
 /// Grid vertex buffer layout for every terrain pipeline.
 pub(crate) fn grid_buffer_layout() -> wgpu::VertexBufferLayout<'static> {
-    wgpu::VertexBufferLayout { array_stride: 8, step_mode: wgpu::VertexStepMode::Vertex, attributes: &GRID_ATTRIBUTES }
+    wgpu::VertexBufferLayout {
+        array_stride: 8,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &GRID_ATTRIBUTES,
+    }
 }
 
 /// Resident terrain resources and per-frame selection, drawn by any compatible terrain pipeline.
@@ -229,7 +235,11 @@ impl TerrainGeometry {
         let mut resident_gpu_bytes = 0;
         let mut buffer = |label: &str, contents: &[u8], usage: wgpu::BufferUsages| {
             resident_gpu_bytes += contents.len() as u64;
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some(label), contents, usage })
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(label),
+                contents,
+                usage,
+            })
         };
 
         // Static topology and decoded world heights upload once.
@@ -270,7 +280,11 @@ impl TerrainGeometry {
             gpu.queue(),
             &wgpu::TextureDescriptor {
                 label: Some("terrain heights"),
-                size: wgpu::Extent3d { width: manifest.size, height: manifest.size, depth_or_array_layers: 1 },
+                size: wgpu::Extent3d {
+                    width: manifest.size,
+                    height: manifest.size,
+                    depth_or_array_layers: 1,
+                },
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
@@ -288,8 +302,14 @@ impl TerrainGeometry {
             label: Some("terrain"),
             layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: scene.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&height_view) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: scene.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&height_view),
+                },
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
@@ -298,7 +318,10 @@ impl TerrainGeometry {
                         size: wgpu::BufferSize::new(PATCH_RECORD_BYTES),
                     }),
                 },
-                wgpu::BindGroupEntry { binding: 3, resource: model.as_entire_binding() },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: model.as_entire_binding(),
+                },
             ],
         });
 
@@ -521,7 +544,9 @@ fn create_gpu_selection(
         binding,
         visibility: wgpu::ShaderStages::COMPUTE,
         ty: wgpu::BindingType::Buffer {
-            ty: wgpu::BufferBindingType::Storage { read_only },
+            ty: wgpu::BufferBindingType::Storage {
+                read_only,
+            },
             has_dynamic_offset: false,
             min_binding_size: None,
         },
@@ -551,12 +576,30 @@ fn create_gpu_selection(
         label: Some("terrain selection"),
         layout: &layout,
         entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: scene.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: metadata_buffer.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: details.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 3, resource: patches.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 4, resource: indirect.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 5, resource: ranges_buffer.as_entire_binding() },
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: scene.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: metadata_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: details.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: patches.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: indirect.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: ranges_buffer.as_entire_binding(),
+            },
         ],
     });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

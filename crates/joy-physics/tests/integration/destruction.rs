@@ -96,7 +96,11 @@ fn wall() -> Vec<DestructibleChunkDefinition> {
 }
 
 fn damage(center: DVec3, radius: f64, amount: f64) -> RadialDamage {
-    RadialDamage { center, radius, damage: amount }
+    RadialDamage {
+        center,
+        radius,
+        damage: amount,
+    }
 }
 
 fn ids<'a>(chunks: impl IntoIterator<Item = &'a DestructibleChunkDefinition>) -> Vec<&'a str> {
@@ -236,8 +240,11 @@ fn overlapping_hits_raycasts_and_reset_retain_stable_identities() {
 
 #[test]
 fn ground_support_releases_overhangs_and_islands_at_the_damage_boundary() {
-    let support =
-        ChunkSupportOptions { ground_height: 0.0, maximum_cantilever_distance: 1.05, contact_tolerance: None };
+    let support = ChunkSupportOptions {
+        ground_height: 0.0,
+        maximum_cantilever_distance: 1.05,
+        contact_tolerance: None,
+    };
     let mut structure = ChunkStructure::new(&wall(), Some(support)).unwrap();
     assert!(structure.support_state().iter().all(|chunk| chunk.supported));
     for column in [1.0, 2.0, 3.0] {
@@ -275,8 +282,11 @@ fn support_excludes_corner_contacts_and_climbing_does_not_regain_reach() {
         material: "masonry".to_owned(),
         hit_points: 2.0,
     };
-    let support =
-        ChunkSupportOptions { ground_height: 0.0, maximum_cantilever_distance: 1.05, contact_tolerance: None };
+    let support = ChunkSupportOptions {
+        ground_height: 0.0,
+        maximum_cantilever_distance: 1.05,
+        contact_tolerance: None,
+    };
     let definitions = [
         chunk("foot", DVec3::new(0.0, 0.5, 0.0)),
         chunk("bridge", DVec3::new(1.0, 1.5, 0.0)),
@@ -484,8 +494,11 @@ fn invalid_definitions_damage_and_queries_report_the_recorded_messages() {
     let mut flat = chunks[0].clone();
     flat.size[1] = 0.0;
     let dimensions = ChunkStructure::new(&[flat], None).unwrap_err();
-    let support =
-        ChunkSupportOptions { ground_height: 0.0, maximum_cantilever_distance: -1.0, contact_tolerance: None };
+    let support = ChunkSupportOptions {
+        ground_height: 0.0,
+        maximum_cantilever_distance: -1.0,
+        contact_tolerance: None,
+    };
     let support = ChunkStructure::new(&chunks, Some(support)).unwrap_err();
 
     let mut structure = ChunkStructure::new(&chunks, None).unwrap();
@@ -555,7 +568,13 @@ fn physics_world_keeps_chunk_collision_in_step_with_committed_damage() {
 
     // Stale, duplicate, and malformed batches change nothing.
     let stale = create_removal_mutation_batch(0, &["wall:0:0".to_owned()]).unwrap();
-    assert_eq!(physics.apply_mutations(&stale), Err(PhysicsError::StaleMutationBatch { sequence: 0, last: 1 }));
+    assert_eq!(
+        physics.apply_mutations(&stale),
+        Err(PhysicsError::StaleMutationBatch {
+            sequence: 0,
+            last: 1
+        })
+    );
     let duplicate = PhysicsMutationBatch {
         sequence: 2,
         removed_shape_ids: Vec::new(),
@@ -567,7 +586,10 @@ fn physics_world_keeps_chunk_collision_in_step_with_committed_damage() {
     let mut flat = shape(&wall()[1]);
     flat.id = "debris:0".to_owned();
     flat.half_extents[2] = 0.0;
-    let malformed = PhysicsMutationBatch { added_shapes: vec![flat], ..duplicate };
+    let malformed = PhysicsMutationBatch {
+        added_shapes: vec![flat],
+        ..duplicate
+    };
     assert_eq!(physics.apply_mutations(&malformed), Err(PhysicsError::InvalidShape("debris:0".to_owned())));
     assert_eq!(physics.resident_shape_ids().count(), 14);
 

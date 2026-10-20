@@ -133,10 +133,16 @@ pub const PHYSICS: PhysicsSettings = PhysicsSettings {
     restitution: 0.05,
     linear_damping: 0.05,
     angular_damping: 0.1,
-    bake: SdfBakeOptions { resolution: 40 },
+    bake: SdfBakeOptions {
+        resolution: 40,
+    },
 };
 
-pub const BENCHMARK: BenchmarkSettings = BenchmarkSettings { parameter: "bench", steps: 1200, props: 50 };
+pub const BENCHMARK: BenchmarkSettings = BenchmarkSettings {
+    parameter: "bench",
+    steps: 1200,
+    props: 50,
+};
 
 pub const VIEW: ViewSettings = ViewSettings {
     target: Vec3::new(0.0, 0.6, 0.0),

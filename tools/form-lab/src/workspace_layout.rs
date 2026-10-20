@@ -26,8 +26,16 @@ pub fn create_panel_layout(storage: Option<Storage>) -> PanelLayout {
     PanelLayout::new(
         PanelLayoutOptions {
             storage_key: PANEL_STORAGE_KEY.to_owned(),
-            left: PaneLimits { default_width: 320.0, minimum: 160.0, maximum: 600.0 },
-            right: PaneLimits { default_width: 260.0, minimum: 220.0, maximum: 480.0 },
+            left: PaneLimits {
+                default_width: 320.0,
+                minimum: 160.0,
+                maximum: 600.0,
+            },
+            right: PaneLimits {
+                default_width: 260.0,
+                minimum: 220.0,
+                maximum: 480.0,
+            },
             center_collapsible: true,
             labels: ["Script", "Preview", "Inspector"],
             maximize_mode: MaximizeMode::Workspace,

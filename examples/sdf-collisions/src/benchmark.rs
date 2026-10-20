@@ -87,7 +87,12 @@ fn run_bin(mode: ColliderMode, library: &PropLibrary, steps: u32, props: usize) 
 
 impl fmt::Display for BenchmarkReport {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let SdfCollisionStatistics { pairs, contacts, iterations, distance_queries } = self.sdf.snapshot.statistics;
+        let SdfCollisionStatistics {
+            pairs,
+            contacts,
+            iterations,
+            distance_queries,
+        } = self.sdf.snapshot.statistics;
         write!(
             formatter,
             "SDF benchmark: {} props, {} steps | SDF {:.3} ms/step ({:.3} settled), hash {:016x}, {} left the bin | \

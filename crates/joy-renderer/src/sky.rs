@@ -37,7 +37,13 @@ pub struct AtmosphereOptions {
 
 impl Default for AtmosphereOptions {
     fn default() -> Self {
-        Self { rayleigh: 1.0, mie: 1.0, ozone: 1.0, density: 1.0, fog_density: 0.002 }
+        Self {
+            rayleigh: 1.0,
+            mie: 1.0,
+            ozone: 1.0,
+            density: 1.0,
+            fog_density: 0.002,
+        }
     }
 }
 
@@ -64,7 +70,7 @@ impl Default for CloudOptions {
             density: 0.7,
             altitude: 1800.0,
             thickness: 700.0,
-            shadow_strength: 0.45
+            shadow_strength: 0.45,
         }
     }
 }
@@ -83,7 +89,11 @@ pub struct LightShaftOptions {
 
 impl Default for LightShaftOptions {
     fn default() -> Self {
-        Self { intensity: 0.65, decay: 0.94, exposure: 0.2 }
+        Self {
+            intensity: 0.65,
+            decay: 0.94,
+            exposure: 0.2,
+        }
     }
 }
 
@@ -99,7 +109,10 @@ pub struct AmbientOcclusionOptions {
 
 impl Default for AmbientOcclusionOptions {
     fn default() -> Self {
-        Self { intensity: 1.0, radius: 7.0 }
+        Self {
+            intensity: 1.0,
+            radius: 7.0,
+        }
     }
 }
 
@@ -172,7 +185,11 @@ pub enum SkyOptionsError {
 
 fn check_range(value: f64, minimum: f64, maximum: f64, name: &'static str) -> Result<(), SkyOptionsError> {
     if !value.is_finite() || value < minimum || value > maximum {
-        return Err(SkyOptionsError::OutOfRange { name, minimum, maximum });
+        return Err(SkyOptionsError::OutOfRange {
+            name,
+            minimum,
+            maximum,
+        });
     }
     Ok(())
 }

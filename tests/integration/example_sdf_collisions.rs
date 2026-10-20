@@ -68,7 +68,12 @@ fn benchmark_piles_repeat_exactly_and_stay_in_their_bins() {
 
 #[test]
 fn the_demo_drops_pauses_adds_and_resets_props_through_key_input() {
-    let options = HeadlessOptions { width: 640, height: 400, input: input_map(), ..Default::default() };
+    let options = HeadlessOptions {
+        width: 640,
+        height: 400,
+        input: input_map(),
+        ..Default::default()
+    };
     let mut shell = match HeadlessShell::new(options) {
         Ok(shell) => shell,
         Err(error) => {

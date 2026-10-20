@@ -194,7 +194,12 @@ impl FormLab {
 
     /// A FORM LAB for Joy Editor: no browser recovery (the editor owns files); layout preferences persist.
     pub fn hosted() -> Self {
-        Self::with_storage(ToolHosting::Hosted { area: egui::Rect::NOTHING }, Some(Storage::new(STORAGE_APPLICATION)))
+        Self::with_storage(
+            ToolHosting::Hosted {
+                area: egui::Rect::NOTHING,
+            },
+            Some(Storage::new(STORAGE_APPLICATION)),
+        )
     }
 
     /// A FORM LAB with explicit storage (`None` keeps nothing between sessions), for tests and hosts.
@@ -363,7 +368,10 @@ impl FormLab {
     /// Replace the study, or ask first when it has edits.
     fn replace_with(&mut self, document: FormDocument, prompt: &'static str) {
         if self.session.has_edits() {
-            self.replacement = Some(PendingReplacement { prompt, document });
+            self.replacement = Some(PendingReplacement {
+                prompt,
+                document,
+            });
         } else {
             self.load(document);
         }
@@ -404,7 +412,11 @@ impl FormLab {
 
     fn handle_session_event(&mut self, event: SessionEvent) {
         match event {
-            SessionEvent::BuildReady { data, milliseconds, frame } => {
+            SessionEvent::BuildReady {
+                data,
+                milliseconds,
+                frame,
+            } => {
                 let accepted = (*data).clone();
                 match self.inspection.update(*data, frame, &mut self.viewport) {
                     Ok(()) => {
@@ -443,15 +455,34 @@ impl FormLab {
             return;
         };
         match (purpose, event) {
-            (FilePurpose::Artifact { kind, format, contents }, FileDialogEvent::Saved { .. }) => {
+            (
+                FilePurpose::Artifact {
+                    kind,
+                    format,
+                    contents,
+                },
+                FileDialogEvent::Saved {
+                    ..
+                },
+            ) => {
                 if kind == ArtifactKind::Save {
                     let format = if format == "form" { SaveFormat::Form } else { SaveFormat::FormLab };
                     self.session.save_completed(format, &contents, !cfg!(target_arch = "wasm32"));
                 }
                 self.artifact.completed();
             }
-            (FilePurpose::Artifact { .. }, FileDialogEvent::Cancelled) => self.artifact.cancelled(),
-            (FilePurpose::Artifact { .. }, FileDialogEvent::Failed(message)) => self.artifact.failed(message),
+            (
+                FilePurpose::Artifact {
+                    ..
+                },
+                FileDialogEvent::Cancelled,
+            ) => self.artifact.cancelled(),
+            (
+                FilePurpose::Artifact {
+                    ..
+                },
+                FileDialogEvent::Failed(message),
+            ) => self.artifact.failed(message),
             (purpose, FileDialogEvent::Opened(file)) => {
                 self.handle_opened(purpose, &file.name, file.contents.as_bytes())
             }
@@ -459,13 +490,22 @@ impl FormLab {
                 self.parameters.messages.insert(name, message);
             }
             (
-                FilePurpose::ExportMaterialX | FilePurpose::ImportMaterialX | FilePurpose::ChooseTexture { .. },
+                FilePurpose::ExportMaterialX
+                | FilePurpose::ImportMaterialX
+                | FilePurpose::ChooseTexture {
+                    ..
+                },
                 FileDialogEvent::Failed(message),
             ) => {
                 self.materials.message = message;
             }
             (_, FileDialogEvent::Failed(message)) => self.session.set_status(message, StatusState::Error),
-            (FilePurpose::ExportMaterialX, FileDialogEvent::Saved { .. }) => {
+            (
+                FilePurpose::ExportMaterialX,
+                FileDialogEvent::Saved {
+                    ..
+                },
+            ) => {
                 self.materials.message = "MaterialX saved.".into();
             }
             _ => {}
@@ -496,7 +536,10 @@ impl FormLab {
                     self.parameters.messages.insert(parameter, error);
                 }
             },
-            FilePurpose::ChooseTexture { material, field } => {
+            FilePurpose::ChooseTexture {
+                material,
+                field,
+            } => {
                 let result = image_data_url(bytes)
                     .and_then(|source| with_texture(self.session.materials(), &material, field, Some(source)));
                 match result {
@@ -525,7 +568,10 @@ impl FormLab {
                     Err(error) => self.materials.message = error,
                 }
             }
-            FilePurpose::ExportMaterialX | FilePurpose::Artifact { .. } => {}
+            FilePurpose::ExportMaterialX
+            | FilePurpose::Artifact {
+                ..
+            } => {}
         }
     }
 
@@ -911,7 +957,10 @@ impl FormLab {
             let rect = ui.max_rect();
             let viewport_size = ui.ctx().content_rect().size();
             self.viewport.set_pane(
-                Some(PaneRect { min: Vec2::new(rect.min.x, rect.min.y), size: Vec2::new(rect.width(), rect.height()) }),
+                Some(PaneRect {
+                    min: Vec2::new(rect.min.x, rect.min.y),
+                    size: Vec2::new(rect.width(), rect.height()),
+                }),
                 Vec2::new(viewport_size.x, viewport_size.y),
             );
             let actions = viewport_input(ui, rect, egui::Id::new("form-lab-viewport"));
@@ -1110,13 +1159,20 @@ impl FormLab {
         );
         for action in actions {
             match action {
-                ParameterAction::Set { name, value, commit } => {
+                ParameterAction::Set {
+                    name,
+                    value,
+                    commit,
+                } => {
                     self.session.set_override(&name, Some(value));
                     if commit {
                         self.session.commit_properties();
                     }
                 }
-                ParameterAction::SetMesh { name, value } => {
+                ParameterAction::SetMesh {
+                    name,
+                    value,
+                } => {
                     self.parameters.messages.remove(&name);
                     self.session.set_override(&name, Some(value));
                 }
@@ -1193,14 +1249,23 @@ impl FormLab {
         for action in self.materials.show(ui, &materials, &mut self.drafts) {
             match action {
                 MaterialAction::SetMaterials(materials) => self.session.set_materials(materials),
-                MaterialAction::ChooseTexture { material, field } => {
+                MaterialAction::ChooseTexture {
+                    material,
+                    field,
+                } => {
                     let request = OpenRequest::binary(
                         "Choose texture",
                         FileFilter::new("Images", &["png", "jpg", "jpeg", "webp"]),
                     )
                     .maximum_bytes(joy_engine::form::DOCUMENT_TEXTURE_BYTES);
                     let started = self.dialogs.open(request);
-                    self.start_file(FilePurpose::ChooseTexture { material, field }, started);
+                    self.start_file(
+                        FilePurpose::ChooseTexture {
+                            material,
+                            field,
+                        },
+                        started,
+                    );
                 }
                 MaterialAction::ImportMaterialX => {
                     let request =
@@ -1260,7 +1325,9 @@ impl FormLab {
     /// The area the tool draws in this frame.
     fn area(&self, context: &egui::Context) -> egui::Rect {
         match self.hosting {
-            ToolHosting::Hosted { area } if area.is_positive() => area,
+            ToolHosting::Hosted {
+                area,
+            } if area.is_positive() => area,
             _ => context.content_rect(),
         }
     }

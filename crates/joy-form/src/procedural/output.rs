@@ -44,7 +44,15 @@ pub fn emit(value: &Json, builder: &mut Builder, material_index: Option<u32>) ->
             if scale.iter().any(|v| v.abs() < 1e-9) {
                 return Err("Instance scale must be nonzero.".into());
             }
-            emit_geometry(&value["source"], builder, Some(Transform { position, rotation, scale }))?;
+            emit_geometry(
+                &value["source"],
+                builder,
+                Some(Transform {
+                    position,
+                    rotation,
+                    scale,
+                }),
+            )?;
         }
         Ok(())
     })();
@@ -126,7 +134,12 @@ fn emit_geometry(geometry: &Json, builder: &mut Builder, transform: Option<Trans
     let saved_normal = builder.normal.clone();
     let saved_uv = builder.uv.clone();
     let saved_data = builder.user_data.clone();
-    let emission = Emission { geometry, transform, color: saved_color.clone(), user_data: saved_data.clone() };
+    let emission = Emission {
+        geometry,
+        transform,
+        color: saved_color.clone(),
+        user_data: saved_data.clone(),
+    };
     let result = (|| {
         let faces = geometry["faces"].as_array().unwrap();
         let used: HashSet<usize> =

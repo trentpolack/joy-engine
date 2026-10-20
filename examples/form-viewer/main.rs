@@ -53,12 +53,18 @@ struct FormViewer {
 
 impl FormViewer {
     fn new() -> Result<Self, AppError> {
-        let environment =
-            EnvironmentSystem::new(EnvironmentOptions { time_of_day: 15.5 / 24.0, ..Default::default() })?;
+        let environment = EnvironmentSystem::new(EnvironmentOptions {
+            time_of_day: 15.5 / 24.0,
+            ..Default::default()
+        })?;
         Ok(Self {
             library: FormAssetLibrary::new(),
             scene: RenderScene::new(),
-            camera: OrbitCamera { yaw: 0.65, pitch: 0.38, ..Default::default() },
+            camera: OrbitCamera {
+                yaw: 0.65,
+                pitch: 0.38,
+                ..Default::default()
+            },
             environment,
             lighting: None,
             selected: 0,
@@ -244,7 +250,12 @@ fn scalar_parameters(path: &str, text: &str) -> Vec<Parameter> {
 
 fn options() -> ShellOptions {
     let input = InputMap::new().action("orbit", [InputBinding::MouseButton(0)]);
-    ShellOptions { title: "FORM VIEWER".into(), input, canvas_id: "form-viewer".into(), ..Default::default() }
+    ShellOptions {
+        title: "FORM VIEWER".into(),
+        input,
+        canvas_id: "form-viewer".into(),
+        ..Default::default()
+    }
 }
 
 fn start() {

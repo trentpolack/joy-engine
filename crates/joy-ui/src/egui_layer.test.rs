@@ -15,7 +15,13 @@ fn browser_modifiers_follow_the_platform_shortcut_key_and_reach_egui() {
     // egui only learns modifier state from `ModifiersChanged` events, so the browser adapter must send them.
     let context = egui::Context::default();
     let frame = |events: Vec<egui::Event>| {
-        let mut output = context.run_ui(egui::RawInput { events, ..Default::default() }, |_| {});
+        let mut output = context.run_ui(
+            egui::RawInput {
+                events,
+                ..Default::default()
+            },
+            |_| {},
+        );
         output.textures_delta.clear();
     };
     frame(vec![egui::Event::ModifiersChanged(mac)]);

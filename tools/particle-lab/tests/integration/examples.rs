@@ -47,7 +47,10 @@ fn emitter_presets_compile_without_shared_parameters_or_child_references_and_are
         assert!(compile_particle_effect(&asset.to_json()).is_ok(), "{}", info.label);
         assert_eq!(emitter.id, "new_emitter");
         assert!(emitter.trail.is_none() && emitter.death.is_none());
-        emitter.bursts.push(joy_engine::particles::ParticleBurst { time: 1.0, count: 1 });
+        emitter.bursts.push(joy_engine::particles::ParticleBurst {
+            time: 1.0,
+            count: 1,
+        });
         assert_ne!(create_emitter_template("new_emitter", info.preset).bursts, emitter.bursts);
     }
 }

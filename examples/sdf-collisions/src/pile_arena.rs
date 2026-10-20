@@ -249,13 +249,21 @@ impl PileArena {
             ..BodyOptions::default()
         };
         let body = match self.mode {
-            ColliderMode::Sdf => {
-                self.world.create_sdf_body(&prop.shape, BodyOptions { position: origin, ..options })?
-            }
+            ColliderMode::Sdf => self.world.create_sdf_body(
+                &prop.shape,
+                BodyOptions {
+                    position: origin,
+                    ..options
+                },
+            )?,
             ColliderMode::BoundingBox => {
                 let position = origin + rotate_portably(prop.box_center, rotation);
                 let half_extents = prop.box_half_extents;
-                self.world.create_body(BodyOptions { position, half_extents, ..options })?
+                self.world.create_body(BodyOptions {
+                    position,
+                    half_extents,
+                    ..options
+                })?
             }
         };
 
@@ -263,7 +271,11 @@ impl PileArena {
             let transform = Transform::new(origin, rotation, Vec3::ONE);
             scene.insert(MeshInstance::new(prop.asset.clone()).with_transform(transform))
         });
-        self.pieces.push(Piece { body, prop: prop_index, mesh });
+        self.pieces.push(Piece {
+            body,
+            prop: prop_index,
+            mesh,
+        });
         Ok(())
     }
 

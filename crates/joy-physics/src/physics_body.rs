@@ -97,7 +97,10 @@ pub struct BodyOptions {
 impl BodyOptions {
     /// Default options for a shape, at the origin with no rotation.
     pub const fn new(shape: PrimitiveShape) -> Self {
-        Self { shape, ..BODY_DEFAULTS }
+        Self {
+            shape,
+            ..BODY_DEFAULTS
+        }
     }
 }
 
@@ -134,7 +137,9 @@ impl PhysicsWorld {
         // Rapier recycles a pair's previous contacts while its relative pose barely moves, but SDF manifolds are sparse
         // and refine themselves step by step (each new sample can displace a worse cached point), so stale ones let
         // bodies tip. Pairs with active hooks are never recycled; the world's default hooks keep every solver flag.
-        let collider = SharedShape::new(SdfCollider { shape: shape.clone() });
+        let collider = SharedShape::new(SdfCollider {
+            shape: shape.clone(),
+        });
         Ok(self.insert_body(validated, collider, ActiveHooks::FILTER_CONTACT_PAIRS))
     }
 
@@ -315,8 +320,19 @@ impl PhysicsWorld {
             // Mass is queried (and used by vehicles) before the first step, so resolve it immediately.
             body.recompute_mass_properties_from_colliders(&self.solver.colliders);
         }
-        self.bodies.insert(raw, BodyRecord { collider, dynamic, previous_pose: pose, vehicle: None });
-        BodyHandle { world: self.world_id, raw }
+        self.bodies.insert(
+            raw,
+            BodyRecord {
+                collider,
+                dynamic,
+                previous_pose: pose,
+                vehicle: None,
+            },
+        );
+        BodyHandle {
+            world: self.world_id,
+            raw,
+        }
     }
 }
 

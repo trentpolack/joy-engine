@@ -382,7 +382,12 @@ impl Procedural {
         }
         let target_domain = domain(if instances { "points" } else { requested })?;
         let object = value.shared(kind)?;
-        let current = Wrangle { object, instances, domain: target_domain.into(), index: 0 };
+        let current = Wrangle {
+            object,
+            instances,
+            domain: target_domain.into(),
+            index: 0,
+        };
         let length = count(current.geometry(&current.object.borrow()), target_domain);
         self.positions_changed = false;
         self.normals_written.clear();

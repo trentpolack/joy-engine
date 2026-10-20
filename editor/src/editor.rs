@@ -148,8 +148,11 @@ impl App for JoyEditor {
     fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
         let capabilities = target.renderer().gpu().capabilities().clone();
         {
-            let mut context =
-                StartContext { capabilities: &capabilities, renderer: target.renderer(), viewport: frame.viewport };
+            let mut context = StartContext {
+                capabilities: &capabilities,
+                renderer: target.renderer(),
+                viewport: frame.viewport,
+            };
             self.workspace.prepare_tabs(&mut context);
         }
         let logical_size = target.renderer().logical_size();

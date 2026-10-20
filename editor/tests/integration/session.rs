@@ -19,10 +19,16 @@ fn sessions_round_trip_through_storage_and_ignore_invalid_data() {
     let storage = Storage::in_directory(&folder.root);
     assert_eq!(WorkspaceSession::load(Some(&storage)), WorkspaceSession::default());
 
-    let mut session = WorkspaceSession { project: "demo".into(), ..Default::default() };
+    let mut session = WorkspaceSession {
+        project: "demo".into(),
+        ..Default::default()
+    };
     session.tabs.insert("demo".into(), vec!["assets/a.joylevel".into(), "assets/b.joyfx".into()]);
     session.active.insert("demo".into(), "assets/b.joyfx".into());
-    session.layout = LayoutPreferences { content_browser_width: 300.0, content_browser_collapsed: true };
+    session.layout = LayoutPreferences {
+        content_browser_width: 300.0,
+        content_browser_collapsed: true,
+    };
     session.save(Some(&storage)).unwrap();
     assert_eq!(WorkspaceSession::load(Some(&storage)), session);
 

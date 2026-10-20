@@ -38,10 +38,22 @@ pub struct Example {
 
 /// The bundled examples in menu order.
 pub const EXAMPLES: [Example; 4] = [
-    Example { label: "Impact / Ember Bloom", build: ember_impact },
-    Example { label: "Continuous / Solar Swirl", build: solar_swirl },
-    Example { label: "Materials / Prism Sprite Garden", build: prism_sprite_garden },
-    Example { label: "Lighting / Orbiting Lights", build: orbiting_lights },
+    Example {
+        label: "Impact / Ember Bloom",
+        build: ember_impact,
+    },
+    Example {
+        label: "Continuous / Solar Swirl",
+        build: solar_swirl,
+    },
+    Example {
+        label: "Materials / Prism Sprite Garden",
+        build: prism_sprite_garden,
+    },
+    Example {
+        label: "Lighting / Orbiting Lights",
+        build: orbiting_lights,
+    },
 ];
 
 /// One emitter insertion recipe; recipes never borrow an effect's parameters or child emitters.
@@ -72,7 +84,11 @@ pub const EMITTER_PRESETS: [PresetInfo; 5] = [
         label: "Spark Burst",
         description: "A short streak burst with gravity.",
     },
-    PresetInfo { preset: EmitterPreset::Ring, label: "Ring Flash", description: "Expanding rings for an impact." },
+    PresetInfo {
+        preset: EmitterPreset::Ring,
+        label: "Ring Flash",
+        description: "Expanding rings for an impact.",
+    },
     PresetInfo {
         preset: EmitterPreset::Smoke,
         label: "Smoke",
@@ -121,7 +137,10 @@ pub fn create_emitter_template(id: &str, preset: EmitterPreset) -> ParticleEmitt
             emitter.duration = 0.0;
             emitter.rate = 0.0;
             emitter.renderer = ParticleRenderer::Streak;
-            emitter.bursts = vec![ParticleBurst { time: 0.0, count: 40 }];
+            emitter.bursts = vec![ParticleBurst {
+                time: 0.0,
+                count: 40,
+            }];
             emitter.spawn.push_str("\ncolor = rgba(2.8, 0.6, 0.08, 1);");
             emitter.update = "velocity.y-= 90*dt; color.a = 1 - t;".to_owned();
         }
@@ -130,7 +149,10 @@ pub fn create_emitter_template(id: &str, preset: EmitterPreset) -> ParticleEmitt
             emitter.rate = 0.0;
             emitter.renderer = ParticleRenderer::Ring;
             emitter.lifetime = 0.5;
-            emitter.bursts = vec![ParticleBurst { time: 0.0, count: 3 }];
+            emitter.bursts = vec![ParticleBurst {
+                time: 0.0,
+                count: 3,
+            }];
             emitter.spawn = "size = rand(6, 12); color = rgba(2.4, 0.7, 0.1, 1);".to_owned();
             emitter.update = "size+= 60*dt; color.a = 1 - t;".to_owned();
         }

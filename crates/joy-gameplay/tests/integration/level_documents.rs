@@ -192,7 +192,13 @@ fn level_resolution_reads_each_source_once_and_leaves_the_authored_level_untouch
     assert_eq!(level.entities[0].template.as_deref(), Some("assets/vessel.joyobject"));
 
     let failure = resolve_level_objects(&level, |_| Err("missing file")).unwrap_err();
-    assert_eq!(failure, ObjectError::Read { path: "assets/vessel.joyobject".into(), message: "missing file".into() });
+    assert_eq!(
+        failure,
+        ObjectError::Read {
+            path: "assets/vessel.joyobject".into(),
+            message: "missing file".into()
+        }
+    );
 }
 
 /// Apply one recorded LevelDocument operation and return its result in the recording's JSON form.

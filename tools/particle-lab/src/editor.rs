@@ -78,6 +78,9 @@ impl ParticleScriptEditor {
                 reference_requested = ui.small_button("Script Reference").clicked();
             });
         });
-        ParticleScriptEditorResponse { editor, reference_requested }
+        ParticleScriptEditorResponse {
+            editor,
+            reference_requested,
+        }
     }
 }

@@ -295,7 +295,13 @@ fn wheel_gestures(context: &egui::Context, viewport_height: f32) -> Vec<WheelGes
             .events
             .iter()
             .filter_map(|event| {
-                let egui::Event::MouseWheel { unit, delta, modifiers, .. } = event else {
+                let egui::Event::MouseWheel {
+                    unit,
+                    delta,
+                    modifiers,
+                    ..
+                } = event
+                else {
                     return None;
                 };
                 // egui scrolls content (positive Y moves it down); DOM wheel deltas have the opposite sign.

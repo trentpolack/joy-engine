@@ -66,7 +66,14 @@ pub struct Style {
 impl Style {
     /// Regular text of `size` pixels in `color`.
     pub const fn new(size: f32, color: Color32) -> Self {
-        Self { size, color, spacing: 0.0, weight: Weight::Regular, line_height: None, monospace: false }
+        Self {
+            size,
+            color,
+            spacing: 0.0,
+            weight: Weight::Regular,
+            line_height: None,
+            monospace: false,
+        }
     }
 
     /// With letter spacing in pixels.
@@ -260,7 +267,10 @@ impl Text {
 
 /// Lay out runs of styled text, wrapping at `wrap_width` (infinite for one line) with `align` per line.
 pub fn layout(painter: &Painter, runs: &[(&str, Style)], wrap_width: f32, align: Align) -> Text {
-    let mut job = LayoutJob { halign: align, ..Default::default() };
+    let mut job = LayoutJob {
+        halign: align,
+        ..Default::default()
+    };
     job.wrap.max_width = wrap_width;
 
     // egui adds letter spacing before every glyph but the first of a section, where CSS adds it after every letter;
@@ -292,7 +302,10 @@ pub fn layout(painter: &Painter, runs: &[(&str, Style)], wrap_width: f32, align:
             // Reserve the symbol's advance: leading space plus a transparent placeholder glyph.
             let placeholder_width = painter.fonts_mut(|fonts| fonts.glyph_width(&style.font(), PLACEHOLDER));
             let reserve = ((symbol.advance() * style.size) - placeholder_width).max(0.0);
-            let placeholder = TextFormat { color: Color32::TRANSPARENT, ..format.clone() };
+            let placeholder = TextFormat {
+                color: Color32::TRANSPARENT,
+                ..format.clone()
+            };
             append(&mut job, &PLACEHOLDER.to_string(), reserve, placeholder, style.spacing);
             pending.push((symbol, style.color, style.size, reserve));
         }
@@ -322,7 +335,11 @@ pub fn layout(painter: &Painter, runs: &[(&str, Style)], wrap_width: f32, align:
             symbols.push((rect, symbol, color, size));
         }
     }
-    Text { galley, symbols, weight }
+    Text {
+        galley,
+        symbols,
+        weight,
+    }
 }
 
 /// Lay out one run of text.

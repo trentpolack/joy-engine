@@ -38,7 +38,10 @@ impl FixedStepLoop {
         } else {
             Self::DEFAULT_UPDATES_PER_SECOND
         };
-        Self { step_seconds: 1.0 / rate, accumulated_seconds: 0.0 }
+        Self {
+            step_seconds: 1.0 / rate,
+            accumulated_seconds: 0.0,
+        }
     }
 
     /// Seconds simulated by one fixed update.

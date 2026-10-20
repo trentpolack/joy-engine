@@ -108,7 +108,10 @@ pub fn collect_particle_lights(effect: &ParticleEffect, max_lights: usize) -> Pa
     rank_particle_lights(&mut candidates);
     let omitted = candidates.len().saturating_sub(limit);
     candidates.truncate(limit);
-    ParticleLightSelection { lights: candidates, omitted }
+    ParticleLightSelection {
+        lights: candidates,
+        omitted,
+    }
 }
 
 /// Sort brightest first, breaking ties by birth index so equally bright particles keep a deterministic order.

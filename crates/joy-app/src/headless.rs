@@ -109,8 +109,11 @@ impl HeadlessShell {
     /// Call the app's start hook with this shell's renderer.
     pub fn start(&mut self, app: &mut impl App) -> AppResult {
         let viewport = self.viewport();
-        let mut context =
-            StartContext { capabilities: self.gpu.capabilities(), renderer: &mut self.renderer, viewport };
+        let mut context = StartContext {
+            capabilities: self.gpu.capabilities(),
+            renderer: &mut self.renderer,
+            viewport,
+        };
         app.start(&mut context)
     }
 
@@ -152,7 +155,10 @@ impl HeadlessShell {
                 joy_renderer::CAPTURE_FORMAT,
                 egui_wgpu::RendererOptions::default(),
             );
-            HeadlessUi { context, painter }
+            HeadlessUi {
+                context,
+                painter,
+            }
         })
     }
 
@@ -244,6 +250,9 @@ impl HeadlessShell {
     }
 
     fn viewport(&self) -> Viewport {
-        Viewport { logical_size: self.renderer.logical_size(), scale_factor: 1.0 }
+        Viewport {
+            logical_size: self.renderer.logical_size(),
+            scale_factor: 1.0,
+        }
     }
 }

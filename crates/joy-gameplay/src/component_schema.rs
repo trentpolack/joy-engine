@@ -222,7 +222,10 @@ impl ComponentSchemaCatalog {
 
     /// A catalog without the built-in schemas.
     pub fn empty() -> Self {
-        Self { schemas: IndexMap::new(), preset_owners: IndexMap::new() }
+        Self {
+            schemas: IndexMap::new(),
+            preset_owners: IndexMap::new(),
+        }
     }
 
     /// Register a project schema, taking ownership of it.
@@ -269,7 +272,10 @@ impl ComponentSchemaCatalog {
         let Some((schema, preset)) = preset else {
             return Err(ComponentSchemaError::UnknownPreset(preset_id.to_owned()));
         };
-        Ok(CreatedComponent { kind: schema.kind.clone(), data: preset.data.clone() })
+        Ok(CreatedComponent {
+            kind: schema.kind.clone(),
+            data: preset.data.clone(),
+        })
     }
 
     /// Resolve the field schema for a path inside a component record, descending through list items.
@@ -519,7 +525,10 @@ fn validate_schema(schema: &ComponentSchema) -> Result<(), ComponentSchemaError>
             return Err(ComponentSchemaError::InvalidPreset(schema.kind.clone()));
         }
         if preset_ids.contains(&preset.id.as_str()) {
-            return Err(ComponentSchemaError::RepeatedPreset { kind: schema.kind.clone(), preset: preset.id.clone() });
+            return Err(ComponentSchemaError::RepeatedPreset {
+                kind: schema.kind.clone(),
+                preset: preset.id.clone(),
+            });
         }
         preset_ids.push(&preset.id);
     }
@@ -538,16 +547,25 @@ fn validate_field_list(kind: &str, fields: &[ComponentFieldSchema]) -> Result<()
 
         if field.kind == ComponentFieldKind::Choice && field.choices.is_empty() {
             let (kind, field) = field_error(field);
-            return Err(ComponentSchemaError::MissingChoices { kind, field });
+            return Err(ComponentSchemaError::MissingChoices {
+                kind,
+                field,
+            });
         }
         if field.kind == ComponentFieldKind::Asset && field.asset_kinds.is_empty() {
             let (kind, field) = field_error(field);
-            return Err(ComponentSchemaError::MissingAssetKinds { kind, field });
+            return Err(ComponentSchemaError::MissingAssetKinds {
+                kind,
+                field,
+            });
         }
         if let Some(items) = &field.items {
             if field.kind != ComponentFieldKind::List {
                 let (kind, field) = field_error(field);
-                return Err(ComponentSchemaError::ItemsOnNonList { kind, field });
+                return Err(ComponentSchemaError::ItemsOnNonList {
+                    kind,
+                    field,
+                });
             }
             validate_field_list(kind, items)?;
         }
@@ -561,7 +579,10 @@ fn validate_field_list(kind: &str, fields: &[ComponentFieldSchema]) -> Result<()
         let sibling = fields.iter().find(|candidate| candidate.name == condition.field);
         if sibling.is_none_or(|sibling| sibling.kind != ComponentFieldKind::Choice) {
             let (kind, field) = field_error(field);
-            return Err(ComponentSchemaError::InvalidCondition { kind, field });
+            return Err(ComponentSchemaError::InvalidCondition {
+                kind,
+                field,
+            });
         }
     }
     Ok(())

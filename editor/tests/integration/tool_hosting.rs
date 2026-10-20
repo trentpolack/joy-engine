@@ -124,7 +124,10 @@ impl AuthoringTool for StubTool {
     }
 
     fn set_hosting(&mut self, hosting: ToolHosting) {
-        if let ToolHosting::Hosted { area } = hosting {
+        if let ToolHosting::Hosted {
+            area,
+        } = hosting
+        {
             self.state.borrow_mut().hosting = Some(area);
         }
     }
@@ -145,7 +148,9 @@ pub fn stub_tools() -> (ToolRegistry, StubInstances) {
     tools.register(move || {
         let state = Rc::new(RefCell::new(StubState::default()));
         created.borrow_mut().push(state.clone());
-        Box::new(StubTool { state })
+        Box::new(StubTool {
+            state,
+        })
     });
     (tools, instances)
 }
@@ -269,7 +274,12 @@ fn form_lab_opens_form_documents_as_a_hosted_tab() {
     workspace.write("projects/demo/assets/pillar.form", script);
     let mut tools = ToolRegistry::new();
     tools.register(|| {
-        Box::new(form_lab::FormLab::with_storage(ToolHosting::Hosted { area: egui::Rect::NOTHING }, None))
+        Box::new(form_lab::FormLab::with_storage(
+            ToolHosting::Hosted {
+                area: egui::Rect::NOTHING,
+            },
+            None,
+        ))
     });
     let mut driver = Driver::start(shell, editor(&workspace.root, None, tools, Some("demo")));
     assert_eq!(driver.editor.workspace().tool_names(), ["FORM LAB"]);
@@ -303,7 +313,12 @@ fn particle_lab_opens_effects_as_a_hosted_tab_beside_form_lab() {
     workspace.write("projects/demo/assets/pillar.form", "box(0, 0.5, 0, 1, 1, 1)\n");
     let mut tools = ToolRegistry::new();
     tools.register(|| {
-        Box::new(form_lab::FormLab::with_storage(ToolHosting::Hosted { area: egui::Rect::NOTHING }, None))
+        Box::new(form_lab::FormLab::with_storage(
+            ToolHosting::Hosted {
+                area: egui::Rect::NOTHING,
+            },
+            None,
+        ))
     });
     tools.register(|| Box::new(particle_lab::ParticleLabTool::with_storage(None)));
     let mut driver = Driver::start(shell, editor(&workspace.root, None, tools, Some("demo")));

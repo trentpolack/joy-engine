@@ -99,7 +99,9 @@ impl CompiledScript {
     /// Returns a [`Diagnostic`] with a one-based line and character column when the source is
     /// malformed or exceeds the source, token, or nesting budgets. An empty source is valid.
     pub fn parse(source: &str) -> Result<Self, Diagnostic> {
-        Ok(Self { statements: parser::parse(source)? })
+        Ok(Self {
+            statements: parser::parse(source)?,
+        })
     }
 
     /// Evaluate the script and return owned geometry.
@@ -179,9 +181,14 @@ pub fn project_name_tokens(source: &str) -> Result<Vec<SourceToken>, Diagnostic>
     Ok(statements
         .iter()
         .filter_map(|statement| match &statement.kind {
-            ast::StmtKind::Project { name, .. } => {
-                Some(SourceToken { text: name.text.clone(), line: name.line, column: name.column })
-            }
+            ast::StmtKind::Project {
+                name,
+                ..
+            } => Some(SourceToken {
+                text: name.text.clone(),
+                line: name.line,
+                column: name.column,
+            }),
             _ => None,
         })
         .collect())

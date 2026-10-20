@@ -96,7 +96,10 @@ impl NativeOutput {
                 None
             }
         };
-        Ok(Self { stream, mixer })
+        Ok(Self {
+            stream,
+            mixer,
+        })
     }
 
     pub(crate) fn running(&self) -> bool {
@@ -109,13 +112,24 @@ impl NativeOutput {
 
     pub(crate) fn play(&mut self, sound: usize, volume: f32, sound_limit: usize, bank_limit: usize) -> bool {
         let mut mixer = lock(&self.mixer);
-        let records: Vec<VoiceRecord> =
-            mixer.voices.iter().map(|voice| VoiceRecord { id: voice.id, sound: voice.sound }).collect();
+        let records: Vec<VoiceRecord> = mixer
+            .voices
+            .iter()
+            .map(|voice| VoiceRecord {
+                id: voice.id,
+                sound: voice.sound,
+            })
+            .collect();
         let stolen = voices_to_steal(&records, sound, sound_limit, bank_limit);
         mixer.voices.retain(|voice| !stolen.contains(&voice.id));
         let id = mixer.next_id;
         mixer.next_id += 1;
-        mixer.voices.push(MixVoice { id, sound, position: 0.0, gain: volume });
+        mixer.voices.push(MixVoice {
+            id,
+            sound,
+            position: 0.0,
+            gain: volume,
+        });
         true
     }
 

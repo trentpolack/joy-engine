@@ -92,7 +92,10 @@ pub fn append_marker(output: &mut Vec<ColorVertex>, position: Vec3, basis: Camer
     let corners = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
         .map(|(x, y): (f32, f32)| position + ((basis.right * x) + (basis.up * y)) * radius);
     for corner in [0, 1, 2, 0, 2, 3] {
-        output.push(ColorVertex { position: corners[corner].to_array(), color });
+        output.push(ColorVertex {
+            position: corners[corner].to_array(),
+            color,
+        });
     }
 }
 

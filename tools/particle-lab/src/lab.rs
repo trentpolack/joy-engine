@@ -644,9 +644,15 @@ impl ParticleLab {
             .parameters
             .iter()
             .filter_map(|(name, parameter)| match parameter {
-                ParticleParameter::Vector3 { .. } => Some((name.as_str(), ParticleValueKind::Vector)),
-                ParticleParameter::Color { .. } => Some((name.as_str(), ParticleValueKind::Color)),
-                ParticleParameter::Scalar { .. } => None,
+                ParticleParameter::Vector3 {
+                    ..
+                } => Some((name.as_str(), ParticleValueKind::Vector)),
+                ParticleParameter::Color {
+                    ..
+                } => Some((name.as_str(), ParticleValueKind::Color)),
+                ParticleParameter::Scalar {
+                    ..
+                } => None,
             })
             .collect();
         let check = |source: &str| match compile_particle_script(source, &input_names, &containers) {
@@ -750,7 +756,10 @@ impl ParticleLab {
         self.emitter_samples.clear();
         self.profile_steps = 0;
         let remaining_steps = (seconds.clamp(0.0, MAXIMUM_REPLAY_SECONDS) / PARTICLE_STEP_SECONDS).round() as u64;
-        self.seek = Some(Seek { remaining_steps, resume_playback });
+        self.seek = Some(Seek {
+            remaining_steps,
+            resume_playback,
+        });
         self.advance_seek();
     }
 

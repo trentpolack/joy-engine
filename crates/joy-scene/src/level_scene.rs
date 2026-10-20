@@ -199,7 +199,10 @@ impl LevelScene {
         let mut placements = Vec::new();
         for entity in entities {
             let id = entity.entity_id();
-            let component_error = |source| LevelSceneError::Component { entity: id.to_owned(), source };
+            let component_error = |source| LevelSceneError::Component {
+                entity: id.to_owned(),
+                source,
+            };
             let transform = entity.entity_transform();
 
             if let Some(record) = entity.entity_component(component_type::LIGHT) {
@@ -219,8 +222,12 @@ impl LevelScene {
             };
             let render = RenderComponent::read(record).map_err(component_error)?;
             let resolved = match render.source {
-                RenderSource::Mesh { .. } => resolve_mesh(id, &render)
-                    .map_err(|source| LevelSceneError::Mesh { entity: id.to_owned(), source })?,
+                RenderSource::Mesh {
+                    ..
+                } => resolve_mesh(id, &render).map_err(|source| LevelSceneError::Mesh {
+                    entity: id.to_owned(),
+                    source,
+                })?,
                 _ => None,
             };
             let (asset, color) = match (resolved, primitive_shape(record)) {
@@ -243,7 +250,12 @@ impl LevelScene {
                 color
             };
             let transform = Transform::new(transform.position, transform.rotation, transform.scale * render.size);
-            placements.push(Placement { id: id.to_owned(), asset, transform, tint });
+            placements.push(Placement {
+                id: id.to_owned(),
+                asset,
+                transform,
+                tint,
+            });
         }
 
         let mut live = HashMap::with_capacity(placements.len());

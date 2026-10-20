@@ -56,7 +56,12 @@ pub(crate) struct VolumeFile {
 
 impl VolumeFile {
     pub(crate) fn new(path: PathBuf, entity: impl Into<String>) -> Self {
-        Self { path, entity: entity.into(), stamp: None, last_poll: None }
+        Self {
+            path,
+            entity: entity.into(),
+            stamp: None,
+            last_poll: None,
+        }
     }
 
     /// Read and validate the volume's current settings.
@@ -119,7 +124,10 @@ fn snapshot(text: &str, entity: &str) -> Result<Snapshot, String> {
     let mut document: Value = serde_json::from_str(text).map_err(|error| error.to_string())?;
     let record = volume_record_mut(&mut document, entity)?;
     let component = PostProcessComponent::read(record).map_err(|error| error.to_string())?;
-    Ok(Snapshot { overrides: component.overrides, revision: revision_of(text) })
+    Ok(Snapshot {
+        overrides: component.overrides,
+        revision: revision_of(text),
+    })
 }
 
 /// The `postProcess` component record of `entity` in a level document.
