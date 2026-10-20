@@ -168,12 +168,13 @@ fn megabytes(bytes: usize) -> f64 {
 }
 
 /// A section heading with a color swatch matching the bin floor.
-fn section(ui: &mut egui::Ui, title: &str, tint: Rgb) {
+fn section(ui: &mut egui::Ui, title: &str, tint: LinearColor) {
     ui.add_space(4.0);
     ui.separator();
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(UiVec2::splat(12.0), egui::Sense::hover());
-        let [red, green, blue] = tint.map(|channel| (channel.clamp(0.0, 1.0) * 255.0) as u8);
+        // The swatch shows the tint's channels as the viewport draws them (no output encode yet).
+        let [red, green, blue, _] = tint.to_array().map(|channel| (channel.clamp(0.0, 1.0) * 255.0) as u8);
         ui.painter().rect_filled(rect, 2.0, Color32::from_rgb(red, green, blue));
         ui.label(RichText::new(title).strong().color(TEXT));
     });

@@ -1,0 +1,519 @@
+{
+ "source": "Golden recording of joy-environment's EnvironmentSystem: new EnvironmentSystem(options), then step(delta) for each listed delta, or sample() when there are none. Re-record with JOY_UPDATE_FIXTURES=1 cargo test -p joy-environment.",
+ "cases": [
+  {
+   "label": "sunrise",
+   "options": {
+    "latitudeDegrees": 42,
+    "timeOfDay": 0.21666666666666667
+   },
+   "steps": [],
+   "frame": {
+    "elapsedSeconds": 0,
+    "timeOfDay": 0.21666666666666679,
+    "sun": {
+     "kind": "sun",
+     "direction": [
+      0.8974295377834816,
+      0.1244118923701853,
+      0.4232515868258455
+     ],
+     "color": [
+      1,
+      0.96,
+      0.86
+     ],
+     "intensity": 5,
+     "angularRadius": 0.00465,
+     "castsShadow": true
+    },
+    "moon": {
+     "kind": "moon",
+     "direction": [
+      -0.8974295377834816,
+      -0.1244118923701853,
+      -0.4232515868258455
+     ],
+     "color": [
+      0.24,
+      0.32,
+      0.55
+     ],
+     "intensity": 0,
+     "angularRadius": 0.00436,
+     "castsShadow": true
+    },
+    "primary": "sun",
+    "skylight": {
+     "color": [
+      0.4212625446169963,
+      0.46425250892339925,
+      0.8096802363269936
+     ],
+     "groundColor": [
+      0.17225592,
+      0.17733377,
+      0.23761898
+     ],
+     "intensity": 0.44999999999999996
+    },
+    "wind": {
+     "direction": [
+      0,
+      0,
+      1
+     ],
+     "velocity": [
+      0,
+      0,
+      4.33055493681749
+     ],
+     "speed": 4.33055493681749
+    }
+   }
+  },
+  {
+   "label": "noon",
+   "options": {
+    "latitudeDegrees": 42,
+    "timeOfDay": 0.5
+   },
+   "steps": [],
+   "frame": {
+    "elapsedSeconds": 0,
+    "timeOfDay": 0.5,
+    "sun": {
+     "kind": "sun",
+     "direction": [
+      -3.898064916623061e-17,
+      0.9479896487789237,
+      -0.3183011558383238
+     ],
+     "color": [
+      1,
+      0.96,
+      0.86
+     ],
+     "intensity": 5,
+     "angularRadius": 0.00465,
+     "castsShadow": true
+    },
+    "moon": {
+     "kind": "moon",
+     "direction": [
+      3.898064916623061e-17,
+      -0.9479896487789237,
+      0.3183011558383238
+     ],
+     "color": [
+      0.24,
+      0.32,
+      0.55
+     ],
+     "intensity": 0,
+     "angularRadius": 0.00436,
+     "castsShadow": true
+    },
+    "primary": "sun",
+    "skylight": {
+     "color": [
+      0.2,
+      0.42,
+      0.8
+     ],
+     "groundColor": [
+      0.7105655,
+      0.72774285,
+      0.73668635
+     ],
+     "intensity": 0.44999999999999996
+    },
+    "wind": {
+     "direction": [
+      0,
+      0,
+      1
+     ],
+     "velocity": [
+      0,
+      0,
+      4.33055493681749
+     ],
+     "speed": 4.33055493681749
+    }
+   }
+  },
+  {
+   "label": "sunset",
+   "options": {
+    "latitudeDegrees": 42,
+    "timeOfDay": 0.7833333333333333
+   },
+   "steps": [],
+   "frame": {
+    "elapsedSeconds": 0,
+    "timeOfDay": 0.7833333333333332,
+    "sun": {
+     "kind": "sun",
+     "direction": [
+      -0.8974295377834816,
+      0.1244118923701853,
+      0.4232515868258455
+     ],
+     "color": [
+      1,
+      0.96,
+      0.86
+     ],
+     "intensity": 5,
+     "angularRadius": 0.00465,
+     "castsShadow": true
+    },
+    "moon": {
+     "kind": "moon",
+     "direction": [
+      0.8974295377834816,
+      -0.1244118923701853,
+      -0.4232515868258455
+     ],
+     "color": [
+      0.24,
+      0.32,
+      0.55
+     ],
+     "intensity": 0,
+     "angularRadius": 0.00436,
+     "castsShadow": true
+    },
+    "primary": "sun",
+    "skylight": {
+     "color": [
+      0.4212625446169963,
+      0.46425250892339925,
+      0.8096802363269936
+     ],
+     "groundColor": [
+      0.17225592,
+      0.17733377,
+      0.23761898
+     ],
+     "intensity": 0.44999999999999996
+    },
+    "wind": {
+     "direction": [
+      0,
+      0,
+      1
+     ],
+     "velocity": [
+      0,
+      0,
+      4.33055493681749
+     ],
+     "speed": 4.33055493681749
+    }
+   }
+  },
+  {
+   "label": "twilight",
+   "options": {
+    "latitudeDegrees": 42,
+    "timeOfDay": 0.18333333333333335
+   },
+   "steps": [],
+   "frame": {
+    "elapsedSeconds": 0,
+    "timeOfDay": 0.18333333333333335,
+    "sun": {
+     "kind": "sun",
+     "direction": [
+      0.8381584509141083,
+      -0.011150839031060511,
+      0.545312818435589
+     ],
+     "color": [
+      1.254126003477402,
+      0.5170946796536707,
+      0.2936620493932184
+     ],
+     "intensity": 1.3696285217514,
+     "angularRadius": 0.00465,
+     "castsShadow": true
+    },
+    "moon": {
+     "kind": "moon",
+     "direction": [
+      -0.8381584509141083,
+      0.011150839031060511,
+      -0.545312818435589
+     ],
+     "color": [
+      0.24,
+      0.32,
+      0.55
+     ],
+     "intensity": 0.0871289154779664,
+     "angularRadius": 0.00436,
+     "castsShadow": true
+    },
+    "primary": "sun",
+    "skylight": {
+     "color": [
+      0.31691164947598993,
+      0.17502527022306147,
+      0.2557670725759964
+     ],
+     "groundColor": [
+      0.06348467,
+      0.03514151,
+      0.051387943
+     ],
+     "intensity": 0.14504879582711758
+    },
+    "wind": {
+     "direction": [
+      0,
+      0,
+      1
+     ],
+     "velocity": [
+      0,
+      0,
+      4.33055493681749
+     ],
+     "speed": 4.33055493681749
+    }
+   }
+  },
+  {
+   "label": "night",
+   "options": {
+    "latitudeDegrees": 42,
+    "timeOfDay": 0
+   },
+   "steps": [],
+   "frame": {
+    "elapsedSeconds": 0,
+    "timeOfDay": 0,
+    "sun": {
+     "kind": "sun",
+     "direction": [
+      1.1235872889555058e-16,
+      -0.41564936998274543,
+      0.9095249316170211
+     ],
+     "color": [
+      1.35,
+      0.35,
+      0.08
+     ],
+     "intensity": 0,
+     "angularRadius": 0.00465,
+     "castsShadow": true
+    },
+    "moon": {
+     "kind": "moon",
+     "direction": [
+      -1.1235872889555058e-16,
+      0.41564936998274543,
+      -0.9095249316170211
+     ],
+     "color": [
+      0.24,
+      0.32,
+      0.55
+     ],
+     "intensity": 0.12,
+     "angularRadius": 0.00436,
+     "castsShadow": true
+    },
+    "primary": "moon",
+    "skylight": {
+     "color": [
+      0.008,
+      0.012,
+      0.035
+     ],
+     "groundColor": [
+      0.027002618,
+      0.036270157,
+      0.065214336
+     ],
+     "intensity": 0.03
+    },
+    "wind": {
+     "direction": [
+      0,
+      0,
+      1
+     ],
+     "velocity": [
+      0,
+      0,
+      4.33055493681749
+     ],
+     "speed": 4.33055493681749
+    }
+   }
+  },
+  {
+   "label": "gusty",
+   "options": {
+    "timeOfDay": 0.3,
+    "northRadians": 0.4,
+    "dayOfYear": 30,
+    "axialTiltDegrees": 20,
+    "wind": {
+     "directionRadians": 1.1,
+     "speed": 7,
+     "gustStrength": 0.8,
+     "gustPeriodSeconds": 3
+    }
+   },
+   "steps": [
+    1.25,
+    2.5,
+    0.75
+   ],
+   "frame": {
+    "elapsedSeconds": 4.5,
+    "timeOfDay": 0.30374999999999996,
+    "sun": {
+     "kind": "sun",
+     "direction": [
+      0.6778416433430754,
+      0.05984457671498869,
+      -0.7327682670447477
+     ],
+     "color": [
+      1.0759429616571081,
+      0.8276422668261829,
+      0.6907556854498732
+     ],
+     "intensity": 3.915100547755598,
+     "angularRadius": 0.00465,
+     "castsShadow": true
+    },
+    "moon": {
+     "kind": "moon",
+     "direction": [
+      -0.6778416433430754,
+      -0.05984457671498869,
+      0.7327682670447477
+     ],
+     "color": [
+      0.24,
+      0.32,
+      0.55
+     ],
+     "intensity": 0.026037586853865653,
+     "angularRadius": 0.00436,
+     "castsShadow": true
+    },
+    "primary": "sun",
+    "skylight": {
+     "color": [
+      0.43148763901458903,
+      0.3861017602930116,
+      0.6459605990932653
+     ],
+     "groundColor": [
+      0.13101754,
+      0.1116201,
+      0.15790237
+     ],
+     "intensity": 0.35886844601147017
+    },
+    "wind": {
+     "direction": [
+      0.8912073600614354,
+      0,
+      0.4535961214255773
+     ],
+     "velocity": [
+      4.724685732819746,
+      0,
+      2.404714345283306
+     ],
+     "speed": 5.301443799223168
+    }
+   }
+  },
+  {
+   "label": "fast-clock",
+   "options": {
+    "timeOfDay": 0.95,
+    "dayLengthSeconds": 10,
+    "timeScale": 2,
+    "latitudeDegrees": -33
+   },
+   "steps": [
+    1,
+    1.5
+   ],
+   "frame": {
+    "elapsedSeconds": 2.5,
+    "timeOfDay": 0.44999999999999996,
+    "sun": {
+     "kind": "sun",
+     "direction": [
+      0.28351649405580903,
+      0.5151529152058163,
+      0.8088484849174482
+     ],
+     "color": [
+      1,
+      0.96,
+      0.86
+     ],
+     "intensity": 5,
+     "angularRadius": 0.00465,
+     "castsShadow": true
+    },
+    "moon": {
+     "kind": "moon",
+     "direction": [
+      -0.28351649405580903,
+      -0.5151529152058163,
+      -0.8088484849174482
+     ],
+     "color": [
+      0.24,
+      0.32,
+      0.55
+     ],
+     "intensity": 0,
+     "angularRadius": 0.00436,
+     "castsShadow": true
+    },
+    "primary": "sun",
+    "skylight": {
+     "color": [
+      0.2,
+      0.42,
+      0.8
+     ],
+     "groundColor": [
+      0.40439615,
+      0.4338203,
+      0.4733807
+     ],
+     "intensity": 0.44999999999999996
+    },
+    "wind": {
+     "direction": [
+      0,
+      0,
+      1
+     ],
+     "velocity": [
+      0,
+      0,
+      4.836944084104496
+     ],
+     "speed": 4.836944084104496
+    }
+   }
+  }
+ ]
+}

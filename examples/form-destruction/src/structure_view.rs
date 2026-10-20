@@ -1,18 +1,19 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Structure presentation from committed engine state (TypeScript `structure-view.ts`); it never changes health or
-//! collision dimensions. The material view uses the engine's chunk tints. The debug views inset faces slightly to reveal
-//! chunk boundaries, then color remaining resistance or committed support paths.
+//! Structure presentation from committed engine state; it never changes health or collision dimensions. The material
+//! view uses the engine's chunk tints. The debug views inset faces slightly to reveal chunk boundaries, then color
+//! remaining resistance or committed support paths.
 
 use std::collections::HashMap;
 
-use joy_engine::core::MeshAssetData;
+use joy_engine::core::LinearColor;
 use joy_engine::physics::{
     ChunkStructure,
     DestructibleChunkDefinition,
     create_chunk_mesh_data,
 };
+use joy_engine::render_types::Mesh;
 
 use super::config::destruction_config::{
     DESTRUCTION,
@@ -22,7 +23,7 @@ use super::config::destruction_config::{
 };
 
 /// Mesh data for the structure's active chunks in `view`.
-pub fn create_structure_mesh_data(structure: &ChunkStructure, view: StructureView) -> MeshAssetData {
+pub fn create_structure_mesh_data(structure: &ChunkStructure, view: StructureView) -> Mesh {
     if view == StructureView::Material {
         return create_chunk_mesh_data(structure.active_chunks());
     }
@@ -38,7 +39,7 @@ pub fn create_structure_mesh_data(structure: &ChunkStructure, view: StructureVie
         let inset =
             DestructibleChunkDefinition { size: chunk.size.map(|size| size * INTEGRITY.mesh_inset), ..chunk.clone() };
         let geometry = create_chunk_mesh_data([&inset]);
-        let vertex_offset = (positions.len() / 3) as u32;
+        let vertex_offset = positions.len() as u32;
         let mut color = integrity_color(health.get(&chunk.id).copied().unwrap_or(chunk.hit_points));
         if view == StructureView::Support
             && let Some(state) = support.get(&chunk.id)
@@ -50,11 +51,13 @@ pub fn create_structure_mesh_data(structure: &ChunkStructure, view: StructureVie
         }
         positions.extend_from_slice(&geometry.positions);
         indices.extend(geometry.indices.iter().map(|index| vertex_offset + index));
-        for _ in 0..geometry.positions.len() / 3 {
-            colors.extend_from_slice(&color);
-        }
+        let tint = LinearColor::rgb(color[0] as f32, color[1] as f32, color[2] as f32);
+        colors.extend(std::iter::repeat_n(tint, geometry.positions.len()));
     }
-    MeshAssetData { positions, indices, colors: Some(colors), ..MeshAssetData::default() }
+    Mesh {
+        colors: Some(colors),
+        ..Mesh::new(positions, indices)
+    }
 }
 
 /// Resistance color on one absolute scale, so stronger frame chunks stay distinct from ordinary masonry.

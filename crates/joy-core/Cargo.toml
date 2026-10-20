@@ -1,0 +1,35 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# The foundation every other Joy Engine crate builds on: shared numeric and data contracts with no engine dependencies.
+#
+#   cargo test -p joy-core
+
+[package]
+name = "joy-core"
+description = "Joy Engine foundation: math, transforms, colors, seeded randomness, primitive shapes, and script language descriptors."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+glam.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true
+thiserror.workspace = true
+libm.workspace = true
+
+[dev-dependencies]
+joy-test-support.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "foundation"
+
+[lints]
+workspace = true

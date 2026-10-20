@@ -29,9 +29,9 @@ Reusable objects let an instance follow source components while retaining local 
 The shared grid is an editor aid, independent of authored ground, export, and simulation. Preview lighting, camera, panel visibility, and maximization remain editing state. Numeric drafts stay separate from accepted values and must be repaired before operations that replace authored state.
 
 ## Modules and Validation
-`site/src/workspace/` owns workspace models/UI and tool hosting; `site/src/level/` owns level authoring; `server/` owns native file access; `tools/` contains the labs. Shared controls and script language presentation live in the engine's [authoring kit](../docs/rust-authoring.md).
+`src/workspace/` owns workspace models/UI and tool hosting; `src/level/` owns level authoring; `src/server/` owns project file access; `src/desktop/` is the native host. The labs it hosts are separate packages in the engine's [`tools/`](../tools/). Shared controls and script language presentation live in the engine's [authoring kit](../docs/rust-authoring.md).
 
-Rust tests under `test/rust/` cover documents, file boundaries, conflicts/recovery, level operations, and headless UI interactions. The canonical capture script checks browser canvas startup and screenshots. Use interactive native checks for file dialogs and project editing; browser captures cannot verify native filesystem workflows.
+Rust tests under `tests/integration/` cover documents, file boundaries, conflicts/recovery, level operations, and headless UI interactions. The canonical capture script checks browser canvas startup and screenshots. Use interactive native checks for file dialogs and project editing; browser captures cannot verify native filesystem workflows.
 
 ## Production Availability
 The hosting workspace's `joy.joyconfig` controls `editors.joyEditor`, `editors.formLab`, and `editors.particleLab`. Joy Editor defaults off; both labs default on. Enabling the editor also enables its hosted labs. Production browser publication remains static and does not add a filesystem service. Development commands remain available regardless of these flags.

@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Persistent rigid debris for released chunks (TypeScript `destruction-debris.ts`): the ground slab, one engine physics
-//! body and mesh per released chunk, and static colliders that keep the surviving structure solid.
+//! Persistent rigid debris for released chunks: the ground slab, one engine physics body and mesh per released chunk,
+//! and static colliders that keep the surviving structure solid.
 //!
 //! Physics uses meters, seconds, and Y-up world space. Debris persists until reset: no expiry or eviction, and one body
 //! per chunk id bounds the example to its 126 generated chunks. Scenes are borrowed per call, never held.
@@ -26,8 +26,6 @@ use super::config::destruction_config::{
 
 /// Material name of the ground's chunk record (only its geometry is used).
 const GROUND_MATERIAL: &str = "frame";
-/// Scene roughness of debris and the ground, for reflections.
-const DEBRIS_ROUGHNESS: f32 = 0.7;
 
 /// One released chunk: its dynamic body and the mesh that follows it.
 struct DebrisPiece {
@@ -37,7 +35,7 @@ struct DebrisPiece {
 
 /// Copied motion of one debris body, in meters and meters per second.
 #[derive(Clone, Debug, PartialEq)]
-#[allow(dead_code, reason = "part of the capture and test API that test/rust drives")]
+#[allow(dead_code, reason = "part of the capture and test API that the integration tests drive")]
 pub struct DebrisPieceSnapshot {
     /// The released chunk's id.
     pub chunk_id: String,
@@ -49,7 +47,7 @@ pub struct DebrisPieceSnapshot {
 
 /// Copied debris diagnostics.
 #[derive(Clone, Debug, PartialEq)]
-#[allow(dead_code, reason = "part of the capture and test API that test/rust drives")]
+#[allow(dead_code, reason = "part of the capture and test API that the integration tests drive")]
 pub struct DebrisSnapshot {
     /// World height of the ground's top.
     pub ground_top: f64,
@@ -62,7 +60,7 @@ pub struct DebrisSnapshot {
 /// Owns the physics world, the ground mesh, debris, and static chunk colliders.
 pub struct DestructionDebris {
     world: PhysicsWorld,
-    #[allow(dead_code, reason = "part of the capture and test API that test/rust drives")]
+    #[allow(dead_code, reason = "part of the capture and test API that the integration tests drive")]
     ground_mesh: MeshInstanceId,
     // Released chunks and surviving-chunk colliders by chunk id, in insertion order (at most one per chunk).
     pieces: Vec<(String, DebrisPiece)>,
@@ -71,15 +69,15 @@ pub struct DestructionDebris {
 
 impl DestructionDebris {
     /// Create the world and the ground slab (collider and mesh, sharing dimensions) in `scene`.
-    pub fn new(scene: &mut RenderScene) -> GameResult<Self> {
+    pub fn new(scene: &mut RenderScene) -> AppResult<Self> {
         let mut world = PhysicsWorld::new(PhysicsWorldOptions {
             gravity: Vec3::new(0.0, -DESTRUCTION.debris_gravity, 0.0),
             fixed_step: DESTRUCTION.physics_step_seconds,
             max_sub_steps: DESTRUCTION.maximum_physics_substeps,
         })?;
         world.create_body(BodyOptions {
-            position: vector(GROUND.center),
-            half_extents: vector(GROUND.size) * 0.5,
+            position: GROUND.center.as_vec3(),
+            half_extents: GROUND.size.as_vec3() * 0.5,
             friction: GROUND.friction,
             restitution: GROUND.restitution,
             ..BodyOptions::new(PrimitiveShape::Box)
@@ -94,8 +92,7 @@ impl DestructionDebris {
         // The ground uses its own neutral tint, independent of the chunk material palette.
         let mut geometry = create_chunk_mesh_data([&ground]);
         geometry.colors = None;
-        let mut mesh = MeshInstance::new(MeshAsset::from_asset_data(&geometry)?).with_tint(GROUND.tint);
-        mesh.scene_roughness = 1.0;
+        let mesh = MeshInstance::new(MeshAsset::new(&geometry)?).with_tint(GROUND.tint);
         let ground_mesh = scene.insert(mesh);
         Ok(Self { world, ground_mesh, pieces: Vec::new(), static_chunks: Vec::new() })
     }
@@ -110,18 +107,18 @@ impl DestructionDebris {
         scene: &mut RenderScene,
         chunks: impl IntoIterator<Item = &'a DestructibleChunkDefinition>,
         apply_impact_impulse: bool,
-    ) -> GameResult {
+    ) -> AppResult {
         for chunk in chunks {
             if self.pieces.iter().any(|(id, _)| *id == chunk.id) {
                 continue;
             }
             let scale = if apply_impact_impulse { DESTRUCTION.fractured_chunk_scale } else { 1.0 };
             let size = chunk.size.map(|value| value * scale);
-            let center = vector(chunk.center);
+            let center = chunk.center.as_vec3();
             let body = self.world.create_body(BodyOptions {
                 mass: DESTRUCTION.debris_mass,
                 position: center,
-                half_extents: vector(size) * 0.5,
+                half_extents: size.as_vec3() * 0.5,
                 friction: DESTRUCTION.debris_friction,
                 restitution: DESTRUCTION.debris_restitution,
                 linear_damping: DESTRUCTION.debris_linear_damping,
@@ -143,10 +140,13 @@ impl DestructionDebris {
                 let top = center + Vec3::new(0.0, (chunk.size[1] / 2.0) as f32, 0.0);
                 self.world.apply_impulse(body, Vec3::from_array(DESTRUCTION.debris_spin_impulse), Some(top))?;
             }
-            let local = DestructibleChunkDefinition { size, center: [0.0; 3], ..chunk.clone() };
-            let asset = MeshAsset::from_asset_data(&create_chunk_mesh_data([&local]))?;
-            let mut mesh = MeshInstance::new(asset).with_transform(Transform::new(center, Vec3::ZERO, Vec3::ONE));
-            mesh.scene_roughness = DEBRIS_ROUGHNESS;
+            let local = DestructibleChunkDefinition {
+                size,
+                center: DVec3::ZERO,
+                ..chunk.clone()
+            };
+            let asset = MeshAsset::new(&create_chunk_mesh_data([&local]))?;
+            let mesh = MeshInstance::new(asset).with_transform(Transform::new(center, Vec3::ZERO, Vec3::ONE));
             let mesh = scene.insert(mesh);
             self.pieces.push((chunk.id.clone(), DebrisPiece { body, mesh }));
         }
@@ -173,8 +173,8 @@ impl DestructionDebris {
                 continue;
             }
             let body = self.world.create_body(BodyOptions {
-                position: vector(chunk.center),
-                half_extents: vector(chunk.size) * 0.5,
+                position: chunk.center.as_vec3(),
+                half_extents: chunk.size.as_vec3() * 0.5,
                 friction: DESTRUCTION.debris_friction,
                 restitution: DESTRUCTION.debris_restitution,
                 ..BodyOptions::new(PrimitiveShape::Box)
@@ -197,7 +197,7 @@ impl DestructionDebris {
     }
 
     /// Copied diagnostics.
-    #[allow(dead_code, reason = "part of the capture and test API that test/rust drives")]
+    #[allow(dead_code, reason = "part of the capture and test API that the integration tests drive")]
     pub fn snapshot(&self) -> DebrisSnapshot {
         DebrisSnapshot {
             ground_top: GROUND.center[1] + (GROUND.size[1] / 2.0),
@@ -228,14 +228,9 @@ impl DestructionDebris {
     }
 
     /// Release the ground mesh and every debris mesh from `scene`; the world and its bodies drop with `self`.
-    #[allow(dead_code, reason = "part of the capture and test API that test/rust drives")]
+    #[allow(dead_code, reason = "part of the capture and test API that the integration tests drive")]
     pub fn dispose(mut self, scene: &mut RenderScene) {
         self.reset(scene);
         scene.remove(self.ground_mesh);
     }
-}
-
-/// A world-space vector from an `f64` triple.
-fn vector(values: [f64; 3]) -> Vec3 {
-    Vec3::new(values[0] as f32, values[1] as f32, values[2] as f32)
 }

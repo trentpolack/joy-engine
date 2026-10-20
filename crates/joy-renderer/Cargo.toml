@@ -1,0 +1,54 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# The Joy Engine renderer: the one wgpu renderer games, tools, and previews draw with (WebGPU or WebGL 2 in browsers;
+# Vulkan, Metal, DirectX 12, or OpenGL natively), including terrain, scene effects, display processing, and particle
+# drawing. Shaders are standalone WGSL files under `src/`.
+#
+#   cargo test -p joy-renderer
+
+[package]
+name = "joy-renderer"
+description = "The Joy Engine renderer: retained scenes, PBR and lit materials, shadows, terrain, scene effects, and display processing on wgpu."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+joy-core.workspace = true
+joy-render-types.workspace = true
+joy-fx.workspace = true
+bytemuck.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true
+thiserror.workspace = true
+log.workspace = true
+web-time.workspace = true
+png.workspace = true
+zune-jpeg.workspace = true
+image-webp.workspace = true
+wgpu.workspace = true
+
+[dev-dependencies]
+# Terrain and particle golden recordings check and re-record through the shared fixture helpers.
+joy-test-support.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+# Native shader tests translate WGSL to WebGL GLSL even on Metal-only hosts.
+naga.workspace = true
+# Headless GPU tests wait on adapter and readback futures.
+pollster.workspace = true
+# Headless GPU tests write PNG captures to `JOY_RENDER_CAPTURE_DIR`.
+image.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "rendering"
+
+[lints]
+workspace = true

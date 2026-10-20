@@ -1,0 +1,33 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Imports meshes from glTF 2.0 and GLB containers into Joy Engine mesh data.
+#
+#   cargo test -p joy-dcc-gltf
+
+[package]
+name = "joy-dcc-gltf"
+description = "Joy Engine glTF and GLB mesh import."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+joy-core.workspace = true
+joy-render-types.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+joy-test-support.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "content"
+
+[lints]
+workspace = true

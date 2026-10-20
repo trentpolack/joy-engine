@@ -60,13 +60,13 @@ pub fn benchmark_requested() -> bool {
 }
 
 /// Run the configured benchmark and return its one-line report.
-pub fn benchmark(library: &PropLibrary) -> GameResult<BenchmarkReport> {
+pub fn benchmark(library: &PropLibrary) -> AppResult<BenchmarkReport> {
     Ok(run_benchmark(library, BENCHMARK.steps, BENCHMARK.props)?)
 }
 
 /// Copied diagnostics of both bins.
 #[derive(Clone, Debug, PartialEq)]
-#[allow(dead_code, reason = "part of the capture and test API that test/rust drives")]
+#[allow(dead_code, reason = "part of the capture and test API that the integration tests drive")]
 pub struct DemoSnapshot {
     /// The SDF bin.
     pub sdf: ArenaSnapshot,
@@ -101,7 +101,7 @@ pub struct SdfCollisionsDemo {
 
 impl SdfCollisionsDemo {
     /// Both empty bins and the evaluated props.
-    pub fn new() -> GameResult<Self> {
+    pub fn new() -> AppResult<Self> {
         let library = PropLibrary::load()?;
         let mut scene = RenderScene::new();
         let half_separation = ARENA.separation * 0.5;
@@ -133,7 +133,7 @@ impl SdfCollisionsDemo {
     }
 
     /// Advance both bins by `elapsed_seconds` (bounded per frame) unless paused.
-    pub fn advance(&mut self, elapsed_seconds: f32) -> GameResult {
+    pub fn advance(&mut self, elapsed_seconds: f32) -> AppResult {
         if self.paused {
             return Ok(());
         }
@@ -162,7 +162,7 @@ impl SdfCollisionsDemo {
     }
 
     /// Copied diagnostics.
-    #[allow(dead_code, reason = "part of the capture and test API that test/rust drives")]
+    #[allow(dead_code, reason = "part of the capture and test API that the integration tests drive")]
     pub fn snapshot(&self) -> DemoSnapshot {
         DemoSnapshot {
             sdf: self.sdf_bin.snapshot(),
@@ -186,10 +186,10 @@ impl SdfCollisionsDemo {
     }
 }
 
-impl Game for SdfCollisionsDemo {
+impl App for SdfCollisionsDemo {
     /// Record the backend, and run the benchmark when the launch parameters request it. It runs here rather than in
     /// [`SdfCollisionsDemo::new`] because the shell routes logs to the console only once it starts.
-    fn start(&mut self, context: &mut StartContext<'_>) -> GameResult {
+    fn start(&mut self, context: &mut StartContext<'_>) -> AppResult {
         self.backend = context.capabilities.backend.label();
         if benchmark_requested() {
             let report = benchmark(&self.library)?;
@@ -199,7 +199,7 @@ impl Game for SdfCollisionsDemo {
         Ok(())
     }
 
-    fn input(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn input(&mut self, frame: &mut Frame<'_>) -> AppResult {
         if frame.input.pressed(DROP_ACTION) {
             self.drop_more();
         }
@@ -225,11 +225,11 @@ impl Game for SdfCollisionsDemo {
         Ok(())
     }
 
-    fn simulation(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn simulation(&mut self, frame: &mut Frame<'_>) -> AppResult {
         self.advance(frame.time.elapsed_seconds)
     }
 
-    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> GameResult {
+    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
         if std::mem::take(&mut self.reset_history) {
             target.renderer().reset_history();
         }
@@ -238,7 +238,6 @@ impl Game for SdfCollisionsDemo {
             lights: &lights,
             ambient: Some(PRESENTATION.ambient),
             clear_color: PRESENTATION.clear_color,
-            time_seconds: frame.time.time_seconds as f32,
             ..FrameInputs::default()
         };
         let camera = self.view_camera(frame.viewport.logical_size);

@@ -1081,6 +1081,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc148d4ddd3930c52f9e5ae79b89805c6f07e9ff417e7b083e0348cea60a5aba"
 dependencies = [
  "bytemuck",
+ "libm",
  "serde_core",
 ]
 
@@ -1415,6 +1416,110 @@ dependencies = [
 ]
 
 [[package]]
+name = "joy-app"
+version = "1.0.0"
+dependencies = [
+ "console_error_panic_hook",
+ "console_log",
+ "egui",
+ "egui-wgpu",
+ "env_logger",
+ "image",
+ "joy-core",
+ "joy-devtools",
+ "joy-input",
+ "joy-renderer",
+ "joy-ui",
+ "js-sys",
+ "log",
+ "pollster",
+ "thiserror 2.0.21",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "web-time",
+ "wgpu",
+ "winit",
+]
+
+[[package]]
+name = "joy-audio"
+version = "1.0.0"
+dependencies = [
+ "cpal",
+ "hound",
+ "log",
+ "thiserror 2.0.21",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "joy-authoring"
+version = "1.0.0"
+dependencies = [
+ "egui",
+ "indexmap",
+ "joy-app",
+ "joy-core",
+ "joy-form",
+ "joy-fx",
+ "joy-storage",
+ "joy-ui",
+ "js-sys",
+ "log",
+ "rfd",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "joy-core"
+version = "1.0.0"
+dependencies = [
+ "glam 0.34.1",
+ "indexmap",
+ "joy-test-support",
+ "libm",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "joy-dcc-gltf"
+version = "1.0.0"
+dependencies = [
+ "joy-core",
+ "joy-render-types",
+ "joy-test-support",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "joy-devtools"
+version = "1.0.0"
+dependencies = [
+ "egui",
+ "indexmap",
+ "joy-core",
+ "joy-gameplay",
+ "joy-input",
+ "joy-renderer",
+ "joy-scene",
+ "joy-ui",
+ "log",
+ "serde_json",
+ "thiserror 2.0.21",
+ "web-time",
+]
+
+[[package]]
 name = "joy-editor"
 version = "0.1.0"
 dependencies = [
@@ -1427,38 +1532,207 @@ dependencies = [
 name = "joy-engine"
 version = "1.0.0"
 dependencies = [
- "bytemuck",
- "console_error_panic_hook",
- "console_log",
- "cpal",
  "egui",
- "egui-wgpu",
- "egui-winit",
- "env_logger",
+ "image",
+ "joy-app",
+ "joy-audio",
+ "joy-authoring",
+ "joy-core",
+ "joy-dcc-gltf",
+ "joy-devtools",
+ "joy-environment",
+ "joy-form",
+ "joy-fx",
+ "joy-gameplay",
+ "joy-input",
+ "joy-physics",
+ "joy-project",
+ "joy-render-types",
+ "joy-renderer",
+ "joy-scene",
+ "joy-storage",
+ "joy-test-support",
+ "joy-ui",
+ "log",
+ "pollster",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "joy-environment"
+version = "1.0.0"
+dependencies = [
+ "joy-core",
+ "joy-render-types",
+ "joy-test-support",
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "joy-form"
+version = "1.0.0"
+dependencies = [
+ "joy-core",
+ "joy-render-types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "joy-fx"
+version = "1.0.0"
+dependencies = [
+ "indexmap",
+ "joy-core",
+ "libm",
+ "serde_json",
+ "thiserror 2.0.21",
+ "web-time",
+]
+
+[[package]]
+name = "joy-gameplay"
+version = "1.0.0"
+dependencies = [
+ "indexmap",
+ "joy-core",
+ "joy-physics",
+ "joy-test-support",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "joy-input"
+version = "1.0.0"
+dependencies = [
  "gilrs",
- "glam 0.34.1",
- "hound",
+ "indexmap",
+ "joy-core",
+ "log",
+ "thiserror 2.0.21",
+ "wasm-bindgen",
+ "web-sys",
+ "winit",
+]
+
+[[package]]
+name = "joy-physics"
+version = "1.0.0"
+dependencies = [
+ "indexmap",
+ "joy-core",
+ "joy-render-types",
+ "joy-test-support",
+ "rapier3d",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "joy-project"
+version = "1.0.0"
+dependencies = [
+ "indexmap",
+ "joy-test-support",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "joy-render-types"
+version = "1.0.0"
+dependencies = [
+ "indexmap",
+ "joy-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "joy-renderer"
+version = "1.0.0"
+dependencies = [
+ "bytemuck",
  "image",
  "image-webp",
  "indexmap",
- "js-sys",
- "libm",
+ "joy-core",
+ "joy-fx",
+ "joy-render-types",
+ "joy-test-support",
  "log",
  "naga",
  "png",
  "pollster",
- "rapier3d",
- "rfd",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "web-time",
+ "wgpu",
+ "zune-jpeg",
+]
+
+[[package]]
+name = "joy-scene"
+version = "1.0.0"
+dependencies = [
+ "indexmap",
+ "joy-core",
+ "joy-environment",
+ "joy-form",
+ "joy-fx",
+ "joy-gameplay",
+ "joy-render-types",
+ "joy-renderer",
+ "joy-test-support",
+ "libm",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "joy-storage"
+version = "1.0.0"
+dependencies = [
+ "js-sys",
+ "thiserror 2.0.21",
  "wasm-bindgen",
- "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "joy-test-support"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "joy-ui"
+version = "1.0.0"
+dependencies = [
+ "egui",
+ "egui-wgpu",
+ "egui-winit",
+ "joy-core",
+ "joy-renderer",
+ "pollster",
+ "wasm-bindgen",
  "web-sys",
  "web-time",
  "wgpu",
  "winit",
- "zune-jpeg",
 ]
 
 [[package]]

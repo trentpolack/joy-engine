@@ -1,5 +1,5 @@
 # Scene Effects Example
-A deterministic Rust room for inspecting depth-aware blur, SSAO or GTAO, SSGI, outlines, TAA, motion blur, SSR, fog, volumetric lighting, adaptive exposure, and HDR bloom.
+A deterministic Rust room for inspecting temporal antialiasing, motion blur, adaptive exposure, volumetric fog and lighting, and HDR bloom.
 
 ```bash
 npm run dev --workspace @joy-engine/example-scene-effects
@@ -8,12 +8,12 @@ npm run test --workspace @joy-engine/example-scene-effects
 npm run capture --workspace @joy-engine/example-scene-effects -- --built
 ```
 
-Native development runs the Cargo example; browser output lives in `dist/` and publishes at `/examples/scene-effects/`. Use `backend=webgpu` or `backend=webgl` in browser queries. Scene effects require WebGPU or a capable native backend; WebGL 2 reports them unavailable while retaining scene rendering, shadows, and HDR bloom.
+Native development runs the Cargo example; browser output lives in `dist/` and publishes at `/examples/scene-effects/`. Use `backend=webgpu` or `backend=webgl` in browser queries. Volumetric fog requires compute shaders (WebGPU or a native backend); WebGL 2 reports it unavailable while temporal antialiasing, motion blur, adaptive exposure, and HDR bloom run on float render targets.
 
 ## Scene and Controls
-Colored walls reveal bounce, blocks and corners reveal occlusion, slats expose temporal stability, and low-roughness surfaces reveal reflections. HDR lighting and deterministic point lights supply actual scene inputs. Camera clips are 0.5/100 world units.
+Slats expose temporal stability, the moving block and camera sway expose motion blur, bright strips drive bloom and exposure, and blocks cast volumetric shadows through the fog lit by deterministic point lights. Camera clips are 0.5/100 world units.
 
-The shared `SceneEffectsControls` provides independent toggles, exclusive SSAO/GTAO selection, All off/Combined presets, bounded quality settings, and bloom. EFFECT GUIDE explains limitations. Fixed time, stepping, object/camera motion, camera cuts, scene replacement, and history reset support repeatable inspection. Drag and wheel orbit/zoom.
+The shared `SceneEffectsControls` provides independent toggles, All off, Cinematic, Atmosphere, and Combined presets, bounded quality settings, and bloom. EFFECT GUIDE explains limitations. Fixed time, stepping, object/camera motion, camera cuts, scene replacement, and history reset support repeatable inspection. Drag and wheel orbit/zoom.
 
 ## Validation
-`test/rust/example_scene_effects.rs` drives the real application headlessly, including shadow/material fixtures; `JOY_RENDER_CAPTURE_DIR` retains GPU captures. Browser captures smoke-test WebAssembly initialization and rendered images. Inspect temporal motion interactively as well as still captures. Statistics report CPU encoding and frame cadence, not GPU execution time. See [scene effects](../../docs/scene-effects.md).
+`tests/integration/example_scene_effects.rs` drives the real application headlessly, including shadow/material fixtures; `JOY_RENDER_CAPTURE_DIR` retains GPU captures. Browser captures smoke-test WebAssembly initialization and rendered images. Inspect temporal motion interactively as well as still captures. Statistics report CPU encoding and frame cadence, not GPU execution time. See [scene effects](../../docs/scene-effects.md).

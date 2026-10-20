@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Orbit, flight, zoom, and pan controls for the terrain example, matching the TypeScript `TerrainCameraControls`.
+//! Orbit, flight, zoom, and pan controls for the terrain example.
 //!
 //! Left-drag orbits around the focus. Holding the right button flies: pointer movement looks around, W/S move along
 //! the view direction, A/D strafe, and Q/E move down and up in world Y. Scrolling zooms; Command (macOS) or Alt
@@ -10,7 +10,7 @@
 
 use std::collections::HashSet;
 
-use joy_engine::glam::{
+use joy_engine::math::{
     Vec2,
     Vec3,
 };

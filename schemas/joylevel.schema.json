@@ -9,7 +9,6 @@
     "$schema": {"type": "string"},
     "version": {"const": 1},
     "name": {"type": "string", "minLength": 1},
-    "postProcessing": {"$ref": "post-processing.schema.json"},
     "entities": {
       "type": "array",
       "items": {"$ref": "#/definitions/entity"}
@@ -30,7 +29,10 @@
           "required": ["position", "rotation", "scale"],
           "properties": {"position": {"$ref": "#/definitions/vector3"}, "rotation": {"$ref": "#/definitions/vector3"}, "scale": {"$ref": "#/definitions/vector3"}}
         },
-        "components": {"type": "object"},
+        "components": {
+          "type": "object",
+          "properties": {"postProcess": {"$ref": "post-process.schema.json"}}
+        },
         "source": {"type": "string"},
         "overrides": {"type": "object"}
       }

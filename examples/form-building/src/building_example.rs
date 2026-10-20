@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The FORM building shell (TypeScript `site/src/main.ts`): one FORM source generates cottage, warehouse, and apartment
-//! exteriors from parameter snapshots, drawn by the engine renderer with their PBR materials.
+//! The FORM building shell: one FORM source generates cottage, warehouse, and apartment exteriors from parameter
+//! snapshots, drawn by the engine renderer with their PBR materials.
 //!
 //! The source parses once; each change evaluates a complete parameter snapshot and replaces the drawn building only
 //! after the new asset is ready, so a failed evaluation leaves the previous building visible. Baked mode
@@ -25,6 +25,7 @@ use joy_engine::form::{
     GeometryData,
 };
 use joy_engine::prelude::*;
+use joy_engine::render_types::MeshDocument;
 use joy_engine::rendering::ShiftedCamera;
 use joy_engine::runtime::{
     Stopwatch,
@@ -39,9 +40,9 @@ use joy_engine::serde_json::{
 };
 
 use super::asset::{
+    asset_from_document,
     asset_from_evaluation,
-    geometry_from_mesh_data,
-    mesh_data_from_evaluation,
+    document_from_evaluation,
 };
 use super::presentation::populate_building_scene;
 
@@ -76,19 +77,23 @@ const ZOOM_SENSITIVITY: f32 = 0.001;
 
 /// Lighting: strong ambient, a dark blue background, and one warm shadowed point light above the front corner.
 const AMBIENT: f32 = 0.65;
-const CLEAR_COLOR: [f32; 4] = [0.065, 0.105, 0.15, 1.0];
-const LIGHT: PointLight =
-    PointLight { position: Vec3::new(8.0, 20.0, 14.0), color: [4.0, 3.6, 3.1], range: 60.0, casts_shadow: true };
+const CLEAR_COLOR: LinearColor = LinearColor::rgb(0.065, 0.105, 0.15);
+const LIGHT: PointLight = PointLight {
+    position: Vec3::new(8.0, 20.0, 14.0),
+    color: LinearColor::rgb(4.0, 3.6, 3.1),
+    range: 60.0,
+    casts_shadow: true,
+};
 
 /// Render timing samples kept for the statistics.
 const TIMING_SAMPLES: usize = 120;
 
-/// Sidebar width in logical pixels, and on viewports at most [`NARROW_VIEWPORT`] wide (TypeScript CSS).
+/// Sidebar width in logical pixels, and on viewports at most [`NARROW_VIEWPORT`] wide.
 const SIDEBAR_WIDTH: f32 = 330.0;
 const SIDEBAR_WIDTH_NARROW: f32 = 260.0;
 const NARROW_VIEWPORT: f32 = 760.0;
 
-// The example's palette (TypeScript `style.css`).
+// The example's palette.
 const SIDEBAR_FILL: Color32 = Color32::from_rgb(0x17, 0x24, 0x31);
 const TITLE: Color32 = Color32::from_rgb(0xf9, 0xb2, 0x5e);
 const TEXT: Color32 = Color32::from_rgb(0xe4, 0xed, 0xf4);
@@ -135,7 +140,7 @@ pub struct BuildingExample {
     preset: String,
     overrides: Map<String, Value>,
     parameters: Vec<NumericParameter>,
-    geometry: Option<GeometryData>,
+    document: Option<MeshDocument>,
     asset: Option<MeshAsset>,
 
     // Presentation.
@@ -158,7 +163,7 @@ pub struct BuildingExample {
 
 impl BuildingExample {
     /// The example in `mode`, showing the cottage. Fails when the bundled source, presets, or baked record are invalid.
-    pub fn new(mode: BuildingMode) -> GameResult<Self> {
+    pub fn new(mode: BuildingMode) -> AppResult<Self> {
         let presets: Map<String, Value> = serde_json::from_str(PRESETS)?;
         let program = match mode {
             BuildingMode::Editable => Some(CompiledScript::parse(SOURCE)?),
@@ -182,7 +187,7 @@ impl BuildingExample {
             preset: START_PRESET.to_owned(),
             overrides: Map::new(),
             parameters,
-            geometry: None,
+            document: None,
             asset: None,
             scene: RenderScene::new(),
             camera,
@@ -199,10 +204,9 @@ impl BuildingExample {
         match mode {
             BuildingMode::Editable => example.set_preset(START_PRESET)?,
             BuildingMode::Baked => {
-                let data = serde_json::from_str(BAKED_COTTAGE)?;
-                let geometry = geometry_from_mesh_data(&data);
-                let asset = asset_from_evaluation(&geometry)?;
-                example.replace_asset(asset, geometry);
+                let document: MeshDocument = serde_json::from_str(BAKED_COTTAGE)?;
+                let asset = asset_from_document(&document)?;
+                example.replace_asset(asset, document);
                 example.fit_camera();
             }
         }
@@ -219,7 +223,7 @@ impl BuildingExample {
     }
 
     /// Evaluate a named preset and frame it. Baked mode ignores presets.
-    pub fn set_preset(&mut self, name: &str) -> GameResult {
+    pub fn set_preset(&mut self, name: &str) -> AppResult {
         if self.mode == BuildingMode::Baked {
             return Ok(());
         }
@@ -236,7 +240,7 @@ impl BuildingExample {
     ///
     /// On failure the previous building, parameters, and timings stay as they were and the located diagnostic is
     /// returned.
-    pub fn regenerate(&mut self, overrides: Map<String, Value>) -> GameResult {
+    pub fn regenerate(&mut self, overrides: Map<String, Value>) -> AppResult {
         let Some(program) = &self.program else {
             return Ok(());
         };
@@ -255,7 +259,7 @@ impl BuildingExample {
                 parameter.value = value;
             }
         }
-        self.replace_asset(asset, geometry);
+        self.replace_asset(asset, document_from_evaluation(&geometry));
         self.overrides = overrides;
         self.evaluation_milliseconds = evaluated;
         self.preparation_milliseconds = stopwatch.elapsed_milliseconds() - evaluated;
@@ -279,16 +283,15 @@ impl BuildingExample {
         json!({"version": 1, "name": RECIPE_NAME, "source": SOURCE, "overrides": self.overrides})
     }
 
-    /// The current building's baked mesh record, or `None` before the first evaluation in editable mode.
+    /// The current building's baked mesh document, or `None` before the first evaluation in editable mode.
     pub fn baked_mesh(&self) -> Option<Value> {
-        let geometry = self.geometry.as_ref()?;
-        serde_json::to_value(mesh_data_from_evaluation(geometry)).ok()
+        serde_json::to_value(self.document.as_ref()?).ok()
     }
 
-    /// Copied diagnostics (TypeScript `snapshot()`): mode, evaluation counts and CPU timings in milliseconds, geometry
-    /// sizes, scene instances, bounds in meters, and render encoding timings.
+    /// Copied diagnostics: mode, evaluation counts and CPU timings in milliseconds, geometry sizes, scene instances,
+    /// bounds in meters, and render encoding timings.
     pub fn snapshot(&self) -> Value {
-        let geometry = self.geometry.as_ref();
+        let document = self.document.as_ref();
         let bounds = self.asset.as_ref().map(MeshAsset::bounds);
         let mut ordered = self.render_samples.clone();
         ordered.sort_by(f64::total_cmp);
@@ -299,9 +302,9 @@ impl BuildingExample {
             "evaluations": self.evaluations,
             "evaluationMilliseconds": round(self.evaluation_milliseconds),
             "preparationMilliseconds": round(self.preparation_milliseconds),
-            "vertices": geometry.map_or(0, |geometry| geometry.positions.len() / 3),
-            "triangles": geometry.map_or(0, |geometry| geometry.triangles.len() / 3),
-            "materialCount": geometry.map_or(0, |geometry| geometry.materials.len()),
+            "vertices": document.map_or(0, |document| document.mesh.vertex_count()),
+            "triangles": document.map_or(0, |document| document.mesh.triangle_count()),
+            "materialCount": document.map_or(0, |document| document.materials.len()),
             "instances": self.scene.len(),
             "bounds": bounds.map(|bounds| json!({
                 "min": bounds.min.to_array().map(|value| round(f64::from(value))),
@@ -316,11 +319,11 @@ impl BuildingExample {
         })
     }
 
-    fn replace_asset(&mut self, asset: MeshAsset, geometry: GeometryData) {
+    fn replace_asset(&mut self, asset: MeshAsset, document: MeshDocument) {
         // The scene holds asset handles, not GPU meshes; clearing drops the previous generation's last reference.
         populate_building_scene(&mut self.scene, asset.clone());
         self.asset = Some(asset);
-        self.geometry = Some(geometry);
+        self.document = Some(document);
         self.render_samples.clear();
         self.reset_history = true;
     }
@@ -345,7 +348,7 @@ impl BuildingExample {
         }
     }
 
-    fn save(&mut self, file_name: &str, value: Option<Value>) -> GameResult {
+    fn save(&mut self, file_name: &str, value: Option<Value>) -> AppResult {
         let value = value.ok_or("Nothing to save yet.")?;
         let text = serde_json::to_string_pretty(&value)?;
         self.notice = format!("Saved {}", save_text_file(file_name, &text)?);
@@ -439,13 +442,13 @@ impl BuildingExample {
     }
 }
 
-impl Game for BuildingExample {
-    fn start(&mut self, context: &mut StartContext<'_>) -> GameResult {
+impl App for BuildingExample {
+    fn start(&mut self, context: &mut StartContext<'_>) -> AppResult {
         self.backend = context.capabilities.backend.label();
         Ok(())
     }
 
-    fn input(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn input(&mut self, frame: &mut Frame<'_>) -> AppResult {
         let pointer = frame.input.pointer();
         if frame.input.action(ORBIT_ACTION).down && pointer.active {
             if let Some(previous) = self.drag {
@@ -461,7 +464,7 @@ impl Game for BuildingExample {
         Ok(())
     }
 
-    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> GameResult {
+    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
         if std::mem::take(&mut self.reset_history) {
             target.renderer().reset_history();
         }

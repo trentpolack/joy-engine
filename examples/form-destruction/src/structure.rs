@@ -1,13 +1,14 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The seeded destructible structure (TypeScript `structure.ts`): a 13×6 front wall of masonry chunks and a shallow
-//! U-shaped return shell of stronger frame chunks. Coordinate-derived ids stay stable; the seed only varies materials.
+//! The seeded destructible structure: a 13×6 front wall of masonry chunks and a shallow U-shaped return shell of
+//! stronger frame chunks. Coordinate-derived ids stay stable; the seed only varies materials.
 
 use joy_engine::core::{
     RandomSource,
     SeededRandom,
 };
+use joy_engine::math::DVec3;
 use joy_engine::physics::DestructibleChunkDefinition;
 
 use super::config::destruction_config::DESTRUCTION;
@@ -18,7 +19,8 @@ const INTERIOR_CHANCE: f64 = 0.22;
 const SHELL_ROWS: u32 = 4;
 const SHELL_DEPTH: u32 = 6;
 
-/// Generate the wall and return-shell chunks for `seed`, in the TypeScript generation order.
+/// Generate the wall and return-shell chunks for `seed` in a fixed row and column order, so a seed always draws the
+/// same materials.
 pub fn generate_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
     let mut random = SeededRandom::new(seed);
     let [width, height, depth] = DESTRUCTION.chunk_size;
@@ -30,8 +32,12 @@ pub fn generate_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
             let material = if random.next_unit() > INTERIOR_CHANCE { "masonry" } else { "interior" };
             chunks.push(DestructibleChunkDefinition {
                 id: format!("front:{column}:{row}"),
-                center: [(f64::from(column) - half_columns) * width, (f64::from(row) * height) + (height / 2.0), 0.0],
-                size: [width, height, depth],
+                center: DVec3::new(
+                    (f64::from(column) - half_columns) * width,
+                    (f64::from(row) * height) + (height / 2.0),
+                    0.0,
+                ),
+                size: DVec3::new(width, height, depth),
                 material: material.to_owned(),
                 hit_points: DESTRUCTION.hit_points,
             });
@@ -44,12 +50,12 @@ pub fn generate_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
             for side in [-1, 1] {
                 chunks.push(DestructibleChunkDefinition {
                     id: format!("side:{side}:{depth_index}:{row}"),
-                    center: [
+                    center: DVec3::new(
                         f64::from(side) * (half_columns * width),
                         (f64::from(row) * height) + (height / 2.0),
                         -f64::from(depth_index) * depth,
-                    ],
-                    size: [depth, height, depth],
+                    ),
+                    size: DVec3::new(depth, height, depth),
                     material: "frame".to_owned(),
                     hit_points: DESTRUCTION.frame_hit_points,
                 });

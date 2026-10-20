@@ -1,5 +1,5 @@
 # Input
-The runtime shell supplies `InputManager` through `frame.input`. Keyboard bindings use `KeyboardEvent.code` names, gamepads use the standard W3C mapping, and native gamepads use gilrs. Games consume the same actions and axes across targets.
+The runtime shell (`joy-app`) supplies `InputManager` (`joy-input`) through `frame.input`. Keyboard bindings use `KeyboardEvent.code` names, gamepads use the standard W3C mapping, and native gamepads use gilrs. Games consume the same actions and axes across targets.
 
 Read `pressed(name)` for discrete actions each frame. Actions combine their bindings; axes choose the stronger digital or rescaled analog value. The default analog dead zone is 0.15. `set_contexts` selects active action contexts, and `rebind` changes bindings without changing game rules.
 

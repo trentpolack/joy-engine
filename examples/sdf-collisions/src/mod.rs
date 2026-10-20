@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! The SDF collisions example's modules: tuning (`config/`), the FORM props and their colliders, one bin and its pile,
-//! the headless benchmark, the sidebar, and the demo itself. `main.rs` and the integration tests in `test/rust/` both
+//! the headless benchmark, the sidebar, and the demo itself. `main.rs` and the integration tests in `tests/integration/` both
 //! include this tree.
 
 /// Named tuning values.

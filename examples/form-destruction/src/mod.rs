@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The FORM destruction example's modules, beside their TypeScript counterparts: tuning (`config/`), the seeded
-//! structure (`structure.ts`), its integrity and support views (`structure-view.ts`), rigid debris
-//! (`destruction-debris.ts`), impact markers (`impact-debug.ts`), the HUD, and the demo itself (`site/src/main.ts`).
-//! `main.rs` and the integration tests in `test/rust/` both include this tree.
+//! The FORM destruction example's modules: tuning (`config`), the seeded structure (`structure`), its integrity and
+//! support views (`structure_view`), rigid debris (`destruction_debris`), impact markers (`impact_debug`), the HUD
+//! (`hud`), and the demo itself (`destruction_demo`). `main.rs` and the integration tests in `tests/integration/` both
+//! include this tree.
 
 /// Named tuning values.
 pub mod config {

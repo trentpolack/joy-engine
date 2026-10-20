@@ -1,0 +1,33 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Joy Engine particle effects (`.joyfx`): documents, the particle script language, and deterministic simulation.
+# Renderer-free; the renderer's `particles` module draws them.
+#
+#   cargo test -p joy-fx
+
+[package]
+name = "joy-fx"
+description = "Joy Engine particle effects: .joyfx documents, the particle script language, and deterministic simulation."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+joy-core.workspace = true
+serde_json.workspace = true
+indexmap.workspace = true
+thiserror.workspace = true
+libm.workspace = true
+web-time.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "content"
+
+[lints]
+workspace = true

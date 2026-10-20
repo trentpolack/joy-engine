@@ -1,0 +1,33 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# GPU-free descriptions of what a renderer draws: meshes, materials, and lights. Producers (FORM, glTF import,
+# destruction, the environment simulation, and games) write these records and the renderer reads them, so the crate
+# sits in the foundation layer below both and never depends on wgpu or any renderer.
+#
+#   cargo test -p joy-render-types
+
+[package]
+name = "joy-render-types"
+description = "Joy Engine render data: GPU-free meshes, materials, and lights shared by content producers and the renderer."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+joy-core.workspace = true
+indexmap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "foundation"
+
+[lints]
+workspace = true

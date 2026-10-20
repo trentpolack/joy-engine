@@ -41,7 +41,7 @@ struct FormViewer {
     environment: EnvironmentSystem,
     lighting: Option<EnvironmentLighting>,
     selected: usize,
-    shading: Shading,
+    shading: ShadingModel<'static>,
     parameters: Vec<Parameter>,
     instance: Option<MeshInstanceId>,
     error: Option<String>,
@@ -52,7 +52,7 @@ struct FormViewer {
 }
 
 impl FormViewer {
-    fn new() -> Result<Self, GameError> {
+    fn new() -> Result<Self, AppError> {
         let environment =
             EnvironmentSystem::new(EnvironmentOptions { time_of_day: 15.5 / 24.0, ..Default::default() })?;
         Ok(Self {
@@ -62,7 +62,7 @@ impl FormViewer {
             environment,
             lighting: None,
             selected: 0,
-            shading: Shading::Lit,
+            shading: ShadingModel::Lit,
             parameters: Vec::new(),
             instance: None,
             error: None,
@@ -99,7 +99,7 @@ impl FormViewer {
         if let Some(previous) = self.instance.take() {
             self.scene.remove(previous);
         }
-        self.instance = Some(self.scene.insert(MeshInstance::new(asset).with_shading(self.shading)));
+        self.instance = Some(self.scene.insert(MeshInstance::new(asset)));
 
         // A ground plane under the asset receives its shadow.
         let bounds = self.scene.get(self.instance.unwrap()).map(|instance| instance.asset.bounds());
@@ -119,13 +119,15 @@ impl FormViewer {
             for id in keep {
                 self.scene.remove(id);
             }
-            self.scene.insert(MeshInstance::new(primitive_box()).with_transform(ground).with_tint([0.54, 0.6, 0.6]));
+            self.scene.insert(
+                MeshInstance::new(primitive_box()).with_transform(ground).with_tint(LinearColor::rgb(0.54, 0.6, 0.6)),
+            );
         }
     }
 }
 
-impl Game for FormViewer {
-    fn input(&mut self, frame: &mut Frame<'_>) -> GameResult {
+impl App for FormViewer {
+    fn input(&mut self, frame: &mut Frame<'_>) -> AppResult {
         let pointer = frame.input.pointer();
         if frame.input.action("orbit").value > 0.0 && pointer.active {
             if let Some(previous) = self.drag {
@@ -140,20 +142,19 @@ impl Game for FormViewer {
         Ok(())
     }
 
-    fn simulation(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn simulation(&mut self, frame: &mut Frame<'_>) -> AppResult {
         let environment = self.environment.step(f64::from(frame.time.elapsed_seconds))?;
-        self.lighting = Some(EnvironmentLighting::from(&environment));
+        self.lighting = Some(environment_lighting(&environment, &SkyOptions::default()));
         if self.dirty {
             self.rebuild();
         }
         Ok(())
     }
 
-    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> GameResult {
+    fn render(&mut self, _frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
         let inputs = FrameInputs {
             environment: self.lighting.as_ref(),
-            clear_color: [0.09, 0.16, 0.2, 1.0],
-            time_seconds: frame.time.time_seconds as f32,
+            clear_color: LinearColor::new(0.09, 0.16, 0.2, 1.0),
             ..Default::default()
         };
         Ok(target.draw(&self.scene, &self.camera, &inputs)?)
@@ -176,7 +177,9 @@ impl Game for FormViewer {
                     self.reframe = true;
                 }
                 ui.horizontal(|ui| {
-                    for (label, shading) in [("Lit", Shading::Lit), ("PBR", Shading::Pbr), ("Unlit", Shading::Unlit)] {
+                    for (label, shading) in
+                        [("Lit", ShadingModel::Lit), ("Layered", ShadingModel::Layered), ("Unlit", ShadingModel::Unlit)]
+                    {
                         if ui.selectable_label(self.shading == shading, label).clicked() && self.shading != shading {
                             self.shading = shading;
                             self.dirty = true;
@@ -246,7 +249,7 @@ fn options() -> ShellOptions {
 
 fn start() {
     let result =
-        FormViewer::new().map_err(|error| ShellError::Game(error.to_string())).and_then(|game| run(options(), game));
+        FormViewer::new().map_err(|error| ShellError::App(error.to_string())).and_then(|app| run(options(), app));
     if let Err(error) = result {
         joy_engine::log::error!("{error}");
     }

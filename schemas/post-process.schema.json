@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Joy post-process volume",
+  "description": "An entity's postProcess component: volume fields plus the post-processing settings it applies. Unbounded volumes apply everywhere; bounded volumes apply while the view is inside their shape. Numeric settings are validated by Joy Engine's post-processing controls.",
+  "type": "object",
+  "properties": {
+    "enabled": {"type": "boolean"},
+    "unbounded": {"type": "boolean"},
+    "priority": {"type": "number"},
+    "weight": {"type": "number", "minimum": 0, "maximum": 1},
+    "blendDistance": {"type": "number", "minimum": 0},
+    "shape": {"enum": ["box", "sphere"]},
+    "halfExtents": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number", "exclusiveMinimum": 0}},
+    "radius": {"type": "number", "exclusiveMinimum": 0},
+    "toneMapper": {"enum": ["filmic", "agx", "aces", "none"]},
+    "agxLook": {"enum": ["default", "punchy"]},
+    "bloomQuality": {"enum": ["low", "medium", "high", "ultra"]}
+  },
+  "additionalProperties": {"type": "number"}
+}

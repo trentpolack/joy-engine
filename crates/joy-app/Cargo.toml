@@ -1,0 +1,52 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Joy Engine application shell: the native window or browser canvas, GPU and renderer startup, the frame loop and
+# clocks that run a game's phases, the headless runner, and the browser page glue.
+#
+#   cargo test -p joy-app
+
+[package]
+name = "joy-app"
+description = "Joy Engine application shell: windows and canvases, the frame loop, game phases, clocks, and the headless runner."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+joy-core.workspace = true
+joy-devtools.workspace = true
+joy-input.workspace = true
+joy-renderer.workspace = true
+joy-ui.workspace = true
+thiserror.workspace = true
+log.workspace = true
+web-time.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+egui.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+egui-wgpu.workspace = true
+pollster.workspace = true
+env_logger.workspace = true
+image.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
+web-sys.workspace = true
+console_error_panic_hook.workspace = true
+console_log.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "platform"
+
+[lints]
+workspace = true

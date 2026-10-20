@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The demo's HUD, matching the TypeScript page (`site/index.html`, `style.css`): title and view buttons, the brief with
-//! seed, backend, chunk, and debris readouts, the integrity or support legend with the last chunk's resistance, the
-//! CONFIG panel, the notice line, and the footer with RESET. Information panels ignore the pointer so clicks reach the
-//! structure behind them; drawing returns the requested changes instead of mutating the demo.
+//! The demo's HUD: title and view buttons, the brief with seed, backend, chunk, and debris readouts, the integrity or
+//! support legend with the last chunk's resistance, the CONFIG panel, the notice line, and the footer with RESET.
+//! Information panels ignore the pointer so clicks reach the structure behind them; drawing returns the requested
+//! changes instead of mutating the demo.
 
 use joy_engine::development::dock;
 use joy_engine::egui::{
@@ -25,7 +25,7 @@ use joy_engine::prelude::*;
 
 use super::config::destruction_config::StructureView;
 
-/// Configurable ranges and steps (TypeScript `index.html`).
+/// Configurable ranges and steps (minimum, maximum, step), starting with the impact radius.
 pub const RADIUS_RANGE: (f64, f64, f64) = (0.6, 2.0, 0.05);
 /// Damage-per-impact range and step.
 pub const DAMAGE_RANGE: (f64, f64, f64) = (0.5, 3.0, 0.5);

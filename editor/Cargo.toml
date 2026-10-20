@@ -2,8 +2,8 @@
 # Licensed under the MIT License.
 
 # Joy Editor on the Rust engine: the authoring workspace for game projects (content browser, document tabs, saves with
-# conflict handling, the level editor, and FORM LAB and PARTICLE LAB as hosted tabs). Modules live in
-# `site/src/`, `server/`, and `desktop/` and support the native application and browser build.
+# conflict handling, the level editor, and FORM LAB and PARTICLE LAB as hosted tabs). Modules live in `src/` and
+# support the native application and browser build.
 #
 #   cargo run -p joy-editor -- --workspace=<hosting workspace>
 #   cargo test -p joy-editor
@@ -13,39 +13,23 @@
 name = "joy-editor"
 description = "Joy Editor: the Joy Engine authoring workspace for levels, reusable objects, FORM meshes, and particle effects."
 version = "0.1.0"
-edition = "2024"
-rust-version = "1.95"
-license = "MIT"
-authors = ["Trent Polack"]
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
 publish = false
-# Integration tests are listed explicitly.
-autotests = false
-autobins = false
 autoexamples = false
 
 [lib]
-path = "site/src/lib.rs"
 # `cdylib` is the browser module; `rlib` serves the native binary and tests.
 crate-type = ["cdylib", "rlib"]
 
-[[bin]]
-name = "joy-editor"
-path = "site/src/main.rs"
-
-[[test]]
-name = "joy-editor"
-path = "test/rust/main.rs"
-
 [dependencies]
-joy-engine = { path = ".." }
+joy-engine.workspace = true
 # Hosted as tabs through `joy_engine::development::AuthoringTool`, without their own browser entry points.
-form-lab = { path = "tools/form-lab", default-features = false }
-particle-lab = { path = "tools/particle-lab", default-features = false }
+form-lab = { path = "../tools/form-lab", default-features = false }
+particle-lab = { path = "../tools/particle-lab", default-features = false }
 
-[lints.rust]
-unsafe_code = "forbid"
-missing_docs = "warn"
-
-[lints.clippy]
-# Explicit parenthesized arithmetic is part of the house style; keep clippy from fighting it.
-precedence = "allow"
+[lints]
+workspace = true

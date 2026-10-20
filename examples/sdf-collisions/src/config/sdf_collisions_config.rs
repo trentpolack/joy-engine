@@ -93,14 +93,14 @@ pub struct ViewSettings {
 pub struct PresentationSettings {
     /// Ambient light strength and the background color.
     pub ambient: f32,
-    pub clear_color: [f32; 4],
+    pub clear_color: LinearColor,
     /// A warm shadowed key light above the front-left, and a cool fill from behind.
     pub key_light: PointLight,
     pub fill_light: PointLight,
     /// Bin floor tints: SDF bin, then box bin. The HUD legend uses the same colors.
-    pub sdf_tint: Rgb,
-    pub box_tint: Rgb,
-    pub wall_tint: Rgb,
+    pub sdf_tint: LinearColor,
+    pub box_tint: LinearColor,
+    pub wall_tint: LinearColor,
     /// Timing samples kept per distribution.
     pub timing_samples: usize,
     /// Longest frame the simulation advances, in seconds; hidden tabs and stalls never fast-forward the piles.
@@ -152,22 +152,22 @@ pub const VIEW: ViewSettings = ViewSettings {
 
 pub const PRESENTATION: PresentationSettings = PresentationSettings {
     ambient: 0.75,
-    clear_color: [0.055, 0.075, 0.095, 1.0],
+    clear_color: LinearColor::new(0.055, 0.075, 0.095, 1.0),
     key_light: PointLight {
         position: Vec3::new(-4.0, 11.0, 7.0),
-        color: [8.0, 7.4, 6.6],
+        color: LinearColor::rgb(8.0, 7.4, 6.6),
         range: 40.0,
         casts_shadow: true,
     },
     fill_light: PointLight {
         position: Vec3::new(6.0, 7.0, -6.0),
-        color: [2.0, 2.4, 3.0],
+        color: LinearColor::rgb(2.0, 2.4, 3.0),
         range: 30.0,
         casts_shadow: false,
     },
-    sdf_tint: [0.27, 0.62, 0.58],
-    box_tint: [0.74, 0.42, 0.27],
-    wall_tint: [0.32, 0.35, 0.38],
+    sdf_tint: LinearColor::rgb(0.27, 0.62, 0.58),
+    box_tint: LinearColor::rgb(0.74, 0.42, 0.27),
+    wall_tint: LinearColor::rgb(0.32, 0.35, 0.38),
     timing_samples: 120,
     maximum_frame_seconds: 0.1,
 };

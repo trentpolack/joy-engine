@@ -9,9 +9,9 @@
 //! Browsers prefer WebGPU and fall back to WebGL 2; add `?backend=webgl` or `?backend=webgpu` to choose. Left-drag
 //! orbits around the focus and scrolling zooms. Hold the right button to fly: the pointer looks around, W/S move along
 //! the view, A/D strafe, and Q/E move down and up. Command or Alt with scrolling pans. G selects a grazing view and O
-//! restores the overview. CONFIG exposes the error tolerance, LOD colors and grid, a camera tour, the stable detail
-//! region, and the draw path: the standalone terrain pass (the TypeScript example's look) or the scene renderer with
-//! lighting, cascaded shadows, and the sky.
+//! restores the overview. CONFIG exposes the error tolerance, LOD colors and grid, a camera tour, and the stable detail
+//! region. The landscape is a scene terrain instance drawn by the engine renderer like any other scene content: lit,
+//! shadowed by cascades, under the procedural sky, and post-processed.
 //!
 //! Demo dimensions are explicit example units (X/Z extent 2048, height = source height x 1000), not physical meters.
 
@@ -23,16 +23,16 @@ use joy_engine::development::dock::{
     DockTool,
 };
 use joy_engine::prelude::*;
-use joy_engine::rendering::TerrainInstanceId;
 use joy_engine::rendering::terrain::{
     TerrainAsset,
     TerrainDiagnostic,
-    TerrainFrame,
-    TerrainRenderer,
     TerrainStats,
-    TerrainView,
     parse_terrain,
     sample_terrain,
+};
+use joy_engine::rendering::{
+    RendererDiagnostics,
+    TerrainInstanceId,
 };
 
 use terrain_camera_controls::{
@@ -43,10 +43,10 @@ use terrain_camera_controls::{
 use terrain_config::TERRAIN_CONFIG;
 
 /// The compiled Dragon Pit heightfield, embedded so the example runs identically natively and in browsers.
-const MANIFEST: &str = include_str!("site/public/dragon-pit/terrain.json");
-const HEIGHTS: &[u8] = include_bytes!("site/public/dragon-pit/height.bin");
+const MANIFEST: &str = include_str!("assets/dragon-pit/terrain.json");
+const HEIGHTS: &[u8] = include_bytes!("assets/dragon-pit/height.bin");
 /// The MIT notice for the source height data, shown in CONFIG because the data ships inside the binary.
-const SOURCE_LICENSE: &str = include_str!("site/public/dragon-pit/LICENSE-source.txt");
+const SOURCE_LICENSE: &str = include_str!("assets/dragon-pit/LICENSE-source.txt");
 const SOURCE_URL: &str = "https://github.com/trentpolack/worldcreator/blob/main/dragon_pit_01/HeightMap.exr";
 
 /// Camera preset actions.
@@ -60,19 +60,9 @@ const HELP_TEXT: &str = "Left-drag orbits · scroll zooms · hold right-click to
                          Cmd or Alt + scroll pans · G near ground · O overview";
 const EXTENT_NOTE: &str = "Demo extent 2048 × 2048; source height × 1000. Physical dimensions are unspecified.";
 
-/// How the landscape is drawn.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum DrawPath {
-    /// The standalone terrain pass: derivative-normal diffuse coloring straight into the canvas.
-    TerrainPass,
-    /// A scene terrain instance through the engine renderer: lighting, cascaded shadows, sky, and display processing.
-    Scene,
-}
-
 struct TerrainLab {
-    // Resident data and the draw paths that borrow it.
+    // Resident data and the scene that draws it.
     asset: TerrainAsset,
-    terrain: Option<TerrainRenderer>,
     scene: RenderScene,
     scene_terrain: TerrainInstanceId,
     environment: EnvironmentSystem,
@@ -87,7 +77,6 @@ struct TerrainLab {
     diagnostic: TerrainDiagnostic,
     pin: bool,
     tour: bool,
-    path: DrawPath,
 
     // HUD state.
     backend: String,
@@ -96,7 +85,7 @@ struct TerrainLab {
 }
 
 impl TerrainLab {
-    fn new() -> Result<Self, GameError> {
+    fn new() -> Result<Self, AppError> {
         let asset = parse_terrain(MANIFEST, HEIGHTS)?;
         let mut scene = RenderScene::new();
         let scene_terrain = scene.create_terrain(asset.clone());
@@ -111,7 +100,6 @@ impl TerrainLab {
         };
         let mut lab = Self {
             asset,
-            terrain: None,
             scene,
             scene_terrain,
             environment,
@@ -122,7 +110,6 @@ impl TerrainLab {
             diagnostic: TerrainDiagnostic::Material,
             pin: true,
             tour: false,
-            path: DrawPath::TerrainPass,
             backend: String::new(),
             stats: "Loading resident terrain…".into(),
             frames: 0,
@@ -148,18 +135,6 @@ impl TerrainLab {
         self.controls.stop_flight();
         self.camera.distance = TERRAIN_CONFIG.near_ground_distance;
         self.camera.pitch = TERRAIN_CONFIG.near_ground_pitch;
-    }
-
-    /// Selection inputs for the current camera; projection scale uses CSS pixels so display density never changes LOD.
-    fn terrain_view(&self, viewport: &Viewport) -> TerrainView {
-        let fov = f64::from(TERRAIN_CONFIG.camera_controls.vertical_fov_radians);
-        TerrainView {
-            eye: self.camera.basis().eye.as_dvec3(),
-            projection_scale: f64::from(viewport.logical_size.y) / (2.0 * (fov / 2.0).tan()),
-            tolerance: f64::from(self.tolerance),
-            target: self.camera.target.as_dvec3(),
-            target_radius: if self.pin { f64::from(TERRAIN_CONFIG.target_radius) } else { 0.0 },
-        }
     }
 
     /// The CONFIG panel contents.
@@ -188,10 +163,6 @@ impl TerrainLab {
             }
         });
 
-        dock::heading(ui, "Draw path");
-        ui.radio_value(&mut self.path, DrawPath::TerrainPass, "Terrain pass");
-        ui.radio_value(&mut self.path, DrawPath::Scene, "Scene renderer (lit, shadows, sky)");
-
         dock::heading(ui, "Joy-Editor");
         dock::note(
             ui,
@@ -206,36 +177,24 @@ impl TerrainLab {
         });
     }
 
-    /// Refresh the statistics text from the draw path that rendered this frame.
+    /// Refresh the statistics text from the renderer's latest frame.
     fn update_stats(&mut self, target: &mut RenderTarget<'_>) {
-        self.stats = match (self.path, &self.terrain) {
-            (DrawPath::TerrainPass, Some(terrain)) => terrain_stats_text(&self.backend, terrain.stats()),
-            _ => {
-                let diagnostics = target.renderer().diagnostics();
-                format!(
-                    "{} · scene renderer · {} draw calls · {} triangles\nShadow views {} · {} visible, {} culled",
-                    self.backend,
-                    group_thousands(diagnostics.draw_calls as u64),
-                    group_thousands(diagnostics.triangles as u64),
-                    diagnostics.shadow_views,
-                    diagnostics.visible,
-                    diagnostics.culled
-                )
-            }
+        let renderer = target.renderer();
+        self.stats = match renderer.terrain_stats(self.scene_terrain) {
+            Some(stats) => terrain_stats_text(&self.backend, stats, renderer.diagnostics()),
+            None => format!("{} · the landscape is outside the view", self.backend),
         };
     }
 }
 
-impl Game for TerrainLab {
-    fn start(&mut self, context: &mut StartContext<'_>) -> GameResult {
+impl App for TerrainLab {
+    fn start(&mut self, context: &mut StartContext<'_>) -> AppResult {
         self.backend = context.capabilities.backend.label().to_uppercase();
-        let renderer = context.renderer.gpu().clone();
-        self.terrain = Some(TerrainRenderer::new(&renderer, &self.asset, context.renderer.output_format())?);
         joy_engine::log::info!("Terrain Lab ready: {}; {} resident patches.", self.backend, self.asset.patches().len());
         Ok(())
     }
 
-    fn input(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn input(&mut self, frame: &mut Frame<'_>) -> AppResult {
         // Presets stay available outside flight; text fields keep keyboard focus (the shell suspends input).
         if frame.input.pressed(GROUND_ACTION) {
             self.ground();
@@ -247,7 +206,7 @@ impl Game for TerrainLab {
         Ok(())
     }
 
-    fn simulation(&mut self, frame: &mut Frame<'_>) -> GameResult {
+    fn simulation(&mut self, frame: &mut Frame<'_>) -> AppResult {
         let seconds = frame.time.elapsed_seconds.min(MAXIMUM_STEP_SECONDS);
         self.controls.update(&mut self.camera, seconds);
 
@@ -255,42 +214,25 @@ impl Game for TerrainLab {
         if self.tour && !self.controls.flying() {
             self.camera.yaw += seconds * TERRAIN_CONFIG.tour_yaw_speed;
         }
-        if self.path == DrawPath::Scene {
-            let environment = self.environment.step(f64::from(seconds))?;
-            self.lighting = Some(EnvironmentLighting::from(&environment));
-        }
+        let environment = self.environment.step(f64::from(seconds))?;
+        self.lighting = Some(environment_lighting(&environment, &SkyOptions::default()));
         Ok(())
     }
 
-    fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> GameResult {
-        let view = self.terrain_view(&frame.viewport);
-        match self.path {
-            DrawPath::TerrainPass => {
-                let terrain = self.terrain.as_mut().ok_or("the terrain renderer has not started")?;
-                let terrain_frame = TerrainFrame {
-                    view_projection: self.camera.camera_frame(frame.viewport.aspect()).view_projection(),
-                    view,
-                    diagnostic: self.diagnostic,
-                    clear_color: TERRAIN_CONFIG.background_color,
-                    now_milliseconds: frame.time.time_seconds * 1000.0,
-                };
-                target.draw_terrain(terrain, &terrain_frame)?;
-            }
-            DrawPath::Scene => {
-                if let Some(instance) = self.scene.terrain_mut(self.scene_terrain) {
-                    instance.tolerance = self.tolerance;
-                    instance.target_radius = view.target_radius as f32;
-                    instance.diagnostic = self.diagnostic;
-                }
-                let inputs = FrameInputs {
-                    environment: self.lighting.as_ref(),
-                    clear_color: TERRAIN_CONFIG.background_color,
-                    time_seconds: frame.time.time_seconds as f32,
-                    ..Default::default()
-                };
-                target.draw(&self.scene, &self.camera, &inputs)?;
-            }
+    fn render(&mut self, _frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
+        // Selection runs in the renderer for the frame's camera, in CSS pixels, so display density never changes LOD.
+        if let Some(instance) = self.scene.terrain_mut(self.scene_terrain) {
+            instance.tolerance = self.tolerance;
+            instance.target_radius = if self.pin { TERRAIN_CONFIG.target_radius } else { 0.0 };
+            instance.diagnostic = self.diagnostic;
         }
+        // The renderer lights and tone maps in linear light, so the sRGB background is decoded first.
+        let inputs = FrameInputs {
+            environment: self.lighting.as_ref(),
+            clear_color: TERRAIN_CONFIG.background_color.to_linear(),
+            ..Default::default()
+        };
+        target.draw(&self.scene, &self.camera, &inputs)?;
 
         self.frames += 1;
         if self.frames == 1 || self.frames.is_multiple_of(STATS_INTERVAL_FRAMES) {
@@ -372,24 +314,24 @@ fn wheel_gestures(context: &egui::Context, viewport_height: f32) -> Vec<WheelGes
     })
 }
 
-/// The TypeScript example's statistics block for the standalone pass.
-fn terrain_stats_text(backend: &str, stats: &TerrainStats) -> String {
-    let gpu = match stats.gpu_milliseconds {
-        Some(milliseconds) => format!("{milliseconds:.2} ms render pass"),
-        None => stats.gpu_timing.to_string(),
-    };
+/// The statistics block: the terrain's selection and residency, then the frame's renderer totals.
+fn terrain_stats_text(backend: &str, stats: &TerrainStats, diagnostics: &RendererDiagnostics) -> String {
     let mebibyte = 1_048_576.0;
     format!(
-        "{backend} · {} patches · {} triangles ({})\nCPU prepare {:.2} ms · record {:.2} ms\nGPU {gpu} · GPU resident \
-         {:.2} MiB\nCPU resident {:.2} MiB · frame upload {} B",
+        "{backend} · {} patches · {} triangles ({})\nCPU prepare {:.2} ms · GPU resident {:.2} MiB · CPU resident {:.2} \
+         MiB · frame upload {} B\n{} draw calls · {} scene triangles · {} shadow views · {} visible, {} culled",
         stats.patches,
         group_thousands(stats.triangles as u64),
         stats.triangle_count_kind.label(),
         stats.cpu_milliseconds,
-        stats.record_milliseconds,
         stats.resident_gpu_bytes as f64 / mebibyte,
         stats.resident_cpu_bytes as f64 / mebibyte,
         group_thousands(stats.frame_upload_bytes),
+        group_thousands(diagnostics.draw_calls as u64),
+        group_thousands(diagnostics.triangles as u64),
+        diagnostics.shadow_views,
+        diagnostics.visible,
+        diagnostics.culled,
     )
 }
 
@@ -427,7 +369,7 @@ fn options() -> ShellOptions {
         .action(GROUND_ACTION, [InputBinding::key(key::KEY_G)])
         .action(OVERVIEW_ACTION, [InputBinding::key(key::KEY_O)]);
 
-    // The scene draw path shadows the whole 2048-unit landscape; distances are world units.
+    // Shadows cover the whole 2048-unit landscape; distances are world units.
     let shadows = ShadowOptions { shadow_distance: 2500.0, normal_bias: 0.5, ..ShadowOptions::default() };
     let renderer = RendererOptions { shadows: Some(shadows), ..RendererOptions::default() };
     // The default canvas ID matches `scripts/rust/build-web.mjs` pages built without `--canvas`.
@@ -436,7 +378,7 @@ fn options() -> ShellOptions {
 
 fn start() {
     let result =
-        TerrainLab::new().map_err(|error| ShellError::Game(error.to_string())).and_then(|game| run(options(), game));
+        TerrainLab::new().map_err(|error| ShellError::App(error.to_string())).and_then(|app| run(options(), app));
     if let Err(error) = result {
         joy_engine::log::error!("Terrain startup failed: {error}");
     }

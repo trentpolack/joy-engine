@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! FORM destruction tuning (TypeScript `config/destruction-config.ts`). Dimensions are meters, gravity meters per
-//! second squared, launch velocities meters per second, impulses newton-seconds, angles radians, times seconds, and
-//! drag distances logical pixels. Colors are linear RGB.
+//! FORM destruction tuning. Dimensions are meters, gravity meters per second squared, launch velocities meters per
+//! second, impulses newton-seconds, angles radians, times seconds, and drag distances logical pixels. Colors are linear
+//! RGB.
 
 use joy_engine::physics::ChunkSupportOptions;
 use joy_engine::prelude::*;
@@ -82,11 +82,11 @@ pub const DESTRUCTION: DestructionConfig = DestructionConfig {
 /// The ground slab; the rendered slab and its static collider share these values.
 pub struct GroundConfig {
     /// Slab center.
-    pub center: [f64; 3],
+    pub center: DVec3,
     /// Full slab dimensions; its top is at world Y = 0.
-    pub size: [f64; 3],
+    pub size: DVec3,
     /// Neutral slab tint, independent of the chunk material palette.
-    pub tint: [f32; 3],
+    pub tint: LinearColor,
     /// Ground friction.
     pub friction: f32,
     /// Ground restitution.
@@ -95,9 +95,9 @@ pub struct GroundConfig {
 
 /// The example's ground.
 pub const GROUND: GroundConfig = GroundConfig {
-    center: [0.0, -1.0, 0.0],
-    size: [200.0, 2.0, 200.0],
-    tint: [0.3, 0.36, 0.42],
+    center: DVec3::new(0.0, -1.0, 0.0),
+    size: DVec3::new(200.0, 2.0, 200.0),
+    tint: LinearColor::rgb(0.3, 0.36, 0.42),
     friction: 0.8,
     restitution: 0.08,
 };
@@ -131,7 +131,7 @@ impl SupportConfig {
 
 /// The example's support rule.
 pub const SUPPORT: SupportConfig = SupportConfig {
-    ground_height: GROUND.center[1] + (GROUND.size[1] / 2.0),
+    ground_height: GROUND.center.y + (GROUND.size.y / 2.0),
     maximum_cantilever_distance: 1.05,
     contact_tolerance: 0.0001,
     anchored_color: [0.08, 0.6, 0.85],
@@ -179,7 +179,12 @@ pub const INTEGRITY: IntegrityConfig = IntegrityConfig {
     intact_color: [0.08, 0.6, 0.85],
     reinforced_color: [0.2, 0.3, 0.85],
     ambient: 0.7,
-    light: PointLight { position: Vec3::new(5.0, 12.0, 9.0), color: [2.0, 2.0, 2.0], range: 45.0, casts_shadow: true },
+    light: PointLight {
+        position: Vec3::new(5.0, 12.0, 9.0),
+        color: LinearColor::rgb(2.0, 2.0, 2.0),
+        range: 45.0,
+        casts_shadow: true,
+    },
 };
 
 /// World-space impact markers; bounds and lifetime keep repeated clicks inexpensive.
@@ -279,7 +284,7 @@ pub const VIEW: ViewConfig = ViewConfig {
 /// Material-view lighting, frame bounds, and HUD cadence.
 pub struct PresentationConfig {
     /// Linear background color.
-    pub clear_color: [f32; 4],
+    pub clear_color: LinearColor,
     /// Material-view ambient.
     pub ambient: f32,
     /// Warm key light.
@@ -296,17 +301,17 @@ pub struct PresentationConfig {
 
 /// The example's presentation.
 pub const PRESENTATION: PresentationConfig = PresentationConfig {
-    clear_color: [0.025, 0.035, 0.045, 1.0],
+    clear_color: LinearColor::new(0.025, 0.035, 0.045, 1.0),
     ambient: 0.42,
     primary_light: PointLight {
         position: Vec3::new(7.0, 14.0, 9.0),
-        color: [5.0, 3.2, 1.8],
+        color: LinearColor::rgb(5.0, 3.2, 1.8),
         range: 45.0,
         casts_shadow: true,
     },
     secondary_light: PointLight {
         position: Vec3::new(-7.0, 5.0, -4.0),
-        color: [0.25, 0.7, 1.2],
+        color: LinearColor::rgb(0.25, 0.7, 1.2),
         range: 24.0,
         casts_shadow: true,
     },

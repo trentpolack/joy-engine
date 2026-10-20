@@ -10,7 +10,7 @@
 //! collision. Worlds use meters, seconds, and Y-up space. Scenes are borrowed per call; `None` runs headless.
 
 use joy_engine::core::PrimitiveShape;
-use joy_engine::core::js_math;
+use joy_engine::math::deterministic;
 use joy_engine::physics::{
     BodyHandle,
     BodyOptions,
@@ -217,7 +217,7 @@ impl PileArena {
     }
 
     /// Release the bin's meshes and every prop mesh from `scene`; the world drops with `self`.
-    #[allow(dead_code, reason = "part of the test API that test/rust drives")]
+    #[allow(dead_code, reason = "part of the test API that the integration tests drive")]
     pub fn dispose(mut self, scene: &mut RenderScene) {
         self.reset(Some(scene));
         for mesh in self.bin_meshes.drain(..) {
@@ -261,7 +261,7 @@ impl PileArena {
 
         let mesh = scene.map(|scene| {
             let transform = Transform::new(origin, rotation, Vec3::ONE);
-            scene.insert(MeshInstance::new(prop.asset.clone()).with_transform(transform).with_shading(Shading::Pbr))
+            scene.insert(MeshInstance::new(prop.asset.clone()).with_transform(transform))
         });
         self.pieces.push(Piece { body, prop: prop_index, mesh });
         Ok(())
@@ -310,7 +310,7 @@ fn bin_slabs(center_x: f32) -> [(Vec3, Vec3); 5] {
 fn rotate_portably(offset: Vec3, rotation: Vec3) -> Vec3 {
     let [x, y, z] = offset.to_array().map(f64::from);
     let [(sine_x, cosine_x), (sine_y, cosine_y), (sine_z, cosine_z)] =
-        rotation.to_array().map(|angle| (js_math::sin(f64::from(angle)), js_math::cos(f64::from(angle))));
+        rotation.to_array().map(|angle| (deterministic::sin(f64::from(angle)), deterministic::cos(f64::from(angle))));
     let (y1, z1) = ((y * cosine_x) - (z * sine_x), (y * sine_x) + (z * cosine_x));
     let (x2, z2) = ((x * cosine_y) + (z1 * sine_y), (z1 * cosine_y) - (x * sine_y));
     let (x3, y3) = ((x2 * cosine_z) - (y1 * sine_z), (x2 * sine_z) + (y1 * cosine_z));

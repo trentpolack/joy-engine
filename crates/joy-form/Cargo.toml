@@ -1,0 +1,33 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# FORM, the procedural modeling language: parse, evaluate, and compile scripts into renderer-free geometry. The
+# `joy-form-evaluate` JSON-lines CLI drives the FORM LAB parity harness.
+#
+#   cargo test -p joy-form
+#   cargo build -p joy-form --bin joy-form-evaluate
+
+[package]
+name = "joy-form"
+description = "FORM: the Joy Engine procedural modeling language, returning renderer-free geometry."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+joy-core.workspace = true
+joy-render-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "content"
+
+[lints]
+workspace = true

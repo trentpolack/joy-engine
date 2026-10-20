@@ -103,14 +103,13 @@ class Audit:
     """
 
     def __init__(self, repository, *, schema_repository=None, path_mappings=(),
-                 private_repositories=(), architecture=False):
+                 private_repositories=()):
         self.repository = repository
         self.repositories = (repository,)
         self.schema_repository = schema_repository or repository
         self.context = (repository,) if self.schema_repository is repository else (repository, self.schema_repository)
         self.path_mappings = tuple((source.resolve(), target.resolve()) for source, target in path_mappings)
         self.private_repositories = [name.lower().removesuffix('.git') for name in private_repositories]
-        self.architecture = architecture
         self.findings = []
         self.tests = []
         self.schema_status = {'status': 'not run'}
@@ -157,8 +156,6 @@ class Audit:
         self.scan_artifacts()
         self.scan_package_targets()
         self.scan_docs()
-        if self.architecture:
-            self.scan_architecture()
         self.scan_tests()
         self.scan_schemas(skip_schemas)
         return self.report()
@@ -278,45 +275,6 @@ class Audit:
                             self.add('doc_anchor_review', repo, path,
                                      f'Fragment was not found by the heading/HTML-id scanner: {target}',
                                      kind='review', line=line_at(visible, match.start()), target=target)
-
-    def scan_architecture(self):
-        repo = self.repository
-        path = 'architecture/layers.json'
-        if path not in repo.text:
-            self.add('architecture_policy_absent', repo, path, 'No layer policy found; relevance needs manual review.', kind='review')
-            return
-        policy = self.parse_json(repo, path)
-        if not isinstance(policy, dict):
-            return
-        layers = policy.get('layers', {})
-        if not isinstance(layers, dict):
-            self.add('invalid_layer_policy', repo, path, 'layers must be an object.')
-            return
-        covered = set()
-        for layer, definition in layers.items():
-            if (not isinstance(definition, dict) or any(
-                    not isinstance(definition.get(key, []), list) or
-                    not all(isinstance(v, str) for v in definition.get(key, []))
-                    for key in ('roots', 'mayImport'))):
-                self.add('invalid_layer_policy', repo, path, f'Layer {layer!r} requires string arrays roots/mayImport.')
-                continue
-            for root in definition.get('roots', []):
-                normalized = root.replace('-', '_')
-                covered.add(normalized)
-                if not any((repo.root / 'src' / name).exists() for name in (root, normalized, normalized + '.rs')):
-                    self.add('stale_layer_root', repo, path,
-                             f'Layer {layer} declares {root!r}, but that source module does not exist.', line=line_of(repo.text[path], f'"{root}"'))
-            for target in definition.get('mayImport', []):
-                if target not in layers:
-                    self.add('unknown_layer_dependency', repo, path, f'{layer} mayImport references unknown layer {target!r}.')
-        modules = set()
-        for source in repo.files:
-            parts = Path(source).parts
-            if source.endswith('.rs') and len(parts) > 1 and parts[0] == 'src':
-                modules.add(Path(parts[1]).stem)
-        for module in sorted(modules - covered - {'lib', 'bin', 'main'}):
-            self.add('unmapped_source_module', repo, path, f'Source module {module!r} has no layer assignment.')
-        self.stats['architecture_references'] = sum('architecture/layers.json' in text for p, text in repo.text.items() if p != path)
 
     def scan_tests(self):
         duplicate_bodies = defaultdict(list)

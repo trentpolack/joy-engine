@@ -1,0 +1,44 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Joy Engine UI: the egui layer over the rendered scene, the Joy theme, HUD text, and shared display metrics.
+#
+#   cargo test -p joy-ui
+
+[package]
+name = "joy-ui"
+description = "Joy Engine UI: the egui layer, the Joy theme, HUD text, and display metrics."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+joy-core.workspace = true
+joy-renderer.workspace = true
+egui.workspace = true
+egui-wgpu.workspace = true
+wgpu.workspace = true
+winit.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+egui-winit.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+# The scRGB UI composite test waits on a headless device and its readback.
+pollster.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+web-sys.workspace = true
+web-time.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "platform"
+
+[lints]
+workspace = true

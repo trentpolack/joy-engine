@@ -35,7 +35,7 @@ Read the root README and the affected package's README before making structural 
 
 When this repository is included as a submodule in a larger workspace, treat it as a directory for the requested edits and validation. Do not introduce a separate repository handoff or require Git state changes to complete the task. Leave submodule commits, branches, pushes, merges, tags, and the parent pin to the user unless explicitly requested; this applies to local, IDE, and cloud work.
 
-Keep the engine's public API small and document why new shared behavior belongs in `src/`. For editor- or tool-only changes, avoid touching the engine package or root tooling unless the change cannot be supported cleanly otherwise.
+Keep the engine's public API small and document why new shared behavior belongs in the engine. For editor- or tool-only changes, avoid touching the engine package or root tooling unless the change cannot be supported cleanly otherwise.
 
 In addition:
 - Update the root-level `CHANGELOG.md` whenever a major/minor/patch change is made; don't get too granular, just calling out major changes.
@@ -62,23 +62,25 @@ Keep the unit suite focused on core behavior and costly regressions: document an
 Do not add tests solely for coverage counts, trivial helpers, fixed tuning values, visual styling, source-text patterns, or implementation details already exercised through behavior. Review appearance and game feel with the existing browser checks and captures. Preserve regression cases for data loss, resource leaks, runaway work, and compatibility failures.
 
 ## Workspace structure
-- `src/`, `schemas/`, `assets/`: the `joy-engine` package (public entry points are listed in [README.md](README.md)).
-- `test/`, `scripts/`, `docs/`: the engine's unit suite, tooling, guides and API documentation sources.
-- `editor/`: Joy Editor (`joy-editor`), a separate Rust package with npm build metadata; FORM LAB and PARTICLE LAB live in `editor/tools/`.
-- `Cargo.toml`, `src/**/*.rs`, `test/rust/`: the `joy-engine` Rust crate and its integration tests. Its `rendering` module is the only renderer; tools and FORM content draw through it rather than owning renderers.
+- `crates/`: the engine's system crates (`joy-core`, `joy-render-types`, `joy-environment`, `joy-physics`, `joy-gameplay`, `joy-form`, `joy-fx`, `joy-dcc-gltf`, `joy-project`, `joy-renderer`, `joy-scene`, `joy-app`, `joy-input`, `joy-audio`, `joy-storage`, `joy-ui`, `joy-devtools`, and `joy-authoring`), each with its own tests and fixtures; each crate names its architecture layer in its `Cargo.toml` (`[package.metadata.joy]`).
+- `src/`, `schemas/`, `assets/`: the `joy-engine` facade package (public entry points are listed in [README.md](README.md)), which re-exports the system crates under their module names, plus shared schemas and assets.
+- `tests/`, `scripts/`, `docs/`: the facade's tests and the tooling tests, tooling, guides and API documentation sources. Every package keeps unit tests beside the module they test (`<file>.test.rs`) and its other tests in its own `tests/` folder (`integration/`, `fixtures/`, and `tooling/`); see the [Rust coding standards](docs/rust-coding-standards.md#tests).
+- `editor/`: Joy Editor (`joy-editor`), a separate Rust package with npm build metadata.
+- `tools/`: FORM LAB (`form-lab`) and PARTICLE LAB (`particle-lab`), standalone tool packages that Joy Editor hosts as tabs.
+- `Cargo.toml`, `src/**/*.rs`, `tests/integration/`: the engine workspace, the `joy-engine` facade crate, and its integration tests. `joy-renderer` is the only renderer; tools and FORM content draw through it (by way of `joy-scene`) rather than owning renderers.
 - `examples/*`: engine feature demonstrations. A hosting workspace can publish examples that opt in with `gameSite.category: "example"`; examples remain independent of games and the host.
 
 The engine package never imports the editor, tools or examples. The editor depends on the engine crate and hosts the lab crates. Tests, fixtures and tooling live inside the owning package. Nothing in this repository may depend on a particular game; game-specific fixtures belong in the consuming repository.
 
-Move code into `src/` when it is stable behavior that more than one game, tool, or example needs.
+Move code into the engine (the engine crate that owns it) when it is stable behavior that more than one game, tool, or example needs.
 
 ## Code Standards and AI Agent Rules
 - Follow [**Coding Standards**](docs/coding-standards.md) and [**Rust Coding Standards**](docs/rust-coding-standards.md). Apply them to changed code as well as new code.
 - Always use [JoyCore](https://github.com/trentpolack/JoyCore) as a reference for code organization, commenting style, naming, clarity, and overall readability. Consult relevant examples when implementing or refactoring code, and adapt their principles to this repository's language and browser-native architecture, even when JoyCore uses a different language or engine.
-- Write runtime code in Rust with descriptive names and documented public contracts. Keep browser-specific glue in platform modules.
-- Keep shared numeric and data contracts in `src/core/`, with consumer exports in `src/lib.rs`. Games own their presentation and gameplay contracts.
+- Write runtime code in Rust with descriptive names and documented public contracts. Keep browser-specific glue in the platform crates' `web` modules.
+- Keep shared numeric and data contracts in `joy-core` (`crates/joy-core/`) and GPU-free render data (meshes, materials, and lights) in `joy-render-types` (`crates/joy-render-types/`), with consumer exports in `src/lib.rs`. Games own their presentation and gameplay contracts.
 - New games are Cargo workspace members that depend on `joy-engine`; retain npm metadata and scripts for site orchestration. Node tooling and the VS Code extension may use their appropriate host languages.
-- Keep all common/engine functionality in `src/` and consume it through `joy-engine`; do not add parallel implementations or compatibility packages.
+- Keep all common/engine functionality in the engine crates and consume it through `joy-engine`; do not add parallel implementations or compatibility packages.
 - Keep one primary responsibility per module.
 - Put tuning values and palettes in the owning workspace's configuration modules.
 - Comment intent, context, alternatives (if relevant), constraints, and non-obvious tradeoffs; do not narrate syntax.
@@ -97,7 +99,7 @@ Move code into `src/` when it is stable behavior that more than one game, tool, 
 - Document time units, coordinate spaces, ownership, mutation, and resource lifecycle at shared API boundaries. Make seconds versus milliseconds and per-tick versus per-second values explicit.
 - Shared systems must support independent instances and explicit cleanup. Avoid mutable module-level gameplay state. Owners must release event listeners, timers, audio resources, and GPU resources on disposal.
 - Keep gameplay randomness separate from cosmetic randomness. Support seeded or injected randomness where reproducible simulation is needed so visual changes do not alter gameplay outcomes.
-- Always aim to build out the core engine (`src/`) with functionality that can benefit all current and future projects.
+- Always aim to build out the core engine (`crates/`) with functionality that can benefit all current and future projects.
 - Keep a consistent DPI/resolution for projects; ensure the 3D scene and HUD/UI elements have the proper scale for standard or high DPI displays. A higher resolution/DPI should not materially change how much the player can see.
 - Aim for quality rendering; stylized does not have to mean compromised fidelity or effects.
 - Games and previews render through Joy Engine. Use the shared egui HUD and development interfaces where appropriate; keep web page infrastructure separate from simulation and rendering.

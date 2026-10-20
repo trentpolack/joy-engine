@@ -1,0 +1,561 @@
+{
+ "builtIns": [
+  {
+   "type": "render",
+   "label": "Render",
+   "description": "Draws a primitive shape, or a FORM mesh when an asset is assigned. Entity scale multiplies size.",
+   "category": "Rendering",
+   "fields": [
+    {
+     "name": "asset",
+     "kind": "asset",
+     "label": "FORM mesh",
+     "description": "Replaces the primitive shape with a compiled FORM or FORM LAB mesh.",
+     "assetKinds": [
+      "form",
+      "formlab"
+     ]
+    },
+    {
+     "name": "parameters",
+     "kind": "record",
+     "description": "FORM parameter overrides; omitted parameters use the script defaults."
+    },
+    {
+     "name": "shape",
+     "kind": "choice",
+     "choices": [
+      "box",
+      "sphere"
+     ],
+     "description": "Primitive drawn when no FORM mesh is assigned."
+    },
+    {
+     "name": "size",
+     "kind": "vector3",
+     "unit": "m",
+     "step": 0.25,
+     "default": [
+      1,
+      1,
+      1
+     ],
+     "description": "Full primitive dimensions before entity scale."
+    },
+    {
+     "name": "color",
+     "kind": "color",
+     "min": 0,
+     "description": "Linear RGB tint. Omitted, primitives draw orange and FORM meshes keep their own colors."
+    }
+   ],
+   "presets": [
+    {
+     "id": "render.primitive",
+     "label": "Primitive",
+     "data": {
+      "shape": "box",
+      "size": [
+       1,
+       1,
+       1
+      ],
+      "color": [
+       0.93,
+       0.42,
+       0.22
+      ]
+     }
+    },
+    {
+     "id": "render.mesh",
+     "label": "FORM Mesh",
+     "data": {
+      "asset": "",
+      "parameters": {}
+     }
+    }
+   ]
+  },
+  {
+   "type": "light",
+   "label": "Point Light",
+   "description": "Illuminates the scene from the entity position. Rotation and scale are ignored.",
+   "category": "Lighting",
+   "fields": [
+    {
+     "name": "enabled",
+     "kind": "boolean",
+     "default": true
+    },
+    {
+     "name": "color",
+     "kind": "color",
+     "min": 0,
+     "default": [
+      1,
+      1,
+      1
+     ],
+     "description": "Linear RGB before intensity."
+    },
+    {
+     "name": "intensity",
+     "kind": "number",
+     "unit": "linear",
+     "min": 0,
+     "step": 0.25,
+     "default": 1
+    },
+    {
+     "name": "range",
+     "kind": "number",
+     "unit": "m",
+     "min": 0,
+     "minExclusive": true,
+     "step": 0.5,
+     "default": 10
+    },
+    {
+     "name": "castsShadow",
+     "kind": "boolean",
+     "label": "casts shadow",
+     "default": true
+    }
+   ],
+   "presets": [
+    {
+     "id": "light.point",
+     "label": "Point Light",
+     "data": {
+      "enabled": true,
+      "color": [
+       1,
+       0.88,
+       0.7
+      ],
+      "intensity": 4,
+      "range": 12,
+      "castsShadow": true
+     }
+    }
+   ]
+  },
+  {
+   "type": "effect",
+   "label": "Particle Effect",
+   "description": "Plays a JOYFX effect attached to the entity transform.",
+   "category": "Effects",
+   "fields": [
+    {
+     "name": "asset",
+     "kind": "asset",
+     "label": "JOYFX effect",
+     "required": true,
+     "assetKinds": [
+      "joyfx"
+     ]
+    },
+    {
+     "name": "enabled",
+     "kind": "boolean",
+     "default": true
+    },
+    {
+     "name": "loop",
+     "kind": "boolean",
+     "default": false,
+     "description": "Restart once every particle has expired."
+    },
+    {
+     "name": "seed",
+     "kind": "number",
+     "integer": true,
+     "step": 1,
+     "default": 7777
+    },
+    {
+     "name": "parameters",
+     "kind": "record",
+     "description": "Effect parameter overrides; omitted parameters use the effect defaults."
+    }
+   ],
+   "presets": [
+    {
+     "id": "effect.particles",
+     "label": "JOYFX Effect",
+     "data": {
+      "asset": "",
+      "enabled": true,
+      "loop": true,
+      "seed": 7777,
+      "parameters": {}
+     }
+    }
+   ]
+  }
+ ],
+ "presets": [
+  {
+   "id": "render.primitive",
+   "created": {
+    "type": "render",
+    "data": {
+     "shape": "box",
+     "size": [
+      1,
+      1,
+      1
+     ],
+     "color": [
+      0.93,
+      0.42,
+      0.22
+     ]
+    }
+   }
+  },
+  {
+   "id": "render.mesh",
+   "created": {
+    "type": "render",
+    "data": {
+     "asset": "",
+     "parameters": {}
+    }
+   }
+  },
+  {
+   "id": "light.point",
+   "created": {
+    "type": "light",
+    "data": {
+     "enabled": true,
+     "color": [
+      1,
+      0.88,
+      0.7
+     ],
+     "intensity": 4,
+     "range": 12,
+     "castsShadow": true
+    }
+   }
+  },
+  {
+   "id": "effect.particles",
+   "created": {
+    "type": "effect",
+    "data": {
+     "asset": "",
+     "enabled": true,
+     "loop": true,
+     "seed": 7777,
+     "parameters": {}
+    }
+   }
+  }
+ ],
+ "validationCases": [
+  {
+   "type": "light",
+   "data": {
+    "color": [
+     1,
+     -0.5,
+     1
+    ],
+    "intensity": "bright",
+    "range": 0,
+    "castsShadow": true,
+    "flicker": 3
+   },
+   "issues": [
+    {
+     "component": "light",
+     "field": "color",
+     "message": "Color values must be at least 0."
+    },
+    {
+     "component": "light",
+     "field": "intensity",
+     "message": "Intensity must be a finite number."
+    },
+    {
+     "component": "light",
+     "field": "range",
+     "message": "Range must be greater than 0."
+    }
+   ]
+  },
+  {
+   "type": "light",
+   "data": {
+    "enabled": "yes",
+    "color": [
+     1,
+     1
+    ],
+    "intensity": -1,
+    "range": -2,
+    "castsShadow": 1
+   },
+   "issues": [
+    {
+     "component": "light",
+     "field": "enabled",
+     "message": "Enabled must be true or false."
+    },
+    {
+     "component": "light",
+     "field": "color",
+     "message": "Color must contain three finite numbers."
+    },
+    {
+     "component": "light",
+     "field": "intensity",
+     "message": "Intensity must be at least 0."
+    },
+    {
+     "component": "light",
+     "field": "range",
+     "message": "Range must be greater than 0."
+    },
+    {
+     "component": "light",
+     "field": "castsShadow",
+     "message": "Casts shadow must be true or false."
+    }
+   ]
+  },
+  {
+   "type": "effect",
+   "data": {
+    "asset": "assets/fire.form"
+   },
+   "issues": [
+    {
+     "component": "effect",
+     "field": "asset",
+     "message": "JOYFX effect must reference a .joyfx asset."
+    }
+   ]
+  },
+  {
+   "type": "effect",
+   "data": {
+    "asset": ""
+   },
+   "issues": [
+    {
+     "component": "effect",
+     "field": "asset",
+     "message": "JOYFX effect needs an asset."
+    }
+   ]
+  },
+  {
+   "type": "effect",
+   "data": {
+    "asset": 3,
+    "seed": 1.5,
+    "loop": "no",
+    "parameters": []
+   },
+   "issues": [
+    {
+     "component": "effect",
+     "field": "asset",
+     "message": "JOYFX effect must be an asset path."
+    },
+    {
+     "component": "effect",
+     "field": "loop",
+     "message": "Loop must be true or false."
+    },
+    {
+     "component": "effect",
+     "field": "seed",
+     "message": "Seed must be a whole number."
+    },
+    {
+     "component": "effect",
+     "field": "parameters",
+     "message": "Parameters must be a record."
+    }
+   ]
+  },
+  {
+   "type": "effect",
+   "data": {
+    "asset": "assets/fire.joyfx",
+    "seed": 12
+   },
+   "issues": []
+  },
+  {
+   "type": "render",
+   "data": {
+    "asset": "assets/kart.png",
+    "parameters": 4,
+    "shape": "plane",
+    "size": [
+     1,
+     2,
+     -3
+    ],
+    "color": [
+     0.5,
+     0.5,
+     -0.1
+    ]
+   },
+   "issues": [
+    {
+     "component": "render",
+     "field": "asset",
+     "message": "FORM mesh must reference a .form or .formlab asset."
+    },
+    {
+     "component": "render",
+     "field": "parameters",
+     "message": "Parameters must be a record."
+    },
+    {
+     "component": "render",
+     "field": "shape",
+     "message": "Shape must be one of box, sphere."
+    },
+    {
+     "component": "render",
+     "field": "color",
+     "message": "Color values must be at least 0."
+    }
+   ]
+  },
+  {
+   "type": "render",
+   "data": {
+    "asset": "",
+    "shape": "sphere",
+    "size": [
+     1,
+     1,
+     1,
+     1
+    ]
+   },
+   "issues": [
+    {
+     "component": "render",
+     "field": "size",
+     "message": "Size must contain three finite numbers."
+    }
+   ]
+  },
+  {
+   "type": "render",
+   "data": {
+    "asset": "assets/kart.formlab"
+   },
+   "issues": []
+  },
+  {
+   "type": "render",
+   "data": "not a record",
+   "issues": [
+    {
+     "component": "render",
+     "field": null,
+     "message": "Render must be a record."
+    }
+   ]
+  },
+  {
+   "type": "render",
+   "data": [
+    1,
+    2
+   ],
+   "issues": [
+    {
+     "component": "render",
+     "field": null,
+     "message": "Render must be a record."
+    }
+   ]
+  }
+ ],
+ "entityCases": [
+  {
+   "entity": {
+    "id": "kart",
+    "name": "kart",
+    "type": "entity",
+    "tags": [],
+    "transform": {
+     "position": [
+      0,
+      1,
+      0
+     ],
+     "rotation": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ]
+    },
+    "components": {
+     "vehicle": {
+      "wheels": [
+       {
+        "position": [
+         0,
+         0,
+         0
+        ]
+       }
+      ]
+     },
+     "physics": {
+      "shape": "box"
+     },
+     "light": {
+      "range": 0
+     }
+    }
+   },
+   "issues": [
+    {
+     "component": "light",
+     "field": "range",
+     "message": "Range must be greater than 0."
+    }
+   ]
+  }
+ ],
+ "fieldCases": [
+  {
+   "type": "render",
+   "path": [
+    "parameters",
+    "height"
+   ],
+   "field": null,
+   "unit": null
+  },
+  {
+   "type": "render",
+   "path": [
+    "size"
+   ],
+   "field": "size",
+   "unit": "m"
+  }
+ ]
+}

@@ -1,7 +1,7 @@
 # Terrain Example
 Dragon Pit demonstrates resident continuous-LOD terrain through the Rust engine. From JoyGames run `npm run dev:example:terrain` for a native window or `npm run build:example:terrain` for browser output in this workspace's `dist/`. The site route is `/examples/terrain/`. From the engine root use `cargo run --example terrain`.
 
-Primary drag orbits, wheel zooms, and right-button flight uses WASD and Q/E. Command or Alt plus wheel pans; G selects a grazing view and O restores the overview. CONFIG provides tolerance, LOD visualization, a camera tour, stable detail, and a switch between standalone terrain and the scene renderer. Browser query `backend=webgpu` or `backend=webgl` selects the backend.
+Primary drag orbits, wheel zooms, and right-button flight uses WASD and Q/E. Command or Alt plus wheel pans; G selects a grazing view and O restores the overview. CONFIG provides tolerance, LOD visualization, a camera tour, and stable detail. The landscape draws through the engine renderer as a scene terrain instance, lit, shadowed, and under the sky. Browser query `backend=webgpu` or `backend=webgl` selects the backend.
 
 ## Author to runtime
 Run these offline conversion commands from the JoyGames root, which owns the terrain conversion scripts.
@@ -12,7 +12,7 @@ The [source EXR](https://github.com/trentpolack/worldcreator/blob/main/dragon_pi
 python3 -m venv /tmp/joy-terrain-python
 /tmp/joy-terrain-python/bin/pip install OpenEXR==3.5.1 numpy==2.5.3
 curl -L --fail https://media.githubusercontent.com/media/trentpolack/worldcreator/main/dragon_pit_01/HeightMap.exr -o /tmp/dragon-pit.exr
-/tmp/joy-terrain-python/bin/python scripts/assets/compile-terrain.py /tmp/dragon-pit.exr joy-engine/examples/terrain/site/public/dragon-pit --channel Y --size 1025 --tile-cells 64 --extent 2048 2048 --vertical-scale 1000 --source-url https://github.com/trentpolack/worldcreator/blob/main/dragon_pit_01/HeightMap.exr
+/tmp/joy-terrain-python/bin/python scripts/assets/compile-terrain.py /tmp/dragon-pit.exr joy-engine/examples/terrain/assets/dragon-pit --channel Y --size 1025 --tile-cells 64 --extent 2048 2048 --vertical-scale 1000 --source-url https://github.com/trentpolack/worldcreator/blob/main/dragon_pit_01/HeightMap.exr
 /tmp/joy-terrain-python/bin/python scripts/assets/test-terrain.py
 ```
 
@@ -23,7 +23,7 @@ Demo dimensions are explicit example units: X/Z extent 2048 × 2048, Y = source 
 ## Runtime Contract
 Version 1 uses a square power-of-two-plus-one grid, power-of-two leaf size, row-major uint16 little-endian height data, explicit scales, global quantization, and precomputed patch bounds/errors. `parse_terrain` decodes loaded bytes; native `load_terrain` reads files. `sample_terrain` returns the finest gameplay surface independently of render LOD.
 
-The indexed grid and heights remain resident. Compute-capable backends select LOD and indirect draws on the GPU; GL backends apply the same policy on the CPU. Morphing and reconciled edges keep neighboring patches connected. The scene path participates in lighting, shadows, and scene attachments. The standalone pass provides diagnostic diffuse rendering. See [terrain implementation](../../docs/rust-terrain.md).
+The indexed grid and heights remain resident. Compute-capable backends select LOD and indirect draws on the GPU; GL backends apply the same policy on the CPU. Morphing and reconciled edges keep neighboring patches connected. Terrain participates in lighting, shadows, the depth pre-pass, and scene attachments like any other scene content, and its LOD and grid diagnostics are instance settings. See [terrain implementation](../../docs/rust-terrain.md).
 
 ## Boundaries and Validation
 This example does not create vehicle collision, roads, streaming, or terrain editing. Any future collision/road adapter must use the same authored coordinates and finest-height sampling. Re-export bounds/errors when height data changes.
