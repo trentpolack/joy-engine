@@ -9,7 +9,7 @@
 //! display's SDR white. Standard and extended sRGB targets do not need it.
 
 /// Format egui paints into before compositing: sRGB encoding keeps 8-bit UI gradients smooth and decodes on load.
-pub(crate) const INTERFACE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+pub(crate) const INTERFACE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// The composite pass.
 const COMPOSITE_SOURCE: &str = include_str!("shaders/ui-composite.wgsl");

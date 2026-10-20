@@ -266,6 +266,7 @@ pub(crate) fn layer_fits_gbuffer(layer: &joy_render_types::SurfaceLayer) -> bool
         let untinted = [tint_red, tint_green, tint_blue].iter().all(|channel| (channel - 1.0).abs() < TOLERANCE);
         untinted && (coat.f0 - joy_render_types::material::DIELECTRIC_F0).abs() < TOLERANCE
     });
+
     let lobes = usize::from(haze) + usize::from(fuzz) + usize::from(coat.is_some());
     gray_f90 && !film && plain_coat && lobes <= 1
 }
@@ -281,18 +282,16 @@ fn pack_layer(layer: &joy_render_types::SurfaceLayer, material: &MaterialAsset) 
         roughness: 0.5,
         amount: 0.0,
     });
-    let coat = layer.coat.map_or(
-        joy_render_types::Coat {
-            weight: 0.0,
-            ..joy_render_types::Coat::default()
-        },
-        |coat| coat,
-    );
+    let coat = layer.coat.unwrap_or(joy_render_types::Coat {
+        weight: 0.0,
+        ..joy_render_types::Coat::default()
+    });
     let film = layer.thin_film.unwrap_or(joy_render_types::ThinFilm {
         thickness: 0.0,
         ior: 1.3,
         weight: 0.0,
     });
+
     let flag = |binding: &str| if material.texture(binding).is_some() { 1.0 } else { 0.0 };
     [
         layer.base_color.to_array(),

@@ -126,7 +126,11 @@ fn render(gpu: &GpuContext, light: f32, config: &PostProcessSettings) -> Vec<f32
     };
     renderer.render(target.view(), &frame).expect("frame renders");
     let pixels = target.read_rgba(gpu).expect("readback");
-    pixels.chunks_exact(4).map(|pixel| srgb_to_linear(f64::from(pixel[0]) / 255.0) as f32).collect()
+    let (rgba_pixels, _) = pixels.as_chunks::<4>();
+    rgba_pixels
+        .iter()
+        .map(|pixel| srgb_to_linear(f64::from(pixel[0]) / 255.0) as f32)
+        .collect()
 }
 
 /// Linear light along the patch's row at `distance` pixels right of its edge.

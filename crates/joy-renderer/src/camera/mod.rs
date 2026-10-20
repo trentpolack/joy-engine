@@ -107,11 +107,22 @@ impl Default for OrbitCamera {
 impl OrbitCamera {
     /// World-space basis vectors and eye position for the current orbit.
     pub fn basis(&self) -> CameraBasis {
-        let backward =
-            Vec3::new(self.pitch.cos() * self.yaw.sin(), self.pitch.sin(), self.pitch.cos() * self.yaw.cos());
+        let backward = Vec3::new(
+            self.pitch.cos() * self.yaw.sin(),
+            self.pitch.sin(),
+            self.pitch.cos() * self.yaw.cos()
+        );
+
         let right = Vec3::new(self.yaw.cos(), 0.0, -self.yaw.sin());
         let up = backward.cross(right);
-        CameraBasis { backward, right, up, eye: self.target + (backward * self.distance) }
+
+        // The eye is `distance` units along the backward vector from the target.
+        CameraBasis {
+            backward,
+            right,
+            up,
+            eye: self.target + (backward * self.distance)
+        }
     }
 
     /// Near clip distance in world units.

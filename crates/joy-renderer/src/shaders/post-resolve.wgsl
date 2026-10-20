@@ -24,8 +24,7 @@ struct Resolve {
   // XY scene size in pixels, ZW its reciprocal.
   scene: vec4f,
   // X dither amplitude in encoded units (one code value on eight-bit targets, zero otherwise), Y 1 when the display
-  // transform does not end at SDR white (ACES 2.0 renders for the display's peak, and no transform passes light as it
-  // is), so nothing extends into the headroom; ZW unused.
+  // transform does not end at SDR white (no transform passes light as it is), so nothing extends into the headroom; ZW unused.
   encoding: vec4f,
 };
 
@@ -34,7 +33,6 @@ struct Resolve {
 @group(0) @binding(2) var bloomTexture: texture_2d<f32>;
 @group(0) @binding(3) var linearSampler: sampler;
 @group(0) @binding(4) var exposureTexture: texture_2d<f32>;
-@group(0) @binding(5) var<uniform> aces: AcesParameters;
 
 struct ResolveVarying {
   @builtin(position) position: vec4f,
@@ -169,7 +167,7 @@ fn interleavedGradientNoise(pixel: vec2f) -> f32 {
   }
   color = color*vignette(input.coordinate);
 
-  // Display transform. Filmic and AgX end at SDR white and extend into the headroom; ACES 2.0 and none do not.
+  // Display transform. Filmic and AgX end at SDR white and extend into the headroom; no tonemapping does not.
   let headroom = resolve.output.x;
   color = toneMap(color, resolve.display.y, resolve.display.z, resolve.filmic);
   if(resolve.encoding.y < 0.5) {
@@ -184,5 +182,6 @@ fn interleavedGradientNoise(pixel: vec2f) -> f32 {
   if(resolve.output.z > 0.5) {
     return vec4f(decodeSrgb(encoded)*resolve.output.w, 1.0);
   }
+
   return vec4f(encoded, 1.0);
 }

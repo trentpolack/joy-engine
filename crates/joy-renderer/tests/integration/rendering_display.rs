@@ -5,9 +5,8 @@
 //! triangle renderer pass through the display transform into a half-float target, as an HDR surface would receive
 //! them, and are read back as floats. Normally lit content must match standard output on every encoding, highlights
 //! must rise into the display's headroom and never beyond it, extended linear (scRGB) output must carry the same image
-//! as light scaled to the display's SDR white, ACES 2.0 must match OpenColorIO's reference, and the filmic curve must
-//! keep middle gray. Skips without a GPU adapter or an HDR scene format; native only (browsers cannot block on
-//! readback).
+//! as light scaled to the display's SDR white, and the filmic curve must keep middle gray. Skips without a 
+//! GPU adapter or an HDR scene format; native only (browsers cannot block on readback).
 #![cfg(not(target_arch = "wasm32"))]
 
 use joy_core::LinearColor;
@@ -70,15 +69,6 @@ const BAND_WIDTH: u32 = 16;
 /// Gray scene light per band: a midtone, SDR white, a bright highlight, and a light far past any tone mapper's
 /// shoulder. Exact in half precision.
 const BANDS: [[f32; 3]; 4] = [[0.18; 3], [1.0; 3], [8.0; 3], [256.0; 3]];
-
-/// Linear Rec.709 scene colors and the display-linear Rec.709 output OpenColorIO 2.6 computes for them with its
-/// built-in "ACES 2.0 SDR 100 nits Rec.709" output transform (the same references `tone_mapping/aces2.rs` tests).
-const ACES_REFERENCE: [([f32; 3], [f32; 3]); 4] = [
-    ([0.18, 0.18, 0.18], [0.0999991, 0.0999994, 0.0999993]),
-    ([1.0, 0.0, 0.0], [0.5540078, 0.0088254, 0.0033028]),
-    ([0.05, 0.2, 0.8], [0.0255990, 0.1119426, 0.4629686]),
-    ([10.0, 0.5, 0.1], [1.0, 0.4766966, 0.3737049]),
-];
 
 /// Headroom and SDR white level of the HDR displays under test.
 const HEADROOM: f32 = 4.0;
@@ -218,12 +208,19 @@ fn read_half_floats(gpu: &GpuContext, texture: &wgpu::Texture) -> Vec<f32> {
         },
         wgpu::Extent3d { width: WIDTH, height: HEIGHT, depth_or_array_layers: 1 },
     );
+
     gpu.queue().submit([encoder.finish()]);
+
     let slice = buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |result| result.expect("readback maps"));
     gpu.device().poll(wgpu::PollType::wait_indefinitely()).expect("readback completes");
+
     let mapped = slice.get_mapped_range().expect("mapped range");
-    mapped.chunks_exact(2).map(|bits| half_to_f32(u16::from_le_bytes([bits[0], bits[1]]))).collect()
+    let (mapped_range, _) = mapped.as_chunks::<2>();
+    mapped_range
+        .iter()
+        .map(|bits| half_to_f32(u16::from_le_bytes([bits[0], bits[1]])))
+        .collect()
 }
 
 /// Decode an IEEE 754 half-precision value.
@@ -289,32 +286,6 @@ fn hdr_output_keeps_midtones_and_lifts_highlights_into_the_headroom() {
     );
     assert!((untouched[1] - 1.0).abs() <= ENCODED_TOLERANCE, "SDR white {untouched:?}");
     assert!((untouched[2] - peak).abs() <= 0.01 && (untouched[3] - peak).abs() <= 0.01, "clamped {untouched:?}");
-}
-
-#[test]
-fn aces_matches_opencolorio_and_renders_for_the_display_peak() {
-    let Some(gpu) = gpu() else {
-        return;
-    };
-    let aces = settings(ToneMapper::Aces);
-
-    // Standard output, read as linear light: within half a percent of the reference, plus half-float rounding.
-    let colors = ACES_REFERENCE.map(|(input, _)| input);
-    let standard = DisplayOutput::extended(OutputEncoding::ExtendedLinear, 1.0, 1.0);
-    let rendered = extended_colors(&gpu, &aces, standard, &colors);
-    for ((input, expected), output) in ACES_REFERENCE.iter().zip(rendered) {
-        for (channel, (value, reference)) in output.iter().zip(expected).enumerate() {
-            let tolerance = (reference * 0.005) + 2e-3;
-            assert!((value - reference).abs() <= tolerance, "{input:?} channel {channel}: {output:?} vs {expected:?}");
-        }
-    }
-
-    // With headroom, ACES renders for the brighter peak itself: brighter midtones and highlights within the headroom.
-    let hdr = extended_bands(&gpu, &aces, DisplayOutput::extended(OutputEncoding::ExtendedLinear, HEADROOM, 1.0));
-    let sdr = extended_bands(&gpu, &aces, standard);
-    assert!(hdr[0] > sdr[0] * 1.05, "midtone rises with the peak: {hdr:?} vs {sdr:?}");
-    assert!(hdr[3] > 2.0 && hdr[3] <= HEADROOM * 1.001, "highlights use the headroom: {hdr:?}");
-    assert!(hdr.windows(2).all(|pair| pair[0] < pair[1]), "brighter light stays brighter: {hdr:?}");
 }
 
 #[test]

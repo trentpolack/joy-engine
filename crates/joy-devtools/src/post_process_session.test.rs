@@ -89,7 +89,7 @@ fn numbers_compare_by_value_and_choices_set_spellings() {
     // `2` and `2.0` are the same edit; it neither dirties the draft nor adds history.
     session.set_value("exposure", PostProcessValue::Number(2.0)).unwrap();
     assert!(!session.dirty() && !session.can_undo());
-    session.set_value("toneMapper", PostProcessValue::Choice("aces".to_owned())).unwrap();
-    assert_eq!(session.draft().get("toneMapper"), Some(&json!("aces")));
+    session.set_value("toneMapper", PostProcessValue::Choice("filmic".to_owned())).unwrap();
+    assert_eq!(session.draft().get("toneMapper"), Some(&json!("filmic")));
     assert!(session.set_value("glow", PostProcessValue::Number(1.0)).is_err());
 }

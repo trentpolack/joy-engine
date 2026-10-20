@@ -129,7 +129,6 @@ fn engine_presets_validate_round_trip_and_read() {
 fn post_process_inspector_validation_agrees_with_the_volume_reader() {
     let catalog = engine_component_catalog();
     let records = [
-        json!({"exposure": 2, "toneMapper": "aces"}),
         json!({"exposure": -1}),
         json!({"bloomKnee": 0}),
         json!({"vignetteRadius": 1.5}),

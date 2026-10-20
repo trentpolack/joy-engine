@@ -62,7 +62,7 @@ fn graph_shape_follows_only_sizes_and_pyramid_depth() {
         bloom_scatter: 0.1,
         bloom_radius: 0.06,
         exposure: 1.8,
-        tone_mapper: ToneMapper::Aces,
+        tone_mapper: ToneMapper::Filmic,
         vignette_strength: 0.5,
         ..base.clone()
     };
@@ -97,16 +97,12 @@ fn graph_shape_follows_only_sizes_and_pyramid_depth() {
 }
 
 #[test]
-fn aces_tables_rebuild_in_headroom_steps_and_targets_dither_by_their_precision() {
-    assert_eq!(aces_peak_luminance(1.0), 100.0);
-    assert_eq!(aces_peak_luminance(0.5), 100.0);
-    assert_eq!(aces_peak_luminance(3.21), 320.0);
+fn target_dither_by_their_precision() {
     assert_eq!(dither_amplitude(wgpu::TextureFormat::Bgra8UnormSrgb), 1.0 / 255.0);
     assert_eq!(dither_amplitude(wgpu::TextureFormat::Rgba16Float), 0.0);
 }
 
-/// Every bloom stage and the resolve validate and translate to WebGL 2 GLSL without extensions, and the resolve's ACES
-/// parameters fit WebGL 2's smallest uniform block.
+/// Every bloom stage and the resolve validate and translate to WebGL 2 GLSL without extensions.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn bloom_and_resolve_translate_for_webgl() {
@@ -138,5 +134,4 @@ fn bloom_and_resolve_translate_for_webgl() {
         assert!(!output.contains("#extension"), "{entry_point} needs a GLSL extension");
     }
     assert_eq!(std::mem::size_of::<ResolveUniforms>(), 96);
-    assert!(std::mem::size_of::<AcesUniforms>() <= 16384);
 }

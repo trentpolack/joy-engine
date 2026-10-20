@@ -5,7 +5,7 @@
 //!
 //! After the scene and its effects, bloom builds a mip pyramid from the exposed scene (prefilter, downsamples, then
 //! upsamples that blend each wider level into the next finer one), and the resolve writes the presentation target:
-//! exposure, bloom, vignette, the display transform (filmic, AgX, ACES 2.0, or none), HDR headroom, and the encoding
+//! exposure, bloom, vignette, the display transform (filmic, AgX, or none), HDR headroom, and the encoding
 //! the target expects. See `post-bloom.wgsl` and `post-resolve.wgsl`.
 //!
 //! The scene targets (color, depth, and bloom) are the scene size, which the renderer's render scale can set below the
@@ -42,10 +42,6 @@ use crate::post_process::{
     PostProcessSettings,
     ToneMapper,
 };
-use crate::tone_mapping::aces2::{
-    Aces2,
-    AcesUniforms,
-};
 
 /// Most bloom pyramid levels; the coarsest level of a long reach is then 1/256 of the scene.
 const MAX_BLOOM_LEVELS: usize = 8;
@@ -55,9 +51,6 @@ const MIN_BLOOM_LEVEL_SIZE: u32 = 2;
 
 /// Format of the exposure texture adaptive exposure writes: one texel, multiplier in red.
 pub(crate) const EXPOSURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
-
-/// Display headroom steps between ACES 2.0 table rebuilds: one twentieth of SDR white.
-const ACES_HEADROOM_STEPS: f32 = 20.0;
 
 /// One as an IEEE half float, for the exposure texture's reset.
 const HALF_ONE: u16 = 0x3c00;
@@ -289,11 +282,9 @@ pub(crate) struct PostProcessor {
     linear_sampler: wgpu::Sampler,
     black: Target,
 
-    // Exposure the resolve and bloom read, and the ACES 2.0 tables for the current display peak.
+    // Exposure the resolve and bloom read.
     exposure: wgpu::Texture,
     exposure_view: wgpu::TextureView,
-    aces_buffer: wgpu::Buffer,
-    aces_peak: Option<f32>,
 
     // Configuration. The resolve writes the presentation target's signal; an sRGB view encodes it itself.
     scene_format: wgpu::TextureFormat,
@@ -316,7 +307,12 @@ impl PostProcessor {
     ) -> Self {
         let bloom_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("post bloom"),
-            entries: &[uniform_entry(0), texture_entry(1), sampler_entry(2), texture_entry(3)],
+            entries: &[
+                uniform_entry(0),
+                texture_entry(1),
+                sampler_entry(2),
+                texture_entry(3)
+            ],
         });
         let resolve_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("post resolve"),
@@ -325,8 +321,7 @@ impl PostProcessor {
                 texture_entry(1),
                 texture_entry(2),
                 sampler_entry(3),
-                texture_entry(4),
-                uniform_entry(5),
+                texture_entry(4)
             ],
         });
 
@@ -381,12 +376,6 @@ impl PostProcessor {
             view_formats: &[],
         });
         let exposure_view = exposure.create_view(&wgpu::TextureViewDescriptor::default());
-        let aces_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("aces parameters"),
-            size: std::mem::size_of::<AcesUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
 
         let processor = Self {
             bloom_layout,
@@ -399,8 +388,6 @@ impl PostProcessor {
             black,
             exposure,
             exposure_view,
-            aces_buffer,
-            aces_peak: None,
             scene_format,
             output_format,
             display: DisplayOutput::STANDARD,
@@ -485,7 +472,6 @@ impl PostProcessor {
         if self.graph.as_ref().map(|graph| graph.key) != Some(key) {
             self.graph = Some(self.build_graph(device, key));
         }
-        self.write_aces_tables(queue);
         self.write_uniforms(queue);
     }
 
@@ -572,20 +558,6 @@ impl PostProcessor {
         }
     }
 
-    /// Rebuild the ACES 2.0 tables when the display's peak moves a step, only while ACES 2.0 is selected.
-    fn write_aces_tables(&mut self, queue: &wgpu::Queue) {
-        if self.config.tone_mapper != ToneMapper::Aces {
-            return;
-        }
-        let peak = aces_peak_luminance(self.display.effective_headroom());
-        if self.aces_peak == Some(peak) {
-            return;
-        }
-        let uniforms = Aces2::rec709(peak).uniforms();
-        queue.write_buffer(&self.aces_buffer, 0, bytemuck::bytes_of(&uniforms));
-        self.aces_peak = Some(peak);
-    }
-
     /// Upload uniforms derived from the current settings and sizes.
     fn write_uniforms(&mut self, queue: &wgpu::Queue) {
         let graph = self.graph.as_mut().expect("graph exists after prepare");
@@ -615,34 +587,53 @@ impl PostProcessor {
             ToneMapper::None => 0.0,
             ToneMapper::Filmic => 1.0,
             ToneMapper::Agx => 2.0,
-            ToneMapper::Aces => 3.0,
         };
         let look = if config.agx_look == AgxLook::Punchy { 1.0 } else { 0.0 };
         let bloom_strength = if levels > 0 { config.bloom_strength } else { 0.0 };
         let (output_width, output_height) = (graph.key.output_width as f32, graph.key.output_height as f32);
         let (scene_width, scene_height) = (graph.key.width as f32, graph.key.height as f32);
+
         // Linear targets: sRGB-format views encode on write, and extended linear (scRGB) surfaces take linear light.
         let linear_target = self.output_format.is_srgb() || self.display.encoding == OutputEncoding::ExtendedLinear;
-        // ACES 2.0 renders for the display's peak, and untone-mapped light shows as it is; only the curves that end at
-        // SDR white extend into the headroom.
-        let native_peak = matches!(config.tone_mapper, ToneMapper::Aces | ToneMapper::None);
+
+        // Untone-mapped light shows as it is; only the curves that end at SDR white extend into the headroom.
+        let native_peak = matches!(config.tone_mapper, ToneMapper::None);
         let resolve = ResolveUniforms {
-            display: [config.exposure, tone_mapper, look, bloom_strength],
+            display: [
+                config.exposure,
+                tone_mapper,
+                look,
+                bloom_strength
+            ],
             filmic: [
                 config.filmic_contrast,
                 config.filmic_linear_start,
                 config.filmic_linear_length,
                 config.filmic_toe,
             ],
-            vignette: [config.vignette_strength, config.vignette_radius.min(0.999), output_width / output_height, 0.0],
+            vignette: [
+                config.vignette_strength,
+                config.vignette_radius.min(0.999),
+                output_width / output_height, 0.0
+            ],
             output: [
                 self.display.effective_headroom(),
                 if graph.key.upscales() { 1.0 } else { 0.0 },
                 if linear_target { 1.0 } else { 0.0 },
                 self.display.effective_sdr_white_level(),
             ],
-            scene: [scene_width, scene_height, 1.0 / scene_width, 1.0 / scene_height],
-            encoding: [dither_amplitude(self.output_format), if native_peak { 1.0 } else { 0.0 }, 0.0, 0.0],
+            scene: [
+                scene_width,
+                scene_height,
+                1.0 / scene_width,
+                1.0 / scene_height
+            ],
+            encoding: [
+                dither_amplitude(self.output_format),
+                if native_peak { 1.0 } else { 0.0 },
+                0.0,
+                0.0
+            ],
         };
         queue.write_buffer(&graph.resolve.uniforms, 0, bytemuck::bytes_of(&resolve));
     }
@@ -709,21 +700,10 @@ impl PostProcessor {
                     binding: 4,
                     resource: wgpu::BindingResource::TextureView(&self.exposure_view),
                 },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: self.aces_buffer.as_entire_binding(),
-                },
             ],
         });
         Pass { bind_group, uniforms }
     }
-}
-
-/// The ACES 2.0 peak, in nits, for a display headroom: SDR white is 100 nits, and the headroom is quantized so small
-/// drifts in a display's reported headroom do not rebuild the tables.
-fn aces_peak_luminance(headroom: f32) -> f32 {
-    let steps = (headroom.max(1.0) * ACES_HEADROOM_STEPS).round();
-    100.0 * steps / ACES_HEADROOM_STEPS
 }
 
 /// One code value of an integer target, in encoded units; float targets need no dither.

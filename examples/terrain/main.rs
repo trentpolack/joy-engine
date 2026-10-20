@@ -370,10 +370,25 @@ fn options() -> ShellOptions {
         .action(OVERVIEW_ACTION, [InputBinding::key(key::KEY_O)]);
 
     // Shadows cover the whole 2048-unit landscape; distances are world units.
-    let shadows = ShadowOptions { shadow_distance: 2500.0, normal_bias: 0.5, ..ShadowOptions::default() };
-    let renderer = RendererOptions { shadows: Some(shadows), ..RendererOptions::default() };
+    let shadows = ShadowOptions {
+        shadow_distance: 2500.0,
+        normal_bias: 0.5,
+        ..ShadowOptions::default()
+    };
+
+    let renderer = RendererOptions {
+        shadows: Some(shadows),
+        atmosphere: true,
+        ..RendererOptions::default()
+    };
+
     // The default canvas ID matches `scripts/rust/build-web.mjs` pages built without `--canvas`.
-    ShellOptions { title: "Joy Terrain Lab".into(), input, renderer, ..Default::default() }
+    ShellOptions {
+        title: "Joy Terrain Lab".into(),
+        input,
+        renderer,
+        ..Default::default()
+    }
 }
 
 fn start() {

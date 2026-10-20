@@ -42,7 +42,7 @@ fn authored_level() -> LevelData {
             "cave",
             [10.0, 0.0, 0.0],
             [2.0, 2.0, 2.0],
-            json!({"priority": 1, "halfExtents": [1, 1, 1], "blendDistance": 1, "exposure": 4, "toneMapper": "aces"})
+            json!({"priority": 1, "halfExtents": [1, 1, 1], "blendDistance": 1, "exposure": 4, "toneMapper": "filmic"})
         ),
         volume("off", [0.0, 0.0, 0.0], [1.0, 1.0, 1.0], json!({"enabled": false, "shape": "sphere", "radius": 5, "exposure": 0.5})),
         {"id": "crate", "components": {}}
@@ -67,12 +67,12 @@ fn bounded_volumes_cover_their_scaled_shape_and_fade_in_over_the_blend_distance(
     // The entity's scale doubles the box to two meters a side; its center is fully inside.
     let inside = volumes.resolve(Vec3::new(10.0, 0.0, 0.0));
     assert_exposure(&inside, 4.0);
-    assert_eq!(inside.tone_mapper, ToneMapper::Aces);
+    assert_eq!(inside.tone_mapper, ToneMapper::Filmic);
 
     // Half a meter inside the surface is half coverage: exposure blends in log space and choices switch at half.
     let edge = volumes.resolve(Vec3::new(11.5, 0.0, 0.0));
     assert_exposure(&edge, 2.0_f32 * std::f32::consts::SQRT_2);
-    assert_eq!(edge.tone_mapper, ToneMapper::Aces);
+    assert_eq!(edge.tone_mapper, ToneMapper::Filmic);
     let contributions = volumes.contributions(Vec3::new(11.5, 0.0, 0.0));
     assert_eq!(contributions, [("global", 1.0), ("off", 0.0), ("cave", 0.5)]);
 

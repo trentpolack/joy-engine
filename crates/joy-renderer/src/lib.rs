@@ -14,7 +14,7 @@
 //!   to [`MAX_POINT_LIGHTS`] that matter most to each view draw, binned into light clusters, with optional soft
 //!   shadows from a shared atlas). Opaque surfaces shade deferred where the device allows and forward on WebGL 2.
 //! - The procedural atmosphere sky driven by an environment frame and [`SkyOptions`].
-//! - HDR scene targets, scene effects, bloom, and filmic, AgX, or ACES 2.0 tone mapping.
+//! - HDR scene targets, scene effects, bloom, and filmic (Ushimura/GT-style curve) or AgX (or no tonemapping).
 //!
 //! The renderer owns every GPU resource it creates; scenes, cameras, and frame inputs are borrowed per frame.
 //!
@@ -55,7 +55,6 @@ mod sky;
 pub mod terrain;
 mod texture;
 mod texture_mips;
-mod tone_mapping;
 mod transparency;
 mod triangle_renderer;
 

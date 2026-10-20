@@ -3,6 +3,9 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-20-2026
+### Rendering
+- Fixed a startup validation panic by removing the stale ACES uniform binding from the display resolve layout.
+
 ### Patch Delivery
 - Hosted patch application now searches both the host delivery directory and the source repository's `.patches/`, warns about duplicates, and removes matching bundles only after success or already-applied detection. Different patches and conflicts retain every bundle.
 

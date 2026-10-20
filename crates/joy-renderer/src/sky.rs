@@ -59,7 +59,13 @@ pub struct CloudOptions {
 
 impl Default for CloudOptions {
     fn default() -> Self {
-        Self { coverage: 0.45, density: 0.7, altitude: 1800.0, thickness: 700.0, shadow_strength: 0.45 }
+        Self {
+            coverage: 0.45,
+            density: 0.7,
+            altitude: 1800.0,
+            thickness: 700.0,
+            shadow_strength: 0.45
+        }
     }
 }
 
