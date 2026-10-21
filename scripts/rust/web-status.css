@@ -1,0 +1,471 @@
+/* Copyright (c) 2026 Trent Polack. All Rights Reserved.
+ * Licensed under the MIT License.
+ */
+
+/* Status screens for browser builds: the page's loading screen (download, compile, and warm up), and the build,
+ * update, and failure screens a hosting development server shows. build-web.mjs inlines this file into every page it
+ * writes; development servers serve it beside the two fonts below so their pages share one look.
+ *
+ * The look follows the Joy Games site: navy ground, orange rules, square edges, Archivo Black headings, and hard
+ * offset shadows. Font URLs are relative, so they resolve beside an inlining page or beside this stylesheet. */
+
+@font-face {
+  font-family: "Archivo Black";
+  font-display: swap;
+  src: local("Archivo Black"), url("fonts/ArchivoBlack-Regular.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Archivo";
+  font-weight: 700;
+  font-display: swap;
+  src: local("Archivo Bold"), url("fonts/Archivo-Bold.ttf") format("truetype");
+}
+
+:root {
+  --joy-status-navy: #1b293d;
+  --joy-status-panel: #3e5577;
+  --joy-status-surface: #25354c;
+  --joy-status-line: #506580;
+  --joy-status-orange: #ff6124;
+  --joy-status-orange-light: #ffb69a;
+  --joy-status-danger: #ef6a62;
+  --joy-status-text: #fafaf9;
+  --joy-status-muted: #cad0d5;
+  --joy-status-code: #101722;
+  --joy-status-shadow: 15px;
+  --joy-status-display: "Archivo Black", "Arial Black", sans-serif;
+  --joy-status-body: "Archivo", Arial, sans-serif;
+  --joy-status-mono: "Meslo LG S", ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* Full-page screen ------------------------------------------------------------------------------------------------- */
+
+.joy-status {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px 40px;
+  overflow: auto;
+  border-top: 2px solid var(--joy-status-orange);
+  background: var(--joy-status-navy);
+  color: var(--joy-status-text);
+  font: 700 16px/1.4 var(--joy-status-body);
+  pointer-events: none;
+  transition: opacity 260ms ease, visibility 0s linear 260ms;
+}
+
+/* The site's heavy closing rule, anchored to the bottom of the screen. */
+.joy-status::after {
+  content: "";
+  position: fixed;
+  inset: auto 0 0;
+  height: 10px;
+  background: var(--joy-status-orange);
+}
+
+.joy-status[hidden] {
+  display: none;
+}
+
+.joy-status[data-state="ready"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.joy-status[data-state="failed"] {
+  pointer-events: auto;
+}
+
+.joy-status-panel {
+  box-sizing: border-box;
+  width: min(640px, calc(100% - var(--joy-status-shadow)));
+  margin-right: var(--joy-status-shadow);
+  padding: clamp(20px, 4vw, 32px);
+  border: 2px solid var(--joy-status-orange);
+  background: var(--joy-status-panel);
+  box-shadow: var(--joy-status-shadow) var(--joy-status-shadow) 0 var(--joy-status-orange);
+  animation: joy-status-arrive 320ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.joy-status-wide .joy-status-panel {
+  width: min(820px, calc(100% - var(--joy-status-shadow)));
+}
+
+.joy-status[data-state="failed"] .joy-status-panel {
+  border-color: var(--joy-status-danger);
+  box-shadow: var(--joy-status-shadow) var(--joy-status-shadow) 0 var(--joy-status-danger);
+}
+
+/* Header: kicker, title, and subtitle ----------------------------------------------------------------------------- */
+
+.joy-status-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 clamp(20px, 5vw, 40px);
+  color: var(--joy-status-orange);
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.joy-status-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.joy-status-indicator {
+  width: 8px;
+  height: 8px;
+  background: currentColor;
+  animation: joy-status-blink 900ms steps(2, jump-none) infinite;
+}
+
+.joy-status-clock {
+  color: var(--joy-status-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.joy-status-title {
+  margin: 0;
+  font: 400 clamp(2.25rem, 8vw, 4.5rem)/0.92 var(--joy-status-display);
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.joy-status-subtitle {
+  margin: 12px 0 0;
+  color: var(--joy-status-muted);
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.joy-status-subtitle:empty {
+  display: none;
+}
+
+/* Stage: what is happening now, with a figure and a meter ---------------------------------------------------------- */
+
+.joy-status-stage {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: clamp(28px, 6vw, 48px) 0 10px;
+}
+
+.joy-status-stage-label {
+  margin: 0;
+  font: 400 clamp(1.1rem, 3vw, 1.5rem)/1 var(--joy-status-display);
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.joy-status[data-state="failed"] .joy-status-stage-label {
+  color: var(--joy-status-danger);
+}
+
+.joy-status-figure {
+  margin: 0;
+  color: var(--joy-status-orange-light);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+/* --joy-status-progress is a 0 to 1 fraction; without data-determinate the fill slides as an open-ended job. */
+.joy-status-meter {
+  position: relative;
+  height: 14px;
+  overflow: hidden;
+  border: 2px solid var(--joy-status-navy);
+  background: var(--joy-status-navy);
+}
+
+.joy-status-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 36%;
+  background: repeating-linear-gradient(-45deg, var(--joy-status-orange) 0 8px, var(--joy-status-orange-light) 8px 12px);
+  background-size: 17px 17px;
+  animation: joy-status-sweep 1300ms ease-in-out infinite alternate, joy-status-stripes 600ms linear infinite;
+}
+
+.joy-status-meter[data-determinate] .joy-status-fill {
+  left: 0;
+  width: calc(var(--joy-status-progress, 0) * 100%);
+  background: var(--joy-status-orange);
+  animation: none;
+  transition: width 140ms ease-out;
+}
+
+.joy-status[data-state="failed"] .joy-status-fill {
+  left: 0;
+  width: 100%;
+  background: var(--joy-status-danger);
+  animation: none;
+}
+
+.joy-status-detail {
+  min-height: 1.4em;
+  margin: 10px 0 0;
+  color: var(--joy-status-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+/* Steps: the stages of the whole job, each with a bar that fills as the job reaches it ----------------------------- */
+
+.joy-status-steps {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 8px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.joy-status-steps li {
+  padding-top: 8px;
+  border-top: 4px solid var(--joy-status-line);
+  color: var(--joy-status-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.joy-status-steps li[data-status="active"] {
+  border-top-color: var(--joy-status-orange);
+  color: var(--joy-status-text);
+  animation: joy-status-blink-border 900ms steps(2, jump-none) infinite;
+}
+
+.joy-status-steps li[data-status="done"] {
+  border-top-color: var(--joy-status-orange);
+  color: var(--joy-status-orange-light);
+}
+
+.joy-status[data-state="failed"] .joy-status-steps li[data-status="active"] {
+  border-top-color: var(--joy-status-danger);
+  color: var(--joy-status-danger);
+  animation: none;
+}
+
+.joy-status-note {
+  margin: 20px 0 0;
+  color: var(--joy-status-muted);
+  font-size: 0.8rem;
+}
+
+/* Output and actions --------------------------------------------------------------------------------------------- */
+
+.joy-status-log {
+  margin-top: 24px;
+  border-top: 1px solid rgb(255 255 255 / 35%);
+}
+
+.joy-status-log summary {
+  padding: 12px 0 0;
+  color: var(--joy-status-orange-light);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.joy-status-log pre,
+.joy-status-console {
+  box-sizing: border-box;
+  max-height: 40vh;
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  overflow: auto;
+  border: 1px solid var(--joy-status-line);
+  background: var(--joy-status-code);
+  color: #e3e9f1;
+  font: 400 12px/1.5 var(--joy-status-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.joy-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.joy-status-actions:empty {
+  display: none;
+}
+
+/* Matches the site's header buttons: outlined, uppercase, and filled orange on hover. */
+.joy-status-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--joy-status-line);
+  background: var(--joy-status-surface);
+  color: var(--joy-status-text);
+  font: 700 0.8rem/1 var(--joy-status-body);
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.joy-status-button:hover,
+.joy-status-button:focus-visible {
+  border-color: var(--joy-status-orange);
+  outline: 0;
+  background: var(--joy-status-orange);
+  color: var(--joy-status-navy);
+}
+
+/* Update banner: a slim strip over a running page while its next build compiles ----------------------------------- */
+
+.joy-status-banner {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px 10px;
+  border-bottom: 3px solid var(--joy-status-line);
+  background: rgb(27 41 61 / 94%);
+  color: var(--joy-status-text);
+  font: 700 0.75rem/1.2 var(--joy-status-body);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  pointer-events: none;
+  animation: joy-status-drop 220ms ease-out both;
+}
+
+.joy-status-banner[hidden] {
+  display: none;
+}
+
+.joy-status-banner-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--joy-status-orange);
+  font: 400 0.95rem/1 var(--joy-status-display);
+  letter-spacing: -0.01em;
+}
+
+.joy-status-banner-stage {
+  color: var(--joy-status-text);
+}
+
+/* Crate and file names read as written. */
+.joy-status-banner-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--joy-status-muted);
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.joy-status-banner .joy-status-figure {
+  font-size: 0.75rem;
+}
+
+.joy-status-banner .joy-status-meter {
+  position: absolute;
+  inset: auto 0 -3px;
+  height: 3px;
+  border: 0;
+  background: transparent;
+}
+
+/* Failure overlay over a running page; the last good build stays underneath. */
+.joy-status-overlay {
+  z-index: 2147483647;
+  background: rgb(27 41 61 / 96%);
+}
+
+/* Motion --------------------------------------------------------------------------------------------------------- */
+
+@keyframes joy-status-arrive {
+  from {
+    opacity: 0;
+    transform: translate(var(--joy-status-shadow), var(--joy-status-shadow));
+    box-shadow: 0 0 0 var(--joy-status-orange);
+  }
+}
+
+@keyframes joy-status-drop {
+  from {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes joy-status-blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes joy-status-blink-border {
+  50% {
+    border-top-color: var(--joy-status-orange-light);
+  }
+}
+
+@keyframes joy-status-sweep {
+  from {
+    left: -36%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+@keyframes joy-status-stripes {
+  to {
+    background-position: 17px 0;
+  }
+}
+
+@media (max-width: 520px) {
+  :root {
+    --joy-status-shadow: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .joy-status,
+  .joy-status-panel,
+  .joy-status-banner,
+  .joy-status-indicator,
+  .joy-status-steps li,
+  .joy-status-fill,
+  .joy-status-button {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .joy-status-fill {
+    left: 0;
+    width: 100%;
+    opacity: 0.6;
+  }
+}

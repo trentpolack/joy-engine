@@ -3,8 +3,9 @@
 // Licensed under the MIT License.
 
 // Build a Rust game, tool, or example for browsers: compile to WebAssembly, generate JavaScript bindings with the
-// wasm-bindgen CLI pinned by the workspace lockfile, and write a static page that hosts the canvas. The output folder
-// is self-contained and can be served by any static host (the site, GitHub Pages, `npx serve`).
+// wasm-bindgen CLI pinned by the workspace lockfile, and write a static page that hosts the canvas behind a loading
+// screen (`web-template.html` with `web-status.css` inlined, plus its fonts in `fonts/`). The output folder is
+// self-contained and can be served by any static host (the site, GitHub Pages, `npx serve`).
 //
 //   node scripts/rust/build-web.mjs --example form-viewer [--release]
 //   node joy-engine/scripts/rust/build-web.mjs --manifest-path Cargo.toml --package vehicle-playground --release
@@ -25,7 +26,7 @@
 // the lockfile's version; set JOY_WASM_BINDGEN to its path when it is not on PATH.
 
 import {spawnSync} from 'node:child_process';
-import {copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync} from 'node:fs';
 import {basename, dirname, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
@@ -40,6 +41,15 @@ const THIRD_PARTY_LICENSES = [
   'crates/joy-ui/fonts/ArchivoBlack-OFL.txt',
   'crates/joy-ui/fonts/Meslo-LICENSE.txt'
 ];
+// Fonts the page's loading screen uses, copied into `fonts/` beside it; the engine already embeds and licenses them.
+const STATUS_FONTS = [
+  'crates/joy-ui/fonts/ArchivoBlack-Regular.ttf',
+  'crates/joy-ui/fonts/Archivo-Bold.ttf'
+];
+// Separates a page title's name from its subtitle ("LUNA · The Hollow Observatory").
+const TITLE_SEPARATOR = ' \u00b7 ';
+// The loading screen's kicker above every title; a subtitle that repeats it ("JOYFX EDITOR · Joy Engine") is dropped.
+const LOADING_KICKER = 'Joy Engine';
 
 const {values: options} = parseArgs({
   options: {
@@ -92,15 +102,50 @@ mkdirSync(outputDirectory, {recursive: true});
 const moduleName = artifact.replaceAll('-', '_');
 run(bindgen.path, ['--target', 'web', '--no-typescript', '--out-dir', outputDirectory, '--out-name', moduleName, wasmFile]);
 
-const template = readFileSync(resolve(scriptRoot, 'web-template.html'), 'utf8');
-const page = template
-  .replaceAll('{{title}}', escapeHtml(options.title ?? artifact))
-  .replaceAll('{{canvas}}', options.canvas)
-  .replaceAll('{{module}}', `./${moduleName}.js`);
-writeFileSync(resolve(outputDirectory, 'index.html'), page);
+writeFileSync(resolve(outputDirectory, 'index.html'), pageHtml(options.title ?? artifact, moduleName, outputDirectory));
+copyStatusFonts(outputDirectory);
 copyFileSync(resolve(engineRoot, 'LICENSE'), resolve(outputDirectory, 'LICENSE'));
 writeFileSync(resolve(outputDirectory, 'THIRD-PARTY-NOTICES.txt'), thirdPartyNotices());
 console.log(`Web build ready: ${relative(process.cwd(), outputDirectory) || '.'} (${basename(wasmFile)}, ${profile}).`);
+
+/**
+ * The page hosting the canvas: the template with its loading screen styles inlined, the title split into the loading
+ * screen's heading and subtitle, and the module's uncompressed size for download progress.
+ */
+function pageHtml(title, moduleName, directory) {
+  const template = readFileSync(resolve(scriptRoot, 'web-template.html'), 'utf8');
+  const [heading, ...subtitleParts] = title.split(TITLE_SEPARATOR);
+  const subtitle = subtitleParts.join(TITLE_SEPARATOR);
+  const wasmName = `${moduleName}_bg.wasm`;
+  const values = {
+    title: escapeHtml(title),
+    kicker: LOADING_KICKER,
+    heading: escapeHtml(heading),
+    subtitle: subtitle.toLowerCase() === LOADING_KICKER.toLowerCase() ? '' : escapeHtml(subtitle),
+    canvas: options.canvas,
+    module: `./${moduleName}.js`,
+    wasm: `./${wasmName}`,
+    wasm_bytes: String(statSync(resolve(directory, wasmName)).size),
+    status_styles: readFileSync(resolve(scriptRoot, 'web-status.css'), 'utf8').trimEnd()
+  };
+
+  // One pass, so inlined styles are never scanned for placeholders.
+  return template.replace(/\{\{(\w+)\}\}/g, (placeholder, name) => {
+    if(!(name in values)) {
+      fail(`web-template.html uses an unknown placeholder ${placeholder}.`);
+    }
+    return values[name];
+  });
+}
+
+/** Copy the loading screen's fonts beside the page, where its stylesheet's relative URLs find them. */
+function copyStatusFonts(directory) {
+  const fontDirectory = resolve(directory, 'fonts');
+  mkdirSync(fontDirectory, {recursive: true});
+  for(const font of STATUS_FONTS) {
+    copyFileSync(resolve(engineRoot, font), resolve(fontDirectory, basename(font)));
+  }
+}
 
 /**
  * Licenses for the SDF collision reference implementation and embedded authoring fonts, separated by a rule.

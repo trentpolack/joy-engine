@@ -20,6 +20,11 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR
 ### Tool Names
 - FORM LAB is now FORM EDITOR (`tools/form-editor`, package `form-editor`) and PARTICLE LAB is now JOYFX EDITOR (`tools/joyfx-editor`, package `joyfx-editor`), across packages, UI, and docs.
 
+### Browser Loading Screen
+- Web builds open on a stylized loading screen in the Joy Games site's look (navy, orange rules, Archivo Black, and hard offset shadows) that steps through download (with measured progress against the module's build-time size), compile, and warm-up, then fades out over the first presented frame. Startup failures, including the engine's failure panel, stay on the screen with a reload button.
+- Added `scripts/rust/web-status.css`, which `build-web.mjs` inlines into every page alongside copies of the Archivo fonts, and which hosting development servers can serve for matching building and update screens. Titles such as `"LUNA · The Hollow Observatory"` split into a heading and subtitle.
+- Browser captures detect startup failures through the loading screen's `data-state="failed"` and wait for it to clear before capturing.
+
 ### Authoring UI
 - UI palettes and font choices now come from `assets/ui/theme-default.json`, with shared dimensions in `assets/ui/layout.json`. Cargo generates native/browser constants directly from those files and rejects invalid values. Removed the duplicated Rust definitions and comparison test; migrated editor, lab, and development widgets to separate `theme::colors` and `theme::layout` values and renamed `apply_authoring` to `apply_editor`.
 - Simplified PARTICLE LAB to a compact single-row header matching FORM LAB and removed its standalone bottom strip. Joy Editor's Content Browser now reserves the actual height of Project Details and Documentation, with long metadata scrolling above the button instead of covering it with the status bar.

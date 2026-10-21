@@ -45,6 +45,8 @@ npm run build:web -- --example form-viewer --release
 node scripts/rust/build-web.mjs --package form-editor --out <folder> --release
 ```
 
+Each page opens on a loading screen that shows download progress, compilation, and renderer warm-up, then fades out over the first presented frame. A startup failure stays on that screen with its message and a reload button. Its styles live in `scripts/rust/web-status.css`, which the build inlines into the page and ships with two Archivo fonts in `fonts/`; a page title such as `"LUNA · The Hollow Observatory"` becomes the screen's heading and subtitle. Hosting development servers can serve the same stylesheet so their building and update screens match.
+
 Workspace `build` scripts create release browser output in `dist/`; `--dev` selects a faster development build. JoyGames' root `npm run dev` builds and serves projects with live rebuilds, and root `npm run build` assembles their WebAssembly pages at the canonical game/tool/example routes.
 
 Browser rendering chooses WebGPU when available and falls back to WebGL 2. Append `?backend=webgpu` or `?backend=webgl` to require a backend. egui uses the engine's browser input translator, and backing resolution follows measured canvas density.

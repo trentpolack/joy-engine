@@ -87,12 +87,15 @@ try {
   await page.goto(url.href);
   await page.waitForFunction(() => document.querySelector('canvas[data-ready="true"]')
     || document.querySelector('#joy-failure')
-    || document.querySelector('#joy-loading')?.textContent.startsWith('Unable to start:'), undefined, { timeout: captureTimeoutMilliseconds });
+    || document.querySelector('#joy-loading[data-state="failed"]'), undefined, { timeout: captureTimeoutMilliseconds });
   const failurePanel = page.locator('#joy-failure');
   const failure = await failurePanel.count() ? await failurePanel.textContent() : null;
   assert.equal(failure, null, failure ?? 'Application started.');
-  const loading = await page.locator('#joy-loading').textContent();
-  assert.ok(!loading?.startsWith('Unable to start:'), loading ?? 'Bindings initialized.');
+  const loadingFailure = page.locator('#joy-loading[data-state="failed"] [data-field="detail"]');
+  const startupFailure = await loadingFailure.count() ? await loadingFailure.textContent() : null;
+  assert.equal(startupFailure, null, startupFailure ?? 'Bindings initialized.');
+  // The loading screen fades out over the first frame; capture the canvas once it is gone.
+  await page.locator('#joy-loading').waitFor({ state: 'hidden' });
   const canvas = page.locator('canvas[data-ready="true"]').first();
   await canvas.waitFor({ state: 'visible' });
   report.backend = await canvas.getAttribute('data-backend');
