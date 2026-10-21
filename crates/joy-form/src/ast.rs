@@ -32,16 +32,47 @@ pub struct Statement {
     pub kind: StmtKind,
     pub token: Token,
 }
+/// How editors present a parameter: text and control choices from `meta(...)` that never change evaluation, except
+/// that a `kind` of `int`, `bool`, `seed`, or `enum` rounds the value to a whole number.
+#[derive(Clone, Debug, Default)]
+pub struct ParameterPresentation {
+    pub label: Option<String>,
+    pub group: Option<String>,
+    pub info: Option<String>,
+    pub kind: Option<String>,
+    pub options: Vec<String>,
+}
 #[derive(Clone, Debug)]
 pub enum StmtKind {
-    Project { fields: serde_json::Value, name: Token },
+    Project {
+        fields: serde_json::Value,
+        name: Token,
+    },
     WithUserData(Expression, Vec<Statement>),
-    Wrangle { domain: String, expression: Expression, binding: Option<String>, body: Vec<Statement> },
-    BindingAttribute { binding: String, name: String, expression: Expression },
+    Wrangle {
+        domain: String,
+        expression: Expression,
+        binding: Option<String>,
+        body: Vec<Statement>,
+    },
+    BindingAttribute {
+        binding: String,
+        name: String,
+        expression: Expression,
+    },
     If(Expression, Vec<Statement>),
     Let(String, Expression),
-    Param { name: String, values: Vec<Expression>, metadata: Vec<(String, Expression)> },
-    Repeat { name: String, expression: Expression, body: Vec<Statement> },
+    Param {
+        name: String,
+        values: Vec<Expression>,
+        metadata: Vec<(String, Expression)>,
+        presentation: ParameterPresentation,
+    },
+    Repeat {
+        name: String,
+        expression: Expression,
+        body: Vec<Statement>,
+    },
     Command(Expression),
 }
 

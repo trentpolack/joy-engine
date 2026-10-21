@@ -2,7 +2,33 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
-## 10-20-2026
+## 10-21-2026
+### Authoring UI
+- Registered the shared authoring font families before the first UI pass, fixing the `joy-display` startup panic in Joy Editor and the labs while preserving games' default body font.
+
+### FORM Assets in Levels
+- FORM parameters accept presentation metadata in `meta(...)`: `label`, `group`, `info`, `kind` (`int`, `bool`, `seed`, or `enum`), and `options`. Whole-number kinds round overrides, booleans accept JSON flags, and `joy_engine::form::parameter_control` and friends read the descriptors.
+- FORM LAB and Joy Editor's level inspector show script labels, groups, and help, with toggles, option choices, and seeds with a reroll button (`toggle_control`, `choice_control`, and `seed_control` in the authoring kit).
+- `FormAssetLibrary::resolve_asset` returns a `FormAsset` with the mesh and its placements: the points a script tags with user data. Placements naming an `object` template spawn level entities (`<parent>/<index>`, one level deep, at most 4,096 per asset), which Joy Editor shows and games simulate.
+- `render` components take an optional FORM LAB `variant`; `AssetScene::prepare_level` builds a run-ready level from authored documents and `AssetScene::follow` presents runtime entities with the prepared assets.
+
+### Hot Reload and Development
+- Added `GameAssets` with `game_assets!` and `source_root!`: games embed text assets and, in native development builds, read them from the project folder and poll for edits (see `docs/hot-reload.md`).
+- Added `DevEditors`, `DevEditorsOptions`, `TuningPanel`, and `development_file`, the standard post-processing and TUNE editors games attach, plus `ConfigField::new`.
+- `HeadlessShell::new_or_skip`, `HeadlessShell::save_capture`, and `region_mean_color` replace the helpers every game's render tests carried.
+
+### Joy Editor
+- Restored **Play**: the native editor runs the selected project's game (`npm run dev`) in its own window, with Stop, and ends it when the editor closes; saved assets reach games that use `GameAssets` live.
+- Added Ctrl/Cmd+O (open a project folder) and Alt+1–9 (switch tabs) to the editor, and Ctrl/Cmd+O to standalone FORM LAB, plus Ctrl/Cmd+S and Ctrl/Cmd+O to standalone PARTICLE LAB.
+
+### Authoring Look
+- The authoring theme installs the Archivo family (Archivo, Archivo SemiBold, and Archivo Black, under the SIL Open Font License) and registers semantic text styles (`display`, `title`, `caption`, and `status`); buttons and headings use the semibold face.
+- Design tokens now live in `assets/theme/joy-tokens.json`, verified against the Rust constants by a test, and gained the workspace surfaces and development overlay fills. Joy Editor's private palette and the development dock's own colors now read the shared tokens, and the editor's literal type sizes follow the token scale.
+- Added shared chrome to the authoring kit (`app_title`, `header_rule`, `project_marker`, `status_bar`, `list_row`, `caption`, and letter-spaced `spaced` text); Joy Editor, FORM LAB, and PARTICLE LAB draw their titles with it, PARTICLE LAB's footer is the shared status bar, and `panel_heading` uses the real fonts.
+
+### Repository Guidance
+- Engine work that absorbs consumer behavior now migrates those consumers in the same change; completion reports have their own section, agents that cannot file issues propose them in reports, and the Node spacing rules live only in the coding standards.
+
 ### Rendering
 - Fixed a startup validation panic by removing the stale ACES uniform binding from the display resolve layout.
 

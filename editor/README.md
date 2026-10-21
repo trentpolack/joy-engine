@@ -12,7 +12,11 @@ npm run build --workspace @joy-games/joy-editor
 
 In JoyGames, `npm run dev:editor` or `npm run dev:joy-editor` runs the native editor. Project discovery uses `--workspace`, `JOY_EDITOR_WORKSPACE`, or the nearest `joy.joyconfig`; projects contain `project.joyproject` manifests. Open Folder accepts another compatible folder for the session.
 
-The static browser build opens bundled examples and supports document downloads. It cannot discover or save project filesystem assets. Game previews and Play destinations are not implemented here; run a game through its own development command.
+The static browser build opens bundled examples and supports document downloads. It cannot discover or save project filesystem assets or start games.
+
+**Play** (native builds) runs the selected project's game with its `npm run dev` command in a separate window; **Stop**, choosing Play again, or closing the editor ends it. Games that read their assets through `GameAssets` hot reload what the editor saves, so FORM, effect, and level edits update the running game without a restart.
+
+Shortcuts: Ctrl/Cmd+S saves, Ctrl/Cmd+P searches the Content Browser, Ctrl/Cmd+O opens a project folder (native), and Alt+1 through Alt+9 switch document tabs. Standalone FORM LAB and PARTICLE LAB also save with Ctrl/Cmd+S and open with Ctrl/Cmd+O.
 
 ## Documents and Ownership
 The workspace owns open files, saved revisions, dirty state, conflicts, and recovery. FORM LAB and PARTICLE LAB implement `joy_engine::development::AuthoringTool` and draw inside tabs using the same engine renderer and authoring kit as their standalone applications. Inactive tabs receive no frames. UI and document/model modules remain separate.

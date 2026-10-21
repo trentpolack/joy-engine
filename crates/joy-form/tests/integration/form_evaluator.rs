@@ -5,7 +5,11 @@
 
 use joy_form::{
     CompiledScript,
+    ParameterControl,
     compile,
+    parameter_control,
+    parameter_group,
+    parameter_label,
 };
 use serde_json::json;
 
@@ -81,4 +85,62 @@ fn maximum_flat_expression_chains_evaluate_and_drop_without_stack_growth() {
     assert_eq!(data.positions, vec![19_000.0, 0.0, 0.0]);
     let invalid = format!("point(vector(1,2,3){},0,0)", ".x".repeat(10_000));
     assert!(compile(&invalid, &json!({}), None).is_err());
+}
+
+#[test]
+fn parameter_presentation_describes_controls_and_whole_number_kinds_round_overrides() {
+    let source = r#"
+        param height = 2 meta(min=0, max=8, step=0.5, label="Tower height", group="Massing", info="Meters above grade.")
+        param floors = 4 meta(min=1, max=12, kind="int")
+        param lit = 1 meta(kind="bool")
+        param seed = 7 meta(kind="seed")
+        param style = 1 meta(options=["Brick", "Glass", "Concrete"])
+        point(height, floors, style)
+    "#;
+    let script = CompiledScript::parse(source).unwrap();
+    let data = script.evaluate(&json!({"floors": 6.6, "lit": false, "seed": 12.4, "style": 9}), None).unwrap();
+    let [height, floors, lit, seed, style] = &data.parameters[..] else {
+        panic!("expected five parameter descriptors");
+    };
+    assert_eq!(height["label"], "Tower height");
+    assert_eq!(height["group"], "Massing");
+    assert_eq!(height["info"], "Meters above grade.");
+    assert!(height.get("kind").is_none());
+    assert_eq!(
+        (floors["kind"].as_str(), floors["step"].as_f64(), floors["value"].as_f64()),
+        (Some("int"), Some(1.0), Some(7.0))
+    );
+    assert_eq!(
+        (lit["kind"].as_str(), lit["max"].as_f64(), lit["value"].as_f64()),
+        (Some("bool"), Some(1.0), Some(0.0))
+    );
+    assert_eq!(
+        (seed["kind"].as_str(), seed["min"].as_f64(), seed["value"].as_f64()),
+        (Some("seed"), Some(0.0), Some(12.0))
+    );
+    assert_eq!(style["kind"], "enum");
+    assert_eq!(style["options"], json!(["Brick", "Glass", "Concrete"]));
+    assert_eq!(style["value"].as_f64(), Some(2.0));
+    assert_eq!(data.positions, vec![2.0, 7.0, 2.0]);
+    assert_eq!(parameter_label(height), "Tower height");
+    assert_eq!(parameter_group(height), Some("Massing"));
+    assert_eq!(parameter_control(floors), ParameterControl::Integer);
+    assert_eq!(parameter_control(lit), ParameterControl::Toggle);
+    assert_eq!(parameter_control(seed), ParameterControl::Seed);
+    assert_eq!(
+        parameter_control(style),
+        ParameterControl::Choice(vec!["Brick".into(), "Glass".into(), "Concrete".into()])
+    );
+
+    let failure = |source: &str| compile(source, &json!({}), None).unwrap_err().message;
+    assert_eq!(
+        failure("param x = 1.5 meta(min=0, max=4, kind=\"int\")"),
+        "Int, bool, seed, and enum parameters require whole-number defaults, bounds, and steps."
+    );
+    assert_eq!(
+        failure("param x = 0 meta(min=0, max=1, kind=\"bool\")"),
+        "Boolean and option parameters derive their bounds; remove min, max, and step."
+    );
+    assert_eq!(failure("param x = 0 meta(kind=\"enum\")"), "Enum parameters require options.");
+    assert_eq!(failure("param x = 1 meta(kind=\"float\")"), "Parameter kind 'float' must be int, bool, seed, or enum.");
 }

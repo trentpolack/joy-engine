@@ -17,6 +17,13 @@ use joy_engine::core::{
     RandomSource,
     SeededRandom,
 };
+use joy_engine::form::{
+    ParameterControl,
+    parameter_control,
+    parameter_group,
+    parameter_info,
+    parameter_label,
+};
 use joy_engine::gameplay::{
     ComponentFieldKind,
     ComponentIssue,
@@ -1131,7 +1138,12 @@ impl LevelEditor {
                 };
                 // FORM numbers are `f64`; JSON writes integral defaults as integers, as JavaScript does.
                 let value = value.as_f64().map_or_else(|| value.clone(), json_number);
-                found.push((component_type::RENDER.to_owned(), name.to_owned(), value, min.as_f64(), max.as_f64()));
+                found.push((
+                    component_type::RENDER.to_owned(),
+                    name.to_owned(),
+                    value,
+                    form_parameter_metadata(parameter, min.as_f64(), max.as_f64()),
+                ));
             }
         }
         if let Some(path) = asset(component_type::EFFECT)
@@ -1154,18 +1166,16 @@ impl LevelEditor {
                         ..
                     } => (Value::from(value.map(json_number).to_vec()), None, None),
                 };
-                found.push((component_type::EFFECT.to_owned(), name.clone(), entry.0, entry.1, entry.2));
+                let metadata = FieldMetadata {
+                    min: entry.1,
+                    max: entry.2,
+                    ..Default::default()
+                };
+                found.push((component_type::EFFECT.to_owned(), name.clone(), entry.0, metadata));
             }
         }
-        for (component, name, value, min, max) in found {
-            self.metadata.insert(
-                format!("{component}.parameters.{name}"),
-                FieldMetadata {
-                    min,
-                    max,
-                    ..Default::default()
-                },
-            );
+        for (component, name, value, metadata) in found {
+            self.metadata.insert(format!("{component}.parameters.{name}"), metadata);
             self.parameter_defaults.push((component, name, value));
         }
     }
@@ -1190,8 +1200,33 @@ impl LevelEditor {
     }
 }
 
-/// An asset-declared parameter: component, name, default value, and numeric bounds.
-type FoundParameter = (String, String, Value, Option<f64>, Option<f64>);
+/// An asset-declared parameter: component, name, default value, and how the inspector presents it.
+type FoundParameter = (String, String, Value, FieldMetadata);
+
+/// How the inspector presents a FORM parameter: its script label (prefixed by its group), help, step, and whole-number
+/// control (`int`, `bool`, and `seed` as bounded integers, `enum` as named options).
+fn form_parameter_metadata(descriptor: &Value, min: Option<f64>, max: Option<f64>) -> FieldMetadata {
+    let label = match parameter_group(descriptor) {
+        Some(group) => format!("{group} · {}", parameter_label(descriptor)),
+        None => parameter_label(descriptor),
+    };
+    let control = parameter_control(descriptor);
+    let options = match &control {
+        ParameterControl::Choice(options) => options.clone(),
+        _ => Vec::new(),
+    };
+    FieldMetadata {
+        label: Some(label),
+        min,
+        max,
+        step: descriptor.get("step").and_then(Value::as_f64),
+        description: parameter_info(descriptor).map(str::to_owned),
+        integer: control != ParameterControl::Continuous,
+        options,
+        seed: control == ParameterControl::Seed,
+        ..Default::default()
+    }
+}
 
 /// Parse a level, or a `.joyobject` as a one-entity level with that entity selected.
 fn parse_document(path: &str, text: &str) -> Result<(LevelDocument, bool), String> {

@@ -19,12 +19,16 @@ use joy_engine::development::{
     ControlResponse,
     NumericDrafts,
     ScalarControl,
+    choice_control,
+    seed_control,
+    toggle_control,
 };
 use joy_engine::egui::{
     self,
     RichText,
     Ui,
 };
+use joy_engine::form::ParameterControl;
 use joy_engine::runtime::theme::tokens;
 use joy_engine::serde_json::Value as Json;
 
@@ -35,6 +39,9 @@ use crate::parameter_values::{
     parameter_title,
 };
 use crate::resource_parameter_controls::resource_group;
+
+/// Text beside a boolean parameter's checkbox.
+const TOGGLE_LABEL: &str = "Enabled";
 
 /// What the author did in the Parameters inspector this frame.
 #[derive(Clone, Debug, PartialEq)]
@@ -148,13 +155,23 @@ impl ParameterControls {
         }
         let query = self.search.trim().to_lowercase().replace('_', " ");
         let mut matches = 0;
+        let mut current_group: Option<String> = None;
         for parameter in parameters.iter_mut() {
-            let title = parameter_title(parameter.name());
-            if !query.is_empty() && !title.to_lowercase().contains(&query) {
+            let text = parameter.text().clone();
+            let searchable = format!("{} {}", text.title, parameter_title(parameter.name())).to_lowercase();
+            if !query.is_empty() && !searchable.contains(&query) {
                 continue;
             }
             matches += 1;
+
+            // A heading starts each run of parameters that share a script `group`.
+            if text.group.is_some() && text.group != current_group {
+                ui.add_space(tokens::SPACE_SM);
+                components::field_title(ui, text.group.clone().unwrap_or_default().to_uppercase());
+            }
+            current_group = text.group.clone();
             ui.separator();
+            let title = text.title.clone();
             let overridden = overridden.contains(parameter.name());
             let name = parameter.name().to_owned();
             let group = ui.push_id(("form-lab-parameter", name.clone()), |ui| match parameter {
@@ -192,7 +209,10 @@ fn numeric_group(
     ui.horizontal(|ui| {
         ui.label(RichText::new(parameter.kind.badge()).color(tokens::MUTED).size(tokens::TYPE_SM))
             .on_hover_text(format!("{} parameter", parameter.kind.name()));
-        ui.label(RichText::new(title).color(tokens::TEXT).strong());
+        let title_label = ui.label(RichText::new(title).color(tokens::TEXT).strong());
+        if let Some(info) = &parameter.text.info {
+            title_label.on_hover_text(info.as_str());
+        }
         joy_engine::development::modified_marker(ui, modified);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let defaults: Vec<String> =
@@ -223,10 +243,23 @@ fn numeric_group(
     let edited = match parameter.kind {
         ParameterKind::Scalar => {
             let mut value = parameter.value.first().copied().unwrap_or_default();
-            let edited = ScalarControl::new("value", &mut value)
-                .range(parameter.minimum, parameter.maximum)
-                .step(step_or_default(parameter.step))
-                .show(ui, drafts);
+            let edited = match &parameter.control {
+                ParameterControl::Toggle => toggle_control(ui, "value", &mut value, TOGGLE_LABEL),
+                ParameterControl::Choice(options) => choice_control(ui, "value", &mut value, options),
+                ParameterControl::Seed => {
+                    seed_control(ui, "value", &mut value, parameter.minimum, parameter.maximum, drafts)
+                }
+                ParameterControl::Integer => ScalarControl::new("value", &mut value)
+                    .range(parameter.minimum, parameter.maximum)
+                    .integer()
+                    .step(step_or_default(parameter.step).max(1.0))
+                    .slider_step(step_or_default(parameter.step).max(1.0))
+                    .show(ui, drafts),
+                ParameterControl::Continuous => ScalarControl::new("value", &mut value)
+                    .range(parameter.minimum, parameter.maximum)
+                    .step(step_or_default(parameter.step))
+                    .show(ui, drafts),
+            };
             if let Some(slot) = parameter.value.first_mut() {
                 *slot = value;
             }

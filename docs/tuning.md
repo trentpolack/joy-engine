@@ -5,4 +5,6 @@ The engine's `development` module owns numeric configuration metadata, draft val
 
 Session tuning does not imply a saved source change. Native persistence can target the declared project file; browser workflows export data or use explicit host support. Show save failures and preserve the draft. New sessions and replaced runtime owners must not retain references to previous tuning targets.
 
+`DevEditors` attaches a game's standard development editors (the post-processing editor for its level's global volume and, with a `TuningPanel`, the TUNE panel) the first frame development tools are on; `development_file` names the source-checkout files they save to in native development builds. `ConfigField::new` builds a field from one row of arguments.
+
 Game defaults live in Rust configuration modules; external override documents are validated serialized data. See [JoyGames config tuning](https://github.com/trentpolack/JoyGames/blob/develop/docs/development/config-tuning.md) and the public API for current field and persistence contracts.

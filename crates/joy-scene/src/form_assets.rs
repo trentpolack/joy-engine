@@ -11,6 +11,7 @@
 //! always has.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use joy_form::GeometryData;
 use joy_render_types::ShadingModel;
@@ -20,6 +21,11 @@ use joy_renderer::{
     MeshAsset,
     RenderError,
     TextureAsset,
+};
+
+use crate::form_placements::{
+    FormPlacement,
+    form_placements,
 };
 
 /// Failure compiling FORM source into a mesh asset: the script's own diagnostic, or a rejected document or mesh.
@@ -50,15 +56,25 @@ pub fn compile_form_mesh(
     Ok(form_mesh_asset(&geometry, model)?)
 }
 
-/// Compiled FORM assets for levels and tools, cached by path, source text, parameters, and shading model; the mesh half of
-/// [`AssetScene`](crate::AssetScene).
+/// A compiled FORM asset: the mesh it draws and the placements its tagged points ask the host to fill.
+#[derive(Clone, Debug)]
+pub struct FormAsset {
+    /// The mesh drawn for the asset's visible geometry.
+    pub mesh: MeshAsset,
+    /// Tagged points in the asset's local space; see [`form_placements`].
+    pub placements: Arc<[FormPlacement]>,
+}
+
+/// Compiled FORM assets for levels and tools, cached by path, source text, variant, parameters, and shading model; the
+/// mesh half of [`AssetScene`](crate::AssetScene).
 ///
 /// `.form` files are FORM source; `.formlab` files are FORM LAB documents (`{"version": 1, "source", "overrides",
-/// "materials"}`) whose overrides the component's parameters extend. Callers read files themselves (from disk, a
-/// bundle, or `include_str!`), so the library never touches the file system and works the same in browsers.
+/// "materials", "variants"}`). Overrides layer in order: the document's overrides, then the named variant's, then the
+/// component's parameters. Callers read files themselves (from disk, a bundle, or `include_str!`), so the library never
+/// touches the file system and works the same in browsers.
 #[derive(Default)]
 pub struct FormAssetLibrary {
-    cache: HashMap<String, MeshAsset>,
+    cache: HashMap<String, FormAsset>,
     textures: FormTextureCache,
 }
 
@@ -76,7 +92,21 @@ impl FormAssetLibrary {
         parameters: &serde_json::Map<String, serde_json::Value>,
         model: ShadingModel<'_>,
     ) -> Result<MeshAsset, FormMeshError> {
-        let key = serde_json::json!([path, text, parameters, model.name()]).to_string();
+        Ok(self.resolve_asset(path, text, None, parameters, model)?.mesh)
+    }
+
+    /// Compile `text` (the contents of `path`) as its mesh and placements, layering the `.formlab` document's overrides,
+    /// then `variant`'s overrides (a FORM LAB document's named variant; fails when the document has none by that name),
+    /// then `parameters`. Reuses a cached asset when nothing changed.
+    pub fn resolve_asset(
+        &mut self,
+        path: &str,
+        text: &str,
+        variant: Option<&str>,
+        parameters: &serde_json::Map<String, serde_json::Value>,
+        model: ShadingModel<'_>,
+    ) -> Result<FormAsset, FormMeshError> {
+        let key = serde_json::json!([path, text, variant, parameters, model.name()]).to_string();
         if let Some(asset) = self.cache.get(&key) {
             return Ok(asset.clone());
         }
@@ -91,18 +121,32 @@ impl FormAssetLibrary {
                     RenderError::InvalidMesh(format!("{path}: FORM LAB document requires script source")).into()
                 );
             };
-            let overrides = match document.get("overrides") {
+            let mut overrides = match document.get("overrides") {
                 Some(serde_json::Value::Object(overrides)) => overrides.clone(),
                 _ => serde_json::Map::new(),
             };
+            if let Some(name) = variant {
+                overrides.extend(variant_overrides(&document, name).ok_or_else(|| {
+                    RenderError::InvalidMesh(format!("{path}: no FORM LAB variant named \"{name}\""))
+                })?);
+            }
             (source.to_owned(), overrides, document.get("materials").cloned())
         } else {
+            if let Some(name) = variant {
+                return Err(RenderError::InvalidMesh(format!(
+                    "{path}: variant \"{name}\" requires a FORM LAB document"
+                ))
+                .into());
+            }
             (text.to_owned(), serde_json::Map::new(), None)
         };
         overrides.extend(parameters.iter().map(|(name, value)| (name.clone(), value.clone())));
         let geometry = joy_form::compile(&source, &serde_json::Value::Object(overrides), materials.as_ref())
             .map_err(FormMeshError::Form)?;
-        let asset = form_mesh_asset_with_textures(&geometry, model, &mut self.textures)?;
+        let asset = FormAsset {
+            mesh: form_mesh_asset_with_textures(&geometry, model, &mut self.textures)?,
+            placements: form_placements(&geometry).into(),
+        };
         self.cache.insert(key, asset.clone());
         Ok(asset)
     }
@@ -115,7 +159,22 @@ impl FormAssetLibrary {
 
     /// Keep only cached assets for which `keep` returns true, so a presentation can prune entries it no longer uses.
     pub fn retain(&mut self, mut keep: impl FnMut(&MeshAsset) -> bool) {
-        self.cache.retain(|_, asset| keep(asset));
+        self.cache.retain(|_, asset| keep(&asset.mesh));
+    }
+}
+
+/// The overrides of the variant named `name` (ignoring case, as FORM LAB keeps names unique) in a FORM LAB document.
+fn variant_overrides(document: &serde_json::Value, name: &str) -> Option<serde_json::Map<String, serde_json::Value>> {
+    let variants = document.get("variants")?.as_array()?;
+    let variant = variants.iter().find(|variant| {
+        variant
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
+    })?;
+    match variant.get("overrides") {
+        Some(serde_json::Value::Object(overrides)) => Some(overrides.clone()),
+        _ => Some(serde_json::Map::new()),
     }
 }
 

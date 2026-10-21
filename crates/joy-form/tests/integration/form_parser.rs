@@ -69,7 +69,9 @@ fn rejects_invalid_metadata_and_data_keys_at_the_original_tokens() {
     assert_error("project meta(name=\"X\", name=\"Y\")", "Duplicate project metadata 'name'.", 1, 24);
     assert_error("project meta(other=\"X\")", "Unknown project metadata 'other'.", 1, 14);
     assert_error("param x = 1 meta(min=0,min=2)", "Duplicate metadata 'min'.", 1, 27);
-    assert_error("param x = 1 meta(label=2)", "Unknown parameter metadata 'label'.", 1, 23);
+    assert_error("param x = 1 meta(color=2)", "Unknown parameter metadata 'color'.", 1, 23);
+    assert_error("param x = 1 meta(label=2)", "Parameter metadata text requires double quotes.", 1, 24);
+    assert_error("param x = 1 meta(options=[\"Only\"])", "Parameter options require 2 to 32 labels.", 1, 26);
     assert_error("let x = {a:1,a:2}", "Duplicate user data field 'a'.", 1, 14);
     assert_error(
         "let x = {constructor:1}",

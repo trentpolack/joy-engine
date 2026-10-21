@@ -18,21 +18,24 @@ use egui::{
     Vec2,
 };
 use joy_core::math::deterministic;
+use joy_ui::theme::tokens;
 
+// Development widgets read the shared design tokens; only their darker overlay surfaces differ from authoring panels,
+// so runtime tools stay legible over bright game frames.
 /// Development widget accent.
-pub const ACCENT: Color32 = Color32::from_rgb(0xed, 0x6c, 0x39);
+pub const ACCENT: Color32 = tokens::ACCENT;
 /// Development widget panel fill.
-pub const BACKGROUND: Color32 = Color32::from_rgb(0x08, 0x0b, 0x16);
+pub const BACKGROUND: Color32 = tokens::OVERLAY;
 /// Development widget input fill.
-pub const INPUT: Color32 = Color32::from_rgb(0x05, 0x07, 0x11);
+pub const INPUT: Color32 = tokens::OVERLAY_FIELD;
 /// Development widget text.
-pub const TEXT: Color32 = Color32::from_rgb(0xee, 0xee, 0xee);
+pub const TEXT: Color32 = tokens::TEXT;
 /// Development widget secondary text.
-pub const MUTED: Color32 = Color32::from_rgb(0xb2, 0xb8, 0xcb);
+pub const MUTED: Color32 = tokens::MUTED;
 /// Development widget separators and input borders.
-pub const LINE: Color32 = Color32::from_rgb(0x34, 0x39, 0x4b);
+pub const LINE: Color32 = tokens::LINE;
 /// Development widget error text.
-pub const ERROR: Color32 = Color32::from_rgb(0xff, 0x8e, 0x8e);
+pub const ERROR: Color32 = tokens::DANGER;
 
 /// Distance from the viewport edges in logical pixels.
 const EDGE: f32 = 12.0;

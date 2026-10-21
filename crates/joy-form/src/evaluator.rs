@@ -181,6 +181,7 @@ impl Runtime<'_> {
                 name,
                 values,
                 metadata,
+                presentation,
             } => {
                 if !top_level {
                     return Err("Parameters must be declared outside repeat blocks.".to_string().into());
@@ -197,7 +198,8 @@ impl Runtime<'_> {
                     evaluated_metadata.push((key.clone(), parameters::read(&self.expression(expression, scope)?)?));
                 }
                 let supplied = self.overrides.get(name).cloned().unwrap_or_else(|| defaults[0].json());
-                let (parameter, value) = parameters::create(name, &defaults, &evaluated_metadata, &supplied)?;
+                let (parameter, value) =
+                    parameters::create(name, &defaults, &evaluated_metadata, presentation, &supplied)?;
                 if value.kind("mesh") {
                     self.track_mesh(&value.json())?;
                 }

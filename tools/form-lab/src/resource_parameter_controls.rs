@@ -51,7 +51,10 @@ pub fn resource_group(
     let (mut color, metallic, roughness) = material_factors(&parameter.value);
     ui.horizontal(|ui| {
         ui.label(RichText::new(parameter.kind.badge()).color(tokens::MUTED).size(tokens::TYPE_SM));
-        ui.label(RichText::new(title).color(tokens::TEXT).strong());
+        let title_label = ui.label(RichText::new(title).color(tokens::TEXT).strong());
+        if let Some(info) = &parameter.text.info {
+            title_label.on_hover_text(info.as_str());
+        }
         joy_engine::development::modified_marker(ui, overridden);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if reset_override_button(ui, overridden, &parameter.name).clicked() && overridden {

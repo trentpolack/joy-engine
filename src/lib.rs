@@ -113,6 +113,10 @@ pub mod development;
 pub mod runtime;
 
 pub use development::DevTools;
+pub use joy_devtools::{
+    game_assets,
+    source_root,
+};
 pub use runtime::{
     App,
     AppError,
@@ -136,6 +140,7 @@ pub use runtime::{
 pub use runtime::{
     HeadlessOptions,
     HeadlessShell,
+    region_mean_color,
 };
 
 /// Immediate-mode UI for HUDs and tools.

@@ -17,6 +17,12 @@
      ]
     },
     {
+     "name": "variant",
+     "kind": "text",
+     "label": "Variant",
+     "description": "A FORM LAB document's named variant, applied beneath the parameter overrides."
+    },
+    {
      "name": "parameters",
      "kind": "record",
      "description": "FORM parameter overrides; omitted parameters use the script defaults."

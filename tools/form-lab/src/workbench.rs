@@ -124,6 +124,9 @@ use crate::workspace_layout::{
 /// The tool's version, shown beside its name.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Product name shown in the standalone header.
+const PRODUCT_NAME: &str = "FORM LAB";
+
 /// Storage folder (natively) for recovery and layout preferences.
 pub const STORAGE_APPLICATION: &str = "form-lab";
 
@@ -639,6 +642,12 @@ impl FormLab {
         {
             self.artifact.open(ArtifactKind::Save, &file_stem(&self.session.name));
         }
+        if standalone
+            && self.replacement.is_none()
+            && context.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::O))
+        {
+            self.open_document();
+        }
         egui::Area::new(egui::Id::new("form-lab-root"))
             .fixed_pos(area.min)
             .order(egui::Order::Background)
@@ -698,18 +707,7 @@ impl FormLab {
     fn header(&mut self, ui: &mut Ui, standalone: bool) {
         ui.horizontal_centered(|ui| {
             if standalone {
-                let painter = ui.painter().clone();
-                let title = joy_engine::runtime::hud_text::single(
-                    &painter,
-                    "FORM LAB",
-                    joy_engine::runtime::hud_text::Style::new(26.0, tokens::ACCENT).heavy().spacing(0.5),
-                );
-                let (rect, _) = ui.allocate_exact_size(title.size(), egui::Sense::hover());
-                title.paint(&painter, rect.min);
-                egui::Frame::new()
-                    .stroke(egui::Stroke::new(1.0, tokens::ACCENT))
-                    .inner_margin(egui::Margin::symmetric(4, 1))
-                    .show(ui, |ui| ui.label(RichText::new(VERSION).color(tokens::ACCENT).size(tokens::TYPE_XS)));
+                components::app_title(ui, PRODUCT_NAME, VERSION);
                 ui.add_space(tokens::SPACE_LG);
             }
             let view = view_menu(ui, &mut self.layout);
@@ -734,16 +732,14 @@ impl FormLab {
                         self.artifact.open(ArtifactKind::Save, &file_stem(&self.session.name));
                     }
                     if self
-                        .track("open", ui.button("OPEN").on_hover_text("Open a .form script or .formlab document"))
+                        .track(
+                            "open",
+                            ui.button("OPEN")
+                                .on_hover_text("Open a .form script or .formlab document (Ctrl/Command+O)"),
+                        )
                         .clicked()
                     {
-                        let request = OpenRequest::text(
-                            "Open",
-                            FileFilter::new("FORM documents", &["formlab", "form", "txt", "json"]),
-                        )
-                        .maximum_bytes(joy_engine::form::DOCUMENT_FILE_BYTES);
-                        let started = self.dialogs.open(request);
-                        self.start_file(FilePurpose::OpenDocument, started);
+                        self.open_document();
                     }
                 }
             });
@@ -754,6 +750,14 @@ impl FormLab {
             egui::pos2(rect.right() + 16.0, rect.bottom() + 8.0),
         );
         ui.painter().rect_filled(line, 0.0, tokens::ACCENT);
+    }
+
+    /// Ask for a `.form` script or `.formlab` document to open.
+    fn open_document(&mut self) {
+        let request = OpenRequest::text("Open", FileFilter::new("FORM documents", &["formlab", "form", "txt", "json"]))
+            .maximum_bytes(joy_engine::form::DOCUMENT_FILE_BYTES);
+        let started = self.dialogs.open(request);
+        self.start_file(FilePurpose::OpenDocument, started);
     }
 
     fn project_bar(&mut self, ui: &mut Ui, standalone: bool) {

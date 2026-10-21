@@ -67,6 +67,14 @@ pub struct FieldMetadata {
     pub step: Option<f64>,
     /// Fixed choices.
     pub choices: Vec<String>,
+    /// Help shown on hover, such as a FORM parameter's `info`.
+    pub description: Option<String>,
+    /// Whole numbers only (FORM `int`, `bool`, `seed`, and `enum` parameters).
+    pub integer: bool,
+    /// Labels for a numeric option index (a FORM `enum` parameter); the field stores the chosen index.
+    pub options: Vec<String>,
+    /// Whether the number is a random seed, edited with a reroll button.
+    pub seed: bool,
 }
 
 /// Everything a tree build borrows.
@@ -97,6 +105,10 @@ pub enum FieldControl {
     Choice(Vec<String>),
     /// A project asset of accepted kinds: `(value, label)` options, starting with the unassigned choice.
     Asset(Vec<(String, String)>),
+    /// A numeric option index shown with these labels; the field stores the chosen index.
+    Indexed(Vec<String>),
+    /// A whole-number random seed with these bounds, edited with a reroll button.
+    Seed(NumberBounds),
 }
 
 /// A scalar field.
@@ -461,17 +473,21 @@ impl TreeBuilder<'_, '_> {
                 }
             }
             FieldControl::Choice(offered)
+        } else if !metadata.options.is_empty() && value.is_number() {
+            FieldControl::Indexed(metadata.options.clone())
         } else {
+            let bounds = NumberBounds {
+                min: metadata.min.or_else(|| schema.and_then(|schema| schema.min)),
+                max: metadata.max.or_else(|| schema.and_then(|schema| schema.max)),
+                step: metadata
+                    .step
+                    .or_else(|| schema.and_then(|schema| if schema.integer { Some(1.0) } else { schema.step })),
+                integer: metadata.integer || schema.is_some_and(|schema| schema.integer),
+            };
             match value {
                 Value::Bool(_) => FieldControl::Boolean,
-                Value::Number(_) => FieldControl::Number(NumberBounds {
-                    min: metadata.min.or_else(|| schema.and_then(|schema| schema.min)),
-                    max: metadata.max.or_else(|| schema.and_then(|schema| schema.max)),
-                    step: metadata
-                        .step
-                        .or_else(|| schema.and_then(|schema| if schema.integer { Some(1.0) } else { schema.step })),
-                    integer: schema.is_some_and(|schema| schema.integer),
-                }),
+                Value::Number(_) if metadata.seed => FieldControl::Seed(bounds),
+                Value::Number(_) => FieldControl::Number(bounds),
                 Value::Null => FieldControl::Text {
                     placeholder: Some("null — enter text to replace".to_owned()),
                 },
@@ -485,7 +501,7 @@ impl TreeBuilder<'_, '_> {
             issue: self.issue(&path),
             path,
             label,
-            description: schema.and_then(|schema| schema.description.clone()),
+            description: metadata.description.clone().or_else(|| schema.and_then(|schema| schema.description.clone())),
             value: value.clone(),
             control,
         }

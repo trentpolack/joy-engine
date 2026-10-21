@@ -6,8 +6,13 @@
 //! edits. These models stay independent of the parameter controls' UI.
 
 use joy_engine::form::{
+    ParameterControl,
     mesh_box_value,
     mesh_sphere_value,
+    parameter_control,
+    parameter_group,
+    parameter_info,
+    parameter_label,
     read_material_value,
     read_mesh,
 };
@@ -71,6 +76,28 @@ impl ParameterKind {
     }
 }
 
+/// The script's presentation of a parameter: its inspector title, optional group heading, and hover help.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ParameterText {
+    /// The inspector title: the script's `label`, or its name with underscores as spaces, in capitals.
+    pub title: String,
+    /// The script's `group`, gathering related parameters under one heading.
+    pub group: Option<String>,
+    /// The script's `info`, shown on hover.
+    pub info: Option<String>,
+}
+
+impl ParameterText {
+    /// Read the presentation fields of a build descriptor.
+    fn read(descriptor: &Json) -> Self {
+        Self {
+            title: parameter_label(descriptor).to_uppercase(),
+            group: parameter_group(descriptor).map(str::to_owned),
+            info: parameter_info(descriptor).map(str::to_owned),
+        }
+    }
+}
+
 /// A bounded scalar, vector, or color parameter from the latest accepted build.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NumericParameter {
@@ -78,6 +105,10 @@ pub struct NumericParameter {
     pub name: String,
     /// Scalar, vector, or color.
     pub kind: ParameterKind,
+    /// Title, group, and help.
+    pub text: ParameterText,
+    /// The control a scalar asks for: continuous, whole number, toggle, choice, or seed.
+    pub control: ParameterControl,
     /// Inclusive lower bound for every component.
     pub minimum: f64,
     /// Inclusive upper bound for every component.
@@ -113,6 +144,8 @@ pub struct ResourceParameter {
     pub name: String,
     /// Mesh or material.
     pub kind: ParameterKind,
+    /// Title, group, and help.
+    pub text: ParameterText,
     /// The script's default resource.
     pub default_value: Json,
     /// The resolved resource of the build.
@@ -144,6 +177,14 @@ impl Parameter {
             Self::Resource(parameter) => parameter.kind,
         }
     }
+
+    /// Title, group, and help.
+    pub fn text(&self) -> &ParameterText {
+        match self {
+            Self::Numeric(parameter) => &parameter.text,
+            Self::Resource(parameter) => &parameter.text,
+        }
+    }
 }
 
 /// Typed parameters from a build's serialized descriptors; malformed descriptors are skipped.
@@ -165,6 +206,7 @@ fn read_parameter(descriptor: &Json) -> Option<Parameter> {
         return Some(Parameter::Resource(ResourceParameter {
             name,
             kind,
+            text: ParameterText::read(descriptor),
             default_value: descriptor.get("defaultValue").cloned().unwrap_or(Json::Null),
             value: descriptor.get("value").cloned().unwrap_or(Json::Null),
         }));
@@ -180,6 +222,8 @@ fn read_parameter(descriptor: &Json) -> Option<Parameter> {
     Some(Parameter::Numeric(NumericParameter {
         name,
         kind,
+        text: ParameterText::read(descriptor),
+        control: parameter_control(descriptor),
         minimum: number("min")?,
         maximum: number("max")?,
         step: number("step").unwrap_or(0.0),
@@ -188,16 +232,19 @@ fn read_parameter(descriptor: &Json) -> Option<Parameter> {
     }))
 }
 
-/// A key that changes only when declarations change (names, types, bounds, defaults), so controls rebuild then and
-/// otherwise keep their state across builds.
+/// A key that changes only when declarations change (names, types, bounds, defaults, titles, controls), so controls
+/// rebuild then and otherwise keep their state across builds.
 pub fn parameter_signature(parameters: &[Parameter]) -> String {
     let declarations: Vec<Json> = parameters
         .iter()
         .map(|parameter| match parameter {
-            Parameter::Resource(resource) => json!({"name": resource.name, "type": resource.kind.name()}),
+            Parameter::Resource(resource) => {
+                json!({"name": resource.name, "type": resource.kind.name(), "title": resource.text.title})
+            }
             Parameter::Numeric(numeric) => json!({
                 "name": numeric.name, "type": numeric.kind.name(), "min": numeric.minimum, "max": numeric.maximum,
-                "step": numeric.step, "defaultValue": numeric.default_value
+                "step": numeric.step, "defaultValue": numeric.default_value, "title": numeric.text.title,
+                "control": format!("{:?}", numeric.control)
             }),
         })
         .collect();

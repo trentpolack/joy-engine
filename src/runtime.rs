@@ -34,8 +34,10 @@ pub use joy_app::{
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use joy_app::{
+    CAPTURE_DIRECTORY_VARIABLE,
     HeadlessOptions,
     HeadlessShell,
+    region_mean_color,
 };
 pub use joy_audio::{
     AudioBank,

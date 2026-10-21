@@ -44,10 +44,6 @@ use joy_engine::egui::{
 };
 use joy_engine::math::Vec2;
 use joy_engine::particles::decode_particle_texture;
-use joy_engine::runtime::hud_text::{
-    self,
-    Style,
-};
 use joy_engine::runtime::theme::tokens;
 use joy_engine::runtime::{
     Storage,
@@ -84,6 +80,18 @@ use crate::viewport::{
 
 /// Header height in standalone mode, including the accent rule.
 const HEADER_HEIGHT: f32 = 100.0;
+/// Left inset of the header title.
+const HEADER_INSET: f32 = 30.0;
+/// Width the header keeps for its actions on the right.
+const HEADER_ACTIONS_WIDTH: f32 = 320.0;
+/// Height of the header's title and subtitle block, for vertical centering.
+const HEADER_TITLE_BLOCK: f32 = 52.0;
+/// Product name and subtitle in the standalone header.
+const PRODUCT_NAME: &str = "PARTICLE LAB";
+const PRODUCT_SUBTITLE: &str = "A Joy Games experiment";
+/// Status bar text in standalone mode.
+const FOOTER_LEFT: &str = "Joy-Games / Particle Lab";
+const FOOTER_RIGHT: &str = "Local workspace · No cloud required";
 /// Project bar height.
 const PROJECT_BAR_HEIGHT: f32 = 54.0;
 /// Footer height in standalone mode.
@@ -324,16 +332,26 @@ impl Interface {
         region
     }
 
-    /// Document shortcuts: Ctrl/Cmd+Enter applies; Space toggles playback and R restarts outside text fields (a focused
+    /// Document shortcuts: Ctrl/Cmd+Enter applies; Ctrl/Cmd+S saves and Ctrl/Cmd+O opens a `.joyfx` when standalone
+    /// (a hosting editor owns saving and opening); Space toggles playback and R restarts outside text fields (a focused
     /// viewport, button, or slider still takes them).
     fn shortcuts(&mut self, context: &egui::Context, lab: &mut ParticleLab) {
         let editing = context.text_edit_focused();
-        let (apply, space, restart) = context.input_mut(|input| {
+        let standalone = !self.hosted;
+        let (apply, space, restart, save, open) = context.input_mut(|input| {
             let apply = input.consume_key(egui::Modifiers::COMMAND, egui::Key::Enter);
             let space = !editing && input.consume_key(egui::Modifiers::NONE, egui::Key::Space);
             let restart = !editing && input.consume_key(egui::Modifiers::NONE, egui::Key::R);
-            (apply, space, restart)
+            let save = standalone && input.consume_key(egui::Modifiers::COMMAND, egui::Key::S);
+            let open = standalone && input.consume_key(egui::Modifiers::COMMAND, egui::Key::O);
+            (apply, space, restart, save, open)
         });
+        if save {
+            self.request(DialogPurpose::SaveEffect, lab);
+        }
+        if open {
+            self.request(DialogPurpose::OpenEffect, lab);
+        }
         if apply {
             lab.apply(false);
         }
@@ -350,30 +368,17 @@ impl Interface {
     // -----------------------------------------------------------------------------------------------------------------
 
     fn header(&mut self, ui: &mut Ui, lab: &mut ParticleLab, rect: Rect) {
-        let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, CornerRadius::ZERO, tokens::PANEL);
-        painter.rect_filled(
-            Rect::from_min_max(pos2(rect.left(), rect.bottom() - 4.0), rect.max),
-            CornerRadius::ZERO,
-            tokens::ACCENT,
+        ui.painter_at(rect).rect_filled(rect, CornerRadius::ZERO, tokens::PANEL);
+        components::header_rule(ui, rect);
+        let title_area = Rect::from_min_max(
+            rect.min + vec2(HEADER_INSET, 0.0),
+            pos2(rect.right() - HEADER_ACTIONS_WIDTH, rect.bottom() - tokens::BORDER_ACCENT),
         );
-        let title = hud_text::single(&painter, "PARTICLE LAB", Style::new(34.0, tokens::ACCENT).heavy().spacing(0.5));
-        let title_rect = title.paint_in(
-            &painter,
-            Rect::from_min_size(rect.min + vec2(30.0, 0.0), vec2(400.0, rect.height() - 4.0)),
-            Align::Min,
-            Align::Center,
-        );
-        let version = env!("CARGO_PKG_VERSION");
-        let badge = Rect::from_min_size(pos2(title_rect.right() + 10.0, title_rect.top() - 2.0), vec2(40.0, 18.0));
-        painter.rect_stroke(badge, CornerRadius::ZERO, Stroke::new(1.0, tokens::ACCENT), egui::StrokeKind::Inside);
-        painter.text(
-            badge.center(),
-            Align2::CENTER_CENTER,
-            version,
-            FontId::monospace(tokens::TYPE_XS),
-            tokens::ACCENT,
-        );
+        ui.scope_builder(UiBuilder::new().max_rect(title_area).layout(Layout::top_down(Align::Min)), |ui| {
+            ui.add_space(((title_area.height() - HEADER_TITLE_BLOCK) / 2.0).max(0.0));
+            ui.horizontal(|ui| components::app_title(ui, PRODUCT_NAME, env!("CARGO_PKG_VERSION")));
+            components::caption(ui, PRODUCT_SUBTITLE, tokens::CREAM);
+        });
         let buttons =
             Rect::from_min_max(pos2(rect.right() - 300.0, rect.top()), pos2(rect.right() - 28.0, rect.bottom() - 4.0));
         ui.scope_builder(UiBuilder::new().max_rect(buttons).layout(Layout::right_to_left(Align::Center)), |ui| {
@@ -955,25 +960,9 @@ fn pane(ui: &mut Ui, rect: Rect, contents: impl FnOnce(&mut Ui)) {
     });
 }
 
-/// The footer strip.
+/// The footer strip: the shared status bar.
 fn footer(ui: &mut Ui, rect: Rect) {
-    let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, CornerRadius::ZERO, tokens::PANEL);
-    painter.line_segment([rect.left_top(), rect.right_top()], Stroke::new(1.0, tokens::BORDER));
-    painter.text(
-        rect.left_center() + vec2(28.0, 0.0),
-        Align2::LEFT_CENTER,
-        "JOY-GAMES / PARTICLE LAB",
-        FontId::monospace(tokens::TYPE_SM),
-        tokens::MUTED,
-    );
-    painter.text(
-        rect.right_center() - vec2(28.0, 0.0),
-        Align2::RIGHT_CENTER,
-        "LOCAL WORKSPACE · NO CLOUD REQUIRED",
-        FontId::monospace(tokens::TYPE_SM),
-        tokens::MUTED,
-    );
+    ui.scope_builder(UiBuilder::new().max_rect(rect), |ui| components::status_bar(ui, FOOTER_LEFT, FOOTER_RIGHT));
 }
 
 /// One emitter stack row.

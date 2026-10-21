@@ -7,6 +7,7 @@ use crate::Diagnostic;
 use crate::ast::{
     ExprKind,
     Expression,
+    ParameterPresentation,
     Statement,
     StmtKind,
     Token,
@@ -17,6 +18,33 @@ const SOURCE_LIMIT: usize = 200_000;
 const TOKEN_LIMIT: usize = 40_000;
 const BLOCK_DEPTH_LIMIT: usize = 48;
 const EXPRESSION_DEPTH_LIMIT: usize = 64;
+// Parameter `meta(...)` keys: numeric bounds the evaluator reads, then presentation text editors show.
+pub(crate) const PARAMETER_MINIMUM: &str = "min";
+pub(crate) const PARAMETER_MAXIMUM: &str = "max";
+pub(crate) const PARAMETER_STEP: &str = "step";
+const PARAMETER_LABEL: &str = "label";
+const PARAMETER_GROUP: &str = "group";
+const PARAMETER_INFO: &str = "info";
+const PARAMETER_KIND: &str = "kind";
+const PARAMETER_OPTIONS: &str = "options";
+const PARAMETER_METADATA_KEYS: [&str; 8] = [
+    PARAMETER_MINIMUM,
+    PARAMETER_MAXIMUM,
+    PARAMETER_STEP,
+    PARAMETER_LABEL,
+    PARAMETER_GROUP,
+    PARAMETER_INFO,
+    PARAMETER_KIND,
+    PARAMETER_OPTIONS,
+];
+
+// Presentation text limits, in characters, so inspectors can lay parameters out predictably.
+const PARAMETER_LABEL_LIMIT: usize = 48;
+const PARAMETER_GROUP_LIMIT: usize = 32;
+const PARAMETER_INFO_LIMIT: usize = 160;
+const PARAMETER_KIND_LIMIT: usize = 16;
+const PARAMETER_OPTION_LIMIT: usize = 32;
+const PARAMETER_OPTION_COUNT_LIMIT: usize = 32;
 const INVALID_DATA_KEY: &str = "Invalid user data field name (1–64 characters; prototype keys are reserved).";
 
 /// User data field names FORM rejects. Exported user data lands in glTF `extras`, and these names would alter object
@@ -164,6 +192,7 @@ impl Parser {
         self.expect("=")?;
         let mut values = vec![self.expression(0)?];
         let mut metadata: Vec<(String, Expression)> = Vec::new();
+        let mut presentation = ParameterPresentation::default();
         if self.take(",") {
             // The legacy form always has exactly four positional expressions.
             values.push(self.expression(0)?);
@@ -174,16 +203,27 @@ impl Parser {
         } else if self.take("meta") {
             self.expect("(")?;
             if !self.take(")") {
+                let mut seen: Vec<String> = Vec::new();
                 loop {
                     let key = self.name()?;
-                    if !matches!(key.as_str(), "min" | "max" | "step") {
+                    if !PARAMETER_METADATA_KEYS.contains(&key.as_str()) {
                         return Err(Diagnostic::at(format!("Unknown parameter metadata '{key}'."), self.current()));
                     }
-                    if metadata.iter().any(|(existing, _)| existing == &key) {
+                    if seen.contains(&key) {
                         return Err(Diagnostic::at(format!("Duplicate metadata '{key}'."), self.current()));
                     }
+                    seen.push(key.clone());
                     self.expect("=")?;
-                    metadata.push((key, self.expression(0)?));
+                    match key.as_str() {
+                        PARAMETER_MINIMUM | PARAMETER_MAXIMUM | PARAMETER_STEP => {
+                            metadata.push((key.clone(), self.expression(0)?));
+                        }
+                        PARAMETER_LABEL => presentation.label = Some(self.metadata_text(PARAMETER_LABEL_LIMIT)?),
+                        PARAMETER_GROUP => presentation.group = Some(self.metadata_text(PARAMETER_GROUP_LIMIT)?),
+                        PARAMETER_INFO => presentation.info = Some(self.metadata_text(PARAMETER_INFO_LIMIT)?),
+                        PARAMETER_KIND => presentation.kind = Some(self.metadata_text(PARAMETER_KIND_LIMIT)?),
+                        _ => presentation.options = self.metadata_options()?,
+                    }
                     if !self.take(",") {
                         break;
                     }
@@ -196,9 +236,48 @@ impl Parser {
                 name,
                 values,
                 metadata,
+                presentation,
             },
             token,
         })
+    }
+
+    /// One double-quoted, single-line metadata text of at most `limit` characters.
+    fn metadata_text(&mut self, limit: usize) -> Result<String, Diagnostic> {
+        let token = self.current().clone();
+        let text: String = serde_json::from_str(&token.text)
+            .map_err(|_| Diagnostic::at("Parameter metadata text requires double quotes.", &token))?;
+        if text.chars().count() > limit || text.contains(['\r', '\n']) {
+            return Err(Diagnostic::at(
+                format!("Parameter metadata text must be one line of at most {limit} characters."),
+                &token,
+            ));
+        }
+        self.cursor += 1;
+        Ok(text)
+    }
+
+    /// A bracketed list of option labels, such as `["Low", "Medium", "High"]`: at least two, at most the option limit.
+    fn metadata_options(&mut self) -> Result<Vec<String>, Diagnostic> {
+        let token = self.current().clone();
+        self.expect("[")?;
+        let mut options = Vec::new();
+        if !self.take("]") {
+            loop {
+                options.push(self.metadata_text(PARAMETER_OPTION_LIMIT)?);
+                if !self.take(",") {
+                    break;
+                }
+            }
+            self.expect("]")?;
+        }
+        if options.len() < 2 || options.len() > PARAMETER_OPTION_COUNT_LIMIT {
+            return Err(Diagnostic::at(
+                format!("Parameter options require 2 to {PARAMETER_OPTION_COUNT_LIMIT} labels."),
+                &token,
+            ));
+        }
+        Ok(options)
     }
 
     fn project(&mut self, token: Token) -> Result<Statement, Diagnostic> {

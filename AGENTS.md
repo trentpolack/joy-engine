@@ -40,13 +40,15 @@ Keep the engine's public API small and document why new shared behavior belongs 
 In addition:
 - Update the root-level `CHANGELOG.md` whenever a major/minor/patch change is made; don't get too granular, just calling out major changes.
 - Group changelog entries under one `## MM-DD-YYYY` heading per day, newest first, with `###` headings for projects or topics. Reuse the day's existing heading rather than creating duplicate date sections. Use the completion date in `America/Detroit` for current work and the introducing commit's date in that timezone for historical backfills. Do not add `Unreleased` sections or replace known historical dates with today's date. Automated changelog updates must preserve existing entries and this daily structure.
-- When encountering new/found work, bugs, potential future work, deprecated logic/packages, adding tech debt then create an Issue in GitHub.
+- When encountering new/found work, bugs, potential future work, deprecated logic/packages, adding tech debt then create an Issue in GitHub. Agents whose instructions forbid filing issues (see `CLAUDE.md`) list these as proposed issues in their completion report instead.
   - Don't create "checklist" issues; just file actionable issues.
   - For follow-up/future work, create a GitHub Issue; do not create standalone markdown files like `follow-ups.md`.
   - Do not file issues for work that is being addressed within current task(s); file issues for work that needs eyes on it for future work.
   - Apply appropriate labels/tags to issues.
+- When engine work absorbs behavior that consumers implement themselves (games in a hosting workspace, Joy Editor, the labs, or examples), migrate those consumers in the same change and delete their now-redundant code. A new engine mechanism without its consumer migration is unfinished work. Name what each consumer removed in the completion report.
 
-Use the completion date in `America/Detroit`. Keep the whole summary under roughly 300 words; link out instead of expanding.
+### Completion Reports
+Keep the whole summary under roughly 300 words and link out instead of expanding. State what changed, what was validated (and what could not be), consumer code removed, and proposed follow-up issues. Use the completion date in `America/Detroit`.
 
 ## Joy Engine Cloud Patch Delivery
 - For engine file changes delivered as a cloud bundle, produce `.patches/joy-engine.patch`, `.patches/joy-engine-base.txt`, `.patches/joy-engine-manifest.txt`, and `.patches/joy-engine-tests.txt` in this repository's root. A hosting workspace may specify its own delivery directory; follow that workspace's instructions when the engine is nested there.
@@ -76,10 +78,11 @@ Move code into the engine (the engine crate that owns it) when it is stable beha
 
 ## Code Standards and AI Agent Rules
 - Follow [**Coding Standards**](docs/coding-standards.md) and [**Rust Coding Standards**](docs/rust-coding-standards.md). Apply them to changed code as well as new code.
-- Always use [JoyCore](https://github.com/trentpolack/JoyCore) as a reference for code organization, commenting style, naming, clarity, and overall readability. Consult relevant examples when implementing or refactoring code, and adapt their principles to this repository's language and browser-native architecture, even when JoyCore uses a different language or engine.
+- Always use [JoyCore](https://github.com/trentpolack/JoyCore) as a reference for code organization, commenting style, naming, clarity, and overall readability. Consult relevant examples when implementing or refactoring code, and adapt their principles to this repository's Rust architecture, even when JoyCore uses a different language or engine.
 - Write runtime code in Rust with descriptive names and documented public contracts. Keep browser-specific glue in the platform crates' `web` modules.
 - Keep shared numeric and data contracts in `joy-core` (`crates/joy-core/`) and GPU-free render data (meshes, materials, and lights) in `joy-render-types` (`crates/joy-render-types/`), with consumer exports in `src/lib.rs`. Games own their presentation and gameplay contracts.
 - New games are Cargo workspace members that depend on `joy-engine`; retain npm metadata and scripts for site orchestration. Node tooling and the VS Code extension may use their appropriate host languages.
+- Games read authored text assets (`.form`, `.formlab`, `.joyfx`, `.joylevel`, `.joyobject`, tuning JSON) through `GameAssets` (`joy_engine::game_assets!` or `joy_engine::source_root!`) rather than bare `include_str!`, so native development builds hot reload edits while browser and release builds stay embedded. Build levels from authored `.joylevel` documents with `AssetScene::prepare_level` so FORM assets and their object placements reach play the same way they look in Joy Editor.
 - Keep all common/engine functionality in the engine crates and consume it through `joy-engine`; do not add parallel implementations or compatibility packages.
 - Keep one primary responsibility per module.
 - Put tuning values and palettes in the owning workspace's configuration modules.
@@ -112,13 +115,8 @@ Move code into the engine (the engine crate that owns it) when it is stable beha
 - Development entry points should expose useful startup, backend, lifecycle, and failure diagnostics without producing routine logs in production builds. Reusable frame/runtime inspection belongs in Joy Engine and should remain removable from production sessions.
 - Verify development behavior through the actual npm entry point. The root `dev` command must serve development web builds; project `dev` commands run native development builds; production preview is explicitly named `preview`. Test production silence separately from development diagnostics.
 - Test for Safari, Chrome, and Edge.
-- The following spacing rules apply to retained Node tooling; `rustfmt` controls Rust formatting. Don't put a space after `if`, `for`, `while` keywords.
-- Put all `if` logic in braces (and not on a single line).
-- Don't add unnecessary trailing commas for containers/initializers.
-- When using operators that adjust and set a variable (`+=`, `-=`, `*=`, etc.) don't add a space; e.g., it should be: `x+= 1`.
-- Don't use spaces around exponents, multiplication, or division operators; addition and subtraction should have spaces between two parameters.
+- Retained Node tooling follows the spacing and comment rules in the [coding standards](docs/coding-standards.md#node-and-extension-tooling); `rustfmt` controls Rust formatting.
 - When using scalars, don't use decimals when the expected operation is essentially between integers. Use decimals when it's assumed that they're floating-point values.
-- When writing JSDoc-style function comments, the description for the function should be a new line after the initial `/*`.
 - For clarity when multiple operations are happening, I like to make the order of operations clear with parentheses that may be _functionally_ pointless but improve readability.
 - Games built on the engine need the standard CONFIG button/menu and JOY-EDITOR config button/menu; the engine owns those shared development widgets.
 - Always avoid hard-coded strings that have gameplay/logic/engine relevance; prefer to create a const variable for the string and use _that_ elsewhere.

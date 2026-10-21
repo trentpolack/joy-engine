@@ -27,6 +27,10 @@ winit.workspace = true
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egui-winit.workspace = true
 
+[dev-dependencies]
+# The theme test reads the canonical design token file.
+serde_json.workspace = true
+
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 # The scRGB UI composite test waits on a headless device and its readback.
 pollster.workspace = true

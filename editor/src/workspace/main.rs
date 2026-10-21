@@ -29,6 +29,10 @@ use super::constants::{
     REFRESH_SECONDS,
 };
 use super::documents::WorkspaceDocument;
+use super::play::{
+    PlaySession,
+    PlayState,
+};
 use super::session::{
     LayoutPreferences,
     WorkspaceSession,
@@ -190,6 +194,9 @@ pub struct Workspace {
     filters: BTreeSet<String>,
     selected_asset: Option<String>,
 
+    // The game Play started, ended when Play stops or the workspace drops.
+    play: PlaySession,
+
     // Session, timers, and messages.
     session: WorkspaceSession,
     status: String,
@@ -217,6 +224,7 @@ impl Workspace {
             search: String::new(),
             filters: BTreeSet::new(),
             selected_asset: None,
+            play: PlaySession::new(),
             session,
             status: "Connecting to local project…".to_owned(),
             next_poll: POLL_SECONDS,
@@ -268,6 +276,33 @@ impl Workspace {
     /// The selected project's summary.
     pub fn project_summary(&self) -> Option<&ProjectSummary> {
         self.projects.iter().find(|project| project.id == self.project)
+    }
+
+    /// Where Play stands.
+    pub fn play_state(&self) -> PlayState {
+        self.play.state()
+    }
+
+    /// Whether Play can run the selected project: a native editor with a project folder on disk.
+    pub fn can_play(&self) -> bool {
+        PlaySession::available() && self.writable() && self.project_summary().is_some()
+    }
+
+    /// Run the selected project's game in its own window (see [`PlaySession`]), reporting the outcome in the status.
+    pub fn play(&mut self) {
+        let Some(project) = self.project_summary().cloned() else {
+            return;
+        };
+        match self.play.start(&project.name, std::path::Path::new(&project.location)) {
+            Ok(()) => self.set_status(format!("Playing {} in its own window; saved assets reload live.", project.name)),
+            Err(message) => self.set_status(message),
+        }
+    }
+
+    /// Stop the running game.
+    pub fn stop_play(&mut self) {
+        self.play.stop();
+        self.set_status("Play stopped.");
     }
 
     /// Every supported asset in the project.
@@ -806,6 +841,9 @@ impl Workspace {
         if time_seconds >= self.next_poll {
             self.next_poll = time_seconds + POLL_SECONDS;
             self.poll();
+            if let Some(message) = self.play.poll() {
+                self.set_status(message);
+            }
         }
         if time_seconds >= self.next_refresh {
             self.next_refresh = time_seconds + REFRESH_SECONDS;

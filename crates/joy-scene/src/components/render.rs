@@ -67,6 +67,8 @@ pub enum RenderSource {
         asset: String,
         /// FORM parameter overrides; omitted parameters use the script defaults.
         parameters: JsonRecord,
+        /// A FORM LAB document's named variant, applied beneath `parameters`.
+        variant: Option<String>,
     },
     /// A unit primitive scaled by `size` (only boxes and spheres are drawable).
     Primitive(PrimitiveShape),
@@ -88,9 +90,10 @@ pub struct RenderComponent {
 impl RenderComponent {
     /// Interpret an authored `render` record.
     ///
-    /// An assigned `asset` (any value but absent, null, or an empty path) must be a safe `.form`/`.formlab` path, and
-    /// its `parameters`, when present, an object; these are the only failures. Malformed `size` and `color` fall back
-    /// to defaults, and an unsupported shape makes the component hidden rather than invalid.
+    /// An assigned `asset` (any value but absent, null, or an empty path) must be a safe `.form`/`.formlab` path, its
+    /// `parameters`, when present, an object, and its `variant`, when present, text; these are the only failures.
+    /// Malformed `size` and `color` fall back to defaults, and an unsupported shape makes the component hidden rather
+    /// than invalid.
     pub fn read(record: &JsonRecord) -> Result<Self, ComponentError> {
         let source = if names_asset(record.get("asset")) {
             let Some(Value::String(path)) = record.get("asset") else {
@@ -102,9 +105,16 @@ impl RenderComponent {
                 Some(Value::Object(parameters)) => parameters.clone(),
                 Some(_) => return Err(ComponentError::InvalidParameters),
             };
+            let variant = match record.get("variant") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(name)) if name.trim().is_empty() => None,
+                Some(Value::String(name)) => Some(name.trim().to_owned()),
+                Some(_) => return Err(ComponentError::InvalidVariant),
+            };
             RenderSource::Mesh {
                 asset,
                 parameters,
+                variant,
             }
         } else {
             match record.get("shape").and_then(Value::as_str).and_then(PrimitiveShape::parse) {
@@ -148,6 +158,11 @@ pub(super) fn render_schema() -> ComponentSchema {
                 description: text("Replaces the primitive shape with a compiled FORM or FORM LAB mesh."),
                 asset_kinds: strings(&[component_asset_kind::FORM, component_asset_kind::FORM_LAB]),
                 ..ComponentFieldSchema::new("asset", ComponentFieldKind::Asset)
+            },
+            ComponentFieldSchema {
+                label: text("Variant"),
+                description: text("A FORM LAB document's named variant, applied beneath the parameter overrides."),
+                ..ComponentFieldSchema::new("variant", ComponentFieldKind::Text)
             },
             ComponentFieldSchema {
                 description: text("FORM parameter overrides; omitted parameters use the script defaults."),

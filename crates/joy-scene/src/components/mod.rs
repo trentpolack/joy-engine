@@ -60,6 +60,9 @@ pub enum ComponentError {
     /// Asset parameters were present but not an object.
     #[error("Asset parameters must be a record.")]
     InvalidParameters,
+    /// A render variant was present but not text.
+    #[error("Render variant must be text.")]
+    InvalidVariant,
     /// A mesh or effect asset path was invalid.
     #[error(transparent)]
     AssetPath(#[from] AssetPathError),

@@ -35,7 +35,6 @@ const engineRoot = resolve(scriptRoot, '../..');
 const WASM_TARGET = 'wasm32-unknown-unknown';
 // Licenses of adapted third-party code compiled into the engine, relative to the engine root.
 const THIRD_PARTY_LICENSES = [
-  'crates/joy-renderer/src/tone_mapping/LICENSE-OpenColorIO',
   'crates/joy-physics/src/sdf/LICENSE-sdf-dcd-demo'
 ];
 

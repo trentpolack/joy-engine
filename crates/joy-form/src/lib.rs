@@ -41,6 +41,7 @@ mod geometry_data;
 mod language_information;
 mod materials;
 mod math;
+mod parameter_descriptor;
 mod parameters;
 mod parser;
 mod primitives;
@@ -67,6 +68,13 @@ pub use materials::{
     AlphaMode,
     FormMaterial,
     FormMaterialTextures,
+};
+pub use parameter_descriptor::{
+    ParameterControl,
+    parameter_control,
+    parameter_group,
+    parameter_info,
+    parameter_label,
 };
 pub use primitives::{
     DEFAULT_SPHERE_SEGMENTS,

@@ -11,6 +11,7 @@
 //! `joy-devtools`.
 
 mod authoring_tool;
+mod choice_controls;
 pub mod components;
 pub mod file_dialogs;
 mod lab_controls;
@@ -27,6 +28,12 @@ pub use authoring_tool::{
     AuthoringTool,
     ToolDocument,
     ToolHosting,
+};
+pub use choice_controls::{
+    choice_control,
+    rerolled_seed,
+    seed_control,
+    toggle_control,
 };
 pub use file_dialogs::{
     FileContents,

@@ -65,6 +65,29 @@ impl Default for HeadlessOptions {
     }
 }
 
+/// Environment variable naming the folder [`HeadlessShell::save_capture`] writes review captures to.
+pub const CAPTURE_DIRECTORY_VARIABLE: &str = "JOY_CAPTURE_DIR";
+
+/// Mean RGB (0–255) of the pixels in the `x` by `y` rectangle of a tightly packed RGBA8 capture `width` pixels wide,
+/// such as [`HeadlessShell::capture`] returns. An empty rectangle averages to zero.
+pub fn region_mean_color(pixels: &[u8], width: u32, x: std::ops::Range<u32>, y: std::ops::Range<u32>) -> [f32; 3] {
+    let mut sum = [0.0_f32; 3];
+    let mut count = 0.0_f32;
+    for row in y {
+        for column in x.clone() {
+            let index = (((row * width) + column) * 4) as usize;
+            for (channel, total) in sum.iter_mut().enumerate() {
+                *total += f32::from(pixels[index + channel]);
+            }
+            count += 1.0;
+        }
+    }
+    if count == 0.0 {
+        return [0.0; 3];
+    }
+    sum.map(|value| value / count)
+}
+
 /// A windowless shell that steps an app one frame at a time and reads back its pixels.
 pub struct HeadlessShell {
     renderer: Renderer,
@@ -104,6 +127,30 @@ impl HeadlessShell {
             time_seconds: 0.0,
             ui: None,
         })
+    }
+
+    /// [`new`](Self::new) for tests and captures that should skip, not fail, on machines without a GPU adapter: prints
+    /// why to standard error and returns `None` when no shell can be created.
+    pub fn new_or_skip(options: HeadlessOptions) -> Option<Self> {
+        match Self::new(options) {
+            Ok(shell) => Some(shell),
+            Err(error) => {
+                eprintln!("skipping render test: {error}");
+                None
+            }
+        }
+    }
+
+    /// Write the latest frame as `name` (a file name such as `title.png`) into the folder named by the
+    /// `JOY_CAPTURE_DIR` environment variable, for review; does nothing when it is unset. Panics when the capture
+    /// cannot be written, because a requested review capture that silently goes missing hides failures.
+    pub fn save_capture(&self, name: &str) {
+        let Ok(directory) = std::env::var(CAPTURE_DIRECTORY_VARIABLE) else {
+            return;
+        };
+        let path = std::path::Path::new(&directory).join(name);
+        self.save_png(&path).expect("captures are writable");
+        eprintln!("wrote {}", path.display());
     }
 
     /// Call the app's start hook with this shell's renderer.
