@@ -1,6 +1,7 @@
 {
   "files.associations": {
     "*.formlab": "json",
+    "*.forminst": "json",
     "*.joyconfig": "json",
     "*.joyfx": "json",
     "*.joylevel": "json",
@@ -11,6 +12,7 @@
     {"fileMatch": ["*.joyproject"], "url": "./schemas/joyproject.schema.json"},
     {"fileMatch": ["*.joylevel"], "url": "./schemas/joylevel.schema.json"},
     {"fileMatch": ["*.joyfx"], "url": "./schemas/joyfx.schema.json"},
+    {"fileMatch": ["*.forminst"], "url": "./schemas/forminst.schema.json"},
     {"fileMatch": ["*.formlab"], "url": "./schemas/formlab.schema.json"},
     {"fileMatch": ["*.joyobject"], "url": "./schemas/joyobject.schema.json"},
     {"fileMatch": ["*.joyconfig"], "url": "./schemas/joyconfig.schema.json"}

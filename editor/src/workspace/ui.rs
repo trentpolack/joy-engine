@@ -540,7 +540,7 @@ impl WorkspaceView {
                         self.new_asset_form(ui, workspace);
                     }
                     ui.label(
-                        RichText::new("Import .form, .formlab, .joyfx, .joylevel or .joyobject files.")
+                        RichText::new("Import .form, .forminst, .joyfx, .joylevel or .joyobject files.")
                             .size(layout::TYPE_XS)
                             .color(colors::MUTED),
                     );
@@ -1217,7 +1217,7 @@ impl WorkspaceView {
 
     /// Ask for a file to import through the platform file dialog.
     fn begin_import(&mut self, workspace: &mut Workspace) {
-        let filter = FileFilter::new("Joy assets", &["form", "formlab", "joyfx", "joylevel", "joyobject"]);
+        let filter = FileFilter::new("Joy assets", &["form", "forminst", "joyfx", "joylevel", "joyobject"]);
         let request = OpenRequest::text("Import asset", filter).maximum_bytes(crate::server::MAXIMUM_ASSET_BYTES);
         if let Err(error) = self.file_dialogs.open(request) {
             workspace.set_status(error.to_string());
@@ -1255,8 +1255,10 @@ impl WorkspaceView {
 fn source_editor(path: &str) -> ScriptEditor {
     let id = ("joy-editor-source", path.to_owned());
     match crate::server::extension_of(path).as_str() {
-        ".form" => ScriptEditor::new(id, ScriptSyntax::form()).with_catalog(joy_engine::form::form_language_catalog()),
-        ".formlab" | ".joyfx" | ".joylevel" | ".joyobject" | ".joyproject" | ".json" => {
+        ".form" => ScriptEditor::new(id, ScriptSyntax::form())
+            .with_catalog(joy_engine::form::form_language_catalog())
+            .with_document_symbols(joy_engine::form::form_document_symbols),
+        ".forminst" | ".joyfx" | ".joylevel" | ".joyobject" | ".joyproject" | ".json" => {
             ScriptEditor::new(id, ScriptSyntax::json())
         }
         _ => ScriptEditor::new(id, ScriptSyntax::plain()),

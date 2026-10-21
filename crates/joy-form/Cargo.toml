@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 # FORM, the procedural modeling language: parse, evaluate, and compile scripts into renderer-free geometry. The
-# `joy-form-evaluate` JSON-lines CLI drives the FORM LAB parity harness.
+# `joy-form-evaluate` JSON-lines CLI drives the FORM EDITOR parity harness.
 #
 #   cargo test -p joy-form
 #   cargo build -p joy-form --bin joy-form-evaluate

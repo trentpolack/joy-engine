@@ -101,7 +101,7 @@ image.workspace = true
 workspace = true
 
 # This package is its own workspace root, including when it is checked out inside a hosting repository. Engine crates
-# live in `crates/`; the editor and labs are member packages. `cargo test` at the root tests the facade and every
+# live in `crates/`; the editor and tool editors are member packages. `cargo test` at the root tests the facade and every
 # engine crate, but not the tools.
 [workspace]
 members = ["crates/*", "editor", "tools/*"]
@@ -289,7 +289,7 @@ precedence = "allow"
 
 # Engine architecture, enforced by `npm run check` (`scripts/check-boundaries.mjs`). Each crate in `crates/` names its
 # layer in `[package.metadata.joy]` (or marks itself `test-support`). A crate may depend only on crates in its own layer
-# or an earlier one in `layers`, and on a backend crate only from the layers listed for it. Apps (the editor, the labs,
+# or an earlier one in `layers`, and on a backend crate only from the layers listed for it. Apps (the editor, the tool editors,
 # the examples, and games) reach all of it through `joy-engine` and never depend on engine or backend crates directly.
 [workspace.metadata.joy]
 layers = ["foundation", "simulation", "content", "rendering", "platform"]

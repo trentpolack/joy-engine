@@ -8,18 +8,29 @@ param leg = 0.5 meta(min=0.2, max=1, step=0.05)
 param back = 0.6 meta(min=0.2, max=1, step=0.05)
 param thickness = 0.08 meta(min=0.04, max=0.2, step=0.01)
 
+# ---- Finish.
 # White vertices, so the material's base color shows as authored.
-color(1, 1, 1)
-let unit = meshBox(1, 1, 1)
+let white = rgba(1, 1, 1, 1)
 let finish = materialPbr(rgba(0.86, 0.5, 0.26, 1), 0, 0.62)
+
+# ---- Parts.
+let unit = meshBox(1, 1, 1)
 let inset = seat/2 - thickness/2
 
-instance(unit, vector(0, 0, 0), vector(0, 0, 0), vector(seat, thickness, seat), finish)
+# An axis-aligned box: the unit mesh placed at `center` and stretched to `size`.
+fn block(center, size) {
+  return place(unit, center, vector(0, 0, 0), size)
+}
+
+let seat_board = block(vector(0, 0, 0), vector(seat, thickness, seat))
+let legs = geometry()
 repeat 2 as column {
   repeat 2 as row {
     let x = (column*2 - 1)*inset
     let z = (row*2 - 1)*inset
-    instance(unit, vector(x, -(leg + thickness)/2, z), vector(0, 0, 0), vector(thickness, leg, thickness), finish)
+    append(legs, block(vector(x, -(leg + thickness)/2, z), vector(thickness, leg, thickness)))
   }
 }
-instance(unit, vector(0, (back + thickness)/2, -inset), vector(0, 0, 0), vector(seat, back, thickness), finish)
+let back_rest = block(vector(0, (back + thickness)/2, -inset), vector(seat, back, thickness))
+
+output("Chair", material(color(merge(seat_board, legs, back_rest), white), finish))

@@ -22,7 +22,9 @@ use joy_engine::egui::{
 };
 use joy_engine::form::{
     CompiledScript,
+    FormInstance,
     GeometryData,
+    InstanceScript,
 };
 use joy_engine::prelude::*;
 use joy_engine::render_types::MeshDocument;
@@ -61,7 +63,7 @@ const MODE_BAKED: &str = "baked";
 pub const START_PRESET: &str = "cottage";
 /// Project name written into saved recipes, and the saved file names.
 const RECIPE_NAME: &str = "Building shell";
-const RECIPE_FILE: &str = "building.formlab";
+const RECIPE_FILE: &str = "building.forminst";
 const BAKE_FILE: &str = "building.mesh.json";
 
 /// Camera framing: heading and elevation (radians), clips, orbit limits, zoom limits, and the fitted distance as a
@@ -278,9 +280,16 @@ impl BuildingExample {
         self.camera.distance = (bounds.max - bounds.min).max_element() * FIT_DISTANCE;
     }
 
-    /// The current editable recipe: a FORM LAB document with the source and parameter snapshot.
+    /// The current editable recipe: a FORM instance that packs the source with the parameter snapshot.
     pub fn recipe(&self) -> Value {
-        json!({"version": 1, "name": RECIPE_NAME, "source": SOURCE, "overrides": self.overrides})
+        FormInstance {
+            name: RECIPE_NAME.to_owned(),
+            script: InstanceScript::Packed(SOURCE.to_owned()),
+            overrides: self.overrides.clone(),
+            materials: None,
+            variants: None,
+        }
+        .to_json()
     }
 
     /// The current building's baked mesh document, or `None` before the first evaluation in editable mode.

@@ -9,7 +9,7 @@ use crate::ast::Token;
 
 /// A parse or evaluation failure with its source location.
 ///
-/// `line` is one-based. `column` is one-based and counts characters, as FORM LAB's editor
+/// `line` is one-based. `column` is one-based and counts characters, as FORM EDITOR's script editor
 /// does. Failures without a source position (overrides, palettes, primitive helpers, and
 /// transport errors) report line 1, column 1.
 #[derive(Serialize, Debug, Clone, PartialEq, Eq, thiserror::Error)]

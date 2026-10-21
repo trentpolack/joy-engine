@@ -3,14 +3,14 @@
 
 //! How editors should present a parameter descriptor from [`GeometryData::parameters`](crate::GeometryData).
 //!
-//! Descriptors stay plain JSON (they round-trip through `.formlab` documents and browser hosts unchanged); this module
-//! reads their optional presentation fields (`label`, `group`, `info`, `kind`, and `options`) so FORM LAB, Joy Editor,
+//! Descriptors stay plain JSON (they round-trip through `.forminst` instances and browser hosts unchanged); this module
+//! reads their optional presentation fields (`label`, `group`, `info`, `kind`, and `options`) so FORM EDITOR, Joy Editor,
 //! and game tools present a script's controls the same way. Reading never fails: a descriptor without presentation
 //! fields reads as a continuous control titled from its name.
 
 use serde_json::Value as Json;
 
-/// The control an editor should show for a numeric parameter.
+/// The control an editor should show for a parameter.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParameterControl {
     /// A continuous value (or vector or color components) between the declared bounds.
@@ -23,10 +23,15 @@ pub enum ParameterControl {
     Choice(Vec<String>),
     /// A whole-number random seed, shown with a reroll control.
     Seed,
+    /// One line of text, shown as a text field (descriptor `type` `"text"`).
+    Text,
 }
 
 /// The control a descriptor asks for; descriptors without a recognized `kind` are continuous.
 pub fn parameter_control(descriptor: &Json) -> ParameterControl {
+    if descriptor.get("type").and_then(Json::as_str) == Some("text") {
+        return ParameterControl::Text;
+    }
     match descriptor.get("kind").and_then(Json::as_str) {
         Some("int") => ParameterControl::Integer,
         Some("bool") => ParameterControl::Toggle,

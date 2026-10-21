@@ -4,7 +4,7 @@
 //! The level viewport: the retained asset presentation, the orbit camera framed into the
 //! viewport's region of the window, the editor grid, picking, and the move gizmo.
 //!
-//! The viewport draws through the engine renderer exactly like games and the labs: [`AssetScene`] presents primitives,
+//! The viewport draws through the engine renderer exactly like games and the tool editors: [`AssetScene`] presents primitives,
 //! FORM meshes, lights, and per-entity particle effects in a [`RenderScene`]; the bounded [`EditorGrid`] is drawn as
 //! translucent unlit ribbons. Every tab shares one window, so the engine's [`RegionCamera`] maps the camera's image onto
 //! the viewport's rectangle (an off-axis projection) and the rest of the window stays covered by editor panels. Positions

@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "name": "apartments",
+  "form": "building.form",
+  "overrides": {
+    "width": 12,
+    "depth": 9,
+    "height": 15,
+    "floors": 5,
+    "window_spacing": 2,
+    "door_spacing": 6,
+    "roof_shape": 0,
+    "wall_tint": [
+      0.72,
+      0.58,
+      0.42,
+      1
+    ],
+    "roof_tint": [
+      0.26,
+      0.18,
+      0.14,
+      1
+    ],
+    "random_seed": 103
+  }
+}

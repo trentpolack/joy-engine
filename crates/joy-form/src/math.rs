@@ -9,15 +9,19 @@ use crate::value::{
 };
 use joy_core::math::deterministic;
 
+/// Apply a binary operator. Comparisons produce true/false; arithmetic works on numbers and on vectors or colors
+/// (component-wise, with a number broadcasting to every component). Equality also compares text, true/false, and
+/// enum members (a member equals its own name as text). `AND` and `OR` short-circuit in the evaluator and never reach
+/// this function.
 pub fn arithmetic(operator: &str, left: &Value, right: &Value) -> Result<Value, String> {
     if let (Value::Number(a), Value::Number(b)) = (left, right) {
         let result = match operator {
-            "==" => f64::from(a == b),
-            "!=" => f64::from(a != b),
-            "<" => f64::from(a < b),
-            ">" => f64::from(a > b),
-            "<=" => f64::from(a <= b),
-            ">=" => f64::from(a >= b),
+            "==" => return Ok(Value::Bool(a == b)),
+            "!=" => return Ok(Value::Bool(a != b)),
+            "<" => return Ok(Value::Bool(a < b)),
+            ">" => return Ok(Value::Bool(a > b)),
+            "<=" => return Ok(Value::Bool(a <= b)),
+            ">=" => return Ok(Value::Bool(a >= b)),
             "+" => a + b,
             "-" => a - b,
             "*" => a * b,
@@ -26,6 +30,15 @@ pub fn arithmetic(operator: &str, left: &Value, right: &Value) -> Result<Value, 
             _ => deterministic::powf(*a, *b),
         };
         return Ok(Value::Number(result));
+    }
+    if operator == "==" || operator == "!=" {
+        let equal = equals(left, right)?;
+        return Ok(Value::Bool(if operator == "==" { equal } else { !equal }));
+    }
+    if matches!(left, Value::Bool(_)) || matches!(right, Value::Bool(_)) {
+        return Err(format!(
+            "'{operator}' needs numbers; true/false only supports ==, !=, AND, OR, and NOT. Use number(flag) for 1 or 0."
+        ));
     }
     if matches!(left, Value::Array(_)) || matches!(right, Value::Array(_)) {
         if !["+", "-", "*", "/"].contains(&operator) {
@@ -55,9 +68,33 @@ pub fn arithmetic(operator: &str, left: &Value, right: &Value) -> Result<Value, 
         }
         return Ok(Value::Array(result));
     }
-    left.scalar()?;
-    right.scalar()?;
-    unreachable!()
+    let failing = if matches!(left, Value::Number(_)) { right } else { left };
+    Err(format!("'{operator}' needs numbers, vectors, or colors; found {}.", failing.describe()))
+}
+
+/// Equality for `==`, `!=`, and `match`. Values of different kinds are an authoring mistake, not "unequal".
+pub fn equals(left: &Value, right: &Value) -> Result<bool, String> {
+    match (left, right) {
+        (Value::Number(a), Value::Number(b)) => Ok(a == b),
+        (Value::Bool(a), Value::Bool(b)) => Ok(a == b),
+        (Value::Text(a), Value::Text(b)) => Ok(a == b),
+        (Value::Enum(a), Value::Enum(b)) => {
+            if !std::rc::Rc::ptr_eq(&a.definition, &b.definition) {
+                return Err(format!(
+                    "Cannot compare {} with {}; they belong to different enums.",
+                    left.describe(),
+                    right.describe()
+                ));
+            }
+            Ok(a.index == b.index)
+        }
+        (Value::Enum(member), Value::Text(text)) | (Value::Text(text), Value::Enum(member)) => {
+            Ok(member.member() == text.as_ref())
+        }
+        (Value::Data(a), Value::Data(b)) if a.is_null() || b.is_null() => Ok(a.is_null() && b.is_null()),
+        (Value::Array(_), Value::Array(_)) => Err("Compare vector or color components, such as 'a.x == b.x'.".into()),
+        _ => Err(format!("Cannot compare {} with {}.", left.describe(), right.describe())),
+    }
 }
 
 pub fn vector_function(name: &str, values: &[Value]) -> Result<Option<Value>, String> {

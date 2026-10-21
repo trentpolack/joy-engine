@@ -95,8 +95,8 @@ mod tests {
         }
         let directory = std::env::temp_dir().join(format!("joy-save-file-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
-        let path = write_file(&directory, "recipe.formlab", b"{\"version\": 1}\n").unwrap();
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"version\": 1}\n");
+        let path = write_file(&directory, "recipe.forminst", b"{\"version\": 2}\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"version\": 2}\n");
         let _ = std::fs::remove_dir_all(&directory);
     }
 }

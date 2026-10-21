@@ -29,7 +29,7 @@ pub use bundled_projects::{
 pub const MAXIMUM_ASSET_BYTES: usize = 6_000_000;
 
 /// Asset formats every project supports, as lowercase dot extensions; manifests may add more.
-pub const BUILT_IN_FORMATS: [&str; 5] = [".form", ".formlab", ".joyfx", ".joylevel", ".joyobject"];
+pub const BUILT_IN_FORMATS: [&str; 5] = [".form", ".forminst", ".joyfx", ".joylevel", ".joyobject"];
 
 /// Folder beneath a project that holds every authorable asset.
 pub const ASSET_DIRECTORY: &str = "assets";

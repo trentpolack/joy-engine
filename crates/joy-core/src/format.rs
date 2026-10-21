@@ -61,6 +61,19 @@ pub fn json_number(value: f64) -> Value {
     Value::from(value)
 }
 
+/// Rewrite every floating-point number in a JSON document with [`json_number`], so integral values are stored as JSON
+/// integers wherever they appear (`2.0` becomes `2`). Documents written this way stay compact and diff cleanly.
+pub fn integral_numbers_as_integers(value: Value) -> Value {
+    match value {
+        Value::Number(number) if number.is_f64() => json_number(number.as_f64().unwrap_or_default()),
+        Value::Array(values) => Value::Array(values.into_iter().map(integral_numbers_as_integers).collect()),
+        Value::Object(fields) => {
+            Value::Object(fields.into_iter().map(|(name, value)| (name, integral_numbers_as_integers(value))).collect())
+        }
+        other => other,
+    }
+}
+
 #[cfg(test)]
 #[path = "format.test.rs"]
 mod tests;

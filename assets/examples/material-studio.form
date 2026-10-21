@@ -9,13 +9,29 @@ param painted = materialPbr(rgba(0.12, 0.5, 0.65, 1), 0, 0.4)
 param glass = materialPbr(rgba(0.7, 0.85, 1, 0.35), 0, 0.12)
 param floor = materialPbr(rgba(0.28, 0.3, 0.34, 1), 0, 0.8)
 
-let sphere = meshSphere(1.25, 32)
-with userData({kind: "material-study", purpose: "compare finishes under studio lighting"}) {
-  color(1, 1, 1)
-  instance(sphere, vector(-3, 1.25, 0), vector(0,0,0), vector(1,1,1), polished)
-  instance(sphere, vector(0, 1.25, 0), vector(0,0,0), vector(1,1,1), brushed)
-  instance(sphere, vector(3, 1.25, 0), vector(0,0,0), vector(1,1,1), painted)
-  instance(meshBox(7, 2.7, 0.12), vector(0,1.35,2), vector(0,0,0), vector(1,1,1), glass)
-  instance(meshBox(11, 0.2, 7), vector(0,-0.1,0), vector(0,0,0), vector(1,1,1), floor)
+# ---- Helpers.
+# White vertices, so each material's base color shows as authored.
+let white = rgba(1, 1, 1, 1)
+
+# A copy of `mesh` placed at `position` and given `finish`.
+fn finished(mesh, position, finish) {
+  return material(color(place(mesh, position), white), finish)
 }
 
+# ---- Studio.
+# Three finishes side by side on the same sphere, a glass screen behind them, and a floor to reflect.
+let sphere = meshSphere(1.25, 32)
+let spheres = merge(
+  finished(sphere, vector(-3, 1.25, 0), polished),
+  finished(sphere, vector(0, 1.25, 0), brushed),
+  finished(sphere, vector(3, 1.25, 0), painted)
+)
+let screen = finished(meshBox(7, 2.7, 0.12), vector(0, 1.35, 2), glass)
+let stage = finished(meshBox(11, 0.2, 7), vector(0, -0.1, 0), floor)
+let studio = merge(spheres, screen, stage)
+
+# Every point records what the scene is for, so a host can identify it.
+addAttribute(studio, "points", "kind", "material-study")
+addAttribute(studio, "points", "purpose", "compare finishes under studio lighting")
+
+output("Material studio", studio)

@@ -6,7 +6,7 @@
 //! Edit `assets/ui/theme-default.json` for game/editor palettes, syntax colors, and font choices. Edit
 //! `assets/ui/layout.json` for shared dimensions: type sizes, spacing, corners, borders, and control heights.
 //! Cargo generates the constants below from those assets for every build; there is no runtime JSON loading or
-//! theme switching. Games use [`apply`]; Joy Editor and both labs use [`apply_editor`], [`colors`], [`layout`], and
+//! theme switching. Games use [`apply`]; Joy Editor and both tool editors use [`apply_editor`], [`colors`], [`layout`], and
 //! [`text_styles`]. Screen composition and persisted pane sizes remain owned by each tool.
 
 // Cargo regenerates these values when either UI asset changes. No JSON parser ships in the UI runtime.
@@ -39,7 +39,7 @@ pub fn panel_frame() -> egui::Frame {
         .corner_radius(egui::CornerRadius::same(layout::game_panel::RADIUS))
 }
 
-/// Semantic text styles the editor and labs share, registered by [`apply_editor`]. Use them through
+/// Semantic text styles the editor and tool editors share, registered by [`apply_editor`]. Use them through
 /// `RichText::new(text).text_style(text_styles::caption())` (or the shared `joy_authoring::components`) instead of
 /// literal sizes, so global type changes reach every tool.
 pub mod text_styles {

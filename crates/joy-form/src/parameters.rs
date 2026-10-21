@@ -11,7 +11,10 @@ use crate::parser::{
 };
 use crate::{
     resources,
-    value::Value,
+    value::{
+        EnumValue,
+        Value,
+    },
 };
 use serde_json::{
     Value as Json,
@@ -25,6 +28,9 @@ const DESCRIPTOR_INFO: &str = "info";
 const DESCRIPTOR_KIND: &str = "kind";
 const DESCRIPTOR_OPTIONS: &str = "options";
 
+/// Descriptor `type` of a free text parameter.
+const TYPE_TEXT: &str = "text";
+
 // Whole-number parameter kinds.
 const KIND_INT: &str = "int";
 const KIND_BOOL: &str = "bool";
@@ -34,11 +40,21 @@ const KIND_ENUM: &str = "enum";
 /// Largest default seed bound: the nonnegative 31-bit range every host stores exactly.
 const SEED_MAXIMUM: f64 = 2_147_483_647.0;
 
+/// Longest text parameter value, in characters.
+const TEXT_PARAMETER_LIMIT: usize = 128;
+
+/// Validate a declared default or bound. Text, true/false, and enum members are kept as they are.
 pub fn read(value: &Value) -> Result<Value, String> {
     if matches!(value, Value::Number(_) | Value::Array(_) | Value::Object(_)) {
         return read_json(&value.json());
     }
-    Err("Parameters require finite scalars, XYZ vectors, RGBA colors, meshes, or materials.".into())
+    if matches!(value, Value::Bool(_) | Value::Text(_) | Value::Enum(_)) {
+        return Ok(value.clone());
+    }
+    Err(format!(
+        "Parameters require numbers, vectors, colors, true/false, text, enum members, meshes, or materials; found {}.",
+        value.describe()
+    ))
 }
 pub fn read_json(value: &Json) -> Result<Value, String> {
     if let Some(n) = value.as_f64()
@@ -65,6 +81,140 @@ pub fn read_json(value: &Json) -> Result<Value, String> {
 }
 
 pub fn create(
+    name: &str,
+    values: &[Value],
+    metadata: &[(String, Value)],
+    presentation: &ParameterPresentation,
+    supplied: &Json,
+) -> Result<(Json, Value), String> {
+    let default = &values[0];
+    match default {
+        Value::Bool(flag) => {
+            return create_bool(name, *flag, values, metadata, presentation, supplied);
+        }
+        Value::Text(text) if presentation.options.is_empty() => {
+            return create_text(name, text, values, metadata, presentation, supplied);
+        }
+        Value::Text(text) => {
+            let index = option_index(&presentation.options, text)
+                .ok_or_else(|| format!("Parameter '{name}' default \"{text}\" is not one of its options."))?;
+            return create_choice(name, index, values, metadata, presentation, supplied, None);
+        }
+        Value::Enum(member) => {
+            if !presentation.options.is_empty() || presentation.kind.is_some() {
+                return Err("Enum-typed parameters take their options from the enum; remove kind and options.".into());
+            }
+            let mut presentation = presentation.clone();
+            presentation.options = member.definition.members.clone();
+            return create_choice(name, member.index, values, metadata, &presentation, supplied, Some(member));
+        }
+        Value::Number(index) if !presentation.options.is_empty() => {
+            if index.fract() != 0.0 || *index < 0.0 || *index as usize >= presentation.options.len() {
+                return Err("Parameter requires min ≤ default ≤ max and a positive step.".into());
+            }
+            return create_choice(name, *index as usize, values, metadata, presentation, supplied, None);
+        }
+        _ => {}
+    }
+    create_numeric(name, values, metadata, presentation, supplied)
+}
+
+/// A true/false parameter: a toggle in editors, stored in descriptors as 0 or 1, and read by the script as a
+/// boolean.
+fn create_bool(
+    name: &str,
+    flag: bool,
+    values: &[Value],
+    metadata: &[(String, Value)],
+    presentation: &ParameterPresentation,
+    supplied: &Json,
+) -> Result<(Json, Value), String> {
+    if presentation.kind.as_deref().is_some_and(|kind| kind != KIND_BOOL) {
+        return Err("True/false parameters use the bool kind.".into());
+    }
+    let mut presentation = presentation.clone();
+    presentation.kind = Some(KIND_BOOL.into());
+    let mut numeric_values = values.to_vec();
+    numeric_values[0] = Value::Number(if flag { 1.0 } else { 0.0 });
+    create_numeric(name, &numeric_values, metadata, &presentation, supplied)
+}
+
+/// A choice among option labels or enum members. Descriptors store the chosen index so editors show a choice; the
+/// script reads the option's text, or the enum member for enum-typed parameters. Overrides may name the option or
+/// give its index.
+fn create_choice(
+    name: &str,
+    index: usize,
+    values: &[Value],
+    metadata: &[(String, Value)],
+    presentation: &ParameterPresentation,
+    supplied: &Json,
+    member: Option<&EnumValue>,
+) -> Result<(Json, Value), String> {
+    if presentation.kind.as_deref().is_some_and(|kind| kind != KIND_ENUM) {
+        return Err("Only enum parameters accept options.".into());
+    }
+    let supplied = match supplied.as_str() {
+        Some(text) => json!(
+            option_index(&presentation.options, text)
+                .ok_or_else(|| format!("Parameter '{name}' has no option \"{text}\"."))?
+        ),
+        None => supplied.clone(),
+    };
+    let mut numeric_values = values.to_vec();
+    numeric_values[0] = Value::Number(index as f64);
+    let (descriptor, value) = create_numeric(name, &numeric_values, metadata, presentation, &supplied)?;
+    let chosen = value.scalar()? as usize;
+    let value = match member {
+        Some(member) => Value::Enum(EnumValue {
+            definition: member.definition.clone(),
+            index: chosen,
+        }),
+        None => Value::text(&presentation.options[chosen]),
+    };
+    Ok((descriptor, value))
+}
+
+/// A free text parameter: one line of at most 128 characters.
+fn create_text(
+    name: &str,
+    default: &str,
+    values: &[Value],
+    metadata: &[(String, Value)],
+    presentation: &ParameterPresentation,
+    supplied: &Json,
+) -> Result<(Json, Value), String> {
+    if values.len() != 1 || !metadata.is_empty() || presentation.kind.is_some() {
+        return Err("Text parameters do not accept numeric bounds or a kind.".into());
+    }
+    let read_text = |text: &str| -> Result<String, String> {
+        read_text(text)
+            .map_err(|_| format!("Parameter '{name}' expects one line of at most {TEXT_PARAMETER_LIMIT} characters."))
+    };
+    let default = read_text(default)?;
+    let value = match supplied {
+        Json::String(text) => read_text(text)?,
+        _ => return Err(format!("Parameter '{name}' expects text.")),
+    };
+    let mut descriptor = json!({"name": name, "type": TYPE_TEXT, "defaultValue": default, "value": value});
+    describe_presentation(&mut descriptor, presentation, None);
+    Ok((descriptor, Value::text(value)))
+}
+
+/// Validate text parameter content: one line of at most 128 characters.
+pub fn read_text(text: &str) -> Result<String, String> {
+    if text.chars().count() > TEXT_PARAMETER_LIMIT || text.contains(['\r', '\n']) {
+        return Err(format!("Text parameters hold one line of at most {TEXT_PARAMETER_LIMIT} characters."));
+    }
+    Ok(text.to_owned())
+}
+
+fn option_index(options: &[String], text: &str) -> Option<usize> {
+    options.iter().position(|option| option == text)
+}
+
+/// A number, vector, or color parameter, including the whole-number kinds.
+fn create_numeric(
     name: &str,
     values: &[Value],
     metadata: &[(String, Value)],
@@ -160,7 +310,7 @@ pub fn create(
     {
         Value::Number(if flag { 1.0 } else { 0.0 })
     } else if supplied.is_string() || supplied.is_boolean() {
-        return Err("Expected a finite scalar; parameter metadata requires min, max, and step.".into());
+        return Err(format!("Parameter '{name}' expects a number."));
     } else {
         return Err("Expected numeric parameter components.".into());
     };
@@ -178,10 +328,17 @@ pub fn create(
             v.max(min).min(upper)
         })
         .collect();
-    let value = if matches!(default, Value::Array(_)) { Value::Array(clamped) } else { Value::Number(clamped[0]) };
+    let value = if matches!(default, Value::Array(_)) {
+        Value::Array(clamped)
+    } else if role == Some(ParameterRole::Bool) {
+        Value::Bool(clamped[0] != 0.0)
+    } else {
+        Value::Number(clamped[0])
+    };
     let mut descriptor = json!({"name":name,"type":kind,"min":min,"max":max,"step":step});
     descriptor["defaultValue"] = default.json();
-    descriptor["value"] = value.json();
+    descriptor["value"] =
+        if let Value::Bool(flag) = value { json!(if flag { 1.0 } else { 0.0 }) } else { value.json() };
     describe_presentation(&mut descriptor, presentation, role);
     Ok((descriptor, value))
 }

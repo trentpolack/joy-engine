@@ -5,9 +5,14 @@ use super::*;
 use serde_json::json;
 
 const SOURCE: &str = r#"
-    with userData({kind: "tree", object: "assets/objects/tree.joyobject", scale: 2}) { point(1, 0, 0) }
-    with userData({kind: "spawn"}) { point(0, 0, 3) }
-    point(5, 5, 5)
+    let sites = geometry()
+    addPoint(sites, vector(1, 0, 0), {kind: "tree", object: "assets/objects/tree.joyobject", scale: vector(2, 2, 2)})
+    addPoint(sites, vector(0, 0, 3), {kind: "spawn"})
+    output("Sites", sites)
+    # Points without attributes are drawn, not placed.
+    let marker = geometry()
+    addPoint(marker, vector(5, 5, 5))
+    output("Marker", marker)
 "#;
 
 #[test]

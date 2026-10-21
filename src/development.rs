@@ -5,10 +5,10 @@
 //! post-processing editor, scene effect preview controls, config panels, and live tuning (`joy-devtools`). Production
 //! builds disable the overlay through `ShellOptions::development` and do not create editors.
 //!
-//! The authoring kit shared by FORM LAB, PARTICLE LAB, and Joy Editor lives here too (`joy-authoring`): lab controls
+//! The authoring kit shared by FORM EDITOR, JOYFX EDITOR, and Joy Editor lives here too (`joy-authoring`): lab controls
 //! ([`NumberField`], [`ScalarControl`], [`ComponentGroup`], [`ColorControl`]) with [`NumericDrafts`],
 //! [`PropertyHistory`], [`PanelLayout`], the [`ScriptEditor`], and the shared Joy look in [`components`] (see
-//! `docs/rust-authoring.md`). [`AuthoringTool`] is the contract that lets authoring tools such as FORM LAB run
+//! `docs/rust-authoring.md`). [`AuthoringTool`] is the contract that lets authoring tools such as FORM EDITOR run
 //! standalone and as Joy Editor tabs.
 
 pub use joy_authoring::{
@@ -51,6 +51,7 @@ pub use joy_authoring::{
     Token,
     TokenKind,
     ToolDocument,
+    ToolFileReader,
     ToolHosting,
     ValueCheck,
     ViewportActions,

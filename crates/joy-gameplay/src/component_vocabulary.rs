@@ -67,8 +67,8 @@ pub mod component_category {
 pub mod component_asset_kind {
     /// FORM scripts.
     pub const FORM: &str = "form";
-    /// FORM LAB documents.
-    pub const FORM_LAB: &str = "formlab";
+    /// FORM instances: a FORM script with parameter overrides, materials, and variants.
+    pub const FORM_INSTANCE: &str = "forminst";
     /// JOYFX particle effects.
     pub const PARTICLE_EFFECT: &str = "joyfx";
 }

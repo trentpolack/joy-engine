@@ -5,7 +5,7 @@
 //!
 //! This owner belongs to the rendering layer because it presents meshes and effects. Entities' `render` components
 //! resolve FORM and
-//! FORM LAB meshes through a [`FormAssetLibrary`] and draw through [`LevelScene`]; `effect` components play `.joyfx`
+//! FORM EDITOR meshes through a [`FormAssetLibrary`] and draw through [`LevelScene`]; `effect` components play `.joyfx`
 //! effects attached to the entity transform, with the component's `seed`, `loop`, `enabled`, and `parameters`.
 //!
 //! Synchronization is staged: [`AssetScene::prepare`] reads, compiles, decodes, and starts every
@@ -128,7 +128,7 @@ pub enum AssetSceneError {
         /// The reader's error message.
         message: String,
     },
-    /// A FORM or FORM LAB mesh failed to compile.
+    /// A FORM or FORM EDITOR mesh failed to compile.
     #[error("{path}: {source}")]
     Mesh {
         /// The mesh asset path.
@@ -292,7 +292,8 @@ impl AssetScene {
 
     /// Resolve, read, compile, and start everything `entities` need, without changing the displayed presentation.
     ///
-    /// `read` receives validated `assets/…` paths (`.joyobject`, `.form`, `.formlab`, `.joyfx`) and returns their text;
+    /// `read` receives validated `assets/…` paths (`.joyobject`, `.form`, `.forminst`, `.joyfx`, and the scripts and
+    /// modules FORM assets reference) and returns their text;
     /// each path is read at most once per preparation, and the reader must enforce its own project boundary. Changed
     /// effects start with their component seed (default 7777) and parameters and advance one fixed step; effects whose
     /// asset text and settings are unchanged keep running. Starting a preparation supersedes earlier uncommitted ones.
@@ -742,11 +743,9 @@ impl AssetScene {
             entity: entity.id.clone(),
             source,
         };
-        let mut read_asset = |path: &str| {
-            read(path).map_err(|message| AssetSceneError::Read {
-                path: path.to_owned(),
-                message,
-            })
+        let read_error = |path: &str, message: String| AssetSceneError::Read {
+            path: path.to_owned(),
+            message,
         };
 
         // Validate presentation records now so commit cannot fail on them.
@@ -760,10 +759,10 @@ impl AssetScene {
                 variant,
             } = RenderComponent::read(record).map_err(component_error)?.source
         {
-            let text = read_asset(&asset)?;
+            let text = read(&asset).map_err(|message| read_error(&asset, message))?;
             let compiled = self
                 .library
-                .resolve_asset(&asset, &text, variant.as_deref(), &parameters, ShadingModel::Lit)
+                .resolve_asset(&asset, &text, &mut *read, variant.as_deref(), &parameters, ShadingModel::Lit)
                 .map_err(|source| AssetSceneError::Mesh {
                     path: asset.clone(),
                     source,
@@ -788,7 +787,7 @@ impl AssetScene {
                 .to_owned(),
             Some(_) => return Err(component_error(ComponentError::AssetPath(AssetPathError::OutsideAssets))),
         };
-        let text = read_asset(&path)?;
+        let text = read(&path).map_err(|message| read_error(&path, message))?;
         let definition = match staging.effect_cache.get(&text).or_else(|| self.effect_cache.get(&text)) {
             Some(definition) => definition.clone(),
             None => parse_particle_effect(&text).map_err(|source| AssetSceneError::Effect {

@@ -3,7 +3,7 @@
 
 //! The FORM BUILDING example (`examples/form-building`): presets and extreme parameters evaluate to valid deterministic
 //! geometry, material overrides reach the layered asset, failed evaluations leave the previous building intact, baked
-//! records round trip, the FORM LAB documents resolve through `FormAssetLibrary` to the same building, and every preset
+//! records round trip, the FORM instances resolve through `FormAssetLibrary` to the same building, and every preset
 //! and baked mode render.
 //!
 //! The render test needs a GPU adapter (llvmpipe or SwiftShader is enough); without one it prints a note and returns.
@@ -136,10 +136,10 @@ fn failed_evaluations_keep_the_previous_building() {
     assert_eq!(building.snapshot(), before, "the previous generation stays");
     assert_eq!(building.recipe(), recipe);
     for source in [
-        "box(0,0,0,0,1,1)",
-        "repeat 20000 as i { instance(meshBox(1,1,1)) }",
+        "box(0,1,1)",
+        "let g = geometry()\nrepeat 20000 as i { append(g, box(1,1,1)) }",
         "let x = nope(1)",
-        "if(1 or 0) {point(0,0,0)}",
+        "if 1 OR 0 { output(\"Box\", box(1,1,1)) }",
     ] {
         let failure = CompiledScript::parse(source).and_then(|program| program.evaluate(&json!({}), None));
         assert!(failure.is_err(), "{source} fails with a located diagnostic");
@@ -160,7 +160,7 @@ fn failed_evaluations_keep_the_previous_building() {
 }
 
 #[test]
-fn baked_records_and_formlab_documents_reproduce_the_building() {
+fn baked_records_and_form_instances_reproduce_the_building() {
     let program = CompiledScript::parse(SOURCE).unwrap();
     let presets = presets();
     let cottage = program.evaluate(&presets["cottage"], None).unwrap();
@@ -171,6 +171,12 @@ fn baked_records_and_formlab_documents_reproduce_the_building() {
     assert_eq!(record, baked);
     assert_eq!(record.mesh.triangle_slots.as_ref(), Some(&cottage.triangle_materials));
     assert_eq!(record.materials.len(), cottage.materials.len());
+
+    // The door and canopy faces keep their entrance records through the bake: two boxes of 12 triangles each.
+    let kinds = &record.mesh.metadata["triangleAttributes"]["kind"]["values"];
+    let entrance_faces = kinds.as_array().unwrap().iter().filter(|kind| *kind == "entrance").count();
+    assert_eq!(entrance_faces, 24, "the cottage's entrance is recorded on its door and canopy");
+
     let original_bounds = asset_from_evaluation(&cottage).unwrap().bounds();
     assert_eq!(asset_from_document(&record).unwrap().bounds(), original_bounds);
 
@@ -183,18 +189,21 @@ fn baked_records_and_formlab_documents_reproduce_the_building() {
     let supplied: MeshDocument = serde_json::from_str(BAKED_COTTAGE).unwrap();
     assert_eq!(supplied, baked, "re-bake assets/cottage.mesh.json when the cottage recipe changes");
 
-    // FORM LAB documents carry the same source and preset overrides.
+    // FORM instances reference the same script and carry the preset overrides.
     let mut library = FormAssetLibrary::new();
+    let mut read = |path: &str| -> Result<String, String> {
+        if path == "assets/building.form" { Ok(SOURCE.to_owned()) } else { Err(format!("missing {path}")) }
+    };
     for (name, text) in [
-        ("cottage", include_str!("../../examples/form-building/assets/cottage.formlab")),
-        ("warehouse", include_str!("../../examples/form-building/assets/warehouse.formlab")),
-        ("apartments", include_str!("../../examples/form-building/assets/apartments.formlab")),
+        ("cottage", include_str!("../../examples/form-building/assets/cottage.forminst")),
+        ("warehouse", include_str!("../../examples/form-building/assets/warehouse.forminst")),
+        ("apartments", include_str!("../../examples/form-building/assets/apartments.forminst")),
     ] {
-        let asset =
-            library.resolve(&format!("assets/{name}.formlab"), text, &Map::new(), ShadingModel::Layered).unwrap();
+        let path = format!("assets/{name}.forminst");
+        let asset = library.resolve(&path, text, &mut read, &Map::new(), ShadingModel::Layered).unwrap();
         let direct = asset_from_evaluation(&program.evaluate(&presets[name], None).unwrap()).unwrap();
-        assert_eq!(asset.bounds(), direct.bounds(), "{name}.formlab");
-        assert_eq!(asset.vertex_count(), direct.vertex_count(), "{name}.formlab");
+        assert_eq!(asset.bounds(), direct.bounds(), "{path}");
+        assert_eq!(asset.vertex_count(), direct.vertex_count(), "{path}");
     }
 }
 

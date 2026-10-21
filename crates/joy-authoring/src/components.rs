@@ -5,7 +5,7 @@
 //! rows, buttons, fields, panel headings, and toolbars as small egui helpers over
 //! [`colors`], [`layout`], and semantic [`text_styles`]. Apply
 //! [`theme::apply_editor`](joy_ui::theme::apply_editor) once for the base widget style and fonts; these helpers
-//! add the pieces egui has no style slot for, so Joy Editor, FORM LAB, and PARTICLE LAB share one vocabulary instead of
+//! add the pieces egui has no style slot for, so Joy Editor, FORM EDITOR, and JOYFX EDITOR share one vocabulary instead of
 //! painting their own.
 
 use egui::text::{
@@ -37,7 +37,7 @@ use joy_ui::theme::{
 /// Letter spacing of application titles, in points.
 const TITLE_SPACING: f32 = -1.0;
 
-/// Compact lab title size, matching the standalone browser header.
+/// Compact tool title size, matching the standalone browser header.
 const TITLE_SIZE: f32 = 27.0;
 
 /// Letter spacing of uppercase panel titles and captions, in points.
@@ -153,7 +153,7 @@ pub fn toolbar_frame() -> Frame {
         .inner_margin(Margin::symmetric(layout::SPACE_MD as i8, layout::SPACE_XS as i8))
 }
 
-/// A numbered panel heading in the lab style (`01 COMPOSE`): an accent index and a spaced uppercase title.
+/// A numbered panel heading in the tool editor style (`01 COMPOSE`): an accent index and a spaced uppercase title.
 pub fn panel_heading(ui: &mut Ui, index: &str, title: &str) {
     let caption = style_font(ui, &text_styles::caption(), layout::TYPE_SM);
     let title_font = FontId::new(layout::TYPE_SM, text_styles::strong_family());
@@ -164,13 +164,13 @@ pub fn panel_heading(ui: &mut Ui, index: &str, title: &str) {
     ui.label(job);
 }
 
-/// A standard workbench button with the explicit bold face used by the browser labs.
+/// A standard workbench button with the explicit bold face used by the browser tool editors.
 pub fn button(text: impl Into<String>) -> egui::Button<'static> {
     egui::Button::new(RichText::new(text.into()).text_style(TextStyle::Button))
         .min_size(vec2(0.0, layout::CONTROL_HEIGHT))
 }
 
-/// A native checkbox with the lab's orange checked fill and compact label, retaining egui's input and accessibility.
+/// A native checkbox with the tool editors' orange checked fill and compact label, retaining egui's input and accessibility.
 pub fn checkbox(ui: &mut Ui, value: &mut bool, text: &str) -> egui::Response {
     // Draw in the caller's layout so wrapped toolbars can measure the whole checkbox before placing it.
     let previous = ui.style().clone();

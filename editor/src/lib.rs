@@ -6,7 +6,7 @@
 //!
 //! Module responsibilities:
 //! - [`workspace`] (`src/workspace/`): project selection, the Content Browser, document tabs, saves with revision
-//!   checks and conflict resolution, session restore, repair views, and hosting FORM LAB and PARTICLE LAB tabs through
+//!   checks and conflict resolution, session restore, repair views, and hosting FORM EDITOR and JOYFX EDITOR tabs through
 //!   `joy_engine::development::AuthoringTool`.
 //! - [`level`] (`src/level/`): the level and object editor (viewport, outliner, schema-driven inspector).
 //! - [`interaction`] (`src/interaction/`): camera responses to the kit's viewport gestures, inspector drafts, and
@@ -42,12 +42,12 @@ use crate::workspace::tool_bridge::ToolRegistry;
 
 /// The tools Joy Editor hosts as tabs.
 ///
-/// FORM LAB opens `.form` and `.formlab` documents and PARTICLE LAB opens `.joyfx`; formats without a registered tool
+/// FORM EDITOR opens `.form` scripts and `.forminst` instances and JOYFX EDITOR opens `.joyfx`; formats without a registered tool
 /// open in a source view.
 pub fn default_tools() -> ToolRegistry {
     let mut tools = ToolRegistry::new();
-    tools.register(|| Box::new(form_lab::FormLab::hosted()));
-    tools.register(|| Box::new(particle_lab::ParticleLabTool::with_storage(None)));
+    tools.register(|| Box::new(form_editor::FormEditor::hosted()));
+    tools.register(|| Box::new(joyfx_editor::JoyfxEditorTool::with_storage(None)));
     tools
 }
 

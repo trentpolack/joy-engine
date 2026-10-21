@@ -1,17 +1,21 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! FORM placements: the points a script tags with user data so its host places something there.
+//! FORM placements: the isolated points a script tags with attributes so its host places something there.
 //!
-//! FORM stays a geometry language; a script asks for content by emitting isolated points inside
-//! `with userData({kind: "tree", object: "assets/objects/tree.joyobject"}) { point(x, y, z) }`. Hosts read those points
-//! as [`FormPlacement`]s in the asset's local space (script units). Two conventions are shared by every host:
+//! FORM stays a geometry language; a script asks for content by outputting isolated points with attributes, such as
+//! `addPoint(sites, vector(x, y, z), {kind: "tree", object: "assets/objects/tree.joyobject"})`. Hosts read those
+//! points as [`FormPlacement`]s in the asset's local space (script units). Two conventions are shared by every host:
 //!
 //! - `kind` names what the point is for; games map kinds to their own rules (structures, spawns, encounters).
 //! - `object` names a `.joyobject` template; [`placement_entities`] turns those placements into linked entity
 //!   instances, so a level built from FORM assets gets real entities (with their render, light, effect, and physics
-//!   components) without game code. Optional `rotation` (XYZ Euler radians) and `scale` (a number or an XYZ triple)
-//!   orient and size the instance relative to its parent.
+//!   components) without game code. Optional `rotation` (XYZ Euler radians) and `scale` (per-axis XYZ factors)
+//!   orient and size the instance relative to its parent; both are FORM's standard vector point attributes.
+//!
+//! An isolated point is a placement when at least one of its attributes holds a value other than its type's default.
+//! Parts that never set an attribute hold that default once outputs are combined, so a plain marker point stays a
+//! drawn point.
 //!
 //! Placement entity ids are `<parent id>/<placement index>`, stable for a given script and parameter set.
 
@@ -29,16 +33,16 @@ use joy_gameplay::{
 };
 use serde_json::Value;
 
-/// User data field naming what a placement is for.
+/// Point attribute naming what a placement is for.
 pub const PLACEMENT_KIND: &str = "kind";
 
-/// User data field naming the `.joyobject` template instanced at a placement.
+/// Point attribute naming the `.joyobject` template instanced at a placement.
 pub const PLACEMENT_OBJECT: &str = "object";
 
-/// User data field holding a placement's XYZ Euler rotation in radians.
+/// Point attribute holding a placement's XYZ Euler rotation in radians.
 pub const PLACEMENT_ROTATION: &str = "rotation";
 
-/// User data field holding a placement's uniform (number) or per-axis (XYZ) scale.
+/// Point attribute holding a placement's per-axis (XYZ) scale.
 pub const PLACEMENT_SCALE: &str = "scale";
 
 /// Separator between a parent entity id and a placement index in spawned entity ids.
@@ -47,19 +51,20 @@ pub const PLACEMENT_ID_SEPARATOR: char = '/';
 /// Most object placements one asset may spawn, so a script cannot flood a level with entities.
 pub const MAXIMUM_OBJECT_PLACEMENTS: usize = 4096;
 
-/// One tagged FORM point: its user data and position in the asset's local space.
+/// One tagged FORM point: its attributes and position in the asset's local space.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FormPlacement {
     /// The point's position in script units, in the asset's local space.
     pub position: Vec3,
-    /// The point's whole user data record.
+    /// Every custom attribute of the point, by name. Attributes other points in the same output declare hold their
+    /// defaults (zero, empty text, or false) here.
     pub data: JsonRecord,
 }
 
 impl FormPlacement {
-    /// The `kind` field, when it is text.
+    /// The `kind` attribute, when it is nonempty text.
     pub fn kind(&self) -> Option<&str> {
-        self.data.get(PLACEMENT_KIND).and_then(Value::as_str)
+        self.data.get(PLACEMENT_KIND).and_then(Value::as_str).filter(|kind| !kind.is_empty())
     }
 
     /// The `object` template path, when it is nonempty text.
@@ -72,16 +77,13 @@ impl FormPlacement {
         self.data.get(PLACEMENT_ROTATION).and_then(read_vector).unwrap_or(Vec3::ZERO)
     }
 
-    /// The placement's own scale: a positive number for uniform scale or a positive XYZ triple; one otherwise.
+    /// The placement's own per-axis scale; one when absent, malformed, or not positive on every axis.
     pub fn scale(&self) -> Vec3 {
-        match self.data.get(PLACEMENT_SCALE) {
-            Some(Value::Number(number)) => {
-                let value = number.as_f64().unwrap_or(1.0) as f32;
-                if value.is_finite() && value > 0.0 { Vec3::splat(value) } else { Vec3::ONE }
-            }
-            Some(value) => read_vector(value).filter(|scale| scale.min_element() > 0.0).unwrap_or(Vec3::ONE),
-            None => Vec3::ONE,
-        }
+        self.data
+            .get(PLACEMENT_SCALE)
+            .and_then(read_vector)
+            .filter(|scale| scale.min_element() > 0.0)
+            .unwrap_or(Vec3::ONE)
     }
 
     /// The placement's world transform under `parent`: the parent's scale, rotation, and position applied to the local
@@ -98,25 +100,24 @@ impl FormPlacement {
     }
 }
 
-/// Every point of `geometry` that carries a user data record, in point order.
+/// Every isolated point of `geometry` that sets a custom attribute, in point order.
 ///
-/// Only isolated points (`point(...)` commands) are placements; triangle vertices keep their user data for exports and
+/// Only isolated points (points without faces) are placements; triangle vertices keep their attributes for exports and
 /// inspection.
 pub fn form_placements(geometry: &GeometryData) -> Vec<FormPlacement> {
-    let Some(user_data) = geometry.user_data.as_deref() else {
-        return Vec::new();
-    };
     let mut placements = Vec::new();
     for &point in &geometry.points {
         let index = point as usize;
-        let (Some(Value::Object(record)), Some(coordinates)) =
-            (user_data.get(index), geometry.positions.get((index * 3)..((index * 3) + 3)))
-        else {
+        let record = geometry.vertex_record(index);
+        let Some(coordinates) = geometry.positions.get((index * 3)..((index * 3) + 3)) else {
             continue;
         };
+        if !record.values().any(is_set) {
+            continue;
+        }
         placements.push(FormPlacement {
             position: Vec3::new(coordinates[0] as f32, coordinates[1] as f32, coordinates[2] as f32),
-            data: record.clone(),
+            data: record.into_iter().collect(),
         });
     }
     placements
@@ -125,8 +126,8 @@ pub fn form_placements(geometry: &GeometryData) -> Vec<FormPlacement> {
 /// Linked entity instances for `parent`'s object placements, in placement order, with world transforms.
 ///
 /// Each entity links its placement's `object` template (resolve templates with `resolve_level_objects` before running
-/// them) and overrides a `formPlacement` component holding the placement record, so behaviors can read the script's
-/// data.
+/// them) and overrides a `formPlacement` component holding the placement's attributes, so behaviors can read the
+/// script's data.
 /// Fails when the placements name more than [`MAXIMUM_OBJECT_PLACEMENTS`] objects.
 pub fn placement_entities(
     parent: &EntityDefinition,
@@ -174,6 +175,17 @@ const OVERRIDE_COMPONENTS: &str = "components";
 pub struct PlacementLimitError {
     /// The parent entity whose asset emitted the placements.
     pub entity: String,
+}
+
+/// Whether an attribute value differs from its type's default (zero components, empty text, or false).
+fn is_set(value: &Value) -> bool {
+    match value {
+        Value::Number(number) => number.as_f64().is_some_and(|number| number != 0.0),
+        Value::String(text) => !text.is_empty(),
+        Value::Bool(flag) => *flag,
+        Value::Array(components) => components.iter().any(is_set),
+        _ => false,
+    }
 }
 
 #[cfg(test)]

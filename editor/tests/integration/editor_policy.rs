@@ -16,7 +16,7 @@ use crate::support::TempFolder;
 #[test]
 fn the_hosting_workspace_is_found_from_nested_folders() {
     let root = TempFolder::new("policy");
-    let nested = root.root.join("joy-engine/tools/form-lab/src");
+    let nested = root.root.join("joy-engine/tools/form-editor/src");
     std::fs::create_dir_all(&nested).unwrap();
     assert_eq!(find_workspace_root(&nested), None);
     root.write("joy.joyconfig", "{}");

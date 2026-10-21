@@ -2,7 +2,7 @@
 # Licensed under the MIT License.
 
 # Joy Engine authoring kit: the egui controls, panel layout, property history, script editor, viewport gestures, and
-# file dialogs FORM LAB, PARTICLE LAB, and Joy Editor share, plus the contract that hosts tools as editor tabs.
+# file dialogs FORM EDITOR, JOYFX EDITOR, and Joy Editor share, plus the contract that hosts tools as editor tabs.
 #
 #   cargo test -p joy-authoring
 

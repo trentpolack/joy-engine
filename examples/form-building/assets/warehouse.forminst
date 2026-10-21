@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "name": "warehouse",
+  "form": "building.form",
+  "overrides": {
+    "width": 18,
+    "depth": 12,
+    "height": 6,
+    "floors": 1,
+    "window_spacing": 4,
+    "door_spacing": 5,
+    "roof_shape": 0,
+    "wall_tint": [
+      0.36,
+      0.48,
+      0.52,
+      1
+    ],
+    "roof_tint": [
+      0.13,
+      0.17,
+      0.21,
+      1
+    ],
+    "random_seed": 71
+  }
+}

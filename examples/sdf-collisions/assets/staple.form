@@ -5,13 +5,24 @@ param width = 0.8 meta(min=0.3, max=1.4, step=0.05)
 param height = 0.8 meta(min=0.3, max=1.4, step=0.05)
 param bar = 0.14 meta(min=0.06, max=0.3, step=0.01)
 
+# ---- Finish.
 # White vertices, so the material's base color shows as authored.
-color(1, 1, 1)
-let unit = meshBox(1, 1, 1)
+let white = rgba(1, 1, 1, 1)
 let finish = materialPbr(rgba(0.93, 0.76, 0.23, 1), 0.1, 0.5)
+
+# ---- Parts.
+let unit = meshBox(1, 1, 1)
 let post = width/2 - bar/2
 
-repeat 2 as side {
-  instance(unit, vector((side*2 - 1)*post, -bar/2, 0), vector(0, 0, 0), vector(bar, height - bar, bar), finish)
+# An axis-aligned box: the unit mesh placed at `center` and stretched to `size`.
+fn block(center, size) {
+  return place(unit, center, vector(0, 0, 0), size)
 }
-instance(unit, vector(0, height/2 - bar/2, 0), vector(0, 0, 0), vector(width, bar, bar), finish)
+
+let posts = geometry()
+repeat 2 as side {
+  append(posts, block(vector((side*2 - 1)*post, -bar/2, 0), vector(bar, height - bar, bar)))
+}
+let bridge = block(vector(0, height/2 - bar/2, 0), vector(width, bar, bar))
+
+output("Staple", material(color(merge(posts, bridge), white), finish))

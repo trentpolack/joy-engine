@@ -28,34 +28,34 @@ fn material(name: &str) -> Value {
 }
 
 #[test]
-fn reusable_box_preserves_source_geometry_and_restores_instance_attributes() {
+fn placed_meshes_keep_source_geometry_and_uncolored_parts_take_the_default_tint() {
     let data = evaluate(
-        "let m=meshBox(2,4,6) normal(0,1,0) uv(0.25,0.75) instance(m,vector(10,0,0)) instance(m) point(0,0,0)",
+        "let m=meshBox(2,4,6)\nlet parts=merge(place(m,vector(10,0,0)), place(m,vector(0,0,0)))\naddPoint(parts,vector(0,0,0))\noutput(\"Parts\",parts)",
     );
     assert_eq!(&data.positions[..3], &[9.0, -2.0, -3.0]);
     assert_eq!(&data.positions[24..27], &[-1.0, -2.0, -3.0]);
     assert_eq!(&data.triangles[..6], &[0, 2, 1, 0, 3, 2]);
     assert_eq!(&data.triangles[36..42], &[8, 10, 9, 8, 11, 10]);
-    assert_eq!(&data.normals[48..], &[0.0, 1.0, 0.0]);
-    assert_eq!(&data.uvs[32..], &[0.25, 0.75]);
+    assert_eq!(data.points, vec![16]);
     assert_eq!(&data.colors[..3], &[0.929, 0.424, 0.224]);
     assert_eq!(data.alphas, vec![1.0; 17]);
 }
 
 #[test]
-fn sphere_emits_smooth_normals_restores_normal_and_leaves_final_uv() {
-    let data = evaluate("normal(1,0,0) sphere(0,0,0,2,4) point(5,6,7)");
-    assert_eq!(data.positions.len() / 3, 16);
+fn sphere_emits_smooth_normals_seam_uvs_and_moves_with_translate() {
+    let data = evaluate("output(\"Ball\", translate(sphere(2,4), vector(5,6,7)))");
+    // The mesh's two seam poles that no triangle uses are left out, so they are not drawn as stray points.
+    assert_eq!(data.positions.len() / 3, 13);
+    assert!(data.points.is_empty());
     assert_eq!(data.triangles.len() / 3, 8);
-    assert_eq!(&data.positions[..3], &[0.0, 2.0, 0.0]);
+    assert_eq!(&data.positions[..3], &[5.0, 8.0, 7.0]);
     assert_eq!(&data.normals[..3], &[0.0, 1.0, 0.0]);
-    assert_eq!(&data.normals[45..], &[1.0, 0.0, 0.0]);
-    assert_eq!(&data.uvs[30..], &[1.0, 1.0]);
+    assert_eq!(&data.uvs[24..], &[0.75, 1.0]);
 }
 
 #[test]
 fn reflected_mesh_transforms_reverse_winding_and_use_inverse_scale_normals() {
-    let source = "param shape=meshBox(1,1,1) instance(transformMesh(shape,vector(4,5,6),vector(0,0,0),vector(-2,3,4)))";
+    let source = "param shape=meshBox(1,1,1)\noutput(\"Shape\", geometry(transformMesh(shape,vector(4,5,6),vector(0,0,0),vector(-2,3,4))))";
     let mesh = json!({"kind":"mesh","name":"Triangle", "positions":[0,0,0,1,0,0,0,1,0],
         "normals":[1,1,0,1,1,0,1,1,0],"uvs":[0,0,1,0,0,1],"indices":[0,1,2]});
     let data = compile(source, &json!({"shape":mesh.clone()}), None).unwrap();
@@ -68,9 +68,9 @@ fn reflected_mesh_transforms_reverse_winding_and_use_inverse_scale_normals() {
 }
 
 #[test]
-fn bound_material_identity_is_reused_without_conflating_equal_values() {
+fn identical_materials_share_one_palette_entry_and_different_ones_do_not() {
     let data = evaluate(
-        "let m=materialPbr(rgba(0.2,0.3,0.4,0.5),0.1,0.7) material(m) box(0,0,0,1,1,1) material(m) box(2,0,0,1,1,1) material(materialPbr(rgba(0.2,0.3,0.4,0.5),0.1,0.7)) box(4,0,0,1,1,1)",
+        "let m=materialPbr(rgba(0.2,0.3,0.4,0.5),0.1,0.7)\nlet a=material(box(1,1,1),m)\nlet b=material(translate(box(1,1,1),vector(2,0,0)),materialPbr(rgba(0.2,0.3,0.4,0.5),0.1,0.7))\nlet c=material(translate(box(1,1,1),vector(4,0,0)),materialPbr(rgba(1,0,0,1),0,1))\noutput(\"A\",a) output(\"B\",b) output(\"C\",c)",
     );
     assert_eq!(data.materials.len(), 3);
     assert_eq!(data.materials[1]["alphaMode"], "BLEND");
@@ -82,7 +82,8 @@ fn bound_material_identity_is_reused_without_conflating_equal_values() {
 fn palette_default_order_and_generated_names_preserve_authored_materials() {
     let palette = json!([material("ScriptMaterial_2"), material("Default")]);
     let data =
-        compile("material(materialPbr(rgba(1,1,1,1),0,1)) box(0,0,0,1,1,1)", &json!({}), Some(&palette)).unwrap();
+        compile("output(\"Box\", material(box(1,1,1), materialPbr(rgba(1,1,1,1),0,1)))", &json!({}), Some(&palette))
+            .unwrap();
     assert_eq!(data.materials[0]["name"], "Default");
     assert_eq!(data.materials[1]["name"], "ScriptMaterial_2");
     assert_eq!(data.materials[2]["name"], "ScriptMaterial_3");
@@ -91,7 +92,7 @@ fn palette_default_order_and_generated_names_preserve_authored_materials() {
 
 #[test]
 fn borrowed_mesh_parameters_reject_incomplete_and_out_of_bounds_geometry() {
-    let source = "param shape=meshBox(1,1,1) instance(shape)";
+    let source = "param shape=meshBox(1,1,1)\noutput(\"Shape\", geometry(shape))";
     let mut mesh = json!({"kind":"mesh","name":"Triangle","positions":[0,0,0,1,0,0,0,1,0],
         "normals":[0,0,0,0,0,0,0,0,0],"uvs":[0,0,1,0,0,1],"indices":[0,1,3]});
     let error = compile(source, &json!({"shape":mesh.clone()}), None).unwrap_err();
@@ -100,8 +101,8 @@ fn borrowed_mesh_parameters_reject_incomplete_and_out_of_bounds_geometry() {
     mesh["uvs"] = json!([0, 0]);
     let error = compile(source, &json!({"shape":mesh}), None).unwrap_err();
     assert!(error.message.contains("match the vertex count"), "{error}");
-    let error =
-        compile("instance(meshBox(1,1,1),vector(0,0,0),vector(0,0,0),vector(1,0,1))", &json!({}), None).unwrap_err();
+    let error = compile("let a = place(meshBox(1,1,1),vector(0,0,0),vector(0,0,0),vector(1,0,1))", &json!({}), None)
+        .unwrap_err();
     assert!(error.message.contains("Mesh scale must be nonzero"), "{error}");
 }
 
@@ -139,12 +140,6 @@ fn material_texture_allocation_limits_apply_to_individual_and_combined_sources()
 }
 
 #[test]
-fn vertex_metadata_snapshots_preserve_null_gaps_and_clear_state() {
-    let data = evaluate("point(0,0,0) userData({name: \"owned\", values: [1,2]}) point(1,0,0) userData() point(2,0,0)");
-    assert_eq!(data.user_data, Some(vec![Value::Null, json!({"name":"owned","values":[1.0,2.0]}), Value::Null]));
-}
-
-#[test]
 fn material_palette_converts_to_typed_records_with_document_spelling_and_defaults() {
     let mut paint = material("Paint");
     paint["baseColor"] = json!([0.3, 0.4, 0.5, 0.6]);
@@ -153,7 +148,7 @@ fn material_palette_converts_to_typed_records_with_document_spelling_and_default
     paint["emissive"] = json!([4.0, 1.5, 0.0]);
     paint["textures"] = json!({"normal": "data:image/png;base64,iVBORw0KGgo="});
     let data = compile(
-        "material(Paint) point(0,0,0) material(materialPbr(rgba(0.2,0.4,0.6,0.5),0.3,0.7)) point(1,0,0)",
+        "let painted = material(box(1,1,1), \"Paint\")\nlet tinted = material(translate(box(1,1,1), vector(2,0,0)), materialPbr(rgba(0.2,0.4,0.6,0.5),0.3,0.7))\noutput(\"Painted\", painted) output(\"Tinted\", tinted)",
         &json!({}),
         Some(&json!([paint])),
     )
@@ -170,7 +165,11 @@ fn material_palette_converts_to_typed_records_with_document_spelling_and_default
     assert_eq!(materials[1].textures.base_color, None);
     assert_eq!(materials[2].name, "ScriptMaterial_2");
     assert_eq!((materials[2].alpha_mode, materials[2].metallic, materials[2].roughness), (AlphaMode::Blend, 0.3, 0.7));
-    assert_eq!(data.point_materials, vec![1, 2]);
+    assert_eq!((data.triangle_materials[0], data.triangle_materials[12]), (1, 2));
+    assert_eq!(
+        compile("output(\"Box\", material(box(1,1,1), \"Missing\"))", &json!({}), None).unwrap_err().message,
+        "Unknown material 'Missing'. Add it in Materials or import MaterialX."
+    );
 
     // Serialized typed records are the same FORM palette records, so they round-trip as palettes.
     for (typed, record) in materials.iter().zip(&data.materials) {
@@ -193,7 +192,7 @@ fn material_palette_converts_to_typed_records_with_document_spelling_and_default
 
 #[test]
 fn primitive_helpers_match_the_recorded_mesh_box_and_mesh_sphere() {
-    // Recorded expectations for `mesh_box(2, 3, 4)`, which the script `box(0,0,0,2,3,4)` also produces.
+    // Recorded expectations for `mesh_box(2, 3, 4)`, which outputting `box(2,3,4)` also produces.
     let cube = mesh_box(2.0, 3.0, 4.0).unwrap();
     assert_eq!(
         cube.positions,
@@ -214,7 +213,9 @@ fn primitive_helpers_match_the_recorded_mesh_box_and_mesh_sphere() {
         (cube.triangle_materials.as_slice(), cube.form_materials()),
         (&[0; 12][..], vec![FormMaterial::default()])
     );
-    assert_eq!(cube, evaluate("box(0,0,0,2,3,4)"));
+    let mut output = evaluate("output(\"Box\", box(2,3,4))");
+    output.outputs = None;
+    assert_eq!(cube, output);
 
     // Recorded expectations for `mesh_sphere(1.5, 6)`: 4 rows of 7 seam-duplicated vertices, pole rows emit one triangle
     // per column.

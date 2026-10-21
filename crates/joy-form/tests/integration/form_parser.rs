@@ -26,36 +26,74 @@ fn parses_complete_statement_and_data_syntax() {
         param width = 2 meta(min=0, max=10, step=.25)
         param height = 3, 0, 10, 1
         let data = {"display name": "hello", nested: [true, false, null, {}, []]}
-        let g = geometry()
-        with userData(data) {
-            repeat width as i {
-                if i >= 1 { point(i, 0, 0) }
-            }
+        use "parts/kit.form" as kit
+        enum Kind { tower, hall, }
+        fn shell(ref target, size) {
+            append(target, box(size, size, size))
+            return
         }
+        let g = geometry()
+        let count = 0
+        repeat width as i {
+            if i >= 1 AND NOT (i == 3) { count += 1 } else if i == 0 OR false { count -= 1 } else { count *= 2 }
+        }
+        match Kind.hall { case Kind.tower, Kind.hall { count /= 2 } else { } }
         wrangle points in g as p {
             p.position = vector(p.position.x + 1, 0, 0)
+            p.position += vector(0, data["nested"][0], 0)
         }
-        // Names are interpreted as commands only during evaluation.
+        shell(ref g, kit.unit)
+        // Names are interpreted as functions only during evaluation.
         arbitrary(1e-2, 5., +3, (width + height))
     "#;
-    assert!(CompiledScript::parse(source).is_ok());
+    let error = CompiledScript::parse(source).unwrap_err();
+    assert!(error.message.starts_with("Modules need a host that loads files"), "parsed everything else: {error}");
+    assert!(CompiledScript::parse(&source.replace("use \"parts/kit.form\" as kit", "")).is_ok());
+}
+
+#[test]
+fn grammar_words_and_misplaced_declarations_are_rejected_where_they_appear() {
+    assert_error("let AND = 1", "'AND' is a reserved word and cannot be used as a name.", 1, 5);
+    assert_error(
+        "let x = 1
+else { }",
+        "'else' must follow an if block or a match case.",
+        2,
+        1,
+    );
+    assert_error("repeat 2 as i { fn f() { } }", "Declare functions at the top level of a script.", 1, 17);
+    assert_error("return 1", "'return' is only allowed inside a function.", 1, 1);
+    assert_error("if true { enum A { x } }", "Declare enums at the top level of a script.", 1, 11);
+    assert_error("enum A { }", "An enum requires 1 to 32 members.", 1, 8);
+    assert_error("enum A { x, x }", "Duplicate enum member 'x'.", 1, 13);
+    assert_error("fn f(a, a) { }", "Duplicate function parameter 'a'.", 1, 9);
+    assert_error("match 1 { else { } case 1 { } }", "A match's else block must come last.", 1, 20);
+    assert_error(
+        "let x = 1
+x + 1",
+        "Expected a statement; a value on its own must be a function call.",
+        2,
+        1,
+    );
 }
 
 #[test]
 fn exponentiation_binds_more_tightly_than_unary_and_associates_right() {
-    let geometry = compile("point(-2^2, 2^3^2, 7%4+8/2*3)", &json!({}), None).unwrap();
+    let geometry =
+        compile("let g = geometry() addPoint(g, vector(-2^2, 2^3^2, 7%4+8/2*3)) output(\"P\", g)", &json!({}), None)
+            .unwrap();
     assert_eq!(geometry.positions, vec![-4.0, 512.0, 15.0]);
 }
 
 #[test]
 fn reports_character_columns_and_comment_line_boundaries() {
     assert_error(
-        "\"😀\"; let x = @",
+        "let s = \"😀\"; let x = @",
         "@attribute syntax is no longer supported. Use 'wrangle points in geometry as point' and 'point.name'; declare fields first with addAttribute().",
         1,
-        14,
+        22,
     );
-    assert_error("#😀\r\n\"😀\"; let x = ;", "Expected an expression, found ';'.", 2, 14);
+    assert_error("#😀\r\nlet s = \"😀\"; let x = ;", "Expected an expression, found ';'.", 2, 22);
     // A leading byte-order mark takes no column; other Unicode white space does.
     assert_error("\u{feff}\u{00a0}let x = )", "Expected an expression, found ')'.", 1, 10);
     assert_error("\u{2603}", "Unexpected character '\u{2603}'.", 1, 1);
@@ -72,16 +110,16 @@ fn rejects_invalid_metadata_and_data_keys_at_the_original_tokens() {
     assert_error("param x = 1 meta(color=2)", "Unknown parameter metadata 'color'.", 1, 23);
     assert_error("param x = 1 meta(label=2)", "Parameter metadata text requires double quotes.", 1, 24);
     assert_error("param x = 1 meta(options=[\"Only\"])", "Parameter options require 2 to 32 labels.", 1, 26);
-    assert_error("let x = {a:1,a:2}", "Duplicate user data field 'a'.", 1, 14);
+    assert_error("let x = {a:1,a:2}", "Duplicate record field 'a'.", 1, 14);
     assert_error(
         "let x = {constructor:1}",
-        "Invalid user data field name (1–64 characters; prototype keys are reserved).",
+        "Invalid record field name (1–64 characters; prototype keys are reserved).",
         1,
         10,
     );
     assert_error(
         "let x = {\"\":1}",
-        "Invalid user data field name (1–64 characters; prototype keys are reserved).",
+        "Invalid record field name (1–64 characters; prototype keys are reserved).",
         1,
         10,
     );
@@ -115,8 +153,8 @@ fn bounds_source_tokens_and_recursive_nesting() {
     assert!(CompiledScript::parse(&";".repeat(40_000)).is_ok());
     assert_error(&";".repeat(40_001), "Token limit exceeded.", 1, 40_001);
     assert_error(&format!("#{}", "😀".repeat(200_000)), "Script size limit is 200,000 characters.", 1, 1);
-    assert!(CompiledScript::parse(&format!("{}1", "+".repeat(62))).is_ok());
-    assert_error(&format!("{}1", "+".repeat(63)), "Expression nesting limit exceeded.", 1, 64);
-    assert!(CompiledScript::parse(&format!("{}{}", "if 1 {".repeat(47), "}".repeat(47))).is_ok());
-    assert_error(&format!("{}{}", "if 1 {".repeat(48), "}".repeat(48)), "Nesting limit exceeded.", 1, 289);
+    assert!(CompiledScript::parse(&format!("let a = {}1", "+".repeat(62))).is_ok());
+    assert_error(&format!("let a = {}1", "+".repeat(63)), "Expression nesting limit exceeded.", 1, 72);
+    assert!(CompiledScript::parse(&format!("{}{}", "if true {".repeat(47), "}".repeat(47))).is_ok());
+    assert_error(&format!("{}{}", "if true {".repeat(48), "}".repeat(48)), "Nesting limit exceeded.", 1, 433);
 }

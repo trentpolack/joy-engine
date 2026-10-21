@@ -12,11 +12,15 @@ use joy_engine::rendering::{
     RenderError,
     form_mesh_asset,
 };
-use joy_engine::serde_json::Value;
+use joy_engine::serde_json::{
+    self,
+    Value,
+};
 
 /// Metadata keys of a baked document's mesh.
 const PROJECT_KEY: &str = "project";
-const USER_DATA_KEY: &str = "userData";
+const VERTEX_ATTRIBUTES_KEY: &str = "vertexAttributes";
+const TRIANGLE_ATTRIBUTES_KEY: &str = "triangleAttributes";
 
 /// Copy a completed FORM evaluation into an immutable mesh whose palette draws as layered materials; scene instances
 /// share it. Fails only for empty geometry.
@@ -25,13 +29,28 @@ pub fn asset_from_evaluation(geometry: &GeometryData) -> Result<MeshAsset, Rende
 }
 
 /// The baked document of an evaluation: the mesh with its palette slots, each slot's layered material, and the project
-/// and per-vertex user data as mesh metadata.
+/// and custom FORM attributes as mesh metadata.
+///
+/// Custom attributes keep their realized column form (`{"type", "size"?, "values"}` keyed by attribute name), so a
+/// baked building still carries its per-triangle entrance records (`kind`, `index`, and `doorstep`). Absent attribute
+/// maps are left out.
 pub fn document_from_evaluation(geometry: &GeometryData) -> MeshDocument {
     let mut mesh = geometry.to_mesh();
     let mut metadata = JsonRecord::new();
     metadata.insert(PROJECT_KEY.to_owned(), geometry.project.clone().unwrap_or(Value::Null));
-    if let Some(user_data) = &geometry.user_data {
-        metadata.insert(USER_DATA_KEY.to_owned(), Value::Array(user_data.clone()));
+
+    let attribute_maps = [
+        (VERTEX_ATTRIBUTES_KEY, &geometry.vertex_attributes),
+        (TRIANGLE_ATTRIBUTES_KEY, &geometry.triangle_attributes),
+    ];
+    for (key, attributes) in attribute_maps {
+        if attributes.is_empty() {
+            continue;
+        }
+
+        // Attribute columns hold only numbers, text, and flags, so serialization cannot fail.
+        let columns = serde_json::to_value(attributes).expect("FORM attribute columns serialize as JSON");
+        metadata.insert(key.to_owned(), columns);
     }
     mesh.metadata = metadata;
     let materials =

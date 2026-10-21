@@ -3,6 +3,7 @@
 
 //! Asset formats the workspace routes to an owned editor, and the starter content it creates.
 
+use joy_engine::form::FormInstance;
 use joy_engine::gameplay::entity_type;
 use joy_engine::serde_json::{
     self,
@@ -11,25 +12,26 @@ use joy_engine::serde_json::{
 };
 
 /// Formats the workspace can create, import, and open, without dots.
-pub const SUPPORTED_ASSET_KINDS: [&str; 5] = ["joylevel", "joyobject", "form", "formlab", "joyfx"];
+pub const SUPPORTED_ASSET_KINDS: [&str; 5] = ["joylevel", "joyobject", "form", "forminst", "joyfx"];
 
-/// Formats offered by **New**, in menu order, with their labels. Raw `.form` source is imported, not created.
-pub const NEW_ASSET_KINDS: [(&str, &str); 4] = [
+/// Formats offered by **New**, in menu order, with their labels.
+pub const NEW_ASSET_KINDS: [(&str, &str); 5] = [
     ("joylevel", "Level"),
     ("joyobject", "Object"),
-    ("formlab", "FORM LAB document (.formlab)"),
+    ("form", "FORM script (.form)"),
+    ("forminst", "FORM instance (.forminst)"),
     ("joyfx", "Particle effect"),
 ];
 
-/// The format **New** selects first: an editable FORM LAB document.
-pub const DEFAULT_NEW_ASSET_KIND: &str = "formlab";
+/// The format **New** selects first: a FORM script, the recipe instances refer to.
+pub const DEFAULT_NEW_ASSET_KIND: &str = "form";
 
 /// Which editor owns a document. Unknown extensions never fall through to FORM.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AssetEditor {
     /// The level editor, for `.joylevel` levels and `.joyobject` reusable objects.
     Level,
-    /// A hosted authoring tool registered for the extension (FORM LAB for `.form` and `.formlab`, PARTICLE LAB for
+    /// A hosted authoring tool registered for the extension (FORM EDITOR for `.form` and `.forminst`, JOYFX EDITOR for
     /// `.joyfx`).
     Tool,
     /// A plain source view, for manifest-declared formats without an editor.
@@ -40,7 +42,7 @@ pub enum AssetEditor {
 pub fn asset_editor(path: &str) -> AssetEditor {
     match asset_kind(path).as_deref() {
         Some("joylevel" | "joyobject") => AssetEditor::Level,
-        Some("form" | "formlab" | "joyfx") => AssetEditor::Tool,
+        Some("form" | "forminst" | "joyfx") => AssetEditor::Tool,
         _ => AssetEditor::Source,
     }
 }
@@ -79,7 +81,10 @@ pub fn new_asset_path(name: &str, kind: &str) -> Result<String, String> {
 /// A one-sentence explanation of what a new asset of `kind` stores.
 pub fn new_asset_hint(kind: &str) -> &'static str {
     match kind {
-        "formlab" => "Editable procedural document. Saves script, parameter overrides, materials and variants.",
+        "form" => "Procedural recipe. Stores the script and the parameters it exposes.",
+        "forminst" => {
+            "Configured FORM. Stores a script (packed here; point it at a .form to share one recipe), parameter overrides, materials and variants."
+        }
         "joylevel" => "Scene document. Stores entities and their authored settings.",
         "joyobject" => "Reusable object definition. Stores entity components and defaults.",
         "joyfx" => "Editable effect. Stores emitters, scripts and effect parameters.",
@@ -98,10 +103,12 @@ pub fn create_asset_text(path: &str) -> Option<String> {
     let file = path.rsplit('/').next().unwrap_or(path);
     let name = file.rfind('.').map_or(file, |index| &file[..index]);
     let quoted = serde_json::to_string(name).unwrap_or_else(|_| "\"New asset\"".to_owned());
-    let source = format!("project meta(name={quoted})\ncolor(0.93, 0.42, 0.22)\nbox(0, 0.5, 0, 1, 1, 1)\n");
+    let source = format!(
+        "project meta(name={quoted})\n\nlet block = translate(box(1, 1, 1), vector(0, 0.5, 0))\noutput({quoted}, color(block, rgba(0.93, 0.42, 0.22, 1)))\n"
+    );
     let value: Value = match kind.as_str() {
         "form" => return Some(source),
-        "formlab" => json!({"version": 1, "name": name, "source": source, "overrides": {}}),
+        "forminst" => FormInstance::packed(name, &source).to_json(),
         "joyfx" => json!({
             "version": 1, "name": name, "maxParticles": 128, "parameters": {}, "emitters": [{
                 "id": "sparks", "enabled": true, "root": true, "duration": 2, "rate": 12,

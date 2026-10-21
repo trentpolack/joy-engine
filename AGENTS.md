@@ -2,7 +2,7 @@
 This file applies to the entire repository unless a package-specific `AGENTS.md` says otherwise for that package.
 
 ## Overview
-Joy Engine is a Rust game engine for native applications and browser WebAssembly (WebGPU with WebGL 2 fallback) for prototyping, procedural generation and stylized games. This repository holds the engine package, Joy Editor and its FORM LAB and PARTICLE LAB tools, and independently runnable engine examples.
+Joy Engine is a Rust game engine for native applications and browser WebAssembly (WebGPU with WebGL 2 fallback) for prototyping, procedural generation and stylized games. This repository holds the engine package, Joy Editor and its FORM EDITOR and JOYFX EDITOR tools, and independently runnable engine examples.
 
 Prefer readable control flow, named data, and small modules over clever abstractions or compression. If a change makes code harder to scan, explain why the tradeoff is worthwhile. There are additional specific cases in the "Code Standards and AI Agent Rules" section of this doc.
 
@@ -45,7 +45,7 @@ In addition:
   - For follow-up/future work, create a GitHub Issue; do not create standalone markdown files like `follow-ups.md`.
   - Do not file issues for work that is being addressed within current task(s); file issues for work that needs eyes on it for future work.
   - Apply appropriate labels/tags to issues.
-- When engine work absorbs behavior that consumers implement themselves (games in a hosting workspace, Joy Editor, the labs, or examples), migrate those consumers in the same change and delete their now-redundant code. A new engine mechanism without its consumer migration is unfinished work. Name what each consumer removed in the completion report.
+- When engine work absorbs behavior that consumers implement themselves (games in a hosting workspace, Joy Editor, FORM EDITOR, JOYFX EDITOR, or examples), migrate those consumers in the same change and delete their now-redundant code. A new engine mechanism without its consumer migration is unfinished work. Name what each consumer removed in the completion report.
 
 ### Completion Reports
 Keep the whole summary under roughly 300 words and link out instead of expanding. State what changed, what was validated (and what could not be), consumer code removed, and proposed follow-up issues. Use the completion date in `America/Detroit`.
@@ -68,11 +68,11 @@ Do not add tests solely for coverage counts, trivial helpers, fixed tuning value
 - `src/`, `schemas/`, `assets/`: the `joy-engine` facade package (public entry points are listed in [README.md](README.md)), which re-exports the system crates under their module names, plus shared schemas and assets.
 - `tests/`, `scripts/`, `docs/`: the facade's tests and the tooling tests, tooling, guides and API documentation sources. Every package keeps unit tests beside the module they test (`<file>.test.rs`) and its other tests in its own `tests/` folder (`integration/`, `fixtures/`, and `tooling/`); see the [Rust coding standards](docs/rust-coding-standards.md#tests).
 - `editor/`: Joy Editor (`joy-editor`), a separate Rust package with npm build metadata.
-- `tools/`: FORM LAB (`form-lab`) and PARTICLE LAB (`particle-lab`), standalone tool packages that Joy Editor hosts as tabs.
+- `tools/`: FORM EDITOR (`form-editor`) and JOYFX EDITOR (`joyfx-editor`), standalone tool packages that Joy Editor hosts as tabs.
 - `Cargo.toml`, `src/**/*.rs`, `tests/integration/`: the engine workspace, the `joy-engine` facade crate, and its integration tests. `joy-renderer` is the only renderer; tools and FORM content draw through it (by way of `joy-scene`) rather than owning renderers.
 - `examples/*`: engine feature demonstrations. A hosting workspace can publish examples that opt in with `gameSite.category: "example"`; examples remain independent of games and the host.
 
-The engine package never imports the editor, tools or examples. The editor depends on the engine crate and hosts the lab crates. Tests, fixtures and tooling live inside the owning package. Nothing in this repository may depend on a particular game; game-specific fixtures belong in the consuming repository.
+The engine package never imports the editor, tools or examples. The editor depends on the engine crate and hosts the tool editor crates. Tests, fixtures and tooling live inside the owning package. Nothing in this repository may depend on a particular game; game-specific fixtures belong in the consuming repository.
 
 Move code into the engine (the engine crate that owns it) when it is stable behavior that more than one game, tool, or example needs.
 
@@ -82,7 +82,7 @@ Move code into the engine (the engine crate that owns it) when it is stable beha
 - Write runtime code in Rust with descriptive names and documented public contracts. Keep browser-specific glue in the platform crates' `web` modules.
 - Keep shared numeric and data contracts in `joy-core` (`crates/joy-core/`) and GPU-free render data (meshes, materials, and lights) in `joy-render-types` (`crates/joy-render-types/`), with consumer exports in `src/lib.rs`. Games own their presentation and gameplay contracts.
 - New games are Cargo workspace members that depend on `joy-engine`; retain npm metadata and scripts for site orchestration. Node tooling and the VS Code extension may use their appropriate host languages.
-- Games read authored text assets (`.form`, `.formlab`, `.joyfx`, `.joylevel`, `.joyobject`, tuning JSON) through `GameAssets` (`joy_engine::game_assets!` or `joy_engine::source_root!`) rather than bare `include_str!`, so native development builds hot reload edits while browser and release builds stay embedded. Build levels from authored `.joylevel` documents with `AssetScene::prepare_level` so FORM assets and their object placements reach play the same way they look in Joy Editor.
+- Games read authored text assets (`.form`, `.forminst`, `.joyfx`, `.joylevel`, `.joyobject`, tuning JSON) through `GameAssets` (`joy_engine::game_assets!` or `joy_engine::source_root!`) rather than bare `include_str!`, so native development builds hot reload edits while browser and release builds stay embedded. Build levels from authored `.joylevel` documents with `AssetScene::prepare_level` so FORM assets and their object placements reach play the same way they look in Joy Editor.
 - Keep all common/engine functionality in the engine crates and consume it through `joy-engine`; do not add parallel implementations or compatibility packages.
 - Keep one primary responsibility per module.
 - Put tuning values and palettes in the owning workspace's configuration modules.

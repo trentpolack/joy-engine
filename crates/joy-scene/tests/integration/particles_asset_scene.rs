@@ -32,7 +32,7 @@ use serde_json::{
     json,
 };
 
-const BOX_FORM: &str = "project meta(name=\"Box\")\nbox(0, 0, 0, 2, 2, 2)";
+const BOX_FORM: &str = "project meta(name=\"Box\")\noutput(\"Box\", box(2, 2, 2))";
 
 /// The golden recording section this suite owns in the shared particle recording.
 const ASSET_SCENE_SECTION: &str = "/assetScene";

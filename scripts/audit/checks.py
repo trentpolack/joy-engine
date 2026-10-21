@@ -18,7 +18,7 @@ from urllib.request import url2pathname
 GENERATED = {'dist', 'dist-rust', 'target', 'node_modules', 'artifacts', 'coverage',
              '.vite', '.cache', 'playwright-report', 'test-results'}
 FORMATS = {'.joylevel': 'joylevel', '.joyobject': 'joyobject', '.joyproject': 'joyproject',
-           '.joyfx': 'joyfx', '.formlab': 'formlab', '.joyconfig': 'joyconfig'}
+           '.joyfx': 'joyfx', '.forminst': 'forminst', '.formlab': 'formlab', '.joyconfig': 'joyconfig'}
 MAX_TEXT_BYTES = 16 * 1024 * 1024
 INVALID_JSON = object()
 TEXT_SUFFIXES = {'.rs', '.wgsl', '.mjs', '.js', '.cjs', '.ts', '.tsx', '.py', '.json',

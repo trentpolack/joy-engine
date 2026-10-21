@@ -1,8 +1,25 @@
 # Changelog
 
-This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
+This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-21-2026
+### FORM v2 (Breaking)
+- Removed FORM's immediate mode: scripts build explicit geometry values and only `output(name, geometry)` adds to the result. The pen built-ins (`color(r, g, b)`, one-argument `material`, `uv`, `normal`, `point`, `triangle`, `surface`, `instance`, positional `box`/`sphere`, `userData`, `with userData`, and `setUserData`) fail with migration messages. Added `merge`, `append`, `place`, `realize`, `color(geometry, rgba)`, `material(geometry, material | "PaletteName" | null)`, `addPoint` attribute records, `hasAttribute`, and `removeAttribute`.
+- Added logic and structure to the language: booleans with `true`/`false`/`null`, `AND`/`OR`/`NOT` (conditions require booleans; `number(flag)` converts), `if`/`else if`/`else`, `match`/`case`, block-scoped `let` with `=`, `+=`, `-=`, `*=`, and `/=` assignment, `enum` declarations, text comparison, records and lists with indexing and `itemCount`, `fn` functions whose arguments are copies unless declared `ref`, and `use "path.form" as alias` modules.
+- Parameters accept booleans, free text, option text, and enum members (`param kind = Kind.tower`), and the evaluator reports wrong-typed values by kind ("Expected a number; found text.").
+- Custom attributes are typed (numbers, vectors, colors, text, true/false, and face materials) and realize into `GeometryData::vertex_attributes` and `triangle_attributes` (`AttributeColumn`, `vertex_record`, and `triangle_record`), replacing `GeometryData::user_data`. Named outputs are typed `NamedOutput` values whose snapshot converts to JSON on demand (`OutputValue::json`); serialized results keep the same shape.
+- Procedural geometry moved from JSON records to native columns, with snapshots converted only when read. Heavy scripts evaluate two to four times faster than v1 (FRAMEBREAK's district 26 ms to 6 ms; orbital bloom 114 ms to 55 ms); small scripts cost a few milliseconds more in the interpreter.
+- FORM EDITOR's script editor completes keywords, built-ins with signatures, and the names in scope at the cursor (`form_document_symbols`, the `BUILTINS` catalog, and `ScriptEditor::with_document_symbols`).
+- Migrated every engine FORM asset, example, and the building structures to v2. FORM placements are isolated points that set at least one attribute, and their `scale` is FORM's standard XYZ vector.
+
+### FORM Instances
+- Renamed `.formlab` documents to `.forminst` FORM instances (`FormInstance`, version 2) that reference a `.form` script by relative path (`"form"`) or pack one (`"source"`), with overrides, materials, and variants. FORM EDITOR opens version 1 `.formlab` files as packed instances. The engine structures and form-building presets now share one `building.form`.
+- `FormAssetLibrary::resolve` and `resolve_asset` take a reader for referenced scripts and modules, and their cache keys include those files. Hosted tools receive a project file reader (`ToolFileReader`, `AuthoringTool::set_file_reader`), documents carry their project path (`ToolDocument::path`), and Joy Editor saves an instance's script with it (`save_dependencies`).
+- The `render` component's asset kinds are `form` and `forminst` (`component_asset_kind::FORM_INSTANCE`).
+
+### Tool Names
+- FORM LAB is now FORM EDITOR (`tools/form-editor`, package `form-editor`) and PARTICLE LAB is now JOYFX EDITOR (`tools/joyfx-editor`, package `joyfx-editor`), across packages, UI, and docs.
+
 ### Authoring UI
 - UI palettes and font choices now come from `assets/ui/theme-default.json`, with shared dimensions in `assets/ui/layout.json`. Cargo generates native/browser constants directly from those files and rejects invalid values. Removed the duplicated Rust definitions and comparison test; migrated editor, lab, and development widgets to separate `theme::colors` and `theme::layout` values and renamed `apply_authoring` to `apply_editor`.
 - Simplified PARTICLE LAB to a compact single-row header matching FORM LAB and removed its standalone bottom strip. Joy Editor's Content Browser now reserves the actual height of Project Details and Documentation, with long metadata scrolling above the button instead of covering it with the status bar.

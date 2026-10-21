@@ -5,7 +5,9 @@
 //!
 //! Each input line is one request, `{"source": "...", "overrides": {...}, "materials": [...]}`,
 //! where `overrides` (default `{}`) and `materials` (default and `null`: no palette) are
-//! optional. Each request produces exactly one output line, in order:
+//! optional. Scripts that `use` modules also name their own `path` and either `modules` (an
+//! object mapping module paths to source text) or `root` (a folder modules are read from); paths
+//! are relative to that root. Each request produces exactly one output line, in order:
 //!
 //! - `{"ok": true, "data": GeometryData, "evaluation_ms": number}` on success, where
 //!   `evaluation_ms` is the parse-and-evaluate wall time in milliseconds; or
@@ -22,11 +24,12 @@ use std::io::{
     Read,
     Write,
 };
+use std::path::PathBuf;
 use std::time::Instant;
 
 use joy_form::{
+    CompiledScript,
     Diagnostic,
-    compile,
 };
 use serde_json::{
     Value,
@@ -104,12 +107,34 @@ fn evaluate_request(line: &[u8]) -> Value {
     let materials = request.get("materials").filter(|materials| !materials.is_null());
 
     let started = Instant::now();
-    let result = compile(source, &overrides, materials);
+    let result = parse(&request, source).and_then(|script| script.evaluate(&overrides, materials));
     let evaluation_ms = started.elapsed().as_secs_f64() * 1000.0;
     match result {
         Ok(data) => json!({"ok": true, "data": data, "evaluation_ms": evaluation_ms}),
         Err(diagnostic) => failure(diagnostic),
     }
+}
+
+/// Parse the request's script, loading modules from its `modules` map or its `root` folder when it names a `path`.
+fn parse(request: &Value, source: &str) -> Result<CompiledScript, Diagnostic> {
+    let Some(path) = request.get("path").and_then(Value::as_str) else {
+        return CompiledScript::parse(source);
+    };
+    if let Some(modules) = request.get("modules").and_then(Value::as_object) {
+        let loader = |module: &str| -> Result<String, String> {
+            modules
+                .get(module)
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+                .ok_or_else(|| "not in the request's modules".to_owned())
+        };
+        return CompiledScript::parse_with_modules(source, path, &loader);
+    }
+    let root = PathBuf::from(request.get("root").and_then(Value::as_str).unwrap_or("."));
+    let loader = |module: &str| -> Result<String, String> {
+        std::fs::read_to_string(root.join(module)).map_err(|error| error.to_string())
+    };
+    CompiledScript::parse_with_modules(source, path, &loader)
 }
 
 fn failure(diagnostic: Diagnostic) -> Value {

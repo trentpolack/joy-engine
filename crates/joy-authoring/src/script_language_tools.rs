@@ -85,7 +85,7 @@ impl ScriptSyntax {
     }
 
     /// FORM: the FORM catalog plus attribute-domain keywords, quoted strings, `param` declarations highlighted as
-    /// parameters wherever they are used afterwards, components after `.`, and `@` names marked invalid (the FORM LAB
+    /// parameters wherever they are used afterwards, components after `.`, and `@` names marked invalid (the FORM EDITOR
     /// stream language).
     pub fn form() -> Self {
         let mut syntax = Self::from_catalog(&joy_form::form_language_catalog());
@@ -97,7 +97,7 @@ impl ScriptSyntax {
         syntax
     }
 
-    /// JOYFX particle scripts: the particle catalog's keywords and functions (the PARTICLE LAB stream language).
+    /// JOYFX particle scripts: the particle catalog's keywords and functions (the JOYFX EDITOR stream language).
     pub fn particle() -> Self {
         Self::from_catalog(&joy_fx::particle_language_catalog())
     }

@@ -3,7 +3,7 @@
 # Joy Engine
 Joy Engine is a Rust game engine for native applications and browser WebAssembly. It provides rendering, simulation, procedural content, audio, input, and authoring tools through the `joy-engine` crate, a facade over the engine's system crates in `crates/` (`joy-core`, `joy-physics`, `joy-gameplay`, `joy-form`, `joy-renderer`, `joy-app`, and others). Games and tools use one implementation on Windows, macOS, Linux, WebGPU, and the WebGL 2 fallback.
 
-The renderer uses wgpu, the window and canvas shell uses winit, physics uses rapier, and the authoring interface uses egui. Consumers depend on `joy-engine` and its public exports in `src/lib.rs`, never on the system crates or backend crates directly. FORM LAB, PARTICLE LAB, and [Joy Editor](editor/README.md) share that renderer and the engine's authoring kit.
+The renderer uses wgpu, the window and canvas shell uses winit, physics uses rapier, and the authoring interface uses egui. Consumers depend on `joy-engine` and its public exports in `src/lib.rs`, never on the system crates or backend crates directly. FORM EDITOR, JOYFX EDITOR, and [Joy Editor](editor/README.md) share that renderer and the engine's authoring kit.
 
 ## Setup and Commands
 Requires Rust 1.95 or newer, Node.js 24.18.0 or newer for repository tooling, and the WebAssembly target for browser builds. Linux native builds need `pkg-config`, `libudev-dev`, and `libasound2-dev`; native GPU tests also need a Vulkan driver, such as Debian/Ubuntu's `mesa-vulkan-drivers`.

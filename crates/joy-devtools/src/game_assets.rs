@@ -3,7 +3,7 @@
 
 //! Game assets that ship embedded and hot reload in native development builds.
 //!
-//! Games embed their authored text assets (`.form`, `.formlab`, `.joyfx`, `.joylevel`, `.joyobject`, tuning JSON) with
+//! Games embed their authored text assets (`.form`, `.forminst`, `.joyfx`, `.joylevel`, `.joyobject`, tuning JSON) with
 //! [`game_assets!`](crate::game_assets), so browser and release builds need no file system. In native development
 //! builds the same table also remembers the game's source folder: [`GameAssets::read`] then prefers the file on disk,
 //! and [`GameAssets::poll_changes`] reports which previously read files changed, so a game can rebuild only what an

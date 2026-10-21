@@ -44,7 +44,7 @@ use joy_engine::{
 const WIDTH: u32 = 1100;
 const HEIGHT: u32 = 520;
 
-/// Kit widgets in the three-pane lab layout.
+/// Kit widgets in the three-pane tool editor layout.
 struct KitTool {
     layout: PanelLayout,
     editor: ScriptEditor,

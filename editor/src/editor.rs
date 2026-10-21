@@ -31,7 +31,7 @@ pub struct EditorOptions {
     pub store: Box<dyn ProjectStore>,
     /// Where the session is remembered; `None` keeps it in memory only.
     pub storage: Option<Storage>,
-    /// Tools hosted for `.form`, `.formlab`, `.joyfx`, and any other registered extensions.
+    /// Tools hosted for `.form`, `.forminst`, `.joyfx`, and any other registered extensions.
     pub tools: ToolRegistry,
     /// The project to open first, overriding the restored session.
     pub project: Option<String>,

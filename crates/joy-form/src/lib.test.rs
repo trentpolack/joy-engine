@@ -25,7 +25,9 @@ fn project_name_tokens_locate_the_quoted_name() {
 fn parameter_values_validate_and_keep_integers() {
     assert_eq!(read_parameter_value(&json!(2.0)).unwrap().to_string(), "2");
     assert_eq!(read_parameter_value(&json!([1, 0.5, 0, 0.25])).unwrap(), json!([1, 0.5, 0, 0.25]));
-    for invalid in [json!("2"), json!([1, 2]), json!([1, 2, null]), json!({"kind": "mesh"})] {
+    assert_eq!(read_parameter_value(&json!("OPEN")).unwrap(), json!("OPEN"));
+    assert_eq!(read_parameter_value(&json!(true)).unwrap(), json!(true));
+    for invalid in [json!([1, 2]), json!([1, 2, null]), json!({"kind": "mesh"}), json!("x".repeat(129))] {
         assert!(read_parameter_value(&invalid).is_err(), "{invalid}");
     }
     let mesh = mesh_box_value(1.0, 1.0, 1.0).unwrap();

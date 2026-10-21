@@ -10,6 +10,12 @@ param highColor = rgba(0.47, 0.65, 0.52, 1)
 param column = meshBox(0.35, 1, 0.35)
 param finish = materialPbr(rgba(0.93, 0.42, 0.22, 1), 0.2, 0.5)
 
+# ---- Palette.
+# Everything visible is graded by `warm`, FORM's classic tint.
+let warm = rgba(0.929, 0.424, 0.224, 1)
+
+# ---- Terrain.
+# A flat grid lifted into rolling waves. Density marks the crests, where columns will gather.
 let terrain = grid(32, 32, 22, 22)
 addAttribute(terrain, "points", "density", 0)
 color(terrain, lowColor)
@@ -17,26 +23,35 @@ wrangle points in terrain as element {
   let wave = sin(element.position.x*frequency)*cos(element.position.z*frequency)
   element.position = vector(element.position.x, wave*height, element.position.z)
   element.density = clamp((wave + 0.3)*1.4, 0, 1)
-  element.color = mix(lowColor, highColor, element.density)
+  element.color = mix(lowColor, highColor, element.density)*warm
 }
 output("Terrain", terrain)
 
+# ---- Sites.
 # Sites inherit surface attributes. Inspect density in the lower panel.
 let sites = scatter(terrain, count, random_seed, "density")
-addAttribute(sites, "points", "scale", vector(1,1,1))
-addAttribute(sites, "points", "rotation", vector(0,0,0))
+addAttribute(sites, "points", "scale", vector(1, 1, 1))
+addAttribute(sites, "points", "rotation", vector(0, 0, 0))
 seed(random_seed)
 wrangle points in sites as element {
+  # Each column gets a random height (standing on the surface) and a random turn.
   let tall = 0.4 + rand()*2.2
   element.position = vector(element.position.x, element.position.y + tall/2, element.position.z)
   element.scale = vector(1, tall, 1)
   element.rotation = vector(0, rand()*tau, 0)
   element.color = rgba(1, 1, 1, 1)
 }
+
+# Every site records what it is and where it came from, so a game can find the columns.
+addAttribute(sites, "points", "kind", "column-site")
+addAttribute(sites, "points", "index", 0)
+addAttribute(sites, "points", "source", "terrain-scatter")
 repeat pointCount(sites) as i {
-  setUserData(sites, i, {kind: "column-site", index: i, source: "terrain-scatter"})
+  setAttribute(sites, "points", "index", i, i)
 }
 inspect("Sites", sites)
-let columns = instances(column, sites, finish)
-output("Columns", columns)
 
+# ---- Columns.
+# White sites leave each column's graded color as it is; the finish supplies the base color.
+let columns = instances(color(geometry(column), warm), sites, finish)
+output("Columns", columns)

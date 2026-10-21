@@ -13,7 +13,7 @@ use serde_json::json;
 
 #[test]
 fn flat_assets_share_one_white_material_and_layered_assets_keep_the_palette() {
-    let source = "color(0.5, 0.5, 0.5)\nbox(0, 0, 0, 2, 2, 2)";
+    let source = "output(\"Box\", color(box(2, 2, 2), rgba(0.5, 0.5, 0.5, 1)))";
     let palette = json!([{"name": "Default", "baseColor": [1.0, 0.0, 0.0, 1.0], "metallic": 0.25, "roughness": 0.5,
         "emissive": [0.0, 0.0, 0.0], "alphaMode": "OPAQUE", "alphaCutoff": 0.5}]);
 
@@ -48,8 +48,20 @@ const WEBP: &str = "data:image/webp;base64,UklGRh4AAABXRUJQVlA4TBIAAAAvAQAAEA8Q8
 
 #[test]
 fn textured_layered_materials_share_decoded_maps_by_slot() {
-    let source =
-        "material(Painted)\nuv(0.25, 0.75)\ntriangle(0,0,0, 1,0,0, 0,1,0)\nmaterial()\ntriangle(0,0,1, 1,0,1, 0,1,1)";
+    let source = r#"
+        let painted = geometry()
+        addPoint(painted, vector(0, 0, 0), {uv: vector(0.25, 0.75, 0)})
+        addPoint(painted, vector(1, 0, 0), {uv: vector(0.25, 0.75, 0)})
+        addPoint(painted, vector(0, 1, 0), {uv: vector(0.25, 0.75, 0)})
+        addFace(painted, 0, 1, 2)
+        material(painted, "Painted")
+        let plain = geometry()
+        addPoint(plain, vector(0, 0, 1))
+        addPoint(plain, vector(1, 0, 1))
+        addPoint(plain, vector(0, 1, 1))
+        addFace(plain, 0, 1, 2)
+        output("Triangles", merge(painted, plain))
+    "#;
     let palette = json!([{"name": "Painted", "baseColor": [1.0, 1.0, 1.0, 1.0], "metallic": 0.0, "roughness": 0.5,
         "emissive": [0.0, 0.0, 0.0], "alphaMode": "MASK", "alphaCutoff": 0.5,
         "textures": {"baseColor": WEBP, "normal": null, "emissive": null, "metallic": null, "roughness": null,

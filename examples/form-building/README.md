@@ -13,7 +13,7 @@ The native command runs the Cargo example. Browser output lives in this workspac
 ## Editable and Baked Content
 `CompiledScript` parses once, then evaluates complete parameter snapshots. `form_mesh_asset` draws accepted output with the engine PBR pass, including authored material factors. Invalid evaluation retains the previous building. Presets include cottage, warehouse, and apartments; counts are explicitly floored, while metadata bounds do not quantize arbitrary inputs.
 
-Open the supplied `.formlab` recipes in FORM LAB to edit parameters, materials, and mesh resources. Save editable recipe writes source/input state; Bake mesh JSON writes evaluated geometry. Browser actions download; native actions write their named output files. GLB exports are baked interchange and do not preserve procedural source. Baked mode loads the supplied mesh without evaluating FORM.
+Open the supplied `.forminst` instances (cottage, warehouse, and apartments, each referring to `building.form`) in FORM EDITOR to edit parameters, materials, and mesh resources. Save editable recipe writes a packed `building.forminst` with the script and the current overrides; Bake mesh JSON writes evaluated geometry. Browser actions download; native actions write their named output files. GLB exports are baked interchange and do not preserve procedural source. Baked mode loads the supplied mesh without evaluating FORM.
 
 ## Validation and Limits
 `tests/integration/example_form_building.rs` covers presets, failure isolation, baked round trips, tool documents through `FormAssetLibrary`, and headless renders. Browser captures provide startup/image evidence. CPU frame encoding is not GPU execution time.

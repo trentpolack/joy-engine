@@ -14,28 +14,46 @@ param plank = meshBox(1, 0.18, 1)
 param finish = materialPbr(tint, 0.15, 0.55)
 
 seed(random_seed)
-color(1, 1, 1)
+
+# ---- Span.
+# White vertices, so the finish's color shows as authored.
+let white = rgba(1, 1, 1, 1)
 let dx = end.x - start.x
 let dz = end.z - start.z
 let span = sqrt(dx*dx + dz*dz)
 let heading = -atan2(dz, dx)
 
+# ---- Deck.
+# Planks hang along a sine sag between the endpoints, each tilted to the curve's slope with a little random wobble.
+# Every plank's faces record its index and position along the span (0 at start, 1 at end) for a game to read.
+let deck = geometry()
 repeat count as i {
   let t = i / (count - 1)
   let px = mix(start.x, end.x, t)
   let py = mix(start.y, end.y, t) - sin(t*pi)*sag
   let pz = mix(start.z, end.z, t)
   let slope = atan2(end.y - start.y - cos(t*pi)*pi*sag, max(span, 0.01))
-  with userData({kind: "bridge-plank", index: i, spanPosition: t}) {
-    instance(plank, vector(px, py, pz),
-      vector((rand() - 0.5)*variation, heading, slope),
-      vector(max(span, 0.1)/count*0.9, 1, width), finish)
-  }
+  let board = place(plank, vector(px, py, pz),
+    vector((rand() - 0.5)*variation, heading, slope),
+    vector(max(span, 0.1)/count*0.9, 1, width))
+  addAttribute(board, "faces", "kind", "bridge-plank")
+  addAttribute(board, "faces", "index", i)
+  addAttribute(board, "faces", "spanPosition", t)
+  append(deck, board)
 }
 
-# Reusable geometry can also be deformed before instancing.
+# ---- Supports.
+# Reusable geometry can also be deformed before placing: this post rises from its base.
 let support = deform(meshBox(0.35, 3, 0.35), x, y + 1.5, z)
-material(finish)
-with userData({kind: "bridge-support", endpoint: "start"}) { instance(support, start) }
-with userData({kind: "bridge-support", endpoint: "end"}) { instance(support, end) }
 
+# A post at one end of the bridge; `endpoint` is "start" or "end".
+fn post(position, endpoint) {
+  let part = place(support, position)
+  addAttribute(part, "faces", "kind", "bridge-support")
+  addAttribute(part, "faces", "endpoint", endpoint)
+  return part
+}
+
+let supports = merge(post(start, "start"), post(end, "end"))
+
+output("Parametric bridge", material(color(merge(deck, supports), white), finish))

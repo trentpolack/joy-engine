@@ -9,6 +9,10 @@
 //! Drag with the left mouse button to orbit. FORM itself has no renderer; this is the same path games and the editor
 //! use, so what you see here is what a level shows.
 
+use joy_engine::form::{
+    FormInstance,
+    InstanceScript,
+};
 use joy_engine::prelude::*;
 use joy_engine::serde_json::{
     Map,
@@ -18,9 +22,9 @@ use joy_engine::serde_json::{
 /// Built-in assets, compiled from source at startup so the viewer runs identically natively and in browsers.
 const ASSETS: [(&str, &str); 6] = [
     ("assets/form/structures/building.form", include_str!("../../assets/form/structures/building.form")),
-    ("assets/form/structures/cottage.formlab", include_str!("../../assets/form/structures/cottage.formlab")),
-    ("assets/form/structures/warehouse.formlab", include_str!("../../assets/form/structures/warehouse.formlab")),
-    ("assets/form/structures/apartments.formlab", include_str!("../../assets/form/structures/apartments.formlab")),
+    ("assets/form/structures/cottage.forminst", include_str!("../../assets/form/structures/cottage.forminst")),
+    ("assets/form/structures/warehouse.forminst", include_str!("../../assets/form/structures/warehouse.forminst")),
+    ("assets/form/structures/apartments.forminst", include_str!("../../assets/form/structures/apartments.forminst")),
     ("assets/examples/parametric-bridge.form", include_str!("../../assets/examples/parametric-bridge.form")),
     ("assets/examples/satellite-garden.form", include_str!("../../assets/examples/satellite-garden.form")),
 ];
@@ -85,7 +89,15 @@ impl FormViewer {
         let (path, text) = ASSETS[self.selected];
         let overrides: Map<String, Value> =
             self.parameters.iter().map(|parameter| (parameter.name.clone(), Value::from(parameter.value))).collect();
-        let asset = match self.library.resolve(path, text, &overrides, self.shading) {
+        // Instances read their referenced script from the same built-in table.
+        let mut read = |file: &str| -> Result<String, String> {
+            ASSETS
+                .iter()
+                .find(|(asset, _)| *asset == file)
+                .map(|(_, text)| (*text).to_owned())
+                .ok_or(format!("missing {file}"))
+        };
+        let asset = match self.library.resolve(path, text, &mut read, &overrides, self.shading) {
             Ok(asset) => asset,
             Err(error) => {
                 self.error = Some(error.to_string());
@@ -220,11 +232,21 @@ fn asset_name(path: &str) -> &str {
 
 /// Scalar parameters with bounds, read from an evaluation with default values.
 fn scalar_parameters(path: &str, text: &str) -> Vec<Parameter> {
-    let source = if path.ends_with(".formlab") {
-        let document: Value = joy_engine::serde_json::from_str(text).unwrap_or(Value::Null);
-        let overrides = document.get("overrides").cloned().unwrap_or(Value::Object(Map::new()));
-        let source = document.get("source").and_then(Value::as_str).unwrap_or_default().to_owned();
-        (source, overrides)
+    let source = if path.ends_with(".forminst") {
+        let Ok(instance) = FormInstance::read(text) else {
+            return Vec::new();
+        };
+        let source = match &instance.script {
+            InstanceScript::Packed(source) => source.clone(),
+            InstanceScript::Reference(_) => {
+                let script = instance.script_path(path).ok().flatten().unwrap_or_default();
+                ASSETS
+                    .iter()
+                    .find(|(asset, _)| *asset == script)
+                    .map_or_else(String::new, |(_, text)| (*text).to_owned())
+            }
+        };
+        (source, Value::Object(instance.overrides))
     } else {
         (text.to_owned(), Value::Object(Map::new()))
     };

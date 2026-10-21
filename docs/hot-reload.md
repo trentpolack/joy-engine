@@ -11,10 +11,12 @@ Games embed their authored text assets so browser and release builds need no fil
 ## Rebuilding What Changed
 Reload only what an edit touched, and keep the previous result when the new text is rejected:
 
-- FORM and FORM LAB assets in levels: prepare the presentation again (`AssetScene::prepare` keeps running effects whose text and settings are unchanged, and a failed preparation leaves the displayed scene intact).
-- Game-owned FORM programs: hand the new source to the owner's compile cache (FRAMEBREAK's part and city libraries use `replace_source`).
+- FORM scripts and instances in levels: prepare the presentation again (`AssetScene::prepare` keeps running effects whose text and settings are unchanged, and a failed preparation leaves the displayed scene intact). `FormAssetLibrary` recompiles an asset when its own text, an instance's referenced script, or any `use` module it read changes.
+- Game-owned FORM programs: hand the new source to the owner's compile cache (FRAMEBREAK's part and city libraries use `replace_source`). A script's modules are its dependencies too; `CompiledScript::module_paths()` lists the files to watch.
 - `.joyfx` effects: restart the effects that use the changed definition.
 - `.joylevel`: rebuild the level session when the game can restart it safely.
+
+Embed the referenced scripts and modules a FORM asset reads alongside it, since browser and release builds can only read embedded files.
 
 Joy Editor's **Play** runs a game in its own window; saved assets reach it through this path, so authoring and playing stay live together.
 

@@ -12,7 +12,7 @@ External buffer URIs return `GlbError::ExternalBuffer`; Draco, meshopt, and quan
 `project::parse_project_manifest` validates `project.joyproject`: schema version 1, required trimmed text, optional `$schema`, normalized relative preview/asset paths, unique capability IDs, extensions, and feature flags. Absolute paths, drive letters, and parent traversal are rejected. Serialized names and ordering remain compatible with existing documents.
 
 ## Script Language Information
-`ScriptLanguageCatalog` and `ScriptLanguageSymbol` carry names, kinds, details, documentation, signatures, and writability independently of an editor UI. `form::form_language_catalog()` and `particles::particle_language_catalog()` supply language-owned catalogs. The [authoring kit](rust-authoring.md) uses them for highlighting, completion, and hover help.
+`ScriptLanguageCatalog` and `ScriptLanguageSymbol` carry names, kinds, details, documentation, signatures, and writability independently of an editor UI. `form::form_language_catalog()` and `particles::particle_language_catalog()` supply language-owned catalogs, and `form::form_document_symbols(source, cursor)` adds the variables, parameters, functions, enums, modules, and attributes a FORM script declares that are in scope at the cursor. The [authoring kit](rust-authoring.md) uses them for highlighting, completion, and hover help.
 
 ## Verification
 Rust tests use recorded GLB fixtures for strides, sparse accessors, index widths, embedded glTF, and rejection behavior. Manifest tests cover shipped documents, normalization, and rejected paths. These fixtures remain useful without the retired runtime.

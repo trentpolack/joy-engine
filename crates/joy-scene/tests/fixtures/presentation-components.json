@@ -10,17 +10,17 @@
      "name": "asset",
      "kind": "asset",
      "label": "FORM mesh",
-     "description": "Replaces the primitive shape with a compiled FORM or FORM LAB mesh.",
+     "description": "Replaces the primitive shape with a compiled FORM script or FORM instance mesh.",
      "assetKinds": [
       "form",
-      "formlab"
+      "forminst"
      ]
     },
     {
      "name": "variant",
      "kind": "text",
      "label": "Variant",
-     "description": "A FORM LAB document's named variant, applied beneath the parameter overrides."
+     "description": "A FORM instance's named variant, applied beneath the parameter overrides."
     },
     {
      "name": "parameters",
@@ -420,7 +420,7 @@
     {
      "component": "render",
      "field": "asset",
-     "message": "FORM mesh must reference a .form or .formlab asset."
+     "message": "FORM mesh must reference a .form or .forminst asset."
     },
     {
      "component": "render",
@@ -462,7 +462,7 @@
   {
    "type": "render",
    "data": {
-    "asset": "assets/kart.formlab"
+    "asset": "assets/kart.forminst"
    },
    "issues": []
   },

@@ -46,6 +46,7 @@ use egui::{
 
 use joy_core::scripting::{
     ScriptLanguageCatalog,
+    ScriptLanguageSymbol,
     ScriptSymbolKind,
 };
 use joy_ui::theme::{
@@ -118,12 +119,20 @@ struct CompletionState {
     selected: usize,
 }
 
+/// Names a script declares that are visible at a cursor (a character offset): variables, parameters, functions, and
+/// other document symbols completion offers before the language's built-ins. `joy_form::form_document_symbols` is the
+/// FORM provider.
+pub type DocumentSymbolProvider = fn(&str, usize) -> Vec<ScriptLanguageSymbol>;
+
 /// A code editor for one script.
 #[derive(Clone, Debug)]
 pub struct ScriptEditor {
     id: Id,
     syntax: ScriptSyntax,
     catalog: Option<ScriptLanguageCatalog>,
+    // Built-in entries from the catalog; `items` is the document's visible names followed by these.
+    catalog_items: Vec<CompletionItem>,
+    document_symbols: Option<DocumentSymbolProvider>,
     items: Vec<CompletionItem>,
     read_only: bool,
     background: Color32,
@@ -141,6 +150,8 @@ impl ScriptEditor {
             id: Id::new(id_salt),
             syntax,
             catalog: None,
+            catalog_items: Vec::new(),
+            document_symbols: None,
             items: Vec::new(),
             read_only: false,
             background: colors::SCRIPT,
@@ -165,9 +176,16 @@ impl ScriptEditor {
         self
     }
 
+    /// Also complete and describe the names the script itself declares, ranked before built-ins. Requires a catalog.
+    pub fn with_document_symbols(mut self, provider: DocumentSymbolProvider) -> Self {
+        self.document_symbols = Some(provider);
+        self
+    }
+
     /// Replace the language catalog (`None` turns completion and hover off).
     pub fn set_catalog(&mut self, catalog: Option<ScriptLanguageCatalog>) {
-        self.items = catalog.as_ref().map(script_language_tools::completion_items).unwrap_or_default();
+        self.catalog_items = catalog.as_ref().map(script_language_tools::completion_items).unwrap_or_default();
+        self.items = self.catalog_items.clone();
         self.catalog = catalog;
         self.completion = None;
     }
@@ -440,7 +458,12 @@ impl ScriptEditor {
                     let end = galley.pos_from_cursor(CCursor::new(range.end)).translate(galley_pos.to_vec2());
                     pointer.x <= end.right() + 1.0
                 })
-                .and_then(|(_, word)| catalog.symbol(&word).cloned());
+                .and_then(|(_, word)| {
+                    let declared = self.document_symbols.and_then(|provider| {
+                        provider(text.as_str(), index).into_iter().find(|symbol| symbol.name == word)
+                    });
+                    declared.or_else(|| catalog.symbol(&word).cloned())
+                });
             if let Some(symbol) = symbol {
                 response = response.on_hover_ui_at_pointer(|ui| {
                     ui.set_max_width(420.0);
@@ -485,6 +508,14 @@ impl ScriptEditor {
         if !open {
             self.completion = None;
             return;
+        }
+        if let Some(provider) = self.document_symbols {
+            let declared = ScriptLanguageCatalog {
+                id: String::new(),
+                symbols: provider(text, start),
+            };
+            self.items = script_language_tools::completion_items(&declared);
+            self.items.extend(self.catalog_items.iter().cloned());
         }
         let matches = script_language_tools::filter_completions(&self.items, &word);
         if matches.is_empty() {

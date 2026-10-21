@@ -3,30 +3,27 @@
 
 //! Revolve, tube, and smooth-normal generators.
 
-use super::store::{
-    self,
-    Store,
-    count,
-    number,
-    numbers,
+use super::{
+    geometry::{
+        DomainKind,
+        Element,
+        Geometry,
+    },
+    store::Store,
 };
 use crate::{
     math::hypot,
     value::integer_range,
 };
 use joy_core::math::deterministic;
-use serde_json::{
-    Value as Json,
-    json,
-};
 
-pub fn revolve(store: &mut Store, profile: &Json, segments: f64) -> Result<Json, String> {
+pub fn revolve(store: &mut Store, profile: &Geometry, segments: f64) -> Result<Geometry, String> {
     let segments = integer_range(segments, 3.0, 96.0)?;
     let points = ordered_points(profile)?;
     if points.iter().any(|p| p[0] < 0.0 || p[2] != 0.0) {
         return Err("Revolve profiles use (nonnegative radius, height, 0).".into());
     }
-    let mut result = store::create();
+    let mut result = Geometry::default();
     let mut rings = Vec::new();
     for point in points {
         let radius = point[0];
@@ -51,13 +48,13 @@ pub fn revolve(store: &mut Store, profile: &Json, segments: f64) -> Result<Json,
     Ok(result)
 }
 
-pub fn tube(store: &mut Store, path: &Json, radius: f64, sides: f64) -> Result<Json, String> {
+pub fn tube(store: &mut Store, path: &Geometry, radius: f64, sides: f64) -> Result<Geometry, String> {
     let sides = integer_range(sides, 3.0, 64.0)?;
     if !radius.is_finite() || radius <= 0.0 || radius > 1e6 {
         return Err("Tube radius must be positive and at most 1,000,000.".into());
     }
     let points = ordered_points(path)?;
-    let mut result = store::create();
+    let mut result = Geometry::default();
     let mut rings = Vec::new();
     let mut radial: Option<Vec<f64>> = None;
     for row in 0..points.len() {
@@ -95,40 +92,28 @@ pub fn tube(store: &mut Store, path: &Json, radius: f64, sides: f64) -> Result<J
     Ok(result)
 }
 
-pub fn smooth_normals(store: &mut Store, geometry: &mut Json) -> Result<(), String> {
-    let points = geometry["attributes"]["points"]["position"]["values"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(numbers)
-        .collect::<Vec<_>>();
-    let mut normals = vec![vec![0.0; 3]; count(geometry, "points")];
-    for face in geometry["faces"].as_array().unwrap() {
-        let face = face.as_array().unwrap().iter().map(|v| number(v) as usize).collect::<Vec<_>>();
-        let normal =
-            cross(&subtract(&points[face[1]], &points[face[0]]), &subtract(&points[face[2]], &points[face[0]]));
-        for index in face {
+pub fn smooth_normals(store: &mut Store, geometry: &mut Geometry) -> Result<(), String> {
+    let mut normals = vec![[0.0; 3]; geometry.count(DomainKind::Points)];
+    for face in &geometry.faces {
+        let [a, b, c] = face.map(|point| geometry.position(point));
+        let normal = cross(&subtract(&b, &a), &subtract(&c, &a));
+        for point in face {
             for (axis, component) in normal.iter().enumerate() {
-                normals[index][axis] += component;
+                normals[*point][axis] += component;
             }
         }
     }
-    for domain in ["faces", "corners"] {
-        geometry["attributes"][domain].as_object_mut().unwrap().shift_remove("normal");
+    for domain in [DomainKind::Faces, DomainKind::Corners] {
+        geometry.domain_mut(domain).remove("normal");
     }
     for (index, normal) in normals.iter().enumerate() {
-        store.set(geometry, "points", "normal", index, &json!(normalize(normal)), false)?;
+        store.set(geometry, DomainKind::Points, "normal", index, &Element::Numbers(normalize(normal)), false)?;
     }
     Ok(())
 }
 
-fn ordered_points(geometry: &Json) -> Result<Vec<Vec<f64>>, String> {
-    let points = geometry["attributes"]["points"]["position"]["values"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(numbers)
-        .collect::<Vec<_>>();
+fn ordered_points(geometry: &Geometry) -> Result<Vec<Vec<f64>>, String> {
+    let points = geometry.positions().as_chunks::<3>().0.iter().map(|point| point.to_vec()).collect::<Vec<_>>();
     if points.len() < 2 || points.len() > 512 {
         return Err("Profiles and paths require 2–512 ordered points.".into());
     }
@@ -137,7 +122,7 @@ fn ordered_points(geometry: &Json) -> Result<Vec<Vec<f64>>, String> {
     }
     Ok(points)
 }
-fn connect_rings(store: &mut Store, geometry: &mut Json, rings: &[Vec<usize>]) -> Result<(), String> {
+fn connect_rings(store: &mut Store, geometry: &mut Geometry, rings: &[Vec<usize>]) -> Result<(), String> {
     let sides = rings[0].len();
     for row in 0..rings.len() - 1 {
         let v = row as f64 / (rings.len() - 1) as f64;
@@ -158,7 +143,7 @@ fn connect_rings(store: &mut Store, geometry: &mut Json, rings: &[Vec<usize>]) -
 }
 fn append_face(
     store: &mut Store,
-    geometry: &mut Json,
+    geometry: &mut Geometry,
     indices: &[usize; 3],
     uvs: &[[f64; 3]; 3],
 ) -> Result<(), String> {
@@ -167,7 +152,7 @@ fn append_face(
     }
     let face = store.add_face(geometry, indices)?;
     for (corner, uv) in uvs.iter().enumerate() {
-        store.set(geometry, "corners", "uv", face * 3 + corner, &json!(uv), false)?;
+        store.set(geometry, DomainKind::Corners, "uv", (face * 3) + corner, &Element::Numbers(uv.to_vec()), false)?;
     }
     Ok(())
 }

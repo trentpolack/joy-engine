@@ -16,81 +16,112 @@ param window_piece = meshBox(1,1,0.12)
 
 seed(random_seed)
 
-color(1,1,1)
-let unit = meshBox(1,1,1)
+# ---- Finishes.
+# White vertices, so each material's base color shows as authored; window panes add a random cool tint.
+let white = rgba(1,1,1,1)
 let trim = materialPbr(rgba(0.12,0.16,0.19,1),0,0.7)
 let glass = materialPbr(rgba(0.16,0.46,0.58,1),0.3,0.2)
+
+# ---- Proportions.
+let unit = meshBox(1,1,1)
 let floor_count = floor(floors)
 let floor_height = height/floor_count
 let window_height = min(1.3,floor_height*0.55)
-
-# Four walls leave a hollow interior; facade panels are decorative, not cut openings.
-instance(unit,vector(0,height/2,-depth/2),vector(0,0,0),vector(width,height,0.2),wall_finish)
-instance(unit,vector(0,height/2,depth/2),vector(0,0,0),vector(width,height,0.2),wall_finish)
-repeat 2 as side {
-  let sign = side*2 - 1
-  instance(unit,vector(sign*width/2,height/2,0),vector(0,0,0),vector(0.2,height,depth),wall_finish)
-}
-
-# Floor bands and foundations are also reused boxes, not a host geometry generator.
-repeat floor_count + 1 as level {
-  instance(unit,vector(0,level*floor_height,0),vector(0,0,0),vector(width + 0.3,0.16,depth + 0.3),trim)
-}
-
 let columns = max(1,floor((width - 1)/window_spacing))
 let side_columns = max(1,floor((depth - 1)/window_spacing))
 let doors = max(1,floor(width/door_spacing))
+let no_turn = vector(0,0,0)
+let quarter_turn = vector(0,pi/2,0)
+
+# ---- Helpers.
+# A white box: the unit mesh placed at `center`, turned by `rotation`, stretched to `size`, and given `finish`.
+fn block(center, rotation, size, finish) {
+  return material(color(place(unit,center,rotation,size),white),finish)
+}
+
+# A trim frame with a tinted glass pane standing just proud of it.
+fn window(frame_center, pane_center, rotation) {
+  let frame = block(frame_center,rotation,vector(1.25,window_height + 0.18,0.18),trim)
+  let pane_tint = rgba(0.7 + rand()*0.3,0.7 + rand()*0.3,1,1)
+  let pane = place(window_piece,pane_center,rotation,vector(1,window_height,1))
+  return merge(frame,material(color(pane,pane_tint),glass))
+}
+
+# A door with its canopy. Every face records its entrance: `kind`, the door `index`, and the `doorstep` where the
+# door meets the ground (`position` is reserved for point positions).
+fn entrance(index, x) {
+  let door_height = min(2.2,floor_height*0.8)
+  let door = block(vector(x,door_height/2,depth/2 + 0.16),no_turn,vector(1.4,door_height,0.15),trim)
+  let canopy = block(vector(x,door_height + 0.2,depth/2 + 0.5),no_turn,vector(2,0.14,0.9),roof_finish)
+  let parts = merge(door,canopy)
+  addAttribute(parts,"faces","kind","entrance")
+  addAttribute(parts,"faces","index",index)
+  addAttribute(parts,"faces","doorstep",vector(x,0,depth/2))
+  return parts
+}
+
+# ---- Walls.
+# Four walls leave a hollow interior; facade panels are decorative, not cut openings.
+let walls = merge(
+  block(vector(0,height/2,-depth/2),no_turn,vector(width,height,0.2),wall_finish),
+  block(vector(0,height/2,depth/2),no_turn,vector(width,height,0.2),wall_finish)
+)
+repeat 2 as side {
+  let sign = side*2 - 1
+  append(walls,block(vector(sign*width/2,height/2,0),no_turn,vector(0.2,height,depth),wall_finish))
+}
+
+# ---- Floor bands.
+# Floor bands and foundations are also reused boxes, not a host geometry generator.
+let bands = geometry()
+repeat floor_count + 1 as level {
+  append(bands,block(vector(0,level*floor_height,0),no_turn,vector(width + 0.3,0.16,depth + 0.3),trim))
+}
+
+# ---- Windows.
+let windows = geometry()
 repeat floor_count as level {
   let y = (level + 0.5)*floor_height
   repeat 2 as side {
     let sign = side*2 - 1
+    let front = side == 1
     repeat columns as column {
       let x = (column - (columns - 1)/2)*window_spacing
-
       # Ground front is reserved for doors, avoiding overlapped panels.
-      if(level + (1 - side) > 0) {
-        instance(unit,vector(x,y,sign*(depth/2 + 0.15)),vector(0,0,0),vector(1.25,window_height + 0.18,0.18),trim)
-        color(0.7 + rand()*0.3,0.7 + rand()*0.3,1)
-        instance(window_piece,vector(x,y,sign*(depth/2 + 0.26)),vector(0,0,0),vector(1,window_height,1),glass)
-        color(1,1,1)
+      if level > 0 OR NOT front {
+        append(windows,window(vector(x,y,sign*(depth/2 + 0.15)),vector(x,y,sign*(depth/2 + 0.26)),no_turn))
       }
     }
-
     repeat side_columns as column {
       let z = (column - (side_columns - 1)/2)*window_spacing
-      instance(unit,vector(sign*(width/2 + 0.15),y,z),vector(0,pi/2,0),vector(1.25,window_height + 0.18,0.18),trim)
-      color(0.7 + rand()*0.3,0.7 + rand()*0.3,1)
-      instance(window_piece,vector(sign*(width/2 + 0.26),y,z),vector(0,pi/2,0),vector(1,window_height,1),glass)
-      color(1,1,1)
+      append(windows,window(vector(sign*(width/2 + 0.15),y,z),vector(sign*(width/2 + 0.26),y,z),quarter_turn))
     }
   }
 }
 
+# ---- Entrances.
+let entrances = geometry()
 repeat doors as door {
-  let x = (door - (doors - 1)/2)*door_spacing
-  let door_height = min(2.2,floor_height*0.8)
-  with userData({
-    kind:"entrance",
-    index:door,
-    position:vector(x, 0.0, depth/2.0)
-  }) {
-    instance(unit,vector(x,door_height/2,depth/2 + 0.16),vector(0,0,0),vector(1.4,door_height,0.15),trim)
-    instance(unit,vector(x,door_height + 0.2,depth/2 + 0.5),vector(0,0,0),vector(2,0.14,0.9),roof_finish)
-  }
+  append(entrances,entrance(door,(door - (doors - 1)/2)*door_spacing))
 }
-if(roof_shape < 0.5) {
-  instance(unit,vector(0,height + 0.25,0),vector(0,0,0),vector(width + 0.7,0.35,depth + 0.7),roof_finish)
-}
-if(roof_shape >= 0.5) {
+
+# ---- Roof.
+# roof_shape 0 is a flat slab; 1 is a gable of two pitched panels with triangular wall ends.
+let roof = geometry()
+if roof_shape < 0.5 {
+  append(roof,block(vector(0,height + 0.25,0),no_turn,vector(width + 0.7,0.35,depth + 0.7),roof_finish))
+} else {
   let half = width/2 + 0.35
   let slope = atan2(roof_rise,half)
   let length = sqrt(half*half + roof_rise*roof_rise)
   repeat 2 as side {
     let sign = side*2 - 1
-    instance(unit,vector(sign*half/2,height + roof_rise/2,0),vector(0,0,-sign*slope),vector(length,0.2,depth + 0.7),roof_finish)
+    append(roof,block(vector(sign*half/2,height + roof_rise/2,0),vector(0,0,-sign*slope),vector(length,0.2,depth + 0.7),roof_finish))
   }
-
-  material(wall_finish)
-  triangle(-width/2,height,depth/2, width/2,height,depth/2, 0,height + roof_rise,depth/2)
-  triangle(width/2,height,-depth/2, -width/2,height,-depth/2, 0,height + roof_rise,-depth/2)
+  let gables = geometry()
+  addFace(gables,addPoint(gables,vector(-width/2,height,depth/2)),addPoint(gables,vector(width/2,height,depth/2)),addPoint(gables,vector(0,height + roof_rise,depth/2)))
+  addFace(gables,addPoint(gables,vector(width/2,height,-depth/2)),addPoint(gables,vector(-width/2,height,-depth/2)),addPoint(gables,vector(0,height + roof_rise,-depth/2)))
+  append(roof,material(color(gables,white),wall_finish))
 }
+
+output("Building",merge(walls,bands,windows,entrances,roof))

@@ -15,12 +15,14 @@
     },
     "editors": {
       "type": "object",
-      "description": "Production availability overrides. Development enables all editors; enabling Joy Editor also enables both labs.",
+      "description": "Production availability overrides. Development enables all editors; enabling Joy Editor also enables both tool editors.",
       "additionalProperties": false,
       "properties": {
         "joyEditor": {"$ref": "#/definitions/editor"},
-        "formLab": {"$ref": "#/definitions/editor"},
-        "particleLab": {"$ref": "#/definitions/editor"}
+        "formEditor": {"$ref": "#/definitions/editor"},
+        "joyfxEditor": {"$ref": "#/definitions/editor"},
+        "formLab": {"allOf": [{"$ref": "#/definitions/editor"}], "deprecated": true, "description": "Legacy spelling of formEditor; ignored when formEditor is present."},
+        "particleLab": {"allOf": [{"$ref": "#/definitions/editor"}], "deprecated": true, "description": "Legacy spelling of joyfxEditor; ignored when joyfxEditor is present."}
       }
     }
   },

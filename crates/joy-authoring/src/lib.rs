@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The authoring kit shared by FORM LAB, PARTICLE LAB, and Joy Editor: lab controls ([`NumberField`],
+//! The authoring kit shared by FORM EDITOR, JOYFX EDITOR, and Joy Editor: lab controls ([`NumberField`],
 //! [`ScalarControl`], [`ComponentGroup`], [`ColorControl`]) with [`NumericDrafts`], [`PropertyHistory`],
 //! [`PanelLayout`], the [`ScriptEditor`] with its [`script_language_tools`], viewport gestures, [`FileDialogs`], and the
 //! shared Joy look in [`components`] (see `docs/rust-authoring.md`).
@@ -27,6 +27,7 @@ mod web_file_input;
 pub use authoring_tool::{
     AuthoringTool,
     ToolDocument,
+    ToolFileReader,
     ToolHosting,
 };
 pub use choice_controls::{
@@ -81,6 +82,7 @@ pub use property_history::{
     PropertyHistory,
 };
 pub use script_editor::{
+    DocumentSymbolProvider,
     ScriptEditor,
     ScriptEditorResponse,
     token_color,
