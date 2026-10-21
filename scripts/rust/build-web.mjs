@@ -33,9 +33,12 @@ import {parseArgs} from 'node:util';
 const scriptRoot = dirname(fileURLToPath(import.meta.url));
 const engineRoot = resolve(scriptRoot, '../..');
 const WASM_TARGET = 'wasm32-unknown-unknown';
-// Licenses of adapted third-party code compiled into the engine, relative to the engine root.
+// Licenses of third-party code and fonts compiled into the engine, relative to the engine root.
 const THIRD_PARTY_LICENSES = [
-  'crates/joy-physics/src/sdf/LICENSE-sdf-dcd-demo'
+  'crates/joy-physics/src/sdf/LICENSE-sdf-dcd-demo',
+  'crates/joy-ui/fonts/Archivo-OFL.txt',
+  'crates/joy-ui/fonts/ArchivoBlack-OFL.txt',
+  'crates/joy-ui/fonts/Meslo-LICENSE.txt'
 ];
 
 const {values: options} = parseArgs({
@@ -100,8 +103,7 @@ writeFileSync(resolve(outputDirectory, 'THIRD-PARTY-NOTICES.txt'), thirdPartyNot
 console.log(`Web build ready: ${relative(process.cwd(), outputDirectory) || '.'} (${basename(wasmFile)}, ${profile}).`);
 
 /**
- * Every license the engine's compiled code must carry: the SDF collision reference implementation,
- * separated by a rule.
+ * Licenses for the SDF collision reference implementation and embedded authoring fonts, separated by a rule.
  */
 function thirdPartyNotices() {
   const notices = THIRD_PARTY_LICENSES.map(path => readFileSync(resolve(engineRoot, path), 'utf8').trimEnd());

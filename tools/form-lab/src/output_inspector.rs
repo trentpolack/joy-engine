@@ -10,7 +10,10 @@ use joy_engine::egui::{
     RichText,
     Ui,
 };
-use joy_engine::runtime::theme::tokens;
+use joy_engine::runtime::theme::{
+    colors,
+    layout,
+};
 
 use crate::output_inspection::OutputInspection;
 use crate::rendering::viewport::Viewport;
@@ -18,8 +21,8 @@ use crate::rendering::viewport::Viewport;
 /// The RESULT toolbar above the preview. Returns the preview's error when it rejects the chosen output.
 pub fn result_toolbar(ui: &mut Ui, inspection: &mut OutputInspection, viewport: &mut Viewport) -> Option<String> {
     let mut failure = None;
-    ui.horizontal(|ui| {
-        ui.label(RichText::new("RESULT").color(tokens::MUTED).size(tokens::TYPE_XS));
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new("RESULT").color(colors::MUTED).size(layout::TYPE_XS));
         let choices = inspection.output_choices();
         let current = choices
             .iter()
@@ -40,9 +43,7 @@ pub fn result_toolbar(ui: &mut Ui, inspection: &mut OutputInspection, viewport: 
         {
             failure = Some(error);
         }
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(RichText::new(inspection.kind()).color(tokens::MUTED).size(tokens::TYPE_XS).monospace());
-        });
+        ui.label(RichText::new(inspection.kind()).color(colors::MUTED).size(layout::TYPE_XS).monospace());
     });
     failure
 }
@@ -57,8 +58,8 @@ pub fn attribute_panel(ui: &mut Ui, inspection: &mut OutputInspection, viewport:
     let summary = inspection.summary();
     state
         .show_header(ui, |ui| {
-            ui.label(RichText::new("ATTRIBUTES").strong().size(tokens::TYPE_SM));
-            ui.label(RichText::new(summary).color(tokens::MUTED).size(tokens::TYPE_XS).monospace());
+            ui.label(RichText::new("ATTRIBUTES").strong().size(layout::TYPE_SM));
+            ui.label(RichText::new(summary).color(colors::MUTED).size(layout::TYPE_XS).monospace());
         })
         .body(|ui| attribute_body(ui, inspection, viewport));
 }
@@ -80,7 +81,7 @@ fn attribute_body(ui: &mut Ui, inspection: &mut OutputInspection, viewport: &mut
             if domain != inspection.domain() {
                 inspection.choose_domain(domain, viewport);
             }
-            ui.label(RichText::new("VIEW").color(tokens::MUTED).size(tokens::TYPE_XS));
+            ui.label(RichText::new("VIEW").color(colors::MUTED).size(layout::TYPE_XS));
             let views = inspection.view_names();
             let mut view = inspection.view().to_owned();
             let label = |name: &str| if name.is_empty() { "Material".to_owned() } else { name.to_owned() };
@@ -108,9 +109,9 @@ fn attribute_body(ui: &mut Ui, inspection: &mut OutputInspection, viewport: &mut
             }
         });
         ui.horizontal(|ui| {
-            ui.label(RichText::new(inspection.selection_info()).color(tokens::TEXT).size(tokens::TYPE_XS));
+            ui.label(RichText::new(inspection.selection_info()).color(colors::TEXT).size(layout::TYPE_XS));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(RichText::new(inspection.range()).color(tokens::MUTED).size(tokens::TYPE_XS));
+                ui.label(RichText::new(inspection.range()).color(colors::MUTED).size(layout::TYPE_XS));
             });
         });
         let headings = inspection.headings();
@@ -120,12 +121,12 @@ fn attribute_body(ui: &mut Ui, inspection: &mut OutputInspection, viewport: &mut
         egui::ScrollArea::both().id_salt("attribute-scroll").max_height(160.0).show(ui, |ui| {
             egui::Grid::new("attribute-table").striped(true).spacing([12.0, 2.0]).show(ui, |ui| {
                 for heading in &headings {
-                    ui.label(RichText::new(heading).color(tokens::MUTED).size(tokens::TYPE_XS).strong());
+                    ui.label(RichText::new(heading).color(colors::MUTED).size(layout::TYPE_XS).strong());
                 }
                 ui.end_row();
                 for (index, cells) in &rows {
                     let selected_row = selected == Some(*index);
-                    let button = egui::Button::new(RichText::new(index.to_string()).monospace().size(tokens::TYPE_XS))
+                    let button = egui::Button::new(RichText::new(index.to_string()).monospace().size(layout::TYPE_XS))
                         .selected(selected_row)
                         .small();
                     if ui.add(button).on_hover_text(format!("Select {} {index}", inspection.domain().name())).clicked()
@@ -133,7 +134,7 @@ fn attribute_body(ui: &mut Ui, inspection: &mut OutputInspection, viewport: &mut
                         clicked = Some(*index);
                     }
                     for (cell, heading) in cells.iter().zip(headings.iter().skip(1)) {
-                        ui.label(RichText::new(cell).monospace().size(tokens::TYPE_XS))
+                        ui.label(RichText::new(cell).monospace().size(layout::TYPE_XS))
                             .on_hover_text(format!("{heading}: {cell}"));
                     }
                     ui.end_row();

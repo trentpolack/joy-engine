@@ -48,7 +48,10 @@ use joy_core::scripting::{
     ScriptLanguageCatalog,
     ScriptSymbolKind,
 };
-use joy_ui::theme::tokens;
+use joy_ui::theme::{
+    colors,
+    layout,
+};
 
 use crate::script_language_tools::{
     self,
@@ -59,10 +62,13 @@ use crate::script_language_tools::{
     TokenKind,
 };
 
-/// Script font size in points.
-const SCRIPT_FONT_SIZE: f32 = 13.0;
+/// Script font size in points. Keep code denser than body copy so the editor reads as a workstation, not a form.
+const SCRIPT_FONT_SIZE: f32 = layout::TYPE_CODE;
 
-/// Text inserted for Tab (CodeMirror's `indentWithTab` with a two-space unit).
+/// Browser workbench leading, shared by highlighted text, cursor positioning, and gutter rows.
+const SCRIPT_LINE_HEIGHT: f32 = SCRIPT_FONT_SIZE * 1.65;
+
+/// Text inserted for Tab (mirrors Javascript standard).
 const INDENT: &str = "  ";
 
 /// Most completion rows shown before scrolling.
@@ -137,7 +143,7 @@ impl ScriptEditor {
             catalog: None,
             items: Vec::new(),
             read_only: false,
-            background: tokens::SCRIPT,
+            background: colors::SCRIPT,
             diagnostics: Vec::new(),
             completion: None,
             pending_line: None,
@@ -155,7 +161,7 @@ impl ScriptEditor {
     /// Read-only presentation: selectable text with highlighting, no language tools, on the surface fill (JSON views).
     pub fn read_only(mut self) -> Self {
         self.read_only = true;
-        self.background = tokens::SURFACE;
+        self.background = colors::SURFACE;
         self
     }
 
@@ -305,7 +311,7 @@ impl ScriptEditor {
         // Layout.
         let line_count = script_language_tools::line_count(text.as_str());
         let font = FontId::monospace(SCRIPT_FONT_SIZE);
-        let row_height = ui.fonts_mut(|fonts| fonts.row_height(&font));
+        let row_height = SCRIPT_LINE_HEIGHT;
         let digit_width = ui.fonts_mut(|fonts| fonts.glyph_width(&font, '0'));
         let digits = line_count.to_string().len().max(2) as f32;
         let gutter_width = ((digits * digit_width) + 18.0).max(MINIMUM_GUTTER_WIDTH);
@@ -314,11 +320,11 @@ impl ScriptEditor {
             ui.painter().layout_job(highlight_job(syntax, buffer.as_str(), &font))
         };
 
-        let frame = egui::Frame::new().fill(self.background).stroke(Stroke::new(tokens::BORDER_THIN, tokens::BORDER));
+        let frame = egui::Frame::new().fill(self.background).stroke(Stroke::new(layout::BORDER_THIN, colors::LINE));
         let scroll_id = self.id.with("scroll");
         let mut drawn = None;
         frame.show(ui, |ui| {
-            let visible_rows = ((ui.available_height() / row_height).floor() as usize).max(4);
+            let visible_height = ui.available_height();
             egui::ScrollArea::both().id_salt(scroll_id).auto_shrink([false, false]).show(ui, |ui| {
                 ui.horizontal_top(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
@@ -328,10 +334,11 @@ impl ScriptEditor {
                         .id(text_id)
                         .font(FontId::monospace(SCRIPT_FONT_SIZE))
                         .code_editor()
-                        .frame(egui::Frame::NONE)
-                        .margin(vec2(tokens::SPACE_SM, tokens::SPACE_XS))
+                        .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(8, 12)))
                         .desired_width(f32::INFINITY)
-                        .desired_rows(visible_rows)
+                        // Custom syntax leading differs from egui's row estimate; keep the entire blank body clickable.
+                        .desired_rows(4)
+                        .min_size(vec2(0.0, visible_height))
                         .layouter(&mut layouter)
                         .show(ui);
                     if scroll_to_cursor && let Some(range) = output.cursor_range {
@@ -362,9 +369,9 @@ impl ScriptEditor {
                 pos2(response.rect.left(), galley_pos.y + row_rect.top()),
                 pos2(response.rect.right().max(galley_pos.x + galley.size().x), galley_pos.y + row_rect.bottom()),
             );
-            painter.set(active_line, Shape::rect_filled(rect, CornerRadius::ZERO, tokens::SURFACE.gamma_multiply(0.4)));
+            painter.set(active_line, Shape::rect_filled(rect, CornerRadius::ZERO, colors::SURFACE.gamma_multiply(0.4)));
         }
-        let gutter_right = galley_pos.x - tokens::SPACE_SM - 4.0;
+        let gutter_right = galley_pos.x - layout::SPACE_SM - 4.0;
         for (index, (_, row_rect)) in rows.iter().enumerate() {
             let number = index + 1;
             let top = galley_pos.y + row_rect.top();
@@ -373,9 +380,9 @@ impl ScriptEditor {
                 pos2(gutter_right + 4.0, top + row_rect.height()),
             );
             if number == line {
-                painter.rect_filled(row, CornerRadius::ZERO, tokens::SURFACE);
+                painter.rect_filled(row, CornerRadius::ZERO, colors::SURFACE);
             }
-            let color = if number == line { tokens::ACCENT } else { tokens::SCRIPT_GUTTER };
+            let color = if number == line { colors::ACCENT } else { colors::SCRIPT_GUTTER };
             painter.text(
                 pos2(gutter_right, top + (row_rect.height() * 0.5)),
                 Align2::RIGHT_CENTER,
@@ -440,9 +447,9 @@ impl ScriptEditor {
                     ui.label(
                         egui::RichText::new(script_language_tools::symbol_heading(&symbol))
                             .monospace()
-                            .color(tokens::SCRIPT_FUNCTION),
+                            .color(colors::SCRIPT_FUNCTION),
                     );
-                    ui.label(egui::RichText::new(kind_label(symbol.kind)).color(tokens::MUTED).size(tokens::TYPE_XS));
+                    ui.label(egui::RichText::new(kind_label(symbol.kind)).color(colors::MUTED).size(layout::TYPE_XS));
                     ui.label(&symbol.documentation);
                 });
             }
@@ -501,8 +508,8 @@ impl ScriptEditor {
         let mut clicked = None;
         egui::Area::new(self.id.with("completion")).order(Order::Foreground).fixed_pos(position).show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style())
-                .fill(tokens::PANEL)
-                .stroke(Stroke::new(tokens::BORDER_THIN, tokens::BORDER))
+                .fill(colors::PANEL)
+                .stroke(Stroke::new(layout::BORDER_THIN, colors::BORDER))
                 .show(ui, |ui| {
                     ui.set_min_width(260.0);
                     let row_height = 20.0;
@@ -513,7 +520,7 @@ impl ScriptEditor {
                             let (rect, response) = ui
                                 .allocate_exact_size(vec2(ui.available_width().max(260.0), row_height), Sense::click());
                             if selected {
-                                ui.painter().rect_filled(rect, CornerRadius::ZERO, tokens::SELECTION);
+                                ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::SELECTION);
                                 response.scroll_to_me(None);
                             }
                             let painter = ui.painter_at(rect);
@@ -529,14 +536,14 @@ impl ScriptEditor {
                                 Align2::LEFT_CENTER,
                                 &item.label,
                                 FontId::monospace(12.0),
-                                tokens::TEXT,
+                                colors::TEXT,
                             );
                             painter.text(
                                 rect.right_center() - vec2(6.0, 0.0),
                                 Align2::RIGHT_CENTER,
                                 &item.detail,
-                                FontId::proportional(tokens::TYPE_XS),
-                                tokens::MUTED,
+                                FontId::proportional(layout::TYPE_XS),
+                                colors::MUTED,
                             );
                             if response.clicked() {
                                 clicked = Some(*index);
@@ -546,7 +553,7 @@ impl ScriptEditor {
                     if let Some(item) = completion.matches.get(completion.selected).map(|index| &self.items[*index]) {
                         ui.separator();
                         ui.set_max_width(320.0);
-                        ui.label(egui::RichText::new(&item.documentation).color(tokens::MUTED).size(tokens::TYPE_SM));
+                        ui.label(egui::RichText::new(&item.documentation).color(colors::MUTED).size(layout::TYPE_SM));
                     }
                 });
         });
@@ -569,8 +576,8 @@ impl ScriptEditor {
         let mut hovered = None;
         for diagnostic in &self.diagnostics {
             let color = match diagnostic.severity {
-                DiagnosticSeverity::Error => tokens::DANGER,
-                DiagnosticSeverity::Warning => tokens::ACCENT_HOVER,
+                DiagnosticSeverity::Error => colors::DANGER,
+                DiagnosticSeverity::Warning => colors::ACCENT_HOVER,
             };
             let range = diagnostic.character_range(text);
             let start = galley.pos_from_cursor(CCursor::new(range.start)).translate(galley_pos.to_vec2());
@@ -657,6 +664,7 @@ fn highlight_job(syntax: &ScriptSyntax, source: &str, font: &FontId) -> LayoutJo
             byte_range: ByteIndex(token.range.start)..ByteIndex(token.range.end),
             format: TextFormat {
                 font_id: font.clone(),
+                line_height: Some(SCRIPT_LINE_HEIGHT),
                 color: token_color(token.kind),
                 ..Default::default()
             },
@@ -668,7 +676,8 @@ fn highlight_job(syntax: &ScriptSyntax, source: &str, font: &FontId) -> LayoutJo
             byte_range: ByteIndex(0)..ByteIndex(0),
             format: TextFormat {
                 font_id: font.clone(),
-                color: tokens::TEXT,
+                line_height: Some(SCRIPT_LINE_HEIGHT),
+                color: colors::TEXT,
                 ..Default::default()
             },
         });
@@ -679,14 +688,14 @@ fn highlight_job(syntax: &ScriptSyntax, source: &str, font: &FontId) -> LayoutJo
 /// The script editor's highlight color for a token kind.
 pub fn token_color(kind: TokenKind) -> Color32 {
     match kind {
-        TokenKind::Comment => tokens::SCRIPT_COMMENT,
-        TokenKind::String | TokenKind::Function => tokens::SCRIPT_FUNCTION,
-        TokenKind::Number => tokens::SCRIPT_NUMBER,
-        TokenKind::Keyword | TokenKind::Boolean => tokens::SCRIPT_KEYWORD,
-        TokenKind::Parameter => tokens::SCRIPT_PARAMETER,
-        TokenKind::Operator => tokens::SCRIPT_OPERATOR,
-        TokenKind::Invalid => tokens::DANGER,
-        TokenKind::Whitespace | TokenKind::Property | TokenKind::Variable => tokens::TEXT,
+        TokenKind::Comment => colors::SCRIPT_COMMENT,
+        TokenKind::String | TokenKind::Function => colors::SCRIPT_FUNCTION,
+        TokenKind::Number => colors::SCRIPT_NUMBER,
+        TokenKind::Keyword | TokenKind::Boolean => colors::SCRIPT_KEYWORD,
+        TokenKind::Parameter => colors::SCRIPT_PARAMETER,
+        TokenKind::Operator => colors::SCRIPT_OPERATOR,
+        TokenKind::Invalid => colors::DANGER,
+        TokenKind::Whitespace | TokenKind::Property | TokenKind::Variable => colors::TEXT,
     }
 }
 
@@ -710,10 +719,10 @@ fn kind_label(kind: ScriptSymbolKind) -> &'static str {
 
 fn kind_color(kind: ScriptSymbolKind) -> Color32 {
     match kind {
-        ScriptSymbolKind::Keyword => tokens::SCRIPT_KEYWORD,
-        ScriptSymbolKind::Function => tokens::SCRIPT_FUNCTION,
-        ScriptSymbolKind::Variable => tokens::SCRIPT_PARAMETER,
-        ScriptSymbolKind::Property => tokens::SCRIPT_NUMBER,
+        ScriptSymbolKind::Keyword => colors::SCRIPT_KEYWORD,
+        ScriptSymbolKind::Function => colors::SCRIPT_FUNCTION,
+        ScriptSymbolKind::Variable => colors::SCRIPT_PARAMETER,
+        ScriptSymbolKind::Property => colors::SCRIPT_NUMBER,
     }
 }
 

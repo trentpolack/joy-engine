@@ -300,8 +300,12 @@ fn documentation_and_project_details_panels_open_beside_the_content_browser() {
     driver.press("Escape", egui::Modifiers::NONE);
     assert!(!driver.has("workspace-help-close"), "Escape closes the documentation");
     driver.click("project-details");
-    driver.frames(3);
+    driver.frames(20);
     assert!(driver.editor.workspace().project_summary().unwrap().manifest.capabilities.len() == 1);
+    // Expanded project metadata must not push Documentation under the workspace status strip.
+    driver.capture("workspace-project-details");
+    driver.click("workspace-help-open");
+    assert!(driver.has("workspace-help-close"), "Documentation remains reachable with Project Details expanded");
 }
 
 fn level_name(driver: &Driver) -> String {

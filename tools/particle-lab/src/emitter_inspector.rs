@@ -18,7 +18,10 @@ use joy_engine::egui::{
     Ui,
 };
 use joy_engine::particles::ParticleRenderer;
-use joy_engine::runtime::theme::tokens;
+use joy_engine::runtime::theme::{
+    colors,
+    layout,
+};
 
 use crate::document::{
     self,
@@ -88,7 +91,7 @@ impl EmitterInspector {
         let mut delete_burst = None;
         let mut add_burst = false;
 
-        let column = ((ui.available_width() - tokens::SPACE_MD) * 0.5).max(80.0);
+        let column = ((ui.available_width() - layout::SPACE_MD) * 0.5).max(80.0);
         {
             let (asset, drafts) = lab.edit_parts();
             let emitter = &mut asset.emitters[index];
@@ -184,7 +187,7 @@ impl EmitterInspector {
                     ui.push_id(("burst", burst_index), |ui| {
                         ui.horizontal(|ui| {
                             edits.control(&NumberField::new("time", &mut burst.time).minimum(0.0).step(0.01).width(72.0).label("Burst time").show(ui, drafts));
-                            ui.label(RichText::new("s").color(tokens::MUTED));
+                            ui.label(RichText::new("s").color(colors::MUTED));
                             edits.control(&integer_field(ui, "count", &mut burst.count, 72.0, drafts));
                             if ui.small_button("×").on_hover_text("Delete burst").clicked() {
                                 delete_burst = Some(burst_index);
@@ -282,7 +285,7 @@ fn field(ui: &mut Ui, width: f32, label: &str, contents: impl FnOnce(&mut Ui)) {
         if !label.is_empty() {
             components::field_title(ui, label);
         } else {
-            ui.add_space(tokens::TYPE_SM + 6.0);
+            ui.add_space(layout::TYPE_SM + 6.0);
         }
         contents(ui);
     });
@@ -290,8 +293,8 @@ fn field(ui: &mut Ui, width: f32, label: &str, contents: impl FnOnce(&mut Ui)) {
 
 /// A small section title.
 fn section(ui: &mut Ui, title: &str) {
-    ui.add_space(tokens::SPACE_MD);
-    ui.label(RichText::new(title).strong().color(tokens::TEXT).size(tokens::TYPE_SM));
+    ui.add_space(layout::SPACE_MD);
+    ui.label(RichText::new(title).strong().color(colors::TEXT).size(layout::TYPE_SM));
 }
 
 /// A whole-number field of at least one for a `u32` document value.

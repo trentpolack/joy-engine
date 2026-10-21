@@ -96,7 +96,7 @@ impl App for KitTool {
     }
 
     fn ui(&mut self, context: &egui::Context, _frame: &mut Frame<'_>) {
-        theme::apply_authoring(context);
+        theme::apply_editor(context);
         egui::Area::new(egui::Id::new("kit-root")).fixed_pos(egui::Pos2::ZERO).show(context, |ui| {
             let area = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(WIDTH as f32, HEIGHT as f32));
             let panes = self.layout.panes(area);
@@ -229,7 +229,7 @@ fn kit_widgets_paint_and_respond_to_synthetic_input() {
     };
     // The right panel paints the panel fill over the scene.
     let panel = pixel(WIDTH - 20, HEIGHT - 20);
-    let expected = theme::tokens::PANEL;
+    let expected = theme::colors::PANEL;
     assert!(
         panel
             .iter()

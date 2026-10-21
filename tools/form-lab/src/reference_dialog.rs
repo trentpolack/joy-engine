@@ -10,7 +10,10 @@ use joy_engine::egui::{
     RichText,
     Ui,
 };
-use joy_engine::runtime::theme::tokens;
+use joy_engine::runtime::theme::{
+    colors,
+    layout,
+};
 
 use crate::script_guide::{
     RECIPES,
@@ -203,8 +206,8 @@ impl ReferenceDialog {
                 ui.vertical(|ui| {
                     ui.label(
                         RichText::new("THE FORM SCRIPT FIELD GUIDE")
-                            .color(tokens::ACCENT)
-                            .size(tokens::TYPE_XS)
+                            .color(colors::ACCENT)
+                            .size(layout::TYPE_XS)
                             .strong(),
                     );
                     ui.label(RichText::new("A FEW WORDS.\nINFINITE WHAT-IFS.").size(22.0).strong());
@@ -217,9 +220,9 @@ impl ReferenceDialog {
             });
             egui::ScrollArea::vertical().max_height((screen.height() - 160.0).max(200.0)).show(ui, |ui| {
                 paragraph(ui, INTRODUCTION);
-                ui.add_space(tokens::SPACE_MD);
+                ui.add_space(layout::SPACE_MD);
                 let recipes =
-                    ui.label(RichText::new("FIND A STARTING POINT").color(tokens::MUTED).size(tokens::TYPE_XS));
+                    ui.label(RichText::new("FIND A STARTING POINT").color(colors::MUTED).size(layout::TYPE_XS));
                 if std::mem::take(&mut self.scroll_to_recipes) {
                     recipes.scroll_to_me(Some(egui::Align::TOP));
                 }
@@ -238,28 +241,28 @@ impl ReferenceDialog {
                         ui.set_width(ui.available_width());
                         ui.label(RichText::new(recipe.title).strong());
                         components::guidance(ui, recipe.description);
-                        ui.label(RichText::new(recipe.code_for("study")).monospace().size(tokens::TYPE_SM));
+                        ui.label(RichText::new(recipe.code_for("study")).monospace().size(layout::TYPE_SM));
                         if ui.button("Append recipe ↗").on_hover_text(format!("Append {}", recipe.title)).clicked() {
                             appended = Some(index);
                         }
                     });
                 }
-                ui.add_space(tokens::SPACE_MD);
+                ui.add_space(layout::SPACE_MD);
                 for (kind, text) in REFERENCE {
                     match kind {
                         ReferenceBlock::Heading => {
-                            ui.add_space(tokens::SPACE_SM);
-                            ui.label(RichText::new(*text).color(tokens::ACCENT).strong());
+                            ui.add_space(layout::SPACE_SM);
+                            ui.label(RichText::new(*text).color(colors::ACCENT).strong());
                         }
                         ReferenceBlock::Paragraph => paragraph(ui, text),
                         ReferenceBlock::Code => {
-                            egui::Frame::new().fill(tokens::SCRIPT).inner_margin(6).show(ui, |ui| {
-                                ui.label(RichText::new(*text).monospace().size(tokens::TYPE_SM));
+                            egui::Frame::new().fill(colors::SCRIPT).inner_margin(6).show(ui, |ui| {
+                                ui.label(RichText::new(*text).monospace().size(layout::TYPE_SM));
                             });
                         }
                     }
                 }
-                ui.add_space(tokens::SPACE_SM);
+                ui.add_space(layout::SPACE_SM);
                 components::guidance(ui, LIMITS);
             });
         });
@@ -277,14 +280,14 @@ impl ReferenceDialog {
 fn paragraph(ui: &mut Ui, text: &str) {
     let mut job = egui::text::LayoutJob::default();
     let body = egui::TextFormat {
-        color: tokens::TEXT,
-        font_id: egui::FontId::proportional(tokens::TYPE_MD),
+        color: colors::TEXT,
+        font_id: egui::FontId::proportional(layout::TYPE_MD),
         ..Default::default()
     };
     let code = egui::TextFormat {
-        color: tokens::SCRIPT_FUNCTION,
-        font_id: egui::FontId::monospace(tokens::TYPE_SM),
-        background: tokens::SCRIPT,
+        color: colors::SCRIPT_FUNCTION,
+        font_id: egui::FontId::monospace(layout::TYPE_SM),
+        background: colors::SCRIPT,
         ..Default::default()
     };
     for (index, part) in text.split('`').enumerate() {

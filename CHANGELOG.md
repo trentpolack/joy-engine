@@ -4,7 +4,11 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, P
 
 ## 10-21-2026
 ### Authoring UI
+- UI palettes and font choices now come from `assets/ui/theme-default.json`, with shared dimensions in `assets/ui/layout.json`. Cargo generates native/browser constants directly from those files and rejects invalid values. Removed the duplicated Rust definitions and comparison test; migrated editor, lab, and development widgets to separate `theme::colors` and `theme::layout` values and renamed `apply_authoring` to `apply_editor`.
+- Simplified PARTICLE LAB to a compact single-row header matching FORM LAB and removed its standalone bottom strip. Joy Editor's Content Browser now reserves the actual height of Project Details and Documentation, with long metadata scrolling above the button instead of covering it with the status bar.
+- Matched the authoring chrome more closely to the deployed JS/TS FORM LAB: heavier Archivo weights, blue panel hierarchy, full-height controls, outlined sliders and preview modes, parameter spacing, and script leading. Bundled Apache-licensed Meslo LG S for Menlo-like code typography using the shared code-size setting, restored FORM's default pane proportions without overwriting saved layouts, and kept preview controls usable in narrow panes. Web builds include the font's upstream attribution and license.
 - Registered the shared authoring font families before the first UI pass, fixing the `joy-display` startup panic in Joy Editor and the labs while preserving games' default body font.
+- Numeric sliders snap to hundredths by default or to an authored step, without decimal noise. Removed PARTICLE LAB's coarser step overrides while preserving exact authored values, and covered dragging and short-script focus through real input events.
 
 ### FORM Assets in Levels
 - FORM parameters accept presentation metadata in `meta(...)`: `label`, `group`, `info`, `kind` (`int`, `bool`, `seed`, or `enum`), and `options`. Whole-number kinds round overrides, booleans accept JSON flags, and `joy_engine::form::parameter_control` and friends read the descriptors.

@@ -15,7 +15,7 @@ use joy_engine::egui::{
     Ui,
 };
 use joy_engine::rendering::ShadowQuality;
-use joy_engine::runtime::theme::tokens;
+use joy_engine::runtime::theme::layout;
 
 use crate::rendering::preview_lighting::{
     DEFAULT_PREVIEW_LIGHTING,
@@ -45,7 +45,7 @@ impl PreviewLightingControls {
             "Studio reflections and light settings affect this preview only. Exports retain authored materials. \
              Shadows render on WebGPU and WebGL 2.",
         );
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
         let mut next = current;
         for field in PREVIEW_LIGHTING_FIELDS {
             let mut value = current.get(field.key);

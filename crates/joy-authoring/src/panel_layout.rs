@@ -36,7 +36,10 @@ use serde::{
 };
 
 use joy_storage::Storage;
-use joy_ui::theme::tokens;
+use joy_ui::theme::{
+    colors,
+    layout,
+};
 
 /// Divider hit width in points.
 pub const DIVIDER_WIDTH: f32 = 10.0;
@@ -427,15 +430,15 @@ impl PanelLayout {
 
         let active = response.dragged() || response.has_focus();
         let color = if active {
-            tokens::ACCENT
+            colors::ACCENT
         } else if response.hovered() {
-            tokens::ACCENT_HOVER
+            colors::ACCENT_HOVER
         } else {
             Color32::TRANSPARENT
         };
         if color != Color32::TRANSPARENT {
             ui.painter()
-                .line_segment([pos2(x, rect.top()), pos2(x, rect.bottom())], Stroke::new(tokens::BORDER_FOCUS, color));
+                .line_segment([pos2(x, rect.top()), pos2(x, rect.bottom())], Stroke::new(layout::BORDER_FOCUS, color));
         }
         let label = if side == PaneSide::Left { "Resize editing panel" } else { "Resize inspector" };
         response

@@ -29,7 +29,10 @@ use joy_engine::egui::{
     Ui,
 };
 use joy_engine::form::ParameterControl;
-use joy_engine::runtime::theme::tokens;
+use joy_engine::runtime::theme::{
+    colors,
+    layout,
+};
 use joy_engine::serde_json::Value as Json;
 
 use crate::parameter_values::{
@@ -118,12 +121,15 @@ impl ParameterControls {
         }
         self.rects.clear();
         let search = ui.add(
-            egui::TextEdit::singleline(&mut self.search).hint_text("Find a parameter…").desired_width(f32::INFINITY),
+            egui::TextEdit::singleline(&mut self.search)
+                .hint_text("Find a parameter…")
+                .desired_width(f32::INFINITY)
+                .margin(egui::vec2(9.0, 7.0)),
         );
         self.rects.insert("search".into(), search.rect);
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
         components::guidance(ui, guidance);
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
         ui.horizontal(|ui| {
             let undo = ui.add_enabled(can_undo, egui::Button::new("Undo property"));
             self.rects.insert("undo".into(), undo.rect);
@@ -137,7 +143,7 @@ impl ParameterControls {
             }
         });
         egui::CollapsingHeader::new(
-            RichText::new("Tuning keys & defaults").color(tokens::ACCENT).size(tokens::TYPE_SM),
+            RichText::new("Tuning keys & defaults").color(colors::ACCENT).size(layout::TYPE_SM),
         )
         .id_salt("form-lab-tuning-help")
         .show(ui, |ui| {
@@ -147,7 +153,7 @@ impl ParameterControls {
                      source has separate editor undo. Color channels are linear RGBA; A controls opacity.",
             );
         });
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
 
         if parameters.is_empty() {
             components::guidance(ui, "Add a param declaration to give your script a control.");
@@ -166,11 +172,13 @@ impl ParameterControls {
 
             // A heading starts each run of parameters that share a script `group`.
             if text.group.is_some() && text.group != current_group {
-                ui.add_space(tokens::SPACE_SM);
+                ui.add_space(layout::SPACE_SM);
                 components::field_title(ui, text.group.clone().unwrap_or_default().to_uppercase());
             }
             current_group = text.group.clone();
-            ui.separator();
+            if matches > 1 {
+                ui.separator();
+            }
             let title = text.title.clone();
             let overridden = overridden.contains(parameter.name());
             let name = parameter.name().to_owned();
@@ -185,9 +193,10 @@ impl ParameterControls {
                 }
             });
             self.rects.insert(name, group.inner.unwrap_or(group.response.rect));
+            ui.add_space(layout::SPACE_XS);
         }
         if matches == 0 {
-            ui.label(RichText::new("No matching parameters.").color(tokens::MUTED));
+            ui.label(RichText::new("No matching parameters.").color(colors::MUTED));
         }
         actions
     }
@@ -207,9 +216,14 @@ fn numeric_group(
     let minimums = vec![parameter.minimum; parameter.value.len()];
     let maximums = vec![parameter.maximum; parameter.value.len()];
     ui.horizontal(|ui| {
-        ui.label(RichText::new(parameter.kind.badge()).color(tokens::MUTED).size(tokens::TYPE_SM))
-            .on_hover_text(format!("{} parameter", parameter.kind.name()));
-        let title_label = ui.label(RichText::new(title).color(tokens::TEXT).strong());
+        ui.set_min_height(32.0);
+        ui.add_sized(
+            egui::vec2(28.0, 30.0),
+            egui::Label::new(RichText::new(parameter.kind.badge()).color(colors::MUTED).size(layout::TYPE_XS)),
+        )
+        .on_hover_text(format!("{} parameter", parameter.kind.name()));
+        let title_label = ui
+            .label(RichText::new(title).color(colors::TEXT).text_style(egui::TextStyle::Button).size(layout::TYPE_SM));
         if let Some(info) = &parameter.text.info {
             title_label.on_hover_text(info.as_str());
         }
@@ -229,7 +243,7 @@ fn numeric_group(
                 "Default"
             };
             ui.label(
-                RichText::new(state).color(if modified { tokens::ACCENT } else { tokens::MUTED }).size(tokens::TYPE_SM),
+                RichText::new(state).color(if modified { colors::ACCENT } else { colors::MUTED }).size(layout::TYPE_SM),
             )
             .on_hover_text(format!("Script default: {}", defaults.join(", ")));
             if parameter.kind == ParameterKind::Color {
@@ -296,15 +310,15 @@ fn step_or_default(step: f64) -> f64 {
 
 /// The per-parameter reset: a circular arrow, enabled while the parameter has an override, that removes it.
 pub fn reset_override_button(ui: &mut Ui, overridden: bool, name: &str) -> egui::Response {
-    let size = egui::Vec2::splat(20.0);
+    let size = egui::Vec2::splat(30.0);
     let sense = if overridden { egui::Sense::click() } else { egui::Sense::hover() };
     let (rect, response) = ui.allocate_exact_size(size, sense);
     let color = if !overridden {
-        tokens::BORDER
+        colors::ACCENT.gamma_multiply(0.3)
     } else if response.hovered() {
-        tokens::ACCENT_HOVER
+        colors::ACCENT_HOVER
     } else {
-        tokens::MUTED
+        colors::ACCENT
     };
     let painter = ui.painter();
     let center = rect.center();

@@ -60,6 +60,25 @@ fn text(value: &str) -> egui::Event {
 fn typing_opens_completion_and_functions_insert_calls_with_the_cursor_inside() {
     let editor = ScriptEditor::new("spawn", ScriptSyntax::particle()).with_catalog(joy_fx::particle_language_catalog());
     let mut harness = Harness::new(editor, "size = ");
+    harness.frame(vec![]);
+    // The blank body below a short script must still focus the input when clicked.
+    let point = egui::pos2(200.0, 340.0);
+    harness.frame(vec![
+        egui::Event::PointerMoved(point),
+        egui::Event::PointerButton {
+            pos: point,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Modifiers::NONE,
+        },
+        egui::Event::PointerButton {
+            pos: point,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        },
+    ]);
+    assert!(harness.context.memory(|memory| memory.has_focus(harness.editor.id().with("text"))));
     harness.editor.go_to_line(1);
     harness.frame(vec![]);
     harness.frame(vec![key(Key::End, Modifiers::NONE)]);

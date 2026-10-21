@@ -11,7 +11,7 @@ use joy_engine::egui::{
     self,
     RichText,
 };
-use joy_engine::runtime::theme::tokens;
+use joy_engine::runtime::theme::layout;
 
 use crate::session::{
     ArtifactFormat,
@@ -173,7 +173,7 @@ impl ArtifactDialog {
                 self.name = with_extension(&self.name, formats[format].id);
             }
             components::guidance(ui, formats[self.format].description);
-            ui.add_space(tokens::SPACE_SM);
+            ui.add_space(layout::SPACE_SM);
             components::field_title(ui, "File name");
             let field = ui.add(egui::TextEdit::singleline(&mut self.name).char_limit(160).desired_width(f32::INFINITY));
             let submitted = field.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter));
@@ -192,7 +192,7 @@ impl ArtifactDialog {
             if let Some(error) = &self.error {
                 components::error_text(ui, error.clone());
             }
-            ui.add_space(tokens::SPACE_SM);
+            ui.add_space(layout::SPACE_SM);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let confirm = ui.add_enabled(!self.writing, components::primary_button(kind.title())).clicked();
                 if ui.add_enabled(!self.writing, egui::Button::new("Cancel")).clicked() {

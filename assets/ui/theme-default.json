@@ -1,0 +1,53 @@
+{
+  "game": {
+    "navy": "#14242c",
+    "navy_line": "#2a404a",
+    "orange": "#ff6a00",
+    "text": "#e8eeee",
+    "mint": "#8fe3c0"
+  },
+  "editor": {
+    "accent": "#ed6c39",
+    "accent_hover": "#ff9b70",
+    "canvas": "#101722",
+    "field": "#101a27",
+    "script": "#0c1522",
+    "panel": "#1b293d",
+    "surface": "#25354c",
+    "button": "#2b405b",
+    "border": "#40536d",
+    "text": "#e3e9f1",
+    "muted": "#a1b2c9",
+    "danger": "#ef6a62",
+    "success": "#b0cf81",
+    "cream": "#fff3cf",
+    "selection": "#47607b",
+    "line": "#2c394b",
+    "slider_edge": "#6082a5",
+    "build_status": "#23384a",
+    "header": "#151e2b",
+    "document": "#111b29",
+    "tabs": "#101925",
+    "selected_row": "#2a3647",
+    "overlay": "#080b16",
+    "overlay_field": "#050711",
+    "script_comment": "#90a4bf",
+    "script_keyword": "#ff9b70",
+    "script_number": "#b0cf81",
+    "script_function": "#ffd166",
+    "script_parameter": "#87dce3",
+    "script_operator": "#c4d4e8",
+    "script_gutter": "#697e99",
+    "on_accent": "#101722"
+  },
+  "fonts": {
+    "ui": "Archivo Medium",
+    "strong": "Archivo Bold",
+    "display": "Archivo Black",
+    "code": "Meslo LG S",
+    "game_strong": "Archivo SemiBold"
+  },
+  "opacity": {
+    "game_panel": 0.92
+  }
+}

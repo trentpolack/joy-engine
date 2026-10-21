@@ -39,7 +39,8 @@ use joy_engine::runtime::hud_text::{
 };
 use joy_engine::theme::{
     self,
-    tokens,
+    colors,
+    layout,
 };
 
 use joy_engine::development::lab_values::StepScale;
@@ -131,7 +132,7 @@ pub fn region<R>(
 
 /// A thin separator line along one edge of `rect`.
 pub fn edge(ui: &Ui, from: Pos2, to: Pos2) {
-    ui.painter().line_segment([from, to], Stroke::new(1.0, tokens::LINE));
+    ui.painter().line_segment([from, to], Stroke::new(1.0, colors::LINE));
 }
 
 /// A small uppercase, letter-spaced caption in the HUD typography (`CONTENT BROWSER`, `TRANSFORM`).
@@ -145,12 +146,12 @@ pub fn caption(ui: &mut Ui, text: &str, color: Color32) -> Response {
 
 /// An accent section heading (`SCENE`, `INSPECTOR`, `COMPONENTS`).
 pub fn heading(ui: &mut Ui, text: &str) -> Response {
-    caption(ui, text, tokens::ACCENT)
+    caption(ui, text, colors::ACCENT)
 }
 
 /// A standard button in the authoring look.
 pub fn button(ui: &mut Ui, label: &str) -> Response {
-    ui.add(egui::Button::new(RichText::new(label).size(tokens::TYPE_SM)))
+    ui.add(egui::Button::new(RichText::new(label).size(layout::TYPE_SM)))
 }
 
 /// The kit's primary action button.
@@ -173,10 +174,10 @@ pub fn icon_button(ui: &mut Ui, icon: Icon, side: f32, color: Color32, highlight
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(side), Sense::click());
     let painter = ui.painter();
     let hovered = response.hovered() || response.has_focus();
-    let stroke_color = if highlight || hovered { tokens::ACCENT } else { tokens::LINE };
-    painter.rect_filled(rect, 0.0, if hovered { tokens::SELECTED_ROW } else { tokens::PANEL });
+    let stroke_color = if highlight || hovered { colors::ACCENT } else { colors::LINE };
+    painter.rect_filled(rect, 0.0, if hovered { colors::SELECTED_ROW } else { colors::PANEL });
     painter.rect_stroke(rect, 0.0, Stroke::new(1.0, stroke_color), StrokeKind::Inside);
-    paint_icon(painter, rect.shrink(side * 0.25), icon, if highlight { tokens::ACCENT } else { color });
+    paint_icon(painter, rect.shrink(side * 0.25), icon, if highlight { colors::ACCENT } else { color });
     response
 }
 
@@ -303,13 +304,13 @@ pub fn draft_field(
     let escape = focused && ui.input(|input| input.key_pressed(Key::Escape));
     let mut text = draft.map_or_else(|| value.to_owned(), |draft| draft.text.clone());
     let invalid = draft.is_some_and(|draft| draft.error.is_some());
-    let stroke_color = if invalid { tokens::DANGER } else { tokens::LINE };
+    let stroke_color = if invalid { colors::DANGER } else { colors::LINE };
     let response = ui
         .scope(|ui| {
-            ui.visuals_mut().extreme_bg_color = tokens::FIELD;
+            ui.visuals_mut().extreme_bg_color = colors::FIELD;
             ui.visuals_mut().widgets.inactive.bg_stroke = Stroke::new(1.0, stroke_color);
             ui.visuals_mut().widgets.hovered.bg_stroke =
-                Stroke::new(1.0, if invalid { tokens::DANGER } else { tokens::ACCENT });
+                Stroke::new(1.0, if invalid { colors::DANGER } else { colors::ACCENT });
             TextEdit::singleline(&mut text)
                 .id(id)
                 .hint_text(hint)
@@ -333,7 +334,7 @@ pub fn draft_field(
     }
     // The message rides on the field (and the status line) so rows of fields keep their layout.
     let response = match draft.and_then(|draft| draft.error.as_deref()) {
-        Some(error) => response.on_hover_text(RichText::new(error).color(tokens::DANGER)),
+        Some(error) => response.on_hover_text(RichText::new(error).color(colors::DANGER)),
         None => response,
     };
     (response, event)
@@ -347,7 +348,7 @@ pub fn divider(ui: &mut Ui, id: Id, rect: Rect, key_step: f32) -> (f32, bool) {
     if active {
         ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
     }
-    let color = if active { tokens::ACCENT } else { tokens::LINE };
+    let color = if active { colors::ACCENT } else { colors::LINE };
     ui.painter()
         .line_segment([rect.center_top(), rect.center_bottom()], Stroke::new(if active { 2.0 } else { 1.0 }, color));
     if response.clicked() {
@@ -375,8 +376,8 @@ pub fn badge(painter: &egui::Painter, rect: Rect, text: &str, fill: Color32, col
 /// The theme's standard overlay frame for dialogs.
 pub fn dialog_frame() -> egui::Frame {
     theme::panel_frame()
-        .fill(tokens::PANEL)
-        .stroke(Stroke::new(tokens::BORDER_THIN, tokens::ACCENT))
+        .fill(colors::PANEL)
+        .stroke(Stroke::new(layout::BORDER_THIN, colors::ACCENT))
         .corner_radius(CornerRadius::ZERO)
-        .inner_margin(egui::Margin::same(tokens::SPACE_XL as i8))
+        .inner_margin(egui::Margin::same(layout::SPACE_XL as i8))
 }

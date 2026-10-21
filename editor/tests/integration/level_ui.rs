@@ -141,11 +141,13 @@ fn components_and_camera_controls_work_through_the_ui() {
     driver.click("row:assets/track.joylevel");
     driver.click("add-light");
     assert!(driver.has("group:light"), "{:?}", driver.editor.view().controls.names());
+    // Component fields follow the transform and may start below the inspector's fold.
+    let inspector = driver.center("inspector");
+    driver.scroll(inspector, Vec2::new(0.0, -2000.0));
     driver.fill("property:light.range", "0");
     assert!(level(&mut driver).selected_issues().iter().any(|issue| issue.component == "light"));
     assert!(driver.editor.view().controls.names().iter().any(|name| name.starts_with("issue:light:")));
     // The light group sits below the transform; scroll the inspector to reach its remove button.
-    let inspector = driver.center("inspector");
     driver.scroll(inspector, Vec2::new(0.0, -2000.0));
     driver.click("remove:light");
     assert!(!level(&mut driver).selected().unwrap().components.contains_key("light"));

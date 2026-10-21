@@ -30,7 +30,10 @@ use joy_engine::rendering::{
     ImageFormat,
     TextureAsset,
 };
-use joy_engine::runtime::theme::tokens;
+use joy_engine::runtime::theme::{
+    colors,
+    layout,
+};
 use joy_engine::serde_json::{
     Value as Json,
     json,
@@ -103,7 +106,7 @@ impl MaterialControls {
             ui,
             "Linear RGB · Select in script with material(Name). Vertex colors multiply base color.",
         );
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
         if !materials.iter().any(|material| material["name"] == self.selected.as_str()) {
             self.selected = "Default".into();
         }
@@ -129,7 +132,7 @@ impl MaterialControls {
             self.commit(palette, &mut actions);
         }
 
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
         ui.horizontal(|ui| {
             ui.add(
                 egui::TextEdit::singleline(&mut self.new_name)
@@ -175,7 +178,7 @@ impl MaterialControls {
         if !self.message.is_empty() {
             components::guidance(ui, self.message.clone());
         }
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
         components::guidance(ui, "GPU metallic/roughness lighting. MaterialX supports constant gltf_pbr inputs only.");
         actions
     }
@@ -332,12 +335,12 @@ impl MaterialControls {
                             .on_hover_text(format!("{field} texture preview"));
                     }
                     None => {
-                        ui.label(RichText::new("Unreadable").color(tokens::DANGER).size(tokens::TYPE_XS));
+                        ui.label(RichText::new("Unreadable").color(colors::DANGER).size(layout::TYPE_XS));
                     }
                 }
             }
             None => {
-                ui.label(RichText::new("Not Set").color(tokens::MUTED).size(tokens::TYPE_XS));
+                ui.label(RichText::new("Not Set").color(colors::MUTED).size(layout::TYPE_XS));
             }
         }
     }
@@ -345,8 +348,8 @@ impl MaterialControls {
 
 /// A material property heading.
 fn section(ui: &mut Ui, title: &str) {
-    ui.add_space(tokens::SPACE_XS);
-    ui.label(RichText::new(title).color(tokens::MUTED).size(tokens::TYPE_SM).strong());
+    ui.add_space(layout::SPACE_XS);
+    ui.label(RichText::new(title).color(colors::MUTED).size(layout::TYPE_SM).strong());
 }
 
 /// Decode an embedded map into a small UI texture.

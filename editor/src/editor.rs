@@ -170,7 +170,7 @@ impl App for JoyEditor {
 
     fn ui(&mut self, context: &egui::Context, frame: &mut Frame<'_>) {
         if !self.themed {
-            joy_engine::runtime::theme::apply_authoring(context);
+            joy_engine::runtime::theme::apply_editor(context);
             self.themed = true;
         }
         self.view.show(context, &mut self.workspace);

@@ -26,7 +26,10 @@ use joy_engine::egui::{
     vec2,
 };
 use joy_engine::particles::ParticleParameter;
-use joy_engine::runtime::theme::tokens;
+use joy_engine::runtime::theme::{
+    colors,
+    layout,
+};
 
 use crate::document::{
     self,
@@ -59,7 +62,7 @@ impl ParameterPanel {
     pub fn show(&mut self, ui: &mut Ui, lab: &mut ParticleLab) {
         let names: Vec<String> = lab.asset().parameters.keys().cloned().collect();
         if names.is_empty() {
-            ui.label(RichText::new("No named parameters.").color(tokens::MUTED));
+            ui.label(RichText::new("No named parameters.").color(colors::MUTED));
             return;
         }
         let mut actions = Vec::new();
@@ -78,7 +81,7 @@ impl ParameterPanel {
                     let mut selected = kind;
                     egui::ComboBox::from_id_salt("type")
                         .width(40.0)
-                        .selected_text(RichText::new(kind.code()).color(tokens::MUTED).size(tokens::TYPE_XS))
+                        .selected_text(RichText::new(kind.code()).color(colors::MUTED).size(layout::TYPE_XS))
                         .show_ui(ui, |ui| {
                             for option in [ParameterKind::Scalar, ParameterKind::Vector, ParameterKind::Color] {
                                 ui.selectable_value(&mut selected, option, option.label());
@@ -95,7 +98,7 @@ impl ParameterPanel {
                     let response = ui.add(
                         egui::TextEdit::singleline(draft)
                             .desired_width(field_width)
-                            .font(FontId::proportional(tokens::TYPE_MD)),
+                            .font(FontId::proportional(layout::TYPE_MD)),
                     );
                     if response.lost_focus() {
                         if draft.trim() != name {
@@ -118,7 +121,7 @@ impl ParameterPanel {
                     if triangle_button(ui, collapsed).on_hover_text(format!("{label} {name} values")).clicked() {
                         actions.push(CardAction::Collapse(name.clone(), !collapsed));
                     }
-                    let delete = ui.add(egui::Button::new(RichText::new("×").color(tokens::DANGER)).frame(false));
+                    let delete = ui.add(egui::Button::new(RichText::new("×").color(colors::DANGER)).frame(false));
                     if delete.on_hover_text(format!("Delete {name}")).clicked() {
                         actions.push(CardAction::Delete(name.clone()));
                     }
@@ -127,7 +130,7 @@ impl ParameterPanel {
                 if collapsed {
                     let summary = parameter_summary(parameter);
                     if !summary.is_empty() {
-                        ui.label(RichText::new(summary).monospace().color(tokens::MUTED).size(tokens::TYPE_SM));
+                        ui.label(RichText::new(summary).monospace().color(colors::MUTED).size(layout::TYPE_SM));
                     }
                 } else {
                     // Values.
@@ -136,29 +139,17 @@ impl ParameterPanel {
                             value,
                             min,
                             max,
-                        } => ScalarControl::new("value", value)
-                            .range(*min, *max)
-                            .step(0.1)
-                            .name(name.as_str())
-                            .show(ui, drafts),
+                        } => ScalarControl::new("value", value).range(*min, *max).name(name.as_str()).show(ui, drafts),
                         ParticleParameter::Vector3 {
                             value,
                             min,
                             max,
-                        } => ComponentGroup::xyz("value", value)
-                            .bounds(min, max)
-                            .step(0.1)
-                            .name(name.as_str())
-                            .show(ui, drafts),
+                        } => ComponentGroup::xyz("value", value).bounds(min, max).name(name.as_str()).show(ui, drafts),
                         ParticleParameter::Color {
                             value,
                             min,
                             max,
-                        } => ComponentGroup::rgba("value", value)
-                            .bounds(min, max)
-                            .step(0.1)
-                            .name(name.as_str())
-                            .show(ui, drafts),
+                        } => ComponentGroup::rgba("value", value).bounds(min, max).name(name.as_str()).show(ui, drafts),
                     };
                     changed |= response.changed;
                     committed |= response.committed();
@@ -169,7 +160,7 @@ impl ParameterPanel {
                     } else {
                         "Bounds"
                     };
-                    egui::CollapsingHeader::new(RichText::new(title).size(tokens::TYPE_XS).color(tokens::MUTED))
+                    egui::CollapsingHeader::new(RichText::new(title).size(layout::TYPE_XS).color(colors::MUTED))
                         .id_salt("bounds")
                         .show(ui, |ui| {
                             let labels: &[&str] = match kind {
@@ -181,7 +172,7 @@ impl ParameterPanel {
                                 let (lower, upper) = bound_limits(parameter, component);
                                 ui.horizontal(|ui| {
                                     ui.label(
-                                        RichText::new(*label).monospace().color(tokens::MUTED).size(tokens::TYPE_XS),
+                                        RichText::new(*label).monospace().color(colors::MUTED).size(layout::TYPE_XS),
                                     );
                                     for bound in [Bound::Minimum, Bound::Maximum] {
                                         let snapshot = parameter.clone();
@@ -193,8 +184,8 @@ impl ParameterPanel {
                                         };
                                         ui.label(
                                             RichText::new(if bound == Bound::Minimum { "MIN" } else { "MAX" })
-                                                .color(tokens::MUTED)
-                                                .size(tokens::TYPE_XS),
+                                                .color(colors::MUTED)
+                                                .size(layout::TYPE_XS),
                                         );
                                         let response = NumberField::new((bound == Bound::Minimum, component), slot)
                                             .range(lower, upper)
@@ -225,9 +216,9 @@ impl ParameterPanel {
                 let rect = ui.available_rect_before_wrap();
                 ui.painter().line_segment(
                     [pos2(rect.left(), rect.top()), pos2(rect.right(), rect.top())],
-                    Stroke::new(1.0, tokens::BORDER),
+                    Stroke::new(1.0, colors::BORDER),
                 );
-                ui.add_space(tokens::SPACE_MD);
+                ui.add_space(layout::SPACE_MD);
             });
         }
 
@@ -298,7 +289,7 @@ pub fn parameter_summary(parameter: &ParticleParameter) -> String {
 /// A small up (expanded) or down (collapsed) triangle button.
 fn triangle_button(ui: &mut Ui, collapsed: bool) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(vec2(24.0, 24.0), Sense::click());
-    let color = if response.hovered() { tokens::ACCENT_HOVER } else { tokens::MUTED };
+    let color = if response.hovered() { colors::ACCENT_HOVER } else { colors::MUTED };
     let center = rect.center();
     let size = 4.5;
     let points = if collapsed {

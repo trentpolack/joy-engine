@@ -26,7 +26,7 @@ fn the_lab_starts_with_the_first_example_live() {
     assert!(lab.time() > 0.3, "playback runs: {}", lab.time());
     assert!(harness.find("tint A value").is_some(), "parameter fields have accessible names: {:?}", harness.names());
     // Opaque Joy panels surround the open preview, which shows the slate editor background behind the particles.
-    let panel = joy_engine::runtime::theme::tokens::PANEL;
+    let panel = joy_engine::runtime::theme::colors::PANEL;
     assert!(close(harness.pixel(640, 20), [panel.r(), panel.g(), panel.b()]), "header {:?}", harness.pixel(640, 20));
     let region = harness.tool.interface_mut().region().unwrap();
     assert!(region.size.x > 500.0 && region.size.y > 150.0, "{region:?}");
@@ -200,6 +200,18 @@ fn a_slider_drag_is_one_property_undo_and_emitters_are_added_and_selected() {
     harness.click_named("Undo property");
     assert_eq!(power(&harness), 1.0, "the whole drag undoes at once");
     assert!(!harness.tool.lab().can_undo());
+
+    // The exact fields beside parameter sliders share the hundredth step for scalar, vector, and color edits.
+    for (field, parameter) in [("power value", "power"), ("wind X value", "wind"), ("tint R value", "tint")] {
+        harness.fill(field, "0.5");
+        harness.click_named(field);
+        harness.idle(1);
+        harness.key(Key::ArrowUp, Modifiers::NONE);
+        let value = harness.tool.lab().asset().parameters[parameter].default_value().components()[0];
+        assert_eq!(value, 0.51, "{field} uses hundredths");
+        harness.click_named("Undo property");
+        harness.click_named("Undo property");
+    }
 
     harness.click_named("Add emitter");
     harness.idle(1);

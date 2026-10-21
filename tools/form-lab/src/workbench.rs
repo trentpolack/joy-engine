@@ -37,7 +37,10 @@ use joy_engine::rendering::{
     GpuBackend,
     PostProcessSettings,
 };
-use joy_engine::runtime::theme::tokens;
+use joy_engine::runtime::theme::{
+    colors,
+    layout,
+};
 use joy_engine::runtime::{
     App,
     AppResult,
@@ -132,6 +135,9 @@ pub const STORAGE_APPLICATION: &str = "form-lab";
 
 /// Largest MaterialX file imported, in bytes.
 const MAXIMUM_MATERIALX_BYTES: usize = 1_000_000;
+
+/// Below this preview width, give the camera actions their own row instead of covering the heading.
+const COMPACT_PREVIEW_WIDTH: f32 = 540.0;
 
 /// What the pending file dialog is for.
 #[derive(Clone, Debug, PartialEq)]
@@ -632,7 +638,7 @@ impl FormLab {
     /// Draw the whole tool inside `area` (logical points).
     pub fn draw(&mut self, context: &egui::Context, area: egui::Rect) {
         if !self.themed {
-            joy_engine::runtime::theme::apply_authoring(context);
+            joy_engine::runtime::theme::apply_editor(context);
             self.themed = true;
         }
         let standalone = self.hosting == ToolHosting::Standalone;
@@ -658,12 +664,14 @@ impl FormLab {
                     let maximized = self.layout.maximized();
                     if !maximized {
                         egui::Panel::top("form-lab-header")
-                            .exact_size(if standalone { 56.0 } else { 44.0 })
-                            .frame(egui::Frame::new().fill(tokens::PANEL).inner_margin(egui::Margin::symmetric(16, 8)))
+                            .exact_size(if standalone { 58.0 } else { 44.0 })
+                            .frame(egui::Frame::new().fill(colors::PANEL).inner_margin(egui::Margin::symmetric(16, 8)))
                             .show(ui, |ui| self.header(ui, standalone));
                         egui::Panel::top("form-lab-project")
                             .exact_size(46.0)
-                            .frame(egui::Frame::new().fill(tokens::PANEL).inner_margin(egui::Margin::symmetric(14, 6)))
+                            .frame(
+                                egui::Frame::new().fill(colors::SURFACE).inner_margin(egui::Margin::symmetric(16, 6)),
+                            )
                             .show(ui, |ui| self.project_bar(ui, standalone));
                     }
                     let workbench = ui.available_rect_before_wrap();
@@ -694,7 +702,7 @@ impl FormLab {
                         ui.painter().rect_stroke(
                             rect,
                             0.0,
-                            egui::Stroke::new(1.0, tokens::BORDER),
+                            egui::Stroke::new(1.0, colors::BORDER),
                             egui::StrokeKind::Inside,
                         );
                     }
@@ -708,15 +716,15 @@ impl FormLab {
         ui.horizontal_centered(|ui| {
             if standalone {
                 components::app_title(ui, PRODUCT_NAME, VERSION);
-                ui.add_space(tokens::SPACE_LG);
+                ui.add_space(layout::SPACE_LG);
             }
             let view = view_menu(ui, &mut self.layout);
             self.track("view", view);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if self.track("help", ui.button("?").on_hover_text("Language reference")).clicked() {
+                if self.track("help", ui.add(components::button("?")).on_hover_text("Language reference")).clicked() {
                     self.reference.open();
                 }
-                let export = ui.add_enabled(self.session.data().is_some(), egui::Button::new("EXPORT"));
+                let export = ui.add_enabled(self.session.data().is_some(), components::button("EXPORT"));
                 let export = self.track("export", export);
                 if export.clicked() {
                     self.artifact.open(ArtifactKind::Export, &file_stem(&self.session.name));
@@ -725,7 +733,8 @@ impl FormLab {
                     if self
                         .track(
                             "save",
-                            ui.button("SAVE").on_hover_text("Save a FORM script or FORM LAB document (Ctrl/Command+S)"),
+                            ui.add(components::button("SAVE"))
+                                .on_hover_text("Save a FORM script or FORM LAB document (Ctrl/Command+S)"),
                         )
                         .clicked()
                     {
@@ -734,7 +743,7 @@ impl FormLab {
                     if self
                         .track(
                             "open",
-                            ui.button("OPEN")
+                            ui.add(components::button("OPEN"))
                                 .on_hover_text("Open a .form script or .formlab document (Ctrl/Command+O)"),
                         )
                         .clicked()
@@ -749,7 +758,7 @@ impl FormLab {
             egui::pos2(rect.left() - 16.0, rect.bottom() + 6.0),
             egui::pos2(rect.right() + 16.0, rect.bottom() + 8.0),
         );
-        ui.painter().rect_filled(line, 0.0, tokens::ACCENT);
+        ui.painter().rect_filled(line, 0.0, colors::ACCENT);
     }
 
     /// Ask for a `.form` script or `.formlab` document to open.
@@ -763,8 +772,14 @@ impl FormLab {
     fn project_bar(&mut self, ui: &mut Ui, standalone: bool) {
         ui.horizontal_centered(|ui| {
             let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-            ui.painter().rect_filled(dot, 0.0, tokens::ACCENT);
-            let field = ui.add(egui::TextEdit::singleline(&mut self.name_field).char_limit(120).desired_width(200.0));
+            ui.painter().rect_filled(dot, 0.0, colors::ACCENT);
+            let field = ui.add(
+                egui::TextEdit::singleline(&mut self.name_field)
+                    .char_limit(120)
+                    .desired_width(210.0)
+                    .font(egui::FontId::new(layout::TYPE_MD, joy_engine::runtime::theme::text_styles::strong_family()))
+                    .margin(egui::vec2(5.0, 6.0)),
+            );
             self.name_focused = field.has_focus();
             if field.lost_focus() {
                 // An invalid script or name keeps the current name; the status line says why.
@@ -775,7 +790,7 @@ impl FormLab {
                 self.name_field = self.session.name.clone();
             }
             if standalone && let Some((text, title)) = self.session.save_state() {
-                let label = ui.label(RichText::new(text).color(tokens::MUTED).size(tokens::TYPE_SM));
+                let label = ui.label(RichText::new(text).color(colors::MUTED).size(layout::TYPE_SM));
                 if !title.is_empty() {
                     label.on_hover_text(title);
                 }
@@ -790,7 +805,7 @@ impl FormLab {
                         for asset in &self.assets {
                             if asset.folder != folder {
                                 folder = &asset.folder;
-                                ui.label(RichText::new(folder).color(tokens::MUTED).size(tokens::TYPE_XS));
+                                ui.label(RichText::new(folder).color(colors::MUTED).size(layout::TYPE_XS));
                             }
                             if ui.selectable_label(false, &asset.filename).on_hover_text(&asset.path).clicked() {
                                 chosen = Some(asset.path.clone());
@@ -798,7 +813,7 @@ impl FormLab {
                         }
                     });
                 self.targets.insert("examples", examples.response.rect);
-                ui.label(RichText::new("EXAMPLES").color(tokens::TEXT).size(tokens::TYPE_SM));
+                ui.label(RichText::new("EXAMPLES").color(colors::TEXT).size(layout::TYPE_SM));
                 if let Some(path) = chosen
                     && let Err(error) = self.open_example(&path)
                 {
@@ -809,43 +824,43 @@ impl FormLab {
     }
 
     fn script_pane(&mut self, ui: &mut Ui) {
-        egui::Panel::top("script-heading").exact_size(48.0).frame(components::panel_frame()).show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
-                components::panel_heading(ui, "01", "SCRIPT");
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if self
-                        .track(
-                            "run",
-                            ui.add(egui::Button::new("Run ▶")).on_hover_text("Build now (Ctrl/Command+Enter)"),
-                        )
-                        .clicked()
-                    {
-                        self.session.compile();
-                    }
-                    let mut live = self.session.live();
-                    if ui.checkbox(&mut live, "Live").changed() {
-                        self.session.set_live(live);
-                    }
+        egui::Panel::top("script-heading")
+            .exact_size(48.0)
+            .frame(components::panel_frame().fill(colors::SURFACE).inner_margin(egui::Margin::symmetric(12, 8)))
+            .show(ui, |ui| {
+                ui.horizontal_centered(|ui| {
+                    components::panel_heading(ui, "01", "SCRIPT");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if self
+                            .track(
+                                "run",
+                                ui.add(components::button("Run ▶")).on_hover_text("Build now (Ctrl/Command+Enter)"),
+                            )
+                            .clicked()
+                        {
+                            self.session.compile();
+                        }
+                        let mut live = self.session.live();
+                        if components::checkbox(ui, &mut live, "Live").changed() {
+                            self.session.set_live(live);
+                        }
+                    });
                 });
             });
-        });
         egui::Panel::bottom("script-diagnostic")
-            .frame(egui::Frame::new().fill(tokens::CANVAS).inner_margin(egui::Margin::symmetric(10, 8)))
+            .min_size(38.0)
+            .frame(egui::Frame::new().fill(colors::BUILD_STATUS).inner_margin(egui::Margin::symmetric(12, 8)))
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     let status = self.session.status().clone();
                     let color = match status.state {
-                        StatusState::Ready => tokens::SUCCESS,
-                        StatusState::Busy => tokens::ACCENT_HOVER,
-                        StatusState::Error => tokens::DANGER,
+                        StatusState::Ready => colors::SUCCESS,
+                        StatusState::Busy => colors::ACCENT_HOVER,
+                        StatusState::Error => colors::DANGER,
                     };
                     let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
                     ui.painter().circle_filled(dot.center(), 3.5, color);
-                    ui.label(
-                        RichText::new(status.message)
-                            .color(if status.state == StatusState::Error { tokens::DANGER } else { tokens::TEXT })
-                            .size(tokens::TYPE_SM),
-                    );
+                    ui.label(RichText::new(status.message).color(color).size(layout::TYPE_SM));
                     if let Some((line, _column)) = self.session.error_location()
                         && self.track("go-to-error", ui.small_button("Go to error ↗")).clicked()
                     {
@@ -854,27 +869,31 @@ impl FormLab {
                 });
             });
         egui::Panel::bottom("script-bottom")
-            .frame(egui::Frame::new().fill(tokens::PANEL).inner_margin(egui::Margin::symmetric(10, 6)))
+            .frame(egui::Frame::new().fill(colors::PANEL).inner_margin(egui::Margin::symmetric(10, 6)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.label(
                         RichText::new(format!("Ln {}, Col {}", self.cursor.0, self.cursor.1))
-                            .color(tokens::MUTED)
-                            .size(tokens::TYPE_XS)
+                            .color(colors::MUTED)
+                            .size(layout::TYPE_XS)
                             .monospace(),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if self
                             .track(
                                 "script-reference",
-                                ui.button("Script Reference").on_hover_text("FORM SCRIPT language reference"),
+                                ui.add(components::button("Script Reference"))
+                                    .on_hover_text("FORM SCRIPT language reference"),
                             )
                             .clicked()
                         {
                             self.reference.open();
                         }
                         if self
-                            .track("recipes", ui.button("Recipes ↗").on_hover_text("Append a recipe to the script"))
+                            .track(
+                                "recipes",
+                                ui.add(components::button("Recipes ↗")).on_hover_text("Append a recipe to the script"),
+                            )
                             .clicked()
                         {
                             self.reference.open_recipes();
@@ -882,7 +901,7 @@ impl FormLab {
                     });
                 });
             });
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(tokens::SCRIPT)).show(ui, |ui| {
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(colors::SCRIPT)).show(ui, |ui| {
             let response = self.editor.show(ui, &mut self.session.source);
             self.cursor = (response.line, response.column);
             if response.changed {
@@ -895,40 +914,25 @@ impl FormLab {
     }
 
     fn preview_pane(&mut self, ui: &mut Ui) {
-        egui::Panel::top("preview-heading").exact_size(48.0).frame(components::panel_frame()).show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
-                ui.vertical(|ui| {
-                    components::panel_heading(ui, "02", "PREVIEW");
-                    let color = match self.session.preview_state() {
-                        PreviewState::Accepted => tokens::SUCCESS,
-                        PreviewState::Pending => tokens::MUTED,
-                        PreviewState::Failed => tokens::DANGER,
-                    };
-                    ui.label(RichText::new(self.session.preview_text()).color(color).size(tokens::TYPE_XS));
-                });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let maximize = if self.layout.maximized() { "Restore" } else { "Maximize" };
-                    if self.track("maximize", ui.button(maximize)).clicked() {
-                        let maximized = !self.layout.maximized();
-                        self.layout.set_maximized(maximized);
-                    }
-                    if self.track("reset-camera", ui.button("Reset").on_hover_text("Reset camera (0)")).clicked() {
-                        self.viewport.reset_camera();
-                    }
-                    if self.track("frame", ui.button("Frame  F").on_hover_text("Frame all geometry (F)")).clicked() {
-                        self.viewport.frame();
-                    }
-                    let points = components::toggle_button(ui, self.viewport.mode == ViewMode::Points, "Points");
-                    if self.track("points", points).clicked() {
-                        self.viewport.set_mode(ViewMode::Points);
-                    }
-                    let shaded = components::toggle_button(ui, self.viewport.mode == ViewMode::Shaded, "Shaded");
-                    if self.track("shaded", shaded).clicked() {
-                        self.viewport.set_mode(ViewMode::Shaded);
-                    }
-                });
+        let compact = ui.available_width() < COMPACT_PREVIEW_WIDTH;
+        egui::Panel::top("preview-heading")
+            .min_size(if compact { 78.0 } else { 48.0 })
+            .frame(components::panel_frame().fill(colors::SURFACE).inner_margin(egui::Margin::symmetric(12, 8)))
+            .show(ui, |ui| {
+                if compact {
+                    self.preview_heading(ui);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center).with_main_wrap(true), |ui| {
+                            self.preview_actions(ui);
+                        });
+                    });
+                } else {
+                    ui.horizontal_centered(|ui| {
+                        ui.vertical(|ui| self.preview_heading(ui));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| self.preview_actions(ui));
+                    });
+                }
             });
-        });
         egui::Panel::top("preview-toolbar").frame(components::toolbar_frame()).show(ui, |ui| {
             if let Some(error) = result_toolbar(ui, &mut self.inspection, &mut self.viewport) {
                 self.gpu_error = Some(error);
@@ -938,23 +942,37 @@ impl FormLab {
             .frame(components::toolbar_frame())
             .show(ui, |ui| self.generation_summary(ui));
         egui::Panel::bottom("preview-attributes")
-            .frame(egui::Frame::new().fill(tokens::PANEL).inner_margin(egui::Margin::symmetric(10, 4)))
+            .frame(egui::Frame::new().fill(colors::PANEL).inner_margin(egui::Margin::symmetric(10, 4)))
             .show(ui, |ui| {
                 let reveal = std::mem::take(&mut self.reveal_attributes);
                 attribute_panel(ui, &mut self.inspection, &mut self.viewport, reveal);
             });
         egui::Panel::bottom("preview-bottom")
-            .frame(egui::Frame::new().fill(tokens::PANEL).inner_margin(egui::Margin::symmetric(10, 6)))
+            .frame(egui::Frame::new().fill(colors::PANEL).inner_margin(egui::Margin::symmetric(10, 6)))
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.checkbox(&mut self.project_info, "Project info");
-                    ui.checkbox(&mut self.viewport.show_grid, "Line grid")
+                ui.horizontal_wrapped(|ui| {
+                    components::checkbox(ui, &mut self.project_info, "Project info");
+                    components::checkbox(ui, &mut self.viewport.show_grid, "Line grid")
                         .on_hover_text("Editor-only line grid; minor spacing follows 1/2/5 world units, major lines mark five divisions");
-                    ui.label("Point Size");
-                    ui.add(egui::Slider::new(&mut self.viewport.point_size, 1.0..=6.0).step_by(0.5).show_value(false));
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(RichText::new(&self.backend).color(tokens::SUCCESS).size(tokens::TYPE_XS).monospace());
-                    });
+                    let point_size_label = ui.label("Point Size");
+                    let previous_style = ui.style().clone();
+                    ui.spacing_mut().slider_width = 60.0;
+                    ui.spacing_mut().slider_rail_height = 7.0;
+                    ui.spacing_mut().interact_size.y = 16.0;
+                    ui.visuals_mut().selection.bg_fill = colors::ACCENT;
+                    ui.visuals_mut().widgets.inactive.bg_fill = colors::BUTTON;
+                    ui.visuals_mut().widgets.inactive.fg_stroke = egui::Stroke::new(2.0, colors::SLIDER_EDGE);
+                    ui.add(
+                        egui::Slider::new(&mut self.viewport.point_size, 1.0..=6.0)
+                            .show_value(false)
+                            .step_by(0.5)
+                            .handle_shape(egui::style::HandleShape::Circle)
+                            .trailing_fill(true),
+                    )
+                    .labelled_by(point_size_label.id)
+                    .on_hover_text("Point size");
+                    ui.set_style(previous_style);
+                    ui.label(RichText::new(&self.backend).color(colors::SUCCESS).size(layout::TYPE_XS).monospace());
                 });
             });
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| {
@@ -1017,14 +1035,14 @@ impl FormLab {
                 .show(ui.ctx(), |ui| {
                     egui::Frame::new()
                         .fill(Color32::from_rgba_unmultiplied(16, 23, 34, 200))
-                        .stroke(egui::Stroke::new(1.0, tokens::ACCENT))
+                        .stroke(egui::Stroke::new(1.0, colors::ACCENT))
                         .inner_margin(egui::Margin::symmetric(10, 6))
                         .show(ui, |ui| {
                             let arrow = if self.title_open { "▼" } else { "▶" };
                             let response = ui.add(
                                 egui::Label::new(
                                     RichText::new(format!("{arrow}  {}", title.replace('\n', " ")))
-                                        .color(tokens::ACCENT)
+                                        .color(colors::ACCENT)
                                         .strong(),
                                 )
                                 .wrap_mode(egui::TextWrapMode::Extend)
@@ -1034,19 +1052,19 @@ impl FormLab {
                                 self.title_open = !self.title_open;
                             }
                             if self.title_open {
-                                ui.label(RichText::new(info).color(tokens::MUTED).size(tokens::TYPE_XS));
+                                ui.label(RichText::new(info).color(colors::MUTED).size(layout::TYPE_XS));
                             }
                         });
                 });
         }
         let painter = ui.painter_at(rect);
-        let mono = egui::FontId::monospace(tokens::TYPE_XS);
+        let mono = egui::FontId::monospace(layout::TYPE_XS);
         painter.text(
             rect.right_top() + egui::vec2(-30.0, 22.0),
             egui::Align2::CENTER_CENTER,
             "Y ↑",
             mono.clone(),
-            tokens::SUCCESS,
+            colors::SUCCESS,
         );
         painter.text(
             rect.right_top() + egui::vec2(-46.0, 40.0),
@@ -1060,14 +1078,18 @@ impl FormLab {
             egui::Align2::CENTER_CENTER,
             "X →",
             mono.clone(),
-            tokens::ACCENT,
+            colors::ACCENT,
         );
         painter.text(
             rect.center_bottom() + egui::vec2(0.0, -22.0),
             egui::Align2::CENTER_CENTER,
-            "DRAG TO ORBIT  ·  SHIFT + DRAG TO PAN  ·  SCROLL TO ZOOM  ·  CLICK TO INSPECT",
+            if rect.width() < COMPACT_PREVIEW_WIDTH {
+                "DRAG TO ORBIT · SCROLL TO ZOOM"
+            } else {
+                "DRAG TO ORBIT  ·  SHIFT + DRAG TO PAN  ·  SCROLL TO ZOOM  ·  CLICK TO INSPECT"
+            },
             mono,
-            tokens::MUTED,
+            colors::MUTED,
         );
         if let Some(error) = &self.gpu_error {
             let error_rect = egui::Rect::from_min_size(
@@ -1079,9 +1101,54 @@ impl FormLab {
                 error_rect.left_center() + egui::vec2(10.0, 0.0),
                 egui::Align2::LEFT_CENTER,
                 error,
-                egui::FontId::proportional(tokens::TYPE_SM),
-                tokens::DANGER,
+                egui::FontId::proportional(layout::TYPE_SM),
+                colors::DANGER,
             );
+        }
+    }
+
+    fn preview_heading(&self, ui: &mut Ui) {
+        components::panel_heading(ui, "02", "PREVIEW");
+        let color = match self.session.preview_state() {
+            PreviewState::Accepted => colors::SUCCESS,
+            PreviewState::Pending => colors::MUTED,
+            PreviewState::Failed => colors::DANGER,
+        };
+        ui.label(RichText::new(self.session.preview_text()).color(color).size(layout::TYPE_XS));
+    }
+
+    fn preview_actions(&mut self, ui: &mut Ui) {
+        let maximize = if self.layout.maximized() { "Restore" } else { "Maximize" };
+        if self
+            .track(
+                "maximize",
+                ui.add(components::button(maximize).fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::NONE)),
+            )
+            .clicked()
+        {
+            self.layout.set_maximized(!self.layout.maximized());
+        }
+        if self
+            .track(
+                "reset-camera",
+                ui.add(components::button("Reset").fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::NONE))
+                    .on_hover_text("Reset camera (0)"),
+            )
+            .clicked()
+        {
+            self.viewport.reset_camera();
+        }
+        if self.track("frame", ui.add(components::button("Frame  F")).on_hover_text("Frame all geometry (F)")).clicked()
+        {
+            self.viewport.frame();
+        }
+        let points = components::toggle_button(ui, self.viewport.mode == ViewMode::Points, "Points");
+        if self.track("points", points).clicked() {
+            self.viewport.set_mode(ViewMode::Points);
+        }
+        let shaded = components::toggle_button(ui, self.viewport.mode == ViewMode::Shaded, "Shaded");
+        if self.track("shaded", shaded).clicked() {
+            self.viewport.set_mode(ViewMode::Shaded);
         }
     }
 
@@ -1089,8 +1156,8 @@ impl FormLab {
         let statistics = self.session.statistics();
         let has_data = self.session.data().is_some();
         let value = |text: String| if has_data { text } else { "—".to_owned() };
-        ui.horizontal(|ui| {
-            let mono = |text: String| RichText::new(text).color(tokens::MUTED).size(tokens::TYPE_XS).monospace();
+        ui.horizontal_wrapped(|ui| {
+            let mono = |text: String| RichText::new(text).color(colors::MUTED).size(layout::TYPE_XS).monospace();
             ui.label(mono(format!("Generation Time: {}", value(format!("{:.1} ms", statistics.milliseconds)))));
             ui.label(mono(format!(
                 "Data Size: {}",
@@ -1109,41 +1176,58 @@ impl FormLab {
     }
 
     fn inspector_pane(&mut self, ui: &mut Ui) {
-        egui::Panel::top("inspector-heading").exact_size(48.0).frame(components::panel_frame()).show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
-                components::panel_heading(ui, "03", "INSPECTOR");
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let reset = ui
-                        .button(RichText::new("Reset params").color(tokens::ACCENT))
-                        .on_hover_text("Restore all parameter defaults; materials and preview lighting are unchanged");
-                    if self.track("reset-params", reset).clicked() {
-                        self.drafts.clear();
-                        self.session.reset_parameters();
+        egui::Panel::top("inspector-heading")
+            .exact_size(48.0)
+            .frame(components::panel_frame().fill(colors::SURFACE).inner_margin(egui::Margin::symmetric(12, 8)))
+            .show(ui, |ui| {
+                ui.horizontal_centered(|ui| {
+                    components::panel_heading(ui, "03", "INSPECTOR");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let reset = ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new("Reset params")
+                                        .color(colors::ACCENT)
+                                        .text_style(egui::TextStyle::Button)
+                                        .size(layout::TYPE_XS),
+                                )
+                                .fill(egui::Color32::TRANSPARENT)
+                                .stroke(egui::Stroke::new(1.0, colors::ACCENT))
+                                .min_size(egui::vec2(0.0, 30.0)),
+                            )
+                            .on_hover_text(
+                                "Restore all parameter defaults; materials and preview lighting are unchanged",
+                            );
+                        if self.track("reset-params", reset).clicked() {
+                            self.drafts.clear();
+                            self.session.reset_parameters();
+                        }
+                    });
+                });
+            });
+        egui::Panel::top("inspector-tabs")
+            .frame(egui::Frame::new().fill(colors::PANEL).inner_margin(egui::Margin::symmetric(6, 6)))
+            .show(ui, |ui| inspector_tabs(ui, &mut self.tab));
+        egui::CentralPanel::default()
+            .frame(components::panel_frame().fill(colors::SURFACE).inner_margin(egui::Margin::same(12)))
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical().id_salt(("inspector", self.tab.label())).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    match self.tab {
+                        InspectorTab::Parameters => self.parameters_tab(ui),
+                        InspectorTab::Variants => self.variants_tab(ui),
+                        InspectorTab::Materials => self.materials_tab(ui),
+                        InspectorTab::Lighting => {
+                            let current = self.viewport.lighting();
+                            if let Some(next) = self.lighting.show(ui, current, &mut self.drafts)
+                                && let Err(error) = self.viewport.set_lighting(next)
+                            {
+                                self.lighting.message = error;
+                            }
+                        }
                     }
                 });
             });
-        });
-        egui::Panel::top("inspector-tabs")
-            .frame(egui::Frame::new().fill(tokens::PANEL).inner_margin(egui::Margin::symmetric(6, 6)))
-            .show(ui, |ui| inspector_tabs(ui, &mut self.tab));
-        egui::CentralPanel::default().frame(components::panel_frame()).show(ui, |ui| {
-            egui::ScrollArea::vertical().id_salt(("inspector", self.tab.label())).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                match self.tab {
-                    InspectorTab::Parameters => self.parameters_tab(ui),
-                    InspectorTab::Variants => self.variants_tab(ui),
-                    InspectorTab::Materials => self.materials_tab(ui),
-                    InspectorTab::Lighting => {
-                        let current = self.viewport.lighting();
-                        if let Some(next) = self.lighting.show(ui, current, &mut self.drafts)
-                            && let Err(error) = self.viewport.set_lighting(next)
-                        {
-                            self.lighting.message = error;
-                        }
-                    }
-                }
-            });
-        });
     }
 
     fn parameters_tab(&mut self, ui: &mut Ui) {
@@ -1310,7 +1394,7 @@ impl FormLab {
             egui::Modal::new(egui::Id::new("form-lab-confirm")).show(context, |ui| {
                 ui.set_width(340.0);
                 ui.label(replacement.prompt);
-                ui.add_space(tokens::SPACE_SM);
+                ui.add_space(layout::SPACE_SM);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.add(components::primary_button("Replace")).clicked() {
                         answer = Some(true);

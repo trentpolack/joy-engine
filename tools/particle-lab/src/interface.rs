@@ -5,7 +5,7 @@
 //! header with Open, Save, and the script reference; the project bar; the compose panel (Live and Apply, the emitter
 //! stack, the emitter inspector, and the spawn and update script editors); the preview panel (camera actions, playback
 //! toolbar, the viewport, preview options, replay window, timeline, diagnostics, and the performance monitor); the
-//! effect parameter panel; and the footer, laid out with the kit's resizable panes.
+//! effect parameter panel, laid out with the kit's resizable panes.
 //!
 //! Panels are opaque; the preview region is left open for the engine's render of the scene behind the interface, and
 //! its rectangle is returned so the next frame's render fills it.
@@ -44,7 +44,10 @@ use joy_engine::egui::{
 };
 use joy_engine::math::Vec2;
 use joy_engine::particles::decode_particle_texture;
-use joy_engine::runtime::theme::tokens;
+use joy_engine::runtime::theme::{
+    colors,
+    layout,
+};
 use joy_engine::runtime::{
     Storage,
     theme,
@@ -79,27 +82,22 @@ use crate::viewport::{
 };
 
 /// Header height in standalone mode, including the accent rule.
-const HEADER_HEIGHT: f32 = 100.0;
+const HEADER_HEIGHT: f32 = 58.0;
 /// Left inset of the header title.
-const HEADER_INSET: f32 = 30.0;
+const HEADER_INSET: f32 = 16.0;
 /// Width the header keeps for its actions on the right.
 const HEADER_ACTIONS_WIDTH: f32 = 320.0;
-/// Height of the header's title and subtitle block, for vertical centering.
-const HEADER_TITLE_BLOCK: f32 = 52.0;
-/// Product name and subtitle in the standalone header.
+/// Product name in the standalone header.
 const PRODUCT_NAME: &str = "PARTICLE LAB";
-const PRODUCT_SUBTITLE: &str = "A Joy Games experiment";
-/// Status bar text in standalone mode.
-const FOOTER_LEFT: &str = "Joy-Games / Particle Lab";
-const FOOTER_RIGHT: &str = "Local workspace · No cloud required";
 /// Project bar height.
 const PROJECT_BAR_HEIGHT: f32 = 54.0;
-/// Footer height in standalone mode.
-const FOOTER_HEIGHT: f32 = 36.0;
 /// Panel heading height.
 const HEADING_HEIGHT: f32 = 54.0;
 /// Smallest preview viewport height.
 const MINIMUM_VIEWPORT_HEIGHT: f32 = 140.0;
+/// Preview controls need a separate row below this width so they cannot cover the section heading.
+const COMPACT_PREVIEW_WIDTH: f32 = 720.0;
+const NARROW_PREVIEW_WIDTH: f32 = 380.0;
 
 /// Which compose tab shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -297,12 +295,9 @@ impl Interface {
                 let chrome = !(self.hosted
                     || (self.layout.maximized() && self.layout.maximize_mode() == MaximizeMode::Workspace));
                 let mut top = area.top();
-                let mut bottom = area.bottom();
                 if chrome {
                     self.header(ui, lab, Rect::from_min_size(area.min, vec2(area.width(), HEADER_HEIGHT)));
                     top += HEADER_HEIGHT;
-                    bottom -= FOOTER_HEIGHT;
-                    footer(ui, Rect::from_min_max(pos2(area.left(), bottom), area.max));
                 }
                 if !self.layout.maximized() {
                     self.project_bar(
@@ -312,7 +307,7 @@ impl Interface {
                     );
                     top += PROJECT_BAR_HEIGHT;
                 }
-                let workspace = Rect::from_min_max(pos2(area.left(), top), pos2(area.right(), bottom));
+                let workspace = Rect::from_min_max(pos2(area.left(), top), area.right_bottom());
                 let panes = self.layout.panes(workspace);
                 if let Some(rect) = panes.left {
                     pane(ui, rect, |ui| self.compose_panel(ui, lab));
@@ -368,60 +363,54 @@ impl Interface {
     // -----------------------------------------------------------------------------------------------------------------
 
     fn header(&mut self, ui: &mut Ui, lab: &mut ParticleLab, rect: Rect) {
-        ui.painter_at(rect).rect_filled(rect, CornerRadius::ZERO, tokens::PANEL);
+        ui.painter_at(rect).rect_filled(rect, CornerRadius::ZERO, colors::PANEL);
         components::header_rule(ui, rect);
-        let title_area = Rect::from_min_max(
-            rect.min + vec2(HEADER_INSET, 0.0),
-            pos2(rect.right() - HEADER_ACTIONS_WIDTH, rect.bottom() - tokens::BORDER_ACCENT),
-        );
-        ui.scope_builder(UiBuilder::new().max_rect(title_area).layout(Layout::top_down(Align::Min)), |ui| {
-            ui.add_space(((title_area.height() - HEADER_TITLE_BLOCK) / 2.0).max(0.0));
-            ui.horizontal(|ui| components::app_title(ui, PRODUCT_NAME, env!("CARGO_PKG_VERSION")));
-            components::caption(ui, PRODUCT_SUBTITLE, tokens::CREAM);
+        let inner = rect.shrink2(vec2(HEADER_INSET, layout::SPACE_SM));
+        let title_area = Rect::from_min_max(inner.min, pos2(inner.right() - HEADER_ACTIONS_WIDTH, inner.bottom()));
+        ui.scope_builder(UiBuilder::new().max_rect(title_area).layout(Layout::left_to_right(Align::Center)), |ui| {
+            components::app_title(ui, PRODUCT_NAME, env!("CARGO_PKG_VERSION"));
         });
-        let buttons =
-            Rect::from_min_max(pos2(rect.right() - 300.0, rect.top()), pos2(rect.right() - 28.0, rect.bottom() - 4.0));
+        let buttons = Rect::from_min_max(pos2(inner.right() - HEADER_ACTIONS_WIDTH, inner.top()), inner.max);
         ui.scope_builder(UiBuilder::new().max_rect(buttons).layout(Layout::right_to_left(Align::Center)), |ui| {
-            ui.spacing_mut().button_padding = vec2(16.0, 10.0);
-            if ui.button(RichText::new("?").strong()).on_hover_text("Script Reference").clicked() {
+            if ui.add(components::button("?")).on_hover_text("Script Reference").clicked() {
                 self.reference_open = true;
             }
             if ui
-                .button(RichText::new("Save .joyfx ↗").strong())
+                .add(components::button("Save .joyfx ↗"))
                 .on_hover_text("Save the current definition as a portable .joyfx asset")
                 .clicked()
             {
                 self.request(DialogPurpose::SaveEffect, lab);
             }
-            if ui.button(RichText::new("Open").strong()).clicked() {
+            if ui.add(components::button("Open")).clicked() {
                 self.request(DialogPurpose::OpenEffect, lab);
             }
         });
     }
 
     fn project_bar(&mut self, ui: &mut Ui, lab: &mut ParticleLab, rect: Rect) {
-        ui.painter().rect_filled(rect, CornerRadius::ZERO, tokens::PANEL);
-        ui.painter().line_segment([rect.left_bottom(), rect.right_bottom()], Stroke::new(1.0, tokens::BORDER));
+        ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::PANEL);
+        ui.painter().line_segment([rect.left_bottom(), rect.right_bottom()], Stroke::new(1.0, colors::BORDER));
         let inner = rect.shrink2(vec2(28.0, 10.0));
         ui.scope_builder(UiBuilder::new().max_rect(inner).layout(Layout::left_to_right(Align::Center)), |ui| {
             let (dot, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
-            ui.painter().rect_filled(dot, CornerRadius::ZERO, tokens::ACCENT);
+            ui.painter().rect_filled(dot, CornerRadius::ZERO, colors::ACCENT);
             let mut name = lab.asset().name.clone();
             let response = ui.add(
                 egui::TextEdit::singleline(&mut name)
                     .desired_width(200.0)
                     .char_limit(80)
-                    .font(FontId::proportional(tokens::TYPE_MD)),
+                    .font(FontId::proportional(layout::TYPE_MD)),
             );
             if response.changed() {
                 lab.asset_mut().name = name;
                 lab.document_changed();
             }
-            ui.add_space(tokens::SPACE_MD);
-            ui.label(RichText::new("PARTICLE ASSET / .JOYFX").monospace().color(tokens::MUTED).size(tokens::TYPE_XS));
+            ui.add_space(layout::SPACE_MD);
+            ui.label(RichText::new("PARTICLE ASSET / .JOYFX").monospace().color(colors::MUTED).size(layout::TYPE_XS));
             if let Some(notice) = &self.notice {
-                ui.add_space(tokens::SPACE_MD);
-                ui.label(RichText::new(notice).color(tokens::SUCCESS).size(tokens::TYPE_XS));
+                ui.add_space(layout::SPACE_MD);
+                ui.label(RichText::new(notice).color(colors::SUCCESS).size(layout::TYPE_XS));
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let mut selected = self.example_index;
@@ -440,7 +429,7 @@ impl Interface {
                         lab.show_error(joy_engine::development::lab_values::REPAIR_DRAFTS_MESSAGE);
                     }
                 }
-                ui.label(RichText::new("EXAMPLES").monospace().color(tokens::MUTED).size(tokens::TYPE_XS));
+                ui.label(RichText::new("EXAMPLES").monospace().color(colors::MUTED).size(layout::TYPE_XS));
             });
         });
     }
@@ -458,16 +447,16 @@ impl Interface {
                     lab.apply(false);
                 }
                 let mut live = lab.live();
-                if ui.checkbox(&mut live, "Live").changed() {
+                if components::checkbox(ui, &mut live, "Live").changed() {
                     lab.set_live(live);
                 }
             });
         });
         ui.separator();
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Emitter Stack").monospace().color(tokens::MUTED).size(tokens::TYPE_XS));
+            ui.label(RichText::new("Emitter Stack").monospace().color(colors::MUTED).size(layout::TYPE_XS));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if named(ui.button(RichText::new("+ Add").color(tokens::ACCENT)), "Add emitter")
+                if named(ui.button(RichText::new("+ Add").color(colors::ACCENT)), "Add emitter")
                     .on_hover_text("Add emitter")
                     .clicked()
                 {
@@ -578,13 +567,13 @@ impl Interface {
             }
         }
         if let Some(message) = lab.error() {
-            egui::Frame::new().fill(tokens::FIELD).stroke(Stroke::new(1.0, tokens::DANGER)).inner_margin(6).show(
+            egui::Frame::new().fill(colors::FIELD).stroke(Stroke::new(1.0, colors::DANGER)).inner_margin(6).show(
                 ui,
                 |ui| {
                     ui.set_width(ui.available_width());
                     ui.add(
                         egui::Label::new(
-                            RichText::new(message).monospace().color(tokens::DANGER).size(tokens::TYPE_SM),
+                            RichText::new(message).monospace().color(colors::DANGER).size(layout::TYPE_SM),
                         )
                         .wrap(),
                     );
@@ -593,13 +582,13 @@ impl Interface {
         }
         ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new("SPAWN / UPDATE").monospace().color(tokens::MUTED).size(tokens::TYPE_XS));
+                ui.label(RichText::new("SPAWN / UPDATE").monospace().color(colors::MUTED).size(layout::TYPE_XS));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.label(
                         RichText::new("Ctrl / Cmd + Enter to apply")
                             .monospace()
-                            .color(tokens::MUTED)
-                            .size(tokens::TYPE_XS),
+                            .color(colors::MUTED)
+                            .size(layout::TYPE_XS),
                     );
                 });
             });
@@ -633,8 +622,16 @@ impl Interface {
             PerformanceMode::Overview => 62.0,
             PerformanceMode::Detailed => 230.0,
         };
-        let top_height = HEADING_HEIGHT + 46.0;
-        let bottom_height = 40.0 + 40.0 + 46.0 + 46.0 + monitor_height;
+        let compact = rect.width() < COMPACT_PREVIEW_WIDTH;
+        let wrapped_toolbar_height = if rect.width() < NARROW_PREVIEW_WIDTH {
+            80.0
+        } else if compact {
+            54.0
+        } else {
+            0.0
+        };
+        let top_height = HEADING_HEIGHT + 46.0 + wrapped_toolbar_height;
+        let bottom_height = 40.0 + 40.0 + 46.0 + 46.0 + monitor_height + if compact { 30.0 } else { 0.0 };
         let viewport_height = (rect.height() - top_height - bottom_height).max(MINIMUM_VIEWPORT_HEIGHT);
         let top = Rect::from_min_size(rect.min, vec2(rect.width(), top_height));
         let viewport = Rect::from_min_size(pos2(rect.left(), top.bottom()), vec2(rect.width(), viewport_height));
@@ -646,27 +643,20 @@ impl Interface {
                 ui.set_min_height(HEADING_HEIGHT - 22.0);
                 components::panel_heading(ui, "02", "Preview");
                 let (text, color) = match (lab.preview_state(), lab.error().is_some()) {
-                    (_, true) => ("LIVE · FIX ERROR", tokens::DANGER),
-                    (PreviewState::Pending, false) => ("PENDING CHANGES", tokens::ACCENT_HOVER),
-                    (PreviewState::Live, false) => ("LIVE", tokens::SUCCESS),
+                    (_, true) => ("LIVE · FIX ERROR", colors::DANGER),
+                    (PreviewState::Pending, false) => ("PENDING CHANGES", colors::ACCENT_HOVER),
+                    (PreviewState::Live, false) => ("LIVE", colors::SUCCESS),
                 };
                 components::status_badge(ui, text, color);
-                // Right to left: the panel toggles, Reset, Frame, then the projection note.
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    self.layout.visibility_controls(ui);
-                    if ui.button("Reset").on_hover_text("Reset camera (0)").clicked() {
-                        lab.viewport.reset_camera();
-                    }
-                    if ui.button("Frame F").on_hover_text("Frame current particles (F)").clicked() {
-                        lab.frame_current_effect(Vec2::new(viewport.width(), viewport.height()));
-                    }
-                    ui.label(
-                        RichText::new("Y-UP / PERSPECTIVE").monospace().color(tokens::MUTED).size(tokens::TYPE_XS),
-                    );
-                });
+                if !compact {
+                    self.preview_camera_controls(ui, lab, viewport);
+                }
             });
+            if compact {
+                ui.horizontal(|ui| self.preview_camera_controls(ui, lab, viewport));
+            }
             ui.separator();
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 if ui.button("↺ Restart").on_hover_text("Restart (R)").clicked() {
                     lab.restart();
                 }
@@ -677,7 +667,7 @@ impl Interface {
                 if ui.button("Step").on_hover_text("Step one 60 Hz tick").clicked() {
                     lab.step();
                 }
-                ui.label(RichText::new("Seed").color(tokens::MUTED).size(tokens::TYPE_SM));
+                ui.label(RichText::new("Seed").color(colors::MUTED).size(layout::TYPE_SM));
                 let mut drafts = std::mem::take(&mut lab.drafts);
                 let response = joy_engine::development::NumberField::new("seed", &mut self.seed_draft)
                     .step(1.0)
@@ -689,14 +679,14 @@ impl Interface {
                 if response.committed() && response.changed {
                     lab.set_seed(self.seed_draft.trunc() as i64);
                 }
-                ui.label(RichText::new("Speed").color(tokens::MUTED).size(tokens::TYPE_SM));
+                ui.label(RichText::new("Speed").color(colors::MUTED).size(layout::TYPE_SM));
                 let label = SPEEDS.iter().find(|(speed, _)| *speed == lab.speed).map_or("1×", |(_, label)| *label);
                 egui::ComboBox::from_id_salt("speed").width(56.0).selected_text(label).show_ui(ui, |ui| {
                     for (speed, label) in SPEEDS {
                         ui.selectable_value(&mut lab.speed, speed, label);
                     }
                 });
-                ui.checkbox(&mut lab.looping, "Loop");
+                components::checkbox(ui, &mut lab.looping, "Loop");
             });
         });
 
@@ -727,136 +717,170 @@ impl Interface {
         painter.text(
             pos2(viewport.center().x, viewport.bottom() - 16.0),
             Align2::CENTER_CENTER,
-            "DRAG TO ORBIT · SHIFT + DRAG TO PAN · SCROLL TO ZOOM",
-            FontId::monospace(tokens::TYPE_XS),
-            tokens::MUTED.gamma_multiply(0.8),
+            if compact {
+                "DRAG TO ORBIT · SCROLL TO ZOOM"
+            } else {
+                "DRAG TO ORBIT · SHIFT + DRAG TO PAN · SCROLL TO ZOOM"
+            },
+            FontId::monospace(layout::TYPE_XS),
+            colors::MUTED.gamma_multiply(0.8),
         );
         if actions.response.has_focus() {
             painter.rect_stroke(
                 viewport.shrink(1.0),
                 CornerRadius::ZERO,
-                Stroke::new(tokens::BORDER_FOCUS, tokens::ACCENT),
+                Stroke::new(layout::BORDER_FOCUS, colors::ACCENT),
                 egui::StrokeKind::Inside,
             );
         }
 
         // Options, replay window, timeline, diagnostics, and the monitor.
         pane(ui, bottom, |ui| {
-            ui.horizontal(|ui| {
-                ui.checkbox(&mut lab.viewport.grid_visible, "Line grid").on_hover_text(
-                    "Editor-only lines; minor spacing follows 1/2/5 world units, major lines mark five divisions",
-                );
-                ui.label(RichText::new("Editor background").size(tokens::TYPE_SM));
-                let current = lab.viewport.background();
-                egui::ComboBox::from_id_salt("background")
-                    .width(90.0)
-                    .selected_text(PREVIEW_BACKGROUNDS[current].1)
-                    .show_ui(ui, |ui| {
-                        for (key, label, _) in PREVIEW_BACKGROUNDS {
-                            if ui.selectable_label(PREVIEW_BACKGROUNDS[current].0 == key, label).clicked() {
-                                let _ = lab.viewport.set_background(key);
+            egui::ScrollArea::vertical().id_salt("preview-options").auto_shrink([false, false]).show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    components::checkbox(ui, &mut lab.viewport.grid_visible, "Line grid").on_hover_text(
+                        "Editor-only lines; minor spacing follows 1/2/5 world units, major lines mark five divisions",
+                    );
+                    ui.label(RichText::new("Editor background").size(layout::TYPE_SM));
+                    let current = lab.viewport.background();
+                    egui::ComboBox::from_id_salt("background")
+                        .width(90.0)
+                        .selected_text(PREVIEW_BACKGROUNDS[current].1)
+                        .show_ui(ui, |ui| {
+                            for (key, label, _) in PREVIEW_BACKGROUNDS {
+                                if ui.selectable_label(PREVIEW_BACKGROUNDS[current].0 == key, label).clicked() {
+                                    let _ = lab.viewport.set_background(key);
+                                }
                             }
+                        });
+                    components::checkbox(ui, &mut lab.viewport.receiver_visible, "Light receiver (editor only)");
+                });
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new("Replay window").size(layout::TYPE_SM));
+                    let mut choice = self.replay_choice;
+                    let label = match choice {
+                        ReplayChoice::Full => "Full effect",
+                        ReplayChoice::Two => "2 seconds",
+                        ReplayChoice::Five => "5 seconds",
+                        ReplayChoice::Custom => "Custom",
+                    };
+                    egui::ComboBox::from_id_salt("replay").width(100.0).selected_text(label).show_ui(ui, |ui| {
+                        ui.selectable_value(&mut choice, ReplayChoice::Full, "Full effect");
+                        ui.selectable_value(&mut choice, ReplayChoice::Two, "2 seconds");
+                        ui.selectable_value(&mut choice, ReplayChoice::Five, "5 seconds");
+                        ui.selectable_value(&mut choice, ReplayChoice::Custom, "Custom");
+                    });
+                    let mut custom_committed = false;
+                    if choice == ReplayChoice::Custom {
+                        let mut drafts = std::mem::take(&mut lab.drafts);
+                        let response =
+                            joy_engine::development::NumberField::new("replay-custom", &mut self.custom_replay)
+                                .range(0.01, 30.0)
+                                .step(0.01)
+                                .width(64.0)
+                                .label("Custom replay seconds")
+                                .show(ui, &mut drafts);
+                        lab.drafts = drafts;
+                        custom_committed = response.committed() && response.changed;
+                    }
+                    if choice != self.replay_choice || custom_committed {
+                        self.replay_choice = choice;
+                        let window = match choice {
+                            ReplayChoice::Full => ReplayWindow::Full,
+                            ReplayChoice::Two => ReplayWindow::Seconds(2.0),
+                            ReplayChoice::Five => ReplayWindow::Seconds(5.0),
+                            ReplayChoice::Custom => ReplayWindow::Seconds(self.custom_replay),
+                        };
+                        if let Err(message) = lab.set_replay_window(window) {
+                            lab.show_error(message);
+                        }
+                    }
+                    components::guidance(ui, "Editor only · restart on change · Loop repeats the window");
+                });
+                ui.separator();
+                ui.horizontal(|ui| {
+                    let time = lab.time();
+                    let duration = lab.timeline_seconds();
+                    ui.label(RichText::new(format!("{time:.2} s")).monospace().color(colors::MUTED));
+                    let mut value = time.min(duration);
+                    let width = (ui.available_width() - 70.0).max(60.0);
+                    let response = joy_engine::development::lab_slider(
+                        ui,
+                        &mut value,
+                        0.0..=duration,
+                        Some(0.01),
+                        vec2(width, 24.0),
+                    )
+                    .on_hover_text("Timeline");
+                    lab.scrubbing = response.is_pointer_button_down_on() || response.dragged();
+                    if response.changed() {
+                        lab.seek(value);
+                    }
+                    ui.label(RichText::new(format!("{duration:.2} s")).monospace().color(colors::MUTED));
+                });
+                egui::Frame::new()
+                    .fill(colors::CANVAS)
+                    .stroke(Stroke::new(1.0, colors::ACCENT))
+                    .inner_margin(egui::Margin::symmetric(12, 8))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.horizontal_wrapped(|ui| {
+                            let effect = lab.effect();
+                            let count = effect.map_or(0, |effect| effect.particles().len());
+                            let dropped = effect.map_or(0, |effect| effect.dropped_particles());
+                            ui.label(
+                                RichText::new(group_thousands(count as u64)).monospace().strong().color(colors::ACCENT),
+                            );
+                            ui.label(RichText::new("PARTICLES").monospace().color(colors::TEXT).size(layout::TYPE_SM));
+                            ui.label(RichText::new(dropped.to_string()).monospace().strong().color(colors::ACCENT));
+                            ui.label(RichText::new("DROPPED").monospace().color(colors::TEXT).size(layout::TYPE_SM));
+                            ui.label(
+                                RichText::new(&self.backend).monospace().color(colors::ACCENT).size(layout::TYPE_SM),
+                            );
+                            if !compact {
+                                Self::monitor_control(ui, lab);
+                            }
+                        });
+                        if compact {
+                            ui.horizontal(|ui| Self::monitor_control(ui, lab));
                         }
                     });
-                ui.checkbox(&mut lab.viewport.receiver_visible, "Light receiver (editor only)");
-            });
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("Replay window").size(tokens::TYPE_SM));
-                let mut choice = self.replay_choice;
-                let label = match choice {
-                    ReplayChoice::Full => "Full effect",
-                    ReplayChoice::Two => "2 seconds",
-                    ReplayChoice::Five => "5 seconds",
-                    ReplayChoice::Custom => "Custom",
-                };
-                egui::ComboBox::from_id_salt("replay").width(100.0).selected_text(label).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut choice, ReplayChoice::Full, "Full effect");
-                    ui.selectable_value(&mut choice, ReplayChoice::Two, "2 seconds");
-                    ui.selectable_value(&mut choice, ReplayChoice::Five, "5 seconds");
-                    ui.selectable_value(&mut choice, ReplayChoice::Custom, "Custom");
-                });
-                let mut custom_committed = false;
-                if choice == ReplayChoice::Custom {
-                    let mut drafts = std::mem::take(&mut lab.drafts);
-                    let response = joy_engine::development::NumberField::new("replay-custom", &mut self.custom_replay)
-                        .range(0.01, 30.0)
-                        .step(0.01)
-                        .width(64.0)
-                        .label("Custom replay seconds")
-                        .show(ui, &mut drafts);
-                    lab.drafts = drafts;
-                    custom_committed = response.committed() && response.changed;
+                if lab.performance_mode() != PerformanceMode::Disabled {
+                    performance_panel(ui, lab);
                 }
-                if choice != self.replay_choice || custom_committed {
-                    self.replay_choice = choice;
-                    let window = match choice {
-                        ReplayChoice::Full => ReplayWindow::Full,
-                        ReplayChoice::Two => ReplayWindow::Seconds(2.0),
-                        ReplayChoice::Five => ReplayWindow::Seconds(5.0),
-                        ReplayChoice::Custom => ReplayWindow::Seconds(self.custom_replay),
-                    };
-                    if let Err(message) = lab.set_replay_window(window) {
-                        lab.show_error(message);
-                    }
-                }
-                components::guidance(ui, "Editor only · restart on change · Loop repeats the window");
             });
-            ui.separator();
-            ui.horizontal(|ui| {
-                let time = lab.time();
-                let duration = lab.timeline_seconds();
-                ui.label(RichText::new(format!("{time:.2} s")).monospace().color(tokens::MUTED));
-                let mut value = time.min(duration);
-                let width = (ui.available_width() - 70.0).max(60.0);
-                let response =
-                    joy_engine::development::lab_slider(ui, &mut value, 0.0..=duration, Some(0.01), vec2(width, 24.0))
-                        .on_hover_text("Timeline");
-                lab.scrubbing = response.is_pointer_button_down_on() || response.dragged();
-                if response.changed() {
-                    lab.seek(value);
-                }
-                ui.label(RichText::new(format!("{duration:.2} s")).monospace().color(tokens::MUTED));
-            });
-            egui::Frame::new()
-                .fill(tokens::CANVAS)
-                .stroke(Stroke::new(1.0, tokens::ACCENT))
-                .inner_margin(egui::Margin::symmetric(12, 8))
-                .show(ui, |ui| {
-                    ui.set_width(ui.available_width());
-                    ui.horizontal(|ui| {
-                        let effect = lab.effect();
-                        let count = effect.map_or(0, |effect| effect.particles().len());
-                        let dropped = effect.map_or(0, |effect| effect.dropped_particles());
-                        ui.label(
-                            RichText::new(group_thousands(count as u64)).monospace().strong().color(tokens::ACCENT),
-                        );
-                        ui.label(RichText::new("PARTICLES").monospace().color(tokens::TEXT).size(tokens::TYPE_SM));
-                        ui.label(RichText::new(dropped.to_string()).monospace().strong().color(tokens::ACCENT));
-                        ui.label(RichText::new("DROPPED").monospace().color(tokens::TEXT).size(tokens::TYPE_SM));
-                        ui.label(RichText::new(&self.backend).monospace().color(tokens::ACCENT).size(tokens::TYPE_SM));
-                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            let mode = lab.performance_mode();
-                            let mut selected = mode;
-                            egui::ComboBox::from_id_salt("monitor").width(150.0).selected_text(mode.label()).show_ui(
-                                ui,
-                                |ui| {
-                                    for option in PerformanceMode::ALL {
-                                        ui.selectable_value(&mut selected, option, option.label());
-                                    }
-                                },
-                            );
-                            if selected != mode {
-                                lab.set_performance_mode(selected);
-                            }
-                            ui.label(RichText::new("MONITOR").monospace().color(tokens::TEXT).size(tokens::TYPE_SM));
-                        });
-                    });
-                });
-            if lab.performance_mode() != PerformanceMode::Disabled {
-                performance_panel(ui, lab);
-            }
         });
         viewport
+    }
+
+    /// Camera and pane actions keep their full hit targets when the preview becomes a narrow laptop column.
+    fn preview_camera_controls(&mut self, ui: &mut Ui, lab: &mut ParticleLab, viewport: Rect) {
+        ui.with_layout(Layout::right_to_left(Align::Center).with_main_wrap(true), |ui| {
+            self.layout.visibility_controls(ui);
+            if ui.button("Reset").on_hover_text("Reset camera (0)").clicked() {
+                lab.viewport.reset_camera();
+            }
+            if ui.button("Frame F").on_hover_text("Frame current particles (F)").clicked() {
+                lab.frame_current_effect(Vec2::new(viewport.width(), viewport.height()));
+            }
+            if viewport.width() >= COMPACT_PREVIEW_WIDTH {
+                ui.label(RichText::new("Y-UP / PERSPECTIVE").monospace().color(colors::MUTED).size(layout::TYPE_XS));
+            }
+        });
+    }
+
+    fn monitor_control(ui: &mut Ui, lab: &mut ParticleLab) {
+        ui.label(RichText::new("MONITOR").monospace().color(colors::TEXT).size(layout::TYPE_SM));
+        let mode = lab.performance_mode();
+        let mut selected = mode;
+        egui::ComboBox::from_id_salt("monitor").width(150.0).selected_text(mode.label()).show_ui(ui, |ui| {
+            for option in PerformanceMode::ALL {
+                ui.selectable_value(&mut selected, option, option.label());
+            }
+        });
+        if selected != mode {
+            lab.set_performance_mode(selected);
+        }
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -866,9 +890,9 @@ impl Interface {
     fn parameter_panel(&mut self, ui: &mut Ui, lab: &mut ParticleLab) {
         ui.horizontal(|ui| {
             ui.set_min_height(HEADING_HEIGHT - 20.0);
-            components::panel_heading(ui, "03", "Effect Parameters");
+            components::panel_heading(ui, "03", "Parameters");
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if named(ui.button(RichText::new("+ Add").color(tokens::ACCENT)), "Add parameter")
+                if named(ui.button(RichText::new("+ Add").color(colors::ACCENT)), "Add parameter")
                     .on_hover_text("Add parameter")
                     .clicked()
                     && let Err(message) = lab.add_parameter()
@@ -879,7 +903,7 @@ impl Interface {
         });
         ui.separator();
         egui::ScrollArea::vertical().id_salt("parameters").auto_shrink([false, false]).show(ui, |ui| {
-            ui.label(RichText::new("SHAPE THE MOTION. FIND THE FEEL.").monospace().color(tokens::ACCENT).size(tokens::TYPE_XS));
+            ui.label(RichText::new("SHAPE THE MOTION. FIND THE FEEL.").monospace().color(colors::ACCENT).size(layout::TYPE_XS));
             components::guidance(ui, "Whole effect · saved in .joyfx. Save exports the current definition; LIVE marks the accepted audition.");
             ui.horizontal(|ui| {
                 if ui.add_enabled(lab.can_undo(), egui::Button::new("Undo property")).clicked() {
@@ -890,10 +914,10 @@ impl Interface {
                 }
             });
             components::guidance(ui, "Type directly · Shift + arrows fine · Alt + arrows coarse. Script undo is separate.");
-            ui.add_space(tokens::SPACE_SM);
+            ui.add_space(layout::SPACE_SM);
             self.parameters.show(ui, lab);
-            ui.add_space(tokens::SPACE_LG);
-            ui.label(RichText::new("TAKE IT WITH YOU").monospace().strong().color(tokens::TEXT).size(tokens::TYPE_SM));
+            ui.add_space(layout::SPACE_LG);
+            ui.label(RichText::new("TAKE IT WITH YOU").monospace().strong().color(colors::TEXT).size(layout::TYPE_SM));
             components::guidance(ui, "Save a .joyfx asset to use this effect in any Joy Engine project.");
         });
     }
@@ -907,7 +931,7 @@ impl Interface {
             let response = egui::Modal::new(egui::Id::new("particle-lab-reference")).show(context, |ui| {
                 ui.set_max_width(640.0);
                 reference_contents(ui);
-                ui.add_space(tokens::SPACE_MD);
+                ui.add_space(layout::SPACE_MD);
                 ui.button("Close").clicked()
             });
             if response.inner || response.should_close() {
@@ -951,18 +975,18 @@ fn named(response: egui::Response, name: &str) -> egui::Response {
 
 /// Draw `contents` in an opaque panel filling `rect`.
 fn pane(ui: &mut Ui, rect: Rect, contents: impl FnOnce(&mut Ui)) {
-    ui.painter().rect_filled(rect, CornerRadius::ZERO, tokens::PANEL);
-    ui.painter().rect_stroke(rect, CornerRadius::ZERO, Stroke::new(1.0, tokens::BORDER), egui::StrokeKind::Inside);
-    let inner = rect.shrink(tokens::SPACE_MD);
+    ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::PANEL);
+    ui.painter().rect_stroke(
+        rect,
+        CornerRadius::ZERO,
+        Stroke::new(layout::BORDER_THIN, colors::LINE),
+        egui::StrokeKind::Inside,
+    );
+    let inner = rect.shrink(layout::SPACE_MD);
     ui.scope_builder(UiBuilder::new().max_rect(inner).layout(Layout::top_down(Align::Min)), |ui| {
         ui.set_clip_rect(rect.intersect(ui.clip_rect()));
         contents(ui);
     });
-}
-
-/// The footer strip: the shared status bar.
-fn footer(ui: &mut Ui, rect: Rect) {
-    ui.scope_builder(UiBuilder::new().max_rect(rect), |ui| components::status_bar(ui, FOOTER_LEFT, FOOTER_RIGHT));
 }
 
 /// One emitter stack row.
@@ -971,39 +995,46 @@ fn emitter_row(ui: &mut Ui, selected: bool, enabled: bool, id: &str, detail: &st
     response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, id));
     let painter = ui.painter_at(rect);
     let fill = if selected {
-        tokens::SURFACE
+        colors::SELECTED_ROW
     } else if response.hovered() {
-        tokens::BUTTON
+        colors::SURFACE
     } else {
-        tokens::FIELD
+        colors::PANEL
     };
     painter.rect_filled(rect, CornerRadius::ZERO, fill);
-    painter.rect_stroke(rect, CornerRadius::ZERO, Stroke::new(1.0, tokens::BORDER), egui::StrokeKind::Inside);
+    if response.has_focus() {
+        painter.rect_stroke(
+            rect,
+            CornerRadius::ZERO,
+            Stroke::new(layout::BORDER_THIN, colors::ACCENT),
+            egui::StrokeKind::Inside,
+        );
+    }
     if selected {
         painter.rect_filled(
-            Rect::from_min_size(rect.min, vec2(tokens::BORDER_ACCENT * 0.5, rect.height())),
+            Rect::from_min_size(rect.min, vec2(layout::BORDER_ACCENT * 0.5, rect.height())),
             CornerRadius::ZERO,
-            tokens::ACCENT,
+            colors::ACCENT,
         );
     }
     painter.circle_filled(
         rect.left_center() + vec2(24.0, 0.0),
         3.0,
-        if enabled { tokens::ACCENT } else { tokens::BORDER },
+        if enabled { colors::ACCENT } else { colors::BORDER },
     );
     painter.text(
         rect.left_center() + vec2(44.0, 0.0),
         Align2::LEFT_CENTER,
         id,
-        FontId::proportional(tokens::TYPE_MD),
-        tokens::TEXT,
+        FontId::proportional(layout::TYPE_MD),
+        colors::TEXT,
     );
     painter.text(
         rect.right_center() - vec2(10.0, 0.0),
         Align2::RIGHT_CENTER,
         detail,
-        FontId::monospace(tokens::TYPE_XS),
-        tokens::MUTED,
+        FontId::monospace(layout::TYPE_XS),
+        colors::MUTED,
     );
     response
 }
@@ -1023,10 +1054,10 @@ fn performance_panel(ui: &mut Ui, lab: &ParticleLab) {
         stats.lights.to_string()
     };
     let item = |ui: &mut Ui, label: &str, value: String| {
-        ui.label(RichText::new(label).monospace().color(tokens::TEXT).size(tokens::TYPE_SM));
-        ui.label(RichText::new(value).monospace().strong().color(tokens::CREAM).size(tokens::TYPE_SM));
+        ui.label(RichText::new(label).monospace().color(colors::TEXT).size(layout::TYPE_SM));
+        ui.label(RichText::new(value).monospace().strong().color(colors::CREAM).size(layout::TYPE_SM));
     };
-    egui::Frame::new().fill(tokens::CANVAS).inner_margin(egui::Margin::symmetric(12, 6)).show(ui, |ui| {
+    egui::Frame::new().fill(colors::CANVAS).inner_margin(egui::Margin::symmetric(12, 6)).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal_wrapped(|ui| {
             item(ui, "Range", stats.range.clone());
@@ -1047,13 +1078,13 @@ fn performance_panel(ui: &mut Ui, lab: &ParticleLab) {
                     stats.upload_bytes as f64 / 1024.0
                 ))
                 .monospace()
-                .size(tokens::TYPE_XS),
+                .size(layout::TYPE_XS),
             );
             components::guidance(ui, "CPU timings only; GPU time unavailable. Spawn/update: ms per simulation step; geometry: last render. Totals start when detailed profiling is enabled and reset on restart, seek or loop. Detailed profiling adds per-particle timing overhead.");
             egui::ScrollArea::both().id_salt("emitter-performance").max_height(110.0).show(ui, |ui| {
                 egui::Grid::new("emitter-performance-table").striped(true).show(ui, |ui| {
                     for heading in ["Emitter", "Live", "Spawn CPU", "Update CPU", "Geometry CPU", "Triangles", "Lights", "Spawned Total", "Dropped Total", "Operations Total"] {
-                        ui.label(RichText::new(heading).monospace().size(tokens::TYPE_XS).color(tokens::MUTED));
+                        ui.label(RichText::new(heading).monospace().size(layout::TYPE_XS).color(colors::MUTED));
                     }
                     ui.end_row();
                     for row in &view.emitters {
@@ -1069,7 +1100,7 @@ fn performance_panel(ui: &mut Ui, lab: &ParticleLab) {
                             row.dropped.to_string(),
                             group_thousands(row.operations.max(0) as u64),
                         ] {
-                            ui.label(RichText::new(cell).monospace().size(tokens::TYPE_XS));
+                            ui.label(RichText::new(cell).monospace().size(layout::TYPE_XS));
                         }
                         ui.end_row();
                     }
@@ -1094,15 +1125,15 @@ fn group_thousands(value: u64) -> String {
 
 /// The Script Reference dialog's contents.
 fn reference_contents(ui: &mut Ui) {
-    let code = |text: &str| RichText::new(text).monospace().color(tokens::SCRIPT_FUNCTION);
-    ui.label(RichText::new("BOUNDED PARTICLE LANGUAGE").monospace().color(tokens::ACCENT).size(tokens::TYPE_XS));
+    let code = |text: &str| RichText::new(text).monospace().color(colors::SCRIPT_FUNCTION);
+    ui.label(RichText::new("BOUNDED PARTICLE LANGUAGE").monospace().color(colors::ACCENT).size(layout::TYPE_XS));
     ui.heading("Script Reference");
     egui::ScrollArea::vertical().max_height(520.0).show(ui, |ui| {
         let paragraph = |ui: &mut Ui, text: &str| {
             ui.add(egui::Label::new(text).wrap());
         };
         paragraph(ui, "Particles use XYZ world space, with Y up in the perspective preview. Size is in world units; rotation and spin roll the camera-facing sprite. PARTICLE LAB uses its own deterministic language, not JavaScript.");
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
         ui.label(RichText::new("Particle Values").strong());
         paragraph(ui, "Writable containers: position, velocity, and acceleration are vectors with .x, .y, .z components. color has .r, .g, .b, .a components.");
         ui.label(code("velocity = vector(0, 80, 0);   color = rgba(1, 0.4, 0.1, 1);   position = origin + vector(0, 10, 0);   velocity += acceleration * dt;"));
@@ -1112,12 +1143,12 @@ fn reference_contents(ui: &mut Ui) {
         paragraph(ui, "Read only: origin is the root or parent spawn position; parentVelocity is the parent's velocity at child birth (zero for roots). Both are vectors. Other inputs are dt, age, t, index, time, pi, tau, and named properties.");
         paragraph(ui, "Vector and color properties use the same component accessors, for example wind.x or tint.a, and can be copied whole: color = tint; Color properties are linear RGBA: RGB may exceed one for HDR brightness, like scripted particle RGB, and alpha stays in 0–1. Alpha is opacity. Optional lights inherit particle RGB and alpha.");
         paragraph(ui, "Existing version-1 scalar spellings such as vx, alpha, originX, parentVx, and vector-property X/Y/Z suffixes remain readable for saved assets.");
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
         ui.label(RichText::new("Expressions").strong());
         paragraph(ui, "Use let, assignments, += -= *= /=, and if (...) { ... } else { ... }. Operators: + - * / % ^ < > <= >= == != && || !.");
         paragraph(ui, "Functions: sin, cos, tan, abs, sqrt, floor, ceil, round, exp, log, min, max, pow, atan2, clamp, mix, smoothstep, noise, rand, vector, and rgba.");
         paragraph(ui, "Vectors/colors support same-type addition and subtraction, scalar multiplication and division, and mix(a, b, t). Assignments copy values. Conditions, comparisons, and other math functions use scalars.");
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
         ui.label(RichText::new("Children and Limits").strong());
         paragraph(ui, "Root emitters run their timeline. Trail and death links spawn particles directly from a child template, inherit parent velocity inputs, and stop after four child generations. Assets allow up to 4,096 live particles, 128 bursts per emitter, 30 seconds per timeline/lifetime, and bounded spawn work. Loops, arbitrary objects, strings, dynamic indexing, and browser or host calls are unavailable.");
     });
@@ -1127,7 +1158,7 @@ fn reference_contents(ui: &mut Ui) {
 pub fn apply_look(context: &egui::Context) {
     let applied = context.data(|data| data.get_temp::<bool>(egui::Id::new("particle-lab-look"))).unwrap_or(false);
     if !applied {
-        theme::apply_authoring(context);
+        theme::apply_editor(context);
         context.data_mut(|data| data.insert_temp(egui::Id::new("particle-lab-look"), true));
     }
 }

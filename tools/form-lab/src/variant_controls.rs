@@ -10,7 +10,7 @@ use joy_engine::egui::{
     self,
     Ui,
 };
-use joy_engine::runtime::theme::tokens;
+use joy_engine::runtime::theme::layout;
 
 use crate::document::ParameterVariant;
 
@@ -54,7 +54,7 @@ impl VariantControls {
             "Keep different takes on the same script. Variants store parameter overrides, including mesh and material \
              inputs; script defaults stay live.",
         );
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
         components::field_title(ui, "NAME THIS TAKE");
         ui.add(
             egui::TextEdit::singleline(&mut self.name)
@@ -65,7 +65,7 @@ impl VariantControls {
         if ui.button("Save new variant +").clicked() {
             action = Some(VariantAction::Save(self.name.clone()));
         }
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
         components::field_title(ui, "SAVED VARIANTS");
         self.selected = self.selected.min(variants.len().saturating_sub(1));
         let selected_text =
@@ -94,7 +94,7 @@ impl VariantControls {
         if !self.status.is_empty() {
             components::guidance(ui, self.status.clone());
         }
-        ui.add_space(tokens::SPACE_SM);
+        ui.add_space(layout::SPACE_SM);
         components::guidance(
             ui,
             "Apply replaces current overrides. Rename uses the name above. Your script and global material palette are \

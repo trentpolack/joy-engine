@@ -148,7 +148,7 @@ impl App for ParticleLabTool {
                 context,
                 |ui| {
                     ui.colored_label(
-                        joy_engine::runtime::theme::tokens::DANGER,
+                        joy_engine::runtime::theme::colors::DANGER,
                         format!("GPU preview unavailable: {message}"),
                     );
                 },

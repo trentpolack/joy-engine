@@ -48,7 +48,10 @@ use joy_engine::serde_json::{
     Map,
     Value,
 };
-use joy_engine::theme::tokens;
+use joy_engine::theme::{
+    colors,
+    layout,
+};
 
 use super::constants::{
     DEFAULT_CUSTOM_COMPONENT,
@@ -234,7 +237,7 @@ impl LevelUi {
         access: &mut dyn AssetAccess,
         controls: &mut ControlMap,
     ) {
-        ui.painter().rect_filled(rect, 0.0, tokens::PANEL);
+        ui.painter().rect_filled(rect, 0.0, colors::PANEL);
         widgets::edge(ui, rect.left_bottom(), rect.right_bottom());
         let inner = rect.shrink2(vec2(14.0, 8.0));
         // Undo and Redo claim the right edge first; on narrow windows the authoring buttons scroll in the space left of
@@ -273,7 +276,7 @@ impl LevelUi {
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 8.0;
                             heading(ui, if level.object_mode() { "OBJECT" } else { "LEVEL" });
-                            caption(ui, "AUTHORING", tokens::MUTED);
+                            caption(ui, "AUTHORING", colors::MUTED);
                             ui.add_space(10.0);
                             if !level.object_mode() {
                                 if controls.mark("add-box", button(ui, "+ BOX")).clicked() {
@@ -338,7 +341,7 @@ impl LevelUi {
     }
 
     fn status_bar(&mut self, ui: &mut Ui, rect: Rect, level: &LevelEditor, controls: &mut ControlMap) {
-        ui.painter().rect_filled(rect, 0.0, tokens::HEADER);
+        ui.painter().rect_filled(rect, 0.0, colors::HEADER);
         widgets::edge(ui, rect.left_top(), rect.right_top());
         ui.scope_builder(
             egui::UiBuilder::new()
@@ -346,9 +349,9 @@ impl LevelUi {
                 .layout(egui::Layout::left_to_right(Align::Center)),
             |ui| {
                 let (dot, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
-                ui.painter().circle_filled(dot.center(), 3.0, tokens::SUCCESS);
+                ui.painter().circle_filled(dot.center(), 3.0, colors::SUCCESS);
                 let status = ui.add(
-                    egui::Label::new(RichText::new(level.status()).size(tokens::TYPE_XS).color(tokens::TEXT))
+                    egui::Label::new(RichText::new(level.status()).size(layout::TYPE_XS).color(colors::TEXT))
                         .truncate(),
                 );
                 controls.mark("level-status", status);
@@ -360,8 +363,8 @@ impl LevelUi {
                     let instances = level.viewport.instance_count();
                     ui.label(
                         RichText::new(format!("{spacing} · {instances} INSTANCES"))
-                            .size(tokens::TYPE_XS)
-                            .color(tokens::MUTED),
+                            .size(layout::TYPE_XS)
+                            .color(colors::MUTED),
                     );
                 });
             },
@@ -373,7 +376,7 @@ impl LevelUi {
     // -----------------------------------------------------------------------------------------------------------------
 
     fn outliner(&mut self, ui: &mut Ui, rect: Rect, level: &mut LevelEditor, controls: &mut ControlMap) {
-        ui.painter().rect_filled(rect, 0.0, tokens::PANEL);
+        ui.painter().rect_filled(rect, 0.0, colors::PANEL);
         ui.scope_builder(
             egui::UiBuilder::new().max_rect(rect.shrink2(vec2(12.0, 10.0))).layout(egui::Layout::top_down(Align::LEFT)),
             |ui| {
@@ -386,11 +389,11 @@ impl LevelUi {
                 } else {
                     format!("{filtered} / {total}")
                 };
-                let label = caption(ui, &count, tokens::MUTED);
+                let label = caption(ui, &count, colors::MUTED);
                 controls.mark("entity-count", label);
                 controls.insert(format!("entity-count:{count}"), Rect::NOTHING);
                 ui.add_space(4.0);
-                caption(ui, "LEVEL NAME", tokens::MUTED);
+                caption(ui, "LEVEL NAME", colors::MUTED);
                 let name = level.document().level().name.clone();
                 let key = FieldKey::LevelName;
                 let draft = level.drafts().get(&key).cloned();
@@ -398,7 +401,7 @@ impl LevelUi {
                     draft_field(ui, Id::new("level-name"), &name, draft.as_ref(), ui.available_width(), false, "");
                 controls.mark("level-name", response);
                 apply_text_event(level, key, event);
-                caption(ui, "FILTER", tokens::MUTED);
+                caption(ui, "FILTER", colors::MUTED);
                 let filter = TextEdit::singleline(&mut level.filter)
                     .id(Id::new("scene-filter"))
                     .hint_text("Name, type or tag")
@@ -424,29 +427,29 @@ impl LevelUi {
                                 ui.allocate_exact_size(vec2(ui.available_width(), 44.0), Sense::click());
                             let painter = ui.painter();
                             if active {
-                                painter.rect_filled(row.shrink(1.0), 0.0, tokens::SELECTED_ROW);
+                                painter.rect_filled(row.shrink(1.0), 0.0, colors::SELECTED_ROW);
                                 painter.rect_stroke(
                                     row.shrink(1.0),
                                     0.0,
-                                    Stroke::new(1.0, tokens::TEXT),
+                                    Stroke::new(1.0, colors::TEXT),
                                     egui::StrokeKind::Inside,
                                 );
                             } else if response.hovered() {
-                                painter.rect_filled(row, 0.0, tokens::SURFACE);
+                                painter.rect_filled(row, 0.0, colors::SURFACE);
                             }
                             painter.text(
                                 row.min + vec2(8.0, 9.0),
                                 egui::Align2::LEFT_TOP,
                                 &name,
                                 egui::FontId::proportional(12.0),
-                                tokens::TEXT,
+                                colors::TEXT,
                             );
                             painter.text(
                                 row.min + vec2(8.0, 26.0),
                                 egui::Align2::LEFT_TOP,
                                 &kind,
                                 egui::FontId::proportional(10.0),
-                                tokens::MUTED,
+                                colors::MUTED,
                             );
                             controls.mark(format!("entity:{id}"), response.clone());
                             if response.clicked() {
@@ -460,8 +463,8 @@ impl LevelUi {
                 );
                 ui.label(
                     RichText::new("Select an entity to edit its transform and components.")
-                        .size(tokens::TYPE_XS)
-                        .color(tokens::MUTED),
+                        .size(layout::TYPE_XS)
+                        .color(colors::MUTED),
                 );
             },
         );
@@ -501,7 +504,7 @@ impl LevelUi {
             }
         }
         if actions.response.has_focus() {
-            let outline = Stroke::new(1.0, tokens::ACCENT.gamma_multiply(0.6));
+            let outline = Stroke::new(1.0, colors::ACCENT.gamma_multiply(0.6));
             ui.painter().rect_stroke(rect.shrink(1.0), 0.0, outline, egui::StrokeKind::Inside);
         }
         self.gizmo(ui, level, controls);
@@ -517,7 +520,7 @@ impl LevelUi {
                 GizmoHandle::X => Color32::from_rgb(0xe8, 0x5a, 0x4f),
                 GizmoHandle::Y => Color32::from_rgb(0x8f, 0xd1, 0x6a),
                 GizmoHandle::Z => Color32::from_rgb(0x5a, 0x9b, 0xe8),
-                GizmoHandle::Plane => tokens::ACCENT,
+                GizmoHandle::Plane => colors::ACCENT,
             };
             let mut grips = Vec::new();
             if line.handle == GizmoHandle::Plane {
@@ -598,11 +601,11 @@ impl LevelUi {
                             if controls.mark("reset-camera", button(ui, "RESET 0")).on_hover_text("Reset camera (0)").clicked() {
                                 level.viewport.reset_camera();
                             }
-                            let grid = ui.checkbox(&mut level.viewport.show_grid, RichText::new("GRID").size(tokens::TYPE_SM)).on_hover_text(
+                            let grid = ui.checkbox(&mut level.viewport.show_grid, RichText::new("GRID").size(layout::TYPE_SM)).on_hover_text(
                                 "Editor-only lines; minor spacing follows 1/2/5 meters, major lines mark five divisions",
                             );
                             controls.mark("grid-toggle", grid);
-                            caption(ui, "SNAP", tokens::MUTED);
+                            caption(ui, "SNAP", colors::MUTED);
                             let mut snap = f64::from(level.viewport.snap);
                             let field = NumberField::new("snap", &mut snap)
                                 .minimum(0.0)
@@ -623,8 +626,8 @@ impl LevelUi {
             Rect::from_min_size(pos2(bar.max.x - 230.0, bar.max.y + 6.0), vec2(230.0, (rect.height() - 90.0).max(0.0)));
         ui.scope_builder(egui::UiBuilder::new().max_rect(effects).layout(egui::Layout::top_down(Align::LEFT)), |ui| {
             let frame = egui::Frame::new()
-                .fill(tokens::PANEL.gamma_multiply(0.92))
-                .stroke(Stroke::new(1.0, tokens::LINE))
+                .fill(colors::PANEL.gamma_multiply(0.92))
+                .stroke(Stroke::new(1.0, colors::LINE))
                 .inner_margin(6.0);
             let shown = frame.show(ui, |ui| {
                 ui.set_width(effects.width() - 14.0);
@@ -637,10 +640,10 @@ impl LevelUi {
         ui.scope_builder(
             egui::UiBuilder::new().max_rect(corner).layout(egui::Layout::left_to_right(Align::Center)),
             |ui| {
-                ui.label(RichText::new("Y UP · METERS · PERSPECTIVE").size(tokens::TYPE_XS).color(tokens::MUTED));
+                ui.label(RichText::new("Y UP · METERS · PERSPECTIVE").size(layout::TYPE_XS).color(colors::MUTED));
                 ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                     let help = "CLICK SELECT · DRAG ORBIT · SHIFT DRAG PAN · SCROLL ZOOM · F FRAME · 0 RESET";
-                    ui.label(RichText::new(help).size(tokens::TYPE_XS).color(tokens::MUTED));
+                    ui.label(RichText::new(help).size(layout::TYPE_XS).color(colors::MUTED));
                 });
             },
         );
@@ -658,7 +661,7 @@ impl LevelUi {
         access: &mut dyn AssetAccess,
         controls: &mut ControlMap,
     ) {
-        ui.painter().rect_filled(rect, 0.0, tokens::PANEL);
+        ui.painter().rect_filled(rect, 0.0, colors::PANEL);
         ui.scope_builder(
             egui::UiBuilder::new().max_rect(rect.shrink2(vec2(12.0, 10.0))).layout(egui::Layout::top_down(Align::LEFT)),
             |ui| {
@@ -667,7 +670,7 @@ impl LevelUi {
                     ui.spacing_mut().item_spacing.y = 6.0;
                     let Some(selected) = level.selected().cloned() else {
                         ui.label(
-                            RichText::new("Select an entity in the scene.").size(tokens::TYPE_MD).color(tokens::MUTED),
+                            RichText::new("Select an entity in the scene.").size(layout::TYPE_MD).color(colors::MUTED),
                         );
                         return;
                     };
@@ -678,7 +681,7 @@ impl LevelUi {
                         (FieldKey::EntityType, "TYPE", resolved.kind.clone(), ""),
                         (FieldKey::EntityTags, "TAGS", resolved.tags.join(", "), "comma, separated"),
                     ] {
-                        caption(ui, label, tokens::MUTED);
+                        caption(ui, label, colors::MUTED);
                         let draft = level.drafts().get(&key).cloned();
                         let name = format!("{key:?}");
                         let (response, event) =
@@ -689,15 +692,15 @@ impl LevelUi {
 
                     if let Some(template) = &selected.template {
                         ui.add_space(4.0);
-                        egui::Frame::new().fill(tokens::SURFACE).inner_margin(8.0).show(ui, |ui| {
+                        egui::Frame::new().fill(colors::SURFACE).inner_margin(8.0).show(ui, |ui| {
                             ui.set_min_width(ui.available_width());
-                            caption(ui, "LINKED OBJECT", tokens::ACCENT);
-                            ui.label(RichText::new(template).monospace().size(tokens::TYPE_XS));
+                            caption(ui, "LINKED OBJECT", colors::ACCENT);
+                            ui.label(RichText::new(template).monospace().size(layout::TYPE_XS));
                             let groups = selected.overrides.as_ref().map_or(0, |overrides| overrides.len());
                             ui.label(
                                 RichText::new(format!("{groups} override groups"))
-                                    .size(tokens::TYPE_XS)
-                                    .color(tokens::MUTED),
+                                    .size(layout::TYPE_XS)
+                                    .color(colors::MUTED),
                             );
                             ui.horizontal_wrapped(|ui| {
                                 if controls.mark("edit-object", button(ui, "EDIT SOURCE ↗")).clicked() {
@@ -716,14 +719,14 @@ impl LevelUi {
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
                         heading(ui, "TRANSFORM");
-                        caption(ui, "WORLD SPACE", tokens::MUTED);
+                        caption(ui, "WORLD SPACE", colors::MUTED);
                     });
                     for field in TransformField::ALL {
-                        caption(ui, field.label(), tokens::MUTED);
+                        caption(ui, field.label(), colors::MUTED);
                         ui.horizontal(|ui| {
                             let channel_width = ((width / 3.0) - 6.0).max(40.0);
                             for (axis, axis_label) in ["X", "Y", "Z"].iter().enumerate() {
-                                ui.label(RichText::new(*axis_label).size(tokens::TYPE_XS).color(tokens::MUTED));
+                                ui.label(RichText::new(*axis_label).size(layout::TYPE_XS).color(colors::MUTED));
                                 let key = FieldKey::Transform(field, axis);
                                 let current = level.transform_value(field, axis).map(f64::from).unwrap_or(0.0);
                                 let draft = level.drafts().get(&key).cloned();
@@ -749,13 +752,13 @@ impl LevelUi {
                     self.properties(ui, level, access, controls);
 
                     ui.add_space(8.0);
-                    let source = egui::CollapsingHeader::new(RichText::new("ADVANCED SOURCE").size(tokens::TYPE_SM))
+                    let source = egui::CollapsingHeader::new(RichText::new("ADVANCED SOURCE").size(layout::TYPE_SM))
                         .id_salt("advanced-source")
                         .show(ui, |ui| {
                             ui.label(
                                 RichText::new("Optional component source and repair view.")
-                                    .size(tokens::TYPE_XS)
-                                    .color(tokens::MUTED),
+                                    .size(layout::TYPE_XS)
+                                    .color(colors::MUTED),
                             );
                             let editor = ui
                                 .allocate_ui(vec2(ui.available_width(), 220.0), |ui| {
@@ -801,7 +804,7 @@ impl LevelUi {
                     for schema in level.schemas().list() {
                         if schema.category != category {
                             category = schema.category.clone();
-                            ui.label(RichText::new(&category).size(tokens::TYPE_XS).color(tokens::MUTED));
+                            ui.label(RichText::new(&category).size(layout::TYPE_XS).color(colors::MUTED));
                         }
                         for preset in &schema.presets {
                             let selected = choice == ComponentChoice::Preset(preset.id.clone());
@@ -813,7 +816,7 @@ impl LevelUi {
                             }
                         }
                     }
-                    ui.label(RichText::new("Custom").size(tokens::TYPE_XS).color(tokens::MUTED));
+                    ui.label(RichText::new("Custom").size(layout::TYPE_XS).color(colors::MUTED));
                     if ui.selectable_label(choice == ComponentChoice::Custom, "  Custom Properties").clicked() {
                         choice = ComponentChoice::Custom;
                     }
@@ -882,7 +885,7 @@ impl LevelUi {
     ) {
         match node {
             PropertyNode::Note(text) => {
-                ui.label(RichText::new(text).size(tokens::TYPE_XS).color(tokens::MUTED));
+                ui.label(RichText::new(text).size(layout::TYPE_XS).color(colors::MUTED));
             }
             PropertyNode::Group(group) => self.group(ui, group, level, components, actions, controls),
             PropertyNode::Field(field) => {
@@ -891,11 +894,11 @@ impl LevelUi {
                     if field.inactive.is_some() {
                         ui.multiply_opacity(0.45);
                     }
-                    let label_color = if field.issue.is_some() { tokens::DANGER } else { tokens::MUTED };
+                    let label_color = if field.issue.is_some() { colors::DANGER } else { colors::MUTED };
                     let tooltip =
                         field.issue.clone().or_else(|| field.inactive.clone()).or_else(|| field.description.clone());
                     let label =
-                        ui.label(RichText::new(field.label.to_uppercase()).size(tokens::TYPE_XS).color(label_color));
+                        ui.label(RichText::new(field.label.to_uppercase()).size(layout::TYPE_XS).color(label_color));
                     if let Some(tooltip) = tooltip {
                         label.on_hover_text(tooltip);
                     }
@@ -1044,8 +1047,8 @@ impl LevelUi {
                     if vector.inactive.is_some() {
                         ui.multiply_opacity(0.45);
                     }
-                    let color = if vector.issue.is_some() { tokens::DANGER } else { tokens::MUTED };
-                    let label = ui.label(RichText::new(&vector.label).size(tokens::TYPE_XS).color(color));
+                    let color = if vector.issue.is_some() { colors::DANGER } else { colors::MUTED };
+                    let label = ui.label(RichText::new(&vector.label).size(layout::TYPE_XS).color(color));
                     if let Some(tooltip) =
                         vector.issue.clone().or_else(|| vector.inactive.clone()).or_else(|| vector.description.clone())
                     {
@@ -1055,7 +1058,7 @@ impl LevelUi {
                         let count = vector.values.len().max(1) as f32;
                         let channel_width = ((ui.available_width() / count) - 20.0).max(30.0);
                         for (index, channel) in vector.channels.iter().enumerate() {
-                            ui.label(RichText::new(*channel).size(tokens::TYPE_XS).color(tokens::MUTED));
+                            ui.label(RichText::new(*channel).size(layout::TYPE_XS).color(colors::MUTED));
                             let draft_key = FieldKey::PropertyChannel(vector.path.clone(), index);
                             let draft = level.drafts().get(&draft_key).cloned();
                             let value = vector.values[index];
@@ -1090,25 +1093,25 @@ impl LevelUi {
         controls: &mut ControlMap,
     ) {
         let key = group.path.join(".");
-        let mut title = RichText::new(group.label.to_uppercase()).size(tokens::TYPE_SM).strong();
+        let mut title = RichText::new(group.label.to_uppercase()).size(layout::TYPE_SM).strong();
         if !group.issues.is_empty() {
-            title = title.color(tokens::DANGER);
+            title = title.color(colors::DANGER);
         }
-        let fill = if group.component { tokens::HEADER } else { Color32::TRANSPARENT };
-        let stroke = Stroke::new(if group.component { 1.0 } else { 0.0 }, tokens::LINE);
+        let fill = if group.component { colors::HEADER } else { Color32::TRANSPARENT };
+        let stroke = Stroke::new(if group.component { 1.0 } else { 0.0 }, colors::LINE);
         let frame = egui::Frame::new().fill(fill).stroke(stroke).inner_margin(if group.component { 8.0 } else { 2.0 });
         frame.show(ui, |ui| {
             let header =
                 egui::CollapsingHeader::new(title).id_salt(("group", &key)).default_open(group.open).show(ui, |ui| {
                     if let Some(type_name) = &group.type_name {
-                        ui.label(RichText::new(type_name).size(tokens::TYPE_XS).color(tokens::MUTED));
+                        ui.label(RichText::new(type_name).size(layout::TYPE_XS).color(colors::MUTED));
                     }
                     if let Some(description) = &group.description {
-                        ui.label(RichText::new(description).size(tokens::TYPE_XS).color(tokens::MUTED));
+                        ui.label(RichText::new(description).size(layout::TYPE_XS).color(colors::MUTED));
                     }
                     for issue in &group.issues {
                         let label =
-                            ui.label(RichText::new(format!("• {issue}")).size(tokens::TYPE_XS).color(tokens::DANGER));
+                            ui.label(RichText::new(format!("• {issue}")).size(layout::TYPE_XS).color(colors::DANGER));
                         controls.mark(format!("issue:{key}:{issue}"), label);
                     }
                     for child in &group.children {
@@ -1224,7 +1227,7 @@ impl LevelUi {
                 LevelDialog::SaveObject(text) => ("Reusable object path beneath assets/:", text),
                 LevelDialog::CustomComponent(text) => ("Component name:", text),
             };
-            ui.label(RichText::new(prompt).size(tokens::TYPE_MD));
+            ui.label(RichText::new(prompt).size(layout::TYPE_MD));
             let field = TextEdit::singleline(text)
                 .id(Id::new("level-dialog-field"))
                 .desired_width(380.0)

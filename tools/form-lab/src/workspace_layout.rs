@@ -21,7 +21,8 @@ use joy_engine::runtime::Storage;
 /// Storage key of the pane widths and visibility; stable so saved layouts keep loading.
 pub const PANEL_STORAGE_KEY: &str = "joy-editor-panels-form-v2";
 
-/// The workbench layout: Script (320 points by default), Preview, and Inspector (260).
+/// The workbench layout: Script (320 points by default), Preview, and Inspector (260), matching the browser lab.
+/// Existing saved widths still take precedence.
 pub fn create_panel_layout(storage: Option<Storage>) -> PanelLayout {
     PanelLayout::new(
         PanelLayoutOptions {
@@ -76,25 +77,41 @@ impl InspectorTab {
 
 /// The inspector's tab strip; Left, Right, Home, and End move between tabs while one has focus.
 pub fn inspector_tabs(ui: &mut Ui, tab: &mut InspectorTab) {
-    use joy_engine::runtime::theme::tokens;
+    use joy_engine::runtime::theme::{
+        colors,
+        layout,
+    };
     ui.horizontal(|ui| {
         let gap = 4.0;
         ui.spacing_mut().item_spacing.x = gap;
         let width = ((ui.available_width() - (gap * 3.0)) / 4.0).max(40.0);
         for candidate in InspectorTab::ALL {
             let selected = *tab == candidate;
-            let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 28.0), egui::Sense::click());
-            let fill = if selected { tokens::SURFACE } else { tokens::BUTTON };
-            let border = if selected || response.hovered() { tokens::ACCENT } else { tokens::BORDER };
+            let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 30.0), egui::Sense::click());
+            let fill = if selected || response.hovered() { colors::SURFACE } else { colors::BUTTON };
             let painter = ui.painter();
             painter.rect_filled(rect, 0.0, fill);
-            painter.rect_stroke(rect, 0.0, egui::Stroke::new(1.0, border), egui::StrokeKind::Inside);
-            let color = if selected { tokens::ACCENT_HOVER } else { tokens::TEXT };
+            if selected {
+                painter.hline(
+                    rect.x_range(),
+                    rect.bottom() - layout::BORDER_THIN,
+                    egui::Stroke::new(layout::BORDER_FOCUS, colors::ACCENT),
+                );
+            }
+            if response.has_focus() {
+                painter.rect_stroke(
+                    rect,
+                    0.0,
+                    egui::Stroke::new(layout::BORDER_THIN, colors::ACCENT),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            let color = if selected { colors::ACCENT } else { colors::MUTED };
             painter.with_clip_rect(rect).text(
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
                 candidate.label(),
-                egui::FontId::proportional(tokens::TYPE_SM),
+                egui::FontId::new(layout::TYPE_XS, joy_engine::runtime::theme::text_styles::strong_family()),
                 color,
             );
             if response.clicked() {
@@ -126,7 +143,7 @@ pub fn inspector_tabs(ui: &mut Ui, tab: &mut InspectorTab) {
 
 /// The header's View menu: one toggle per panel (at least one stays visible) and Maximize.
 pub fn view_menu(ui: &mut Ui, layout: &mut PanelLayout) -> egui::Response {
-    ui.menu_button("View", |ui| {
+    ui.menu_button("VIEW", |ui| {
         ui.set_min_width(150.0);
         layout.visibility_controls(ui);
     })

@@ -3,78 +3,8 @@
 
 use super::*;
 
-/// The canonical design tokens; the Rust constants must match them exactly.
-const TOKENS: &str = include_str!("../../../assets/theme/joy-tokens.json");
-
-fn color(hex: &str) -> egui::Color32 {
-    let digits = hex.trim_start_matches('#');
-    let channel = |index: usize| u8::from_str_radix(&digits[index..index + 2], 16).unwrap();
-    egui::Color32::from_rgb(channel(0), channel(2), channel(4))
-}
-
-fn pixels(value: &str) -> f32 {
-    value.trim_end_matches("px").parse().unwrap()
-}
-
 #[test]
-fn rust_tokens_match_the_canonical_token_file() {
-    let document: serde_json::Value = serde_json::from_str(TOKENS).unwrap();
-    let text = |group: &str, key: &str| document[group][key].as_str().unwrap_or_else(|| panic!("{group}.{key}"));
-    let colors = [
-        ("accent", tokens::ACCENT),
-        ("accentHover", tokens::ACCENT_HOVER),
-        ("canvas", tokens::CANVAS),
-        ("field", tokens::FIELD),
-        ("script", tokens::SCRIPT),
-        ("panel", tokens::PANEL),
-        ("surface", tokens::SURFACE),
-        ("button", tokens::BUTTON),
-        ("border", tokens::BORDER),
-        ("text", tokens::TEXT),
-        ("muted", tokens::MUTED),
-        ("danger", tokens::DANGER),
-        ("success", tokens::SUCCESS),
-        ("cream", tokens::CREAM),
-        ("selection", tokens::SELECTION),
-        ("line", tokens::LINE),
-        ("header", tokens::HEADER),
-        ("document", tokens::DOCUMENT),
-        ("tabs", tokens::TABS),
-        ("selectedRow", tokens::SELECTED_ROW),
-        ("overlay", tokens::OVERLAY),
-        ("overlayField", tokens::OVERLAY_FIELD),
-    ];
-    for (key, value) in colors {
-        assert_eq!(color(text("color", key)), value, "color.{key}");
-    }
-    let sizes = [
-        ("type", "scaleXs", tokens::TYPE_XS),
-        ("type", "scaleSm", tokens::TYPE_SM),
-        ("type", "scaleMd", tokens::TYPE_MD),
-        ("type", "scaleLg", tokens::TYPE_LG),
-        ("type", "scaleCode", tokens::TYPE_CODE),
-        ("type", "scaleDisplay", tokens::TYPE_DISPLAY),
-        ("space", "xs", tokens::SPACE_XS),
-        ("space", "sm", tokens::SPACE_SM),
-        ("space", "md", tokens::SPACE_MD),
-        ("space", "lg", tokens::SPACE_LG),
-        ("space", "xl", tokens::SPACE_XL),
-        ("radius", "none", f32::from(tokens::RADIUS_NONE)),
-        ("radius", "sm", f32::from(tokens::RADIUS_SM)),
-        ("borderWidth", "thin", tokens::BORDER_THIN),
-        ("borderWidth", "focus", tokens::BORDER_FOCUS),
-        ("borderWidth", "accent", tokens::BORDER_ACCENT),
-        ("size", "control", tokens::CONTROL_HEIGHT),
-        ("size", "header", tokens::HEADER_HEIGHT),
-        ("size", "status", tokens::STATUS_HEIGHT),
-    ];
-    for (group, key, value) in sizes {
-        assert_eq!(pixels(text(group, key)), value, "{group}.{key}");
-    }
-}
-
-#[test]
-fn authoring_look_registers_fonts_and_semantic_styles() {
+fn editor_style_uses_assets_and_registers_fonts_before_its_first_pass() {
     let context = egui::Context::default();
     apply(&context);
 
@@ -82,13 +12,17 @@ fn authoring_look_registers_fonts_and_semantic_styles() {
     for pass in 0..2 {
         let mut output = context.run_ui(egui::RawInput::default(), |root| {
             if pass == 0 {
-                apply_authoring(root.ctx());
+                apply_editor(root.ctx());
             }
             root.set_style(root.ctx().style_of(egui::Theme::Dark));
             egui::CentralPanel::default().show(root, |ui| {
-                for style in
-                    [text_styles::display(), text_styles::title(), text_styles::caption(), text_styles::status()]
-                {
+                for style in [
+                    text_styles::display(),
+                    text_styles::title(),
+                    text_styles::caption(),
+                    text_styles::status(),
+                    egui::TextStyle::Monospace,
+                ] {
                     ui.label(egui::RichText::new("Authoring text").text_style(style));
                 }
             });
@@ -102,4 +36,12 @@ fn authoring_look_registers_fonts_and_semantic_styles() {
         assert!(style.text_styles.contains_key(&egui::TextStyle::Name(name.into())), "{name}");
     }
     assert_eq!(style.text_styles[&text_styles::display()].family, text_styles::display_family());
+    // Read independently from the generated constants: asset edits must reach the actual egui style.
+    let theme: serde_json::Value = serde_json::from_str(include_str!("../../../assets/ui/theme-default.json")).unwrap();
+    let layout: serde_json::Value = serde_json::from_str(include_str!("../../../assets/ui/layout.json")).unwrap();
+    assert_eq!(style.visuals.panel_fill, egui::Color32::from_hex(theme["editor"]["panel"].as_str().unwrap()).unwrap());
+    assert_eq!(style.text_styles[&egui::TextStyle::Monospace].size, layout["type"]["code"].as_f64().unwrap() as f32);
+    assert_eq!(style.spacing.interact_size.y, layout["size"]["control_height"].as_f64().unwrap() as f32);
+    let fonts = context.fonts(|fonts| fonts.definitions().clone());
+    assert_eq!(fonts.families[&egui::FontFamily::Monospace][0], theme["fonts"]["code"].as_str().unwrap());
 }
