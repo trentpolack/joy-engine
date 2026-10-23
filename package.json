@@ -20,6 +20,7 @@
   ],
   "exports": {
     "./development/patches": "./scripts/patching/index.mjs",
+    "./form/catalog": "./scripts/form-reference.mjs",
     "./schemas/*": "./schemas/*",
     "./tsconfig.base.json": "./tsconfig.base.json",
     "./package.json": "./package.json"

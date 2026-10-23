@@ -105,6 +105,7 @@ use crate::interaction::widgets::{
     heading,
     primary_button,
     region,
+    shortcut_button,
     toggle_button,
 };
 
@@ -593,7 +594,7 @@ impl LevelUi {
                             if controls.mark("move-mode", move_button).clicked() {
                                 level.set_tool(LevelTool::Move);
                             }
-                            if controls.mark("focus", button(ui, "FRAME F")).on_hover_text("Frame selection or scene (F)").clicked()
+                            if controls.mark("focus", shortcut_button(ui, "FRAME", "F")).on_hover_text("Frame selection or scene").clicked()
                             {
                                 let selected = level.document().selected_id().map(str::to_owned);
                                 level.viewport.focus(selected.as_deref());

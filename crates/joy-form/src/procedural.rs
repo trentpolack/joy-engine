@@ -53,6 +53,7 @@ use std::{
         RefMut,
     },
     collections::HashSet,
+    rc::Rc,
 };
 use store::{
     Store,
@@ -629,6 +630,20 @@ impl Procedural {
         let source = self.procedural(value)?;
         self.spend(source.size() as f64)?;
         self.snapshot(&source)
+    }
+
+    /// The value a `const` declaration binds. Fresh geometry or instances (`const shape = box(1, 1, 1)`) freeze where
+    /// they are. A resource another binding still shares (`const finished = shape`) is snapshotted first, so declaring
+    /// a constant never freezes the variable it was read from; aliases of the constant itself share its frozen value.
+    pub fn constant_value(&mut self, value: Value) -> Result<Value, String> {
+        let shared_and_editable = match &value {
+            Value::Geometry(geometry) => (Rc::strong_count(geometry) > 1) && !geometry.is_frozen(),
+            Value::Instances(collection) => (Rc::strong_count(collection) > 1) && !collection.is_frozen(),
+            _ => false,
+        };
+        let value = if shared_and_editable { self.copy_argument(&value)? } else { value };
+        value.freeze()?;
+        Ok(value)
     }
 
     /// Set point `index`'s attributes from a record's fields, declaring any attribute the geometry lacks with its

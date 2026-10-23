@@ -467,7 +467,7 @@ fn keyword_documentation(keyword: &str) -> &'static str {
         "meta" => "Metadata for a parameter or project: bounds, labels, groups, kinds, and options.",
         "let" => "let name = value declares a variable in the current block.",
         "const" => {
-            "const name = value declares an immutable value; geometry and instance aliases are frozen too. Use copy() for an editable copy."
+            "const name = value declares an immutable value. A constant read from a geometry or instance variable holds a frozen snapshot and leaves that variable editable; use copy() for an editable copy of a constant."
         }
         "if" | "else" => "if condition { … } else if condition { … } else { … }; conditions must be true or false.",
         "match" | "case" => "match value { case a, b { … } else { … } } runs the first case equal to the value.",

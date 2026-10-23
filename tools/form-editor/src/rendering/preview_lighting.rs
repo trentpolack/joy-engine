@@ -59,7 +59,7 @@ pub const DEFAULT_PREVIEW_LIGHTING: PreviewLightingSettings = PreviewLightingSet
     environment_intensity: 1.0,
     environment_rotation: 0.0,
     casts_shadow: true,
-    quality: ShadowQuality::Low,
+    quality: ShadowQuality::Balanced,
 };
 
 impl Default for PreviewLightingSettings {
@@ -301,12 +301,12 @@ pub fn create_studio_pixels() -> Vec<f32> {
     data
 }
 
-/// The name shown for an engine shadow preset (`low`, `balanced`, `cinematic`).
+/// The display name of an engine shadow preset.
 pub fn quality_name(quality: ShadowQuality) -> &'static str {
     match quality {
-        ShadowQuality::Low => "low",
-        ShadowQuality::Balanced => "balanced",
-        ShadowQuality::Cinematic => "cinematic",
+        ShadowQuality::Low => "Low",
+        ShadowQuality::Balanced => "Balanced",
+        ShadowQuality::Cinematic => "Cinematic",
     }
 }
 

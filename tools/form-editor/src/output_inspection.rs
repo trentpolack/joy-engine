@@ -132,12 +132,15 @@ pub struct OutputInspection {
     range: String,
 }
 
+/// The output choice that previews every `output` together.
+pub const ALL_OUTPUTS_LABEL: &str = "All outputs";
+
 impl OutputInspection {
     /// An empty inspector awaiting a build.
     pub fn new() -> Self {
         Self {
             pending: true,
-            kind: "Awaiting valid build",
+            kind: "Waiting for a successful build",
             ..Self::default()
         }
     }
@@ -201,11 +204,12 @@ impl OutputInspection {
         } else {
             self.domain
         };
+        // What the preview shows, and how it relates to what Export writes (always every `output`, never `inspect`).
         self.kind = match &output {
-            Some(_) if instances => "Retained instances",
-            Some(output) if output.visible => "Output geometry",
-            Some(_) => "Inspection snapshot",
-            None => "Full build · export source",
+            Some(output) if !output.visible => "inspect() snapshot · never exported",
+            Some(_) if instances => "This output's instance sites · Export includes every output",
+            Some(_) => "This output only · Export includes every output",
+            None => "Every output combined, as Export writes it",
         };
         self.show_domain(viewport);
         Ok(())
@@ -336,15 +340,15 @@ impl OutputInspection {
     // Readouts for the UI
     // -----------------------------------------------------------------------------------------------------------------
 
-    /// Output choices: `("", "All outputs")` then each named output, marking inspection-only snapshots.
+    /// Output choices: `("", "All outputs")` then each named `output`, marking `inspect` snapshots.
     pub fn output_choices(&self) -> Vec<(String, String)> {
         let Some(data) = &self.data else {
-            return vec![(String::new(), "Previous build".to_owned())];
+            return vec![(String::new(), "Last successful build".to_owned())];
         };
-        let mut choices = vec![(String::new(), "All outputs".to_owned())];
+        let mut choices = vec![(String::new(), ALL_OUTPUTS_LABEL.to_owned())];
         for output in data.outputs.iter().flatten() {
             let name = output.name.clone();
-            let label = if output.visible { name.clone() } else { format!("{name} · inspect") };
+            let label = if output.visible { name.clone() } else { format!("{name} (inspect)") };
             choices.push((name, label));
         }
         choices

@@ -26,7 +26,8 @@ pub type SharedBudget = Rc<RefCell<Budget>>;
 const CONSTANT_RESOURCE_ERROR: &str =
     "Cannot modify a constant value; use copy() to create editable geometry or instances.";
 
-/// One shared resource identity. Freezing protects every alias; copying its data creates a fresh mutable identity.
+/// One shared resource identity. Freezing protects every alias that shares it; copying its data creates a fresh mutable
+/// identity.
 #[derive(Debug)]
 pub struct SharedValue<T> {
     value: RefCell<T>,
@@ -52,6 +53,10 @@ impl<T> SharedValue<T> {
 
     pub fn freeze(&self) {
         self.frozen.set(true);
+    }
+
+    pub fn is_frozen(&self) -> bool {
+        self.frozen.get()
     }
 
     pub fn ensure_mutable(&self) -> Result<(), String> {
@@ -165,7 +170,8 @@ impl Value {
         Self::Instances(Rc::new(SharedValue::new(value)))
     }
 
-    /// Freeze mutable resources without copying them, so aliases cannot bypass a constant declaration.
+    /// Freeze mutable resources in place, so aliases of the constant cannot bypass it. `const` declarations go through
+    /// `Procedural::constant_value`, which snapshots a resource another binding still shares before freezing it.
     pub fn freeze(&self) -> Result<(), String> {
         match self {
             Self::Geometry(value) => value.freeze(),

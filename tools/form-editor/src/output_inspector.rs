@@ -1,10 +1,12 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The Output inspector's controls (UI module): the RESULT menu and kind above the
-//! preview, and the collapsible ATTRIBUTES panel with its domain and visualization menus, paging, selection readout,
-//! and a read-only table whose index buttons select elements.
+//! The Output inspector's controls (UI module): the SHOW menu above the preview (every output together, or one named
+//! `output` or `inspect` snapshot) with a note on how it relates to Export, and the ATTRIBUTES panel below it (a button
+//! that opens its domain and visualization menus, paging, selection readout, and a read-only table whose index buttons
+//! select elements).
 
+use joy_engine::development::components;
 use joy_engine::egui::{
     self,
     RichText,
@@ -15,35 +17,43 @@ use joy_engine::runtime::theme::{
     layout,
 };
 
-use crate::output_inspection::OutputInspection;
+use crate::output_inspection::{
+    ALL_OUTPUTS_LABEL,
+    OutputInspection,
+};
 use crate::rendering::viewport::Viewport;
 
-/// The RESULT toolbar above the preview. Returns the preview's error when it rejects the chosen output.
+/// The SHOW toolbar above the preview. Returns the preview's error when it rejects the chosen output.
 pub fn result_toolbar(ui: &mut Ui, inspection: &mut OutputInspection, viewport: &mut Viewport) -> Option<String> {
     let mut failure = None;
     ui.horizontal_wrapped(|ui| {
-        ui.label(RichText::new("RESULT").color(colors::MUTED).size(layout::TYPE_XS));
+        let caption = ui.label(RichText::new("SHOW").color(colors::MUTED).size(layout::TYPE_XS));
         let choices = inspection.output_choices();
         let current = choices
             .iter()
             .find(|(name, _)| name == inspection.output())
-            .map_or_else(|| "All outputs".to_owned(), |(_, label)| label.clone());
+            .map_or_else(|| ALL_OUTPUTS_LABEL.to_owned(), |(_, label)| label.clone());
         let mut chosen = None;
         ui.add_enabled_ui(!inspection.pending(), |ui| {
-            egui::ComboBox::from_id_salt("output-select").selected_text(current).show_ui(ui, |ui| {
-                for (name, label) in &choices {
-                    if ui.selectable_label(name == inspection.output(), label).clicked() {
-                        chosen = Some(name.clone());
+            egui::ComboBox::from_id_salt("output-select")
+                .selected_text(current)
+                .show_ui(ui, |ui| {
+                    for (name, label) in &choices {
+                        if ui.selectable_label(name == inspection.output(), label).clicked() {
+                            chosen = Some(name.clone());
+                        }
                     }
-                }
-            })
+                })
+                .response
+                .labelled_by(caption.id)
+                .on_hover_text("Preview every output together, or one named output() or inspect() snapshot");
         });
         if let Some(name) = chosen
             && let Err(error) = inspection.choose_output(&name, viewport)
         {
             failure = Some(error);
         }
-        ui.label(RichText::new(inspection.kind()).color(colors::MUTED).size(layout::TYPE_XS).monospace());
+        ui.label(RichText::new(inspection.kind()).color(colors::MUTED).size(layout::TYPE_XS));
     });
     failure
 }
@@ -55,13 +65,21 @@ pub fn attribute_panel(ui: &mut Ui, inspection: &mut OutputInspection, viewport:
     if reveal {
         state.set_open(true);
     }
-    let summary = inspection.summary();
-    state
-        .show_header(ui, |ui| {
-            ui.label(RichText::new("ATTRIBUTES").strong().size(layout::TYPE_SM));
-            ui.label(RichText::new(summary).color(colors::MUTED).size(layout::TYPE_XS).monospace());
-        })
-        .body(|ui| attribute_body(ui, inspection, viewport));
+    // The whole heading is one button (not just egui's small arrow), so the panel opens wherever the author clicks.
+    let open = state.is_open();
+    ui.horizontal(|ui| {
+        let (arrow, hint) =
+            if open { ("▼", "Hide the attribute table") } else { ("▶", "Show the attribute table") };
+        let toggle = ui.add(components::button(format!("{arrow}  ATTRIBUTES")).selected(open)).on_hover_text(hint);
+        if toggle.clicked() {
+            state.toggle(ui);
+        }
+        ui.label(RichText::new(inspection.summary()).color(colors::MUTED).size(layout::TYPE_XS).monospace());
+    });
+    state.store(ui.ctx());
+    if state.is_open() {
+        attribute_body(ui, inspection, viewport);
+    }
 }
 
 /// Menus, paging, readouts, and the table.

@@ -168,7 +168,7 @@ impl Interface {
                 minimum: 220.0,
                 maximum: 480.0,
             },
-            maximize_mode: MaximizeMode::Workspace,
+            maximize_mode: MaximizeMode::None,
             ..PanelLayoutOptions::default()
         };
         Self {
@@ -292,21 +292,18 @@ impl Interface {
             .show(context, |ui| {
                 ui.set_clip_rect(area);
                 ui.set_min_size(area.size());
-                let chrome = !(self.hosted
-                    || (self.layout.maximized() && self.layout.maximize_mode() == MaximizeMode::Workspace));
+                // Joy Editor draws its own header around a hosted tab; nothing hides the project bar.
                 let mut top = area.top();
-                if chrome {
+                if !self.hosted {
                     self.header(ui, lab, Rect::from_min_size(area.min, vec2(area.width(), HEADER_HEIGHT)));
                     top += HEADER_HEIGHT;
                 }
-                if !self.layout.maximized() {
-                    self.project_bar(
-                        ui,
-                        lab,
-                        Rect::from_min_size(pos2(area.left(), top), vec2(area.width(), PROJECT_BAR_HEIGHT)),
-                    );
-                    top += PROJECT_BAR_HEIGHT;
-                }
+                self.project_bar(
+                    ui,
+                    lab,
+                    Rect::from_min_size(pos2(area.left(), top), vec2(area.width(), PROJECT_BAR_HEIGHT)),
+                );
+                top += PROJECT_BAR_HEIGHT;
                 let workspace = Rect::from_min_max(pos2(area.left(), top), area.right_bottom());
                 let panes = self.layout.panes(workspace);
                 if let Some(rect) = panes.left {
@@ -441,7 +438,7 @@ impl Interface {
     fn compose_panel(&mut self, ui: &mut Ui, lab: &mut JoyfxEditor) {
         ui.horizontal(|ui| {
             ui.set_min_height(HEADING_HEIGHT - 20.0);
-            components::panel_heading(ui, "01", "Compose");
+            components::panel_heading(ui, "Compose");
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if ui.add(components::primary_button("Apply")).on_hover_text("Apply (Ctrl+Enter)").clicked() {
                     lab.apply(false);
@@ -641,7 +638,7 @@ impl Interface {
         pane(ui, top, |ui| {
             ui.horizontal(|ui| {
                 ui.set_min_height(HEADING_HEIGHT - 22.0);
-                components::panel_heading(ui, "02", "Preview");
+                components::panel_heading(ui, "Preview");
                 let (text, color) = match (lab.preview_state(), lab.error().is_some()) {
                     (_, true) => ("LIVE · FIX ERROR", colors::DANGER),
                     (PreviewState::Pending, false) => ("PENDING CHANGES", colors::ACCENT_HOVER),
@@ -857,10 +854,10 @@ impl Interface {
     fn preview_camera_controls(&mut self, ui: &mut Ui, lab: &mut JoyfxEditor, viewport: Rect) {
         ui.with_layout(Layout::right_to_left(Align::Center).with_main_wrap(true), |ui| {
             self.layout.visibility_controls(ui);
-            if ui.button("Reset").on_hover_text("Reset camera (0)").clicked() {
+            if components::shortcut_button(ui, "Reset", "0").on_hover_text("Reset camera").clicked() {
                 lab.viewport.reset_camera();
             }
-            if ui.button("Frame F").on_hover_text("Frame current particles (F)").clicked() {
+            if components::shortcut_button(ui, "Frame", "F").on_hover_text("Frame current particles").clicked() {
                 lab.frame_current_effect(Vec2::new(viewport.width(), viewport.height()));
             }
             if viewport.width() >= COMPACT_PREVIEW_WIDTH {
@@ -890,7 +887,7 @@ impl Interface {
     fn parameter_panel(&mut self, ui: &mut Ui, lab: &mut JoyfxEditor) {
         ui.horizontal(|ui| {
             ui.set_min_height(HEADING_HEIGHT - 20.0);
-            components::panel_heading(ui, "03", "Parameters");
+            components::panel_heading(ui, "Parameters");
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 if named(ui.button(RichText::new("+ Add").color(colors::ACCENT)), "Add parameter")
                     .on_hover_text("Add parameter")

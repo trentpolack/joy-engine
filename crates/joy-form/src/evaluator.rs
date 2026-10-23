@@ -372,7 +372,7 @@ impl Runtime<'_> {
             }
             StmtKind::Const(name, expression) => {
                 let value = self.expression(expression, scope)?;
-                value.freeze()?;
+                let value = self.procedural.constant_value(value)?;
                 self.bind(scope, name, value, BindingRole::Constant)?;
             }
             StmtKind::Assign {

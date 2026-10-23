@@ -3,8 +3,9 @@
 
 //! The Save and Export dialog (UI module): an explicit format, a file name, and
 //! where the file goes. Contents are produced only when the author confirms; the platform's save dialog (natively) or
-//! a download (browsers) then writes them through the authoring kit's `FileDialogs`. Cancelling the save dialog keeps
-//! this dialog open and writes nothing, and a failed write keeps it open with the error.
+//! a download (browsers) then writes them through the authoring kit's `FileDialogs`. Escape, Cancel, ✕, or a click
+//! outside closes it without writing. Cancelling the platform's save dialog keeps this dialog open and writes nothing,
+//! and a failed write keeps it open with the error.
 
 use joy_engine::development::components;
 use joy_engine::egui::{
@@ -147,12 +148,12 @@ impl ArtifactDialog {
         let kind = self.kind?;
         let mut request = None;
         let mut close = false;
-        egui::Modal::new(egui::Id::new("form-editor-artifact-dialog")).show(context, |ui| {
+        let modal = egui::Modal::new(egui::Id::new("form-editor-artifact-dialog")).show(context, |ui| {
             ui.set_width(380.0);
             ui.horizontal(|ui| {
                 ui.heading(RichText::new(kind.title()).strong());
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.add_enabled(!self.writing, egui::Button::new("✕")).on_hover_text("Close file dialog").clicked() {
+                    if ui.add_enabled(!self.writing, egui::Button::new("×")).on_hover_text("Close (Escape)").clicked() {
                         close = true;
                     }
                 });
@@ -203,6 +204,10 @@ impl ArtifactDialog {
                 }
             });
         });
+        // Escape (or a click outside) cancels like the Cancel button, except while a write is underway.
+        if !self.writing && request.is_none() && modal.should_close() {
+            close = true;
+        }
         if close {
             self.kind = None;
         }

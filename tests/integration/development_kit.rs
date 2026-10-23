@@ -104,7 +104,7 @@ impl App for KitTool {
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                     components::panel_frame().show(ui, |ui| {
                         ui.set_min_size(rect.size() - egui::vec2(20.0, 20.0));
-                        components::panel_heading(ui, "01", "Compose");
+                        components::panel_heading(ui, "Compose");
                         let response = self.editor.show(ui, &mut self.script);
                         components::guidance(ui, response.status_text());
                     });
@@ -114,7 +114,7 @@ impl App for KitTool {
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                     components::panel_frame().show(ui, |ui| {
                         ui.set_min_size(rect.size() - egui::vec2(20.0, 20.0));
-                        components::panel_heading(ui, "03", "Effect Parameters");
+                        components::panel_heading(ui, "Effect Parameters");
                         let mut committed = false;
                         components::field_title(ui, "power");
                         let response = ScalarControl::new("power", &mut self.power)

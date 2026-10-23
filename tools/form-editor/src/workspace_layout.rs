@@ -2,9 +2,8 @@
 // Licensed under the MIT License.
 
 //! The workbench's panes and inspector tabs (UI module). The authoring kit's `PanelLayout` places Script, Preview,
-//! and Inspector with
-//! persisted widths, the View menu hides or restores each panel (keeping at least one), and Maximize keeps the panes
-//! while the tool hides its own chrome. Preferences never alter a study.
+//! and Inspector with persisted widths, and the View menu hides or restores each panel (keeping at least one). Nothing
+//! hides the header or project bar. Preferences never alter a study.
 
 use joy_engine::development::{
     MaximizeMode,
@@ -39,7 +38,7 @@ pub fn create_panel_layout(storage: Option<Storage>) -> PanelLayout {
             },
             center_collapsible: true,
             labels: ["Script", "Preview", "Inspector"],
-            maximize_mode: MaximizeMode::Workspace,
+            maximize_mode: MaximizeMode::None,
             ..PanelLayoutOptions::default()
         },
         storage,
@@ -141,7 +140,7 @@ pub fn inspector_tabs(ui: &mut Ui, tab: &mut InspectorTab) {
     });
 }
 
-/// The header's View menu: one toggle per panel (at least one stays visible) and Maximize.
+/// The header's View menu: one toggle per panel (at least one stays visible).
 pub fn view_menu(ui: &mut Ui, layout: &mut PanelLayout) -> egui::Response {
     ui.menu_button("VIEW", |ui| {
         ui.set_min_width(150.0);

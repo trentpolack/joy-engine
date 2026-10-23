@@ -14,7 +14,7 @@ Games own tuning and palettes in Rust configuration modules. External documents 
 Preserve time units, update order, random-number consumption, collision behavior, and rendering order during structural refactors. Keep intentional behavior changes separate. Gameplay randomness stays independent from cosmetic randomness; deterministic scenarios use seeded streams and portable numerical helpers.
 
 ## FORM Authoring
-Use `const` for immutable values, lookup tables, fixed calculations, and finished geometry. Keep `let` for reassignment, `ref` arguments, and geometry or instance builders that will be edited. A constant freezes shared geometry or instance aliases; use `copy()` when a separate editable value is needed.
+Use `const` for immutable values, lookup tables, fixed calculations, and finished geometry. Keep `let` for reassignment, `ref` arguments, and geometry or instance builders that will be edited. A constant holds a frozen snapshot of geometry or instances read from a variable, leaving that variable editable; use `copy()` when a separate editable value of a constant is needed.
 
 Use `for index in start..end` for ascending, exclusive integer ranges, and `foreach item in collection` when only list values are needed. Use `wrangle` for geometry and instance attribute domains. Author enums on multiple lines with PascalCase entries, preserving member order and keeping FORM spellings separate from persistent game IDs when they differ:
 

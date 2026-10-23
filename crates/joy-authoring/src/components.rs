@@ -49,6 +49,13 @@ const PROJECT_MARKER_SIZE: f32 = 8.0;
 /// Width of a list row's leading accent bar when selected.
 const ROW_ACCENT_WIDTH: f32 = 3.0;
 
+/// Space between a shortcut button's label and its keycap.
+const KEYCAP_GAP: f32 = 7.0;
+
+/// Horizontal padding inside a keycap, and its narrowest width (a single key reads as a square).
+const KEYCAP_PADDING: f32 = 4.0;
+const KEYCAP_MINIMUM_WIDTH: f32 = 16.0;
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Application chrome
 // ---------------------------------------------------------------------------------------------------------------------
@@ -153,13 +160,10 @@ pub fn toolbar_frame() -> Frame {
         .inner_margin(Margin::symmetric(layout::SPACE_MD as i8, layout::SPACE_XS as i8))
 }
 
-/// A numbered panel heading in the tool editor style (`01 COMPOSE`): an accent index and a spaced uppercase title.
-pub fn panel_heading(ui: &mut Ui, index: &str, title: &str) {
-    let caption = style_font(ui, &text_styles::caption(), layout::TYPE_SM);
-    let title_font = FontId::new(layout::TYPE_SM, text_styles::strong_family());
+/// A major panel heading in the tool editor style: a bold, spaced uppercase title.
+pub fn panel_heading(ui: &mut Ui, title: &str) {
+    let title_font = FontId::new(layout::TYPE_LG, text_styles::strong_family());
     let mut job = LayoutJob::default();
-    append_spaced(&mut job, index, caption, colors::ACCENT, CAPTION_SPACING);
-    append_spaced(&mut job, "  ", title_font.clone(), colors::TEXT, 0.0);
     append_spaced(&mut job, &title.to_uppercase(), title_font, colors::TEXT, CAPTION_SPACING);
     ui.label(job);
 }
@@ -168,6 +172,52 @@ pub fn panel_heading(ui: &mut Ui, index: &str, title: &str) {
 pub fn button(text: impl Into<String>) -> egui::Button<'static> {
     egui::Button::new(RichText::new(text.into()).text_style(TextStyle::Button))
         .min_size(vec2(0.0, layout::CONTROL_HEIGHT))
+}
+
+/// A workbench button that names its keyboard shortcut: the label in the button face, then `key` in a small outlined
+/// monospace keycap, so the shortcut reads as a key rather than part of the name. Hover text should describe the action
+/// without repeating the key; screen readers hear `label (key)`.
+pub fn shortcut_button(ui: &mut Ui, label: &str, key: &str) -> egui::Response {
+    let padding = ui.spacing().button_padding;
+    let label_galley = egui::WidgetText::from(RichText::new(label).text_style(TextStyle::Button)).into_galley(
+        ui,
+        Some(egui::TextWrapMode::Extend),
+        f32::INFINITY,
+        TextStyle::Button,
+    );
+    let key_galley = ui.painter().layout_no_wrap(key.to_owned(), FontId::monospace(layout::TYPE_XS), colors::MUTED);
+    let keycap_size = vec2(
+        (key_galley.size().x + (KEYCAP_PADDING * 2.0)).max(KEYCAP_MINIMUM_WIDTH),
+        key_galley.size().y + KEYCAP_PADDING,
+    );
+    let width = (padding.x * 2.0) + label_galley.size().x + KEYCAP_GAP + keycap_size.x;
+    let height = layout::CONTROL_HEIGHT.max(label_galley.size().y + (padding.y * 2.0));
+    let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), format!("{label} ({key})"))
+    });
+    if !ui.is_rect_visible(rect) {
+        return response;
+    }
+
+    // The button face matches `button`: egui's interaction visuals for fill, outline, and text.
+    let visuals = ui.style().interact(&response);
+    let painter = ui.painter();
+    painter.rect(rect, visuals.corner_radius, visuals.weak_bg_fill, visuals.bg_stroke, egui::StrokeKind::Inside);
+    let label_position = pos2(rect.left() + padding.x, rect.center().y - (label_galley.size().y * 0.5));
+    let keycap = Rect::from_min_size(
+        pos2(label_position.x + label_galley.size().x + KEYCAP_GAP, rect.center().y - (keycap_size.y * 0.5)),
+        keycap_size,
+    );
+    painter.galley(label_position, label_galley, visuals.text_color());
+    painter.rect_stroke(
+        keycap,
+        CornerRadius::same(layout::RADIUS_SM),
+        Stroke::new(layout::BORDER_THIN, colors::BORDER),
+        egui::StrokeKind::Inside,
+    );
+    painter.galley(keycap.center() - (key_galley.size() * 0.5), key_galley, colors::MUTED);
+    response
 }
 
 /// A native checkbox with the tool editors' orange checked fill and compact label, retaining egui's input and accessibility.

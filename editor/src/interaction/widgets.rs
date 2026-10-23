@@ -154,6 +154,11 @@ pub fn button(ui: &mut Ui, label: &str) -> Response {
     ui.add(egui::Button::new(RichText::new(label).size(layout::TYPE_SM)))
 }
 
+/// The kit's shortcut button: `label`, then `key` in a keycap.
+pub fn shortcut_button(ui: &mut Ui, label: &str, key: &str) -> Response {
+    components::shortcut_button(ui, label, key)
+}
+
 /// The kit's primary action button.
 pub fn primary_button(ui: &mut Ui, label: &str) -> Response {
     ui.add(components::primary_button(label))

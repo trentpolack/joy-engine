@@ -2,6 +2,25 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 10-23-2026
+### FORM Language
+- A `const` read from a geometry or instance variable now holds a frozen snapshot instead of freezing the variable it came from, so `let shape = box(1, 1, 1)` stays editable after `const finished = shape`. Fresh values (`const shape = box(1, 1, 1)`) still freeze in place, and aliases of a constant still cannot edit it.
+- The FORM catalog reader (`scripts/form-reference.mjs`, exported as `joy-engine/form/catalog`) also returns each keyword's hover documentation, so tools outside the engine can present the same completion and hover text as FORM EDITOR.
+
+### Script Editing
+- The shared script editor (FORM EDITOR and JOYFX EDITOR) follows VS Code: Tab/Shift+Tab and Ctrl/Cmd+]/[ indent and outdent selected lines, Ctrl/Cmd+/ toggles `#` comments, Enter keeps indentation (deeper after an opening bracket), and `}` lines up with its block. Trackpad scrolling locks to the predominant axis, and hover popups wait until scrolling stops.
+- Browser builds no longer type a shortcut's letter when Ctrl or Cmd is held (Cmd+Z, Cmd+S, and Cmd+A previously also inserted `z`, `s`, or `a`), and copy, cut, and paste reach text fields: winit cancelled those key presses, which suppressed the browser's clipboard events.
+
+### FORM EDITOR
+- Lighting settings use the parameter inspector's grouped XYZ direction and RGB color controls, including the color picker, with full-width titles, consistent checkbox and button styling, and Balanced shadows by default. Removed the backend note and limited Reset params to the Parameters tab.
+- Enlarged the shared workspace headings and the Recipes/Reference dialogs, standardized their action buttons, and replaced the project-info triangle glyphs with a drawn disclosure arrow.
+- The script pane ends in one status bar matching the preview's statistics bar (build status, Go to error, and cursor position). RECIPES and REFERENCE moved to the header and open separate documentation pages that link to each other.
+- The project bar shows the open file's name and kind (`wave-study.form · FORM SCRIPT`) with an unsaved-edits dot, replacing the field that edited the script's project name. Save and Export suggest the file's name.
+- Escape (or a click outside) cancels the Save/Export dialog and the replace-study confirmation.
+- Removed Maximize: nothing hides the header or project bar. `MaximizeMode::Workspace` is replaced by `MaximizeMode::None`, which FORM EDITOR and JOYFX EDITOR use (JOYFX EDITOR's header and project bar also stay visible).
+- ATTRIBUTES is a full button. The preview's RESULT toolbar is now SHOW (**All outputs** or one `output`/`inspect` snapshot), with a note on how the choice relates to Export instead of "Full build · export source".
+- Added `components::shortcut_button`, which shows a key in an outlined keycap; Frame `F` and Reset `0` in FORM EDITOR and JOYFX EDITOR and Joy Editor's level FRAME `F` use it.
+
 ## 10-21-2026
 ### FORM v2 (Breaking)
 - Added deeply immutable `const` values, including geometry and instance aliases, with editable explicit copies. Replaced `repeat` with exclusive integer `for index in start..end` loops and added ordered `foreach item in collection` iteration. Migrated engine assets, packed instances, editor recipes, completion, highlighting, and references; authored enums use multiline PascalCase entries.

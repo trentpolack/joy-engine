@@ -166,6 +166,8 @@ struct PendingReplacement {
 #[derive(Clone)]
 struct DocumentSource {
     document: FormDocument,
+    // The file's name with its extension (`wave-study.form`), shown in the project bar.
+    file_name: String,
     files: Option<ToolFileReader>,
     path: String,
     // The native folder the reader's root stands for, so edited referenced scripts can be written back.
@@ -194,8 +196,10 @@ pub struct FormEditor {
     dialogs: FileDialogs,
     file_purpose: Option<FilePurpose>,
     replacement: Option<PendingReplacement>,
-    name_field: String,
-    name_focused: bool,
+    // The open document's file name (`wave-study.form`); `None` until a file is opened or saved.
+    file_name: Option<String>,
+    // The file name a pending Save will write, recorded when the platform confirms it.
+    pending_save_name: Option<String>,
     cursor: (usize, usize),
     project_info: bool,
     title_open: bool,
@@ -239,7 +243,8 @@ impl FormEditor {
         if !session.has_edits() {
             session.set_files(Some(library_reader(&assets)), DEFAULT_FORM_ASSET_PATH);
         }
-        let name_field = session.name.clone();
+        // Recovered work is the author's own unsaved study, not the library example it may have started from.
+        let file_name = (!session.has_edits()).then(|| file_name_of(DEFAULT_FORM_ASSET_PATH));
         Self {
             session,
             viewport: Viewport::new(),
@@ -258,8 +263,8 @@ impl FormEditor {
             dialogs: FileDialogs::new(),
             file_purpose: None,
             replacement: None,
-            name_field,
-            name_focused: false,
+            file_name,
+            pending_save_name: None,
             cursor: (1, 1),
             project_info: true,
             title_open: false,
@@ -398,6 +403,7 @@ impl FormEditor {
             open_form_library_asset(asset, &self.assets).map_err(|error| format!("Could not open {path}: {error}"))?;
         let source = DocumentSource {
             document,
+            file_name: asset.filename.clone(),
             files: Some(library_reader(&self.assets)),
             path: asset.path.clone(),
             disk_root: None,
@@ -422,6 +428,7 @@ impl FormEditor {
     fn load(&mut self, source: DocumentSource) {
         let DocumentSource {
             document,
+            file_name,
             files,
             path,
             disk_root,
@@ -435,7 +442,7 @@ impl FormEditor {
         self.editor.set_diagnostics(Vec::new());
         self.editor.reset_history();
         self.session.load(document);
-        self.name_field = self.session.name.clone();
+        self.file_name = Some(file_name);
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -472,9 +479,6 @@ impl FormEditor {
                         self.session.accept_build(accepted, milliseconds);
                         self.editor.set_diagnostics(Vec::new());
                         self.gpu_error = None;
-                        if !self.name_field_focused() {
-                            self.name_field = self.session.name.clone();
-                        }
                     }
                     Err(error) => {
                         self.session.reject_preview("");
@@ -486,10 +490,6 @@ impl FormEditor {
                 self.editor.set_diagnostics(vec![ScriptDiagnostic::from(&diagnostic)]);
             }
         }
-    }
-
-    fn name_field_focused(&self) -> bool {
-        self.name_focused
     }
 
     fn start_file(&mut self, purpose: FilePurpose, request: Result<(), joy_engine::development::FileDialogError>) {
@@ -517,6 +517,9 @@ impl FormEditor {
                 if kind == ArtifactKind::Save {
                     let format = if format == "form" { SaveFormat::Form } else { SaveFormat::Instance };
                     self.session.save_completed(format, &contents, !cfg!(target_arch = "wasm32"));
+                    if let Some(name) = self.pending_save_name.take() {
+                        self.file_name = Some(name);
+                    }
                 }
                 self.artifact.completed();
             }
@@ -525,13 +528,19 @@ impl FormEditor {
                     ..
                 },
                 FileDialogEvent::Cancelled,
-            ) => self.artifact.cancelled(),
+            ) => {
+                self.pending_save_name = None;
+                self.artifact.cancelled();
+            }
             (
                 FilePurpose::Artifact {
                     ..
                 },
                 FileDialogEvent::Failed(message),
-            ) => self.artifact.failed(message),
+            ) => {
+                self.pending_save_name = None;
+                self.artifact.failed(message);
+            }
             (purpose, FileDialogEvent::Opened(file)) => {
                 self.handle_opened(purpose, &file.name, file.contents.as_bytes(), file.path.as_deref())
             }
@@ -575,6 +584,7 @@ impl FormEditor {
                         self.raw_form = false;
                         let source = DocumentSource {
                             document,
+                            file_name: name.to_owned(),
                             files,
                             path,
                             disk_root,
@@ -691,6 +701,9 @@ impl FormEditor {
                         SaveRequest::text(title, &request.name, filter, String::from_utf8_lossy(&bytes).into_owned())
                     }
                 };
+                if request.kind == ArtifactKind::Save {
+                    self.pending_save_name = Some(request.name.clone());
+                }
                 let started = self.dialogs.save(save);
                 match started {
                     Ok(()) => {
@@ -722,7 +735,7 @@ impl FormEditor {
             && self.replacement.is_none()
             && context.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::S))
         {
-            self.artifact.open(ArtifactKind::Save, &file_stem(&self.session.name));
+            self.artifact.open(ArtifactKind::Save, &self.document_stem());
         }
         if standalone
             && self.replacement.is_none()
@@ -737,19 +750,14 @@ impl FormEditor {
             .show(context, |ui| {
                 ui.set_clip_rect(area);
                 ui.scope_builder(UiBuilder::new().max_rect(area), |ui| {
-                    let maximized = self.layout.maximized();
-                    if !maximized {
-                        egui::Panel::top("form-editor-header")
-                            .exact_size(if standalone { 58.0 } else { 44.0 })
-                            .frame(egui::Frame::new().fill(colors::PANEL).inner_margin(egui::Margin::symmetric(16, 8)))
-                            .show(ui, |ui| self.header(ui, standalone));
-                        egui::Panel::top("form-editor-project")
-                            .exact_size(46.0)
-                            .frame(
-                                egui::Frame::new().fill(colors::SURFACE).inner_margin(egui::Margin::symmetric(16, 6)),
-                            )
-                            .show(ui, |ui| self.project_bar(ui, standalone));
-                    }
+                    egui::Panel::top("form-editor-header")
+                        .exact_size(if standalone { 58.0 } else { 44.0 })
+                        .frame(egui::Frame::new().fill(colors::PANEL).inner_margin(egui::Margin::symmetric(16, 8)))
+                        .show(ui, |ui| self.header(ui, standalone));
+                    egui::Panel::top("form-editor-project")
+                        .exact_size(46.0)
+                        .frame(egui::Frame::new().fill(colors::SURFACE).inner_margin(egui::Margin::symmetric(16, 6)))
+                        .show(ui, |ui| self.project_bar(ui, standalone));
                     let workbench = ui.available_rect_before_wrap();
                     let panes = self.layout.panes(workbench);
                     self.panes = panes;
@@ -797,13 +805,20 @@ impl FormEditor {
             let view = view_menu(ui, &mut self.layout);
             self.track("view", view);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if self.track("help", ui.add(components::button("?")).on_hover_text("Language reference")).clicked() {
+                // Documentation: the language reference and the recipes are separate pages.
+                let reference = ui.add(components::button("REFERENCE")).on_hover_text("FORM SCRIPT language reference");
+                if self.track("script-reference", reference).clicked() {
                     self.reference.open();
                 }
+                let recipes = ui.add(components::button("RECIPES")).on_hover_text("Append a recipe to the script");
+                if self.track("recipes", recipes).clicked() {
+                    self.reference.open_recipes();
+                }
+                ui.add_space(layout::SPACE_LG);
                 let export = ui.add_enabled(self.session.data().is_some(), components::button("EXPORT"));
                 let export = self.track("export", export);
                 if export.clicked() {
-                    self.artifact.open(ArtifactKind::Export, &file_stem(&self.session.name));
+                    self.artifact.open(ArtifactKind::Export, &self.document_stem());
                 }
                 if standalone {
                     if self
@@ -814,7 +829,7 @@ impl FormEditor {
                         )
                         .clicked()
                     {
-                        self.artifact.open(ArtifactKind::Save, &file_stem(&self.session.name));
+                        self.artifact.open(ArtifactKind::Save, &self.document_stem());
                     }
                     if self
                         .track(
@@ -837,6 +852,20 @@ impl FormEditor {
         ui.painter().rect_filled(line, 0.0, colors::ACCENT);
     }
 
+    /// The open document's file name, or an untitled `.form` name from the study's display name.
+    fn document_file_name(&self) -> String {
+        self.file_name.clone().unwrap_or_else(|| format!("{}.form", file_stem(&self.session.name)))
+    }
+
+    /// The open document's file name without its extension, as Save and Export suggest it.
+    fn document_stem(&self) -> String {
+        let file_name = self.document_file_name();
+        match file_name.rsplit_once('.') {
+            Some((stem, _)) if !stem.is_empty() => stem.to_owned(),
+            _ => file_name,
+        }
+    }
+
     /// Ask for a `.form` script or `.forminst` instance (or an older `.formlab` document) to open.
     fn open_document(&mut self) {
         let request = OpenRequest::text(
@@ -850,24 +879,24 @@ impl FormEditor {
 
     fn project_bar(&mut self, ui: &mut Ui, standalone: bool) {
         ui.horizontal_centered(|ui| {
-            let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-            ui.painter().rect_filled(dot, 0.0, colors::ACCENT);
-            let field = ui.add(
-                egui::TextEdit::singleline(&mut self.name_field)
-                    .char_limit(120)
-                    .desired_width(210.0)
-                    .font(egui::FontId::new(layout::TYPE_MD, joy_engine::runtime::theme::text_styles::strong_family()))
-                    .margin(egui::vec2(5.0, 6.0)),
-            );
-            self.name_focused = field.has_focus();
-            if field.lost_focus() {
-                // An invalid script or name keeps the current name; the status line says why.
-                let next = self.name_field.clone();
-                let _ = self.session.rename(&next);
-                self.name_field = self.session.name.clone();
-            } else if !field.has_focus() && self.name_field != self.session.name {
-                self.name_field = self.session.name.clone();
+            // The open file and what kind of document it is; the display name lives in the script's `project` line.
+            components::project_marker(ui);
+            let file_name = self.document_file_name();
+            let label = RichText::new(&file_name)
+                .color(colors::TEXT)
+                .size(layout::TYPE_MD)
+                .family(joy_engine::runtime::theme::text_styles::strong_family());
+            let path = self.session.document_path();
+            let location = if path.is_empty() { file_name.clone() } else { path.to_owned() };
+            let hover = if self.session.has_edits() { format!("{location} · unsaved edits") } else { location };
+            ui.add(egui::Label::new(label).truncate()).on_hover_text(hover);
+            if self.session.has_edits() {
+                // An unsaved-edits dot, as editor tabs show it.
+                let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+                ui.painter().circle_filled(dot.center(), 3.0, colors::ACCENT);
             }
+            ui.label(RichText::new(document_kind(&file_name)).color(colors::MUTED).size(layout::TYPE_XS));
+            ui.add_space(layout::SPACE_MD);
             if standalone && let Some((text, title)) = self.session.save_state() {
                 let label = ui.label(RichText::new(text).color(colors::MUTED).size(layout::TYPE_SM));
                 if !title.is_empty() {
@@ -908,7 +937,7 @@ impl FormEditor {
             .frame(components::panel_frame().fill(colors::SURFACE).inner_margin(egui::Margin::symmetric(12, 8)))
             .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {
-                    components::panel_heading(ui, "01", "SCRIPT");
+                    components::panel_heading(ui, "SCRIPT");
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if self
                             .track(
@@ -926,60 +955,43 @@ impl FormEditor {
                     });
                 });
             });
-        egui::Panel::bottom("script-diagnostic")
-            .min_size(38.0)
-            .frame(egui::Frame::new().fill(colors::BUILD_STATUS).inner_margin(egui::Margin::symmetric(12, 8)))
-            .show(ui, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    let status = self.session.status().clone();
-                    let color = match status.state {
-                        StatusState::Ready => colors::SUCCESS,
-                        StatusState::Busy => colors::ACCENT_HOVER,
-                        StatusState::Error => colors::DANGER,
-                    };
-                    let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-                    ui.painter().circle_filled(dot.center(), 3.5, color);
-                    ui.label(RichText::new(status.message).color(color).size(layout::TYPE_SM));
-                    if let Some((line, _column)) = self.session.error_location()
-                        && self.track("go-to-error", ui.small_button("Go to error ↗")).clicked()
-                    {
+        // One status bar, styled like the preview's statistics bar: the build status on the left (with Go to error when
+        // a diagnostic has a location) and the cursor position on the right.
+        egui::Panel::bottom("script-status").frame(components::toolbar_frame()).show(ui, |ui| {
+            let status = self.session.status().clone();
+            let color = match status.state {
+                StatusState::Ready => colors::SUCCESS,
+                StatusState::Busy => colors::ACCENT_HOVER,
+                StatusState::Error => colors::DANGER,
+            };
+            // One interaction row high, like a line of the preview's statistics bar, so the two bars line up.
+            let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+            // The panel sizes itself from what it used last frame; reserve the row so it never shrinks under the text.
+            ui.set_min_height(row.y);
+            ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(
+                    RichText::new(format!("Ln {}, Col {}", self.cursor.0, self.cursor.1))
+                        .color(colors::MUTED)
+                        .size(layout::TYPE_XS)
+                        .monospace(),
+                );
+                if let Some((line, _column)) = self.session.error_location() {
+                    let go_to = egui::Button::new(RichText::new("Go to error").size(layout::TYPE_XS)).small();
+                    let go_to = ui.add(go_to).on_hover_text(format!("Move the cursor to line {line}"));
+                    if self.track("go-to-error", go_to).clicked() {
                         self.editor.go_to_line(line);
                     }
+                }
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+                    ui.painter().circle_filled(dot.center(), 3.5, color);
+                    let message =
+                        egui::Label::new(RichText::new(&status.message).color(color).size(layout::TYPE_XS).monospace())
+                            .truncate();
+                    ui.add(message).on_hover_text(&status.message);
                 });
             });
-        egui::Panel::bottom("script-bottom")
-            .frame(egui::Frame::new().fill(colors::PANEL).inner_margin(egui::Margin::symmetric(10, 6)))
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(
-                        RichText::new(format!("Ln {}, Col {}", self.cursor.0, self.cursor.1))
-                            .color(colors::MUTED)
-                            .size(layout::TYPE_XS)
-                            .monospace(),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if self
-                            .track(
-                                "script-reference",
-                                ui.add(components::button("Script Reference"))
-                                    .on_hover_text("FORM SCRIPT language reference"),
-                            )
-                            .clicked()
-                        {
-                            self.reference.open();
-                        }
-                        if self
-                            .track(
-                                "recipes",
-                                ui.add(components::button("Recipes ↗")).on_hover_text("Append a recipe to the script"),
-                            )
-                            .clicked()
-                        {
-                            self.reference.open_recipes();
-                        }
-                    });
-                });
-            });
+        });
         egui::CentralPanel::default().frame(egui::Frame::new().fill(colors::SCRIPT)).show(ui, |ui| {
             let response = self.editor.show(ui, &mut self.session.source);
             self.cursor = (response.line, response.column);
@@ -1117,16 +1129,35 @@ impl FormEditor {
                         .stroke(egui::Stroke::new(1.0, colors::ACCENT))
                         .inner_margin(egui::Margin::symmetric(10, 6))
                         .show(ui, |ui| {
-                            let arrow = if self.title_open { "▼" } else { "▶" };
-                            let response = ui.add(
-                                egui::Label::new(
-                                    RichText::new(format!("{arrow}  {}", title.replace('\n', " ")))
-                                        .color(colors::ACCENT)
-                                        .strong(),
-                                )
-                                .wrap_mode(egui::TextWrapMode::Extend)
-                                .sense(egui::Sense::click()),
-                            );
+                            let response = ui
+                                .horizontal(|ui| {
+                                    // Draw the disclosure arrow instead of depending on the font's triangle glyphs.
+                                    let arrow = ui
+                                        .scope(|ui| {
+                                            let widgets = &mut ui.visuals_mut().widgets;
+                                            widgets.inactive.fg_stroke.color = colors::ACCENT;
+                                            widgets.hovered.fg_stroke.color = colors::ACCENT_HOVER;
+                                            widgets.active.fg_stroke.color = colors::ACCENT;
+                                            let response =
+                                                ui.allocate_response(egui::vec2(12.0, 12.0), egui::Sense::click());
+                                            egui::collapsing_header::paint_default_icon(
+                                                ui,
+                                                if self.title_open { 1.0 } else { 0.0 },
+                                                &response,
+                                            );
+                                            response
+                                        })
+                                        .inner;
+                                    let label = ui.add(
+                                        egui::Label::new(
+                                            RichText::new(title.replace('\n', " ")).color(colors::ACCENT).strong(),
+                                        )
+                                        .wrap_mode(egui::TextWrapMode::Extend)
+                                        .sense(egui::Sense::click()),
+                                    );
+                                    arrow.union(label)
+                                })
+                                .inner;
                             if response.clicked() {
                                 self.title_open = !self.title_open;
                             }
@@ -1187,7 +1218,7 @@ impl FormEditor {
     }
 
     fn preview_heading(&self, ui: &mut Ui) {
-        components::panel_heading(ui, "02", "PREVIEW");
+        components::panel_heading(ui, "PREVIEW");
         let color = match self.session.preview_state() {
             PreviewState::Accepted => colors::SUCCESS,
             PreviewState::Pending => colors::MUTED,
@@ -1197,28 +1228,12 @@ impl FormEditor {
     }
 
     fn preview_actions(&mut self, ui: &mut Ui) {
-        let maximize = if self.layout.maximized() { "Restore" } else { "Maximize" };
-        if self
-            .track(
-                "maximize",
-                ui.add(components::button(maximize).fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::NONE)),
-            )
-            .clicked()
-        {
-            self.layout.set_maximized(!self.layout.maximized());
-        }
-        if self
-            .track(
-                "reset-camera",
-                ui.add(components::button("Reset").fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::NONE))
-                    .on_hover_text("Reset camera (0)"),
-            )
-            .clicked()
-        {
+        let reset = components::shortcut_button(ui, "Reset", "0").on_hover_text("Reset camera");
+        if self.track("reset-camera", reset).clicked() {
             self.viewport.reset_camera();
         }
-        if self.track("frame", ui.add(components::button("Frame  F")).on_hover_text("Frame all geometry (F)")).clicked()
-        {
+        let frame = components::shortcut_button(ui, "Frame", "F").on_hover_text("Frame all geometry");
+        if self.track("frame", frame).clicked() {
             self.viewport.frame();
         }
         let points = components::toggle_button(ui, self.viewport.mode == ViewMode::Points, "Points");
@@ -1260,23 +1275,14 @@ impl FormEditor {
             .frame(components::panel_frame().fill(colors::SURFACE).inner_margin(egui::Margin::symmetric(12, 8)))
             .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {
-                    components::panel_heading(ui, "03", "INSPECTOR");
+                    components::panel_heading(ui, "INSPECTOR");
+                    if self.tab != InspectorTab::Parameters {
+                        return;
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let reset = ui
-                            .add(
-                                egui::Button::new(
-                                    RichText::new("Reset params")
-                                        .color(colors::ACCENT)
-                                        .text_style(egui::TextStyle::Button)
-                                        .size(layout::TYPE_XS),
-                                )
-                                .fill(egui::Color32::TRANSPARENT)
-                                .stroke(egui::Stroke::new(1.0, colors::ACCENT))
-                                .min_size(egui::vec2(0.0, 30.0)),
-                            )
-                            .on_hover_text(
-                                "Restore all parameter defaults; materials and preview lighting are unchanged",
-                            );
+                        let reset = ui.add(components::button("Reset params")).on_hover_text(
+                            "Restore all parameter defaults; materials and preview lighting are unchanged",
+                        );
                         if self.track("reset-params", reset).clicked() {
                             self.drafts.clear();
                             self.session.reset_parameters();
@@ -1470,7 +1476,7 @@ impl FormEditor {
         }
         let mut answer = None;
         if let Some(replacement) = &self.replacement {
-            egui::Modal::new(egui::Id::new("form-editor-confirm")).show(context, |ui| {
+            let modal = egui::Modal::new(egui::Id::new("form-editor-confirm")).show(context, |ui| {
                 ui.set_width(340.0);
                 ui.label(replacement.prompt);
                 ui.add_space(layout::SPACE_SM);
@@ -1483,6 +1489,9 @@ impl FormEditor {
                     }
                 });
             });
+            if answer.is_none() && modal.should_close() {
+                answer = Some(false);
+            }
         }
         if let Some(replace) = answer {
             self.confirm_replacement(replace);
@@ -1503,6 +1512,23 @@ impl FormEditor {
 impl Default for FormEditor {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// The file name at the end of a project or library path.
+fn file_name_of(path: &str) -> String {
+    path.rsplit('/').next().unwrap_or(path).to_owned()
+}
+
+/// What kind of document a file name holds, as the project bar labels it.
+fn document_kind(file_name: &str) -> &'static str {
+    let lower = file_name.to_ascii_lowercase();
+    if lower.ends_with(".forminst") || lower.ends_with(".formlab") {
+        "FORM INSTANCE"
+    } else if lower.ends_with(".form") {
+        "FORM SCRIPT"
+    } else {
+        "FORM DOCUMENT"
     }
 }
 
@@ -1564,6 +1590,7 @@ impl AuthoringTool for FormEditor {
         let files = if document.path.is_empty() { None } else { self.host_files.clone() };
         self.load(DocumentSource {
             document: opened,
+            file_name,
             files,
             path: document.path,
             disk_root: None,

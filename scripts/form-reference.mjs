@@ -24,9 +24,10 @@ const BUILTINS_SECTION = 'form-builtins';
 const MINOR_HEADING_WORDS = new Set(['a', 'an', 'and', 'as', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to']);
 
 /**
- * Read the keyword list and grouped built-in functions from the catalog's Rust source.
+ * Read the keyword list (with each keyword's hover documentation) and grouped built-in functions from the catalog's
+ * Rust source.
  * @param {string} source - Contents of `language_information.rs`.
- * @returns {{keywords: string[], groups: {title: string, builtins: {name: string, signature: string, summary: string}[]}[]}}
+ * @returns {{keywords: string[], keywordDocumentation: Record<string, string>, groups: {title: string, builtins: {name: string, signature: string, summary: string}[]}[]}}
  */
 export function readCatalog(source) {
   const keywordList = source.match(/pub const FORM_KEYWORDS: \[&str; \d+\] = \[([\s\S]*?)\];/);
@@ -42,6 +43,7 @@ export function readCatalog(source) {
 
   // Each group starts at a `// ---- Title.` comment; each entry is `builtin("name", "signature", "summary")`,
   // possibly wrapped across lines by rustfmt.
+  /** @type {{title: string, builtins: {name: string, signature: string, summary: string}[]}[]} */
   const groups = [];
   const entryPattern = /\/\/ ---- ([^\n]+?)\.\n|builtin\(\s*"((?:[^"\\]|\\.)*)",\s*"((?:[^"\\]|\\.)*)",\s*"((?:[^"\\]|\\.)*)",?\s*\)/g;
   for(const match of table[1].matchAll(entryPattern)) {
@@ -58,7 +60,48 @@ export function readCatalog(source) {
       summary: unescapeRust(match[4])
     });
   }
-  return { keywords, groups };
+  return { keywords, keywordDocumentation: readKeywordDocumentation(source, keywords), groups };
+}
+
+/**
+ * Read the language catalog from this engine checkout, for tools outside the engine (such as the VS Code extension)
+ * that present the same keywords, documentation, and built-in functions as FORM EDITOR's completion and hover.
+ * @returns {ReturnType<typeof readCatalog>}
+ */
+export function readFormCatalog() {
+  return readCatalog(readFileSync(CATALOG_PATH, 'utf8'));
+}
+
+/**
+ * Read each keyword's hover text from `keyword_documentation`'s match arms (`"if" | "else" => "…"`), falling back to its
+ * catch-all arm.
+ * @param {string} source - Contents of `language_information.rs`.
+ * @param {string[]} keywords
+ * @returns {Record<string, string>}
+ */
+function readKeywordDocumentation(source, keywords) {
+  const body = source.match(/fn keyword_documentation\(keyword: &str\) -> &'static str \{([\s\S]*?)\n\}/);
+  if(!body) {
+    throw new Error('keyword_documentation was not found in the catalog source.');
+  }
+  /** @type {Record<string, string>} */
+  const documentation = {};
+  let fallback = '';
+  const armPattern = /((?:"[^"]+"\s*\|\s*)*"[^"]+"|_)\s*=>\s*\{?\s*"((?:[^"\\]|\\.)*)"/g;
+  for(const match of body[1].matchAll(armPattern)) {
+    const text = unescapeRust(match[2]);
+    if(match[1] === '_') {
+      fallback = text;
+      continue;
+    }
+    for(const keyword of match[1].matchAll(/"([^"]+)"/g)) {
+      documentation[keyword[1]] = text;
+    }
+  }
+  for(const keyword of keywords) {
+    documentation[keyword] ??= fallback;
+  }
+  return documentation;
 }
 
 /**
@@ -139,7 +182,7 @@ function headingCase(text) {
  * @returns {string}
  */
 function unescapeRust(text) {
-  return text.replace(/\\(["\\])/g, '$1');
+  return text.replace(/\\n/g, '\n').replace(/\\(["\\])/g, '$1');
 }
 
 /**

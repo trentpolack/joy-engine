@@ -3,7 +3,7 @@
 
 //! The real tool on a real device, driven through its interface with synthetic input (`HeadlessShell::step_with_ui`):
 //! the default study builds and renders through the engine, examples open, parameters edit with undo, panels hide and
-//! maximize, and exports write. Needs a GPU adapter (llvmpipe or SwiftShader is enough); without one each test prints
+//! restore, dialogs close with Escape, and exports write. Needs a GPU adapter (llvmpipe or SwiftShader is enough); without one each test prints
 //! a note and returns. Set `JOY_RENDER_CAPTURE_DIR` to keep PNG captures. Native only.
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -251,7 +251,7 @@ fn parameters_edit_through_the_inspector_with_property_undo() {
 }
 
 #[test]
-fn panels_hide_restore_and_maximize_from_the_workbench() {
+fn panels_hide_and_restore_without_hiding_the_header() {
     let Some(mut shell) = shell() else {
         return;
     };
@@ -278,16 +278,30 @@ fn panels_hide_restore_and_maximize_from_the_workbench() {
     lab.layout_mut().set_collapsed(PaneSide::Left, false);
     lab.layout_mut().set_collapsed(PaneSide::Right, false);
 
-    // Maximize hides the tool's chrome and keeps the panes.
+    // Nothing hides the header: there is no Maximize, and the panes always start below the project bar.
     shell.step_with_ui(&mut lab, input(Vec::new())).unwrap();
-    let maximize = lab.control_rect("maximize").expect("Maximize is drawn");
-    click(&mut shell, &mut lab, maximize.center());
+    assert!(lab.control_rect("maximize").is_none(), "FORM EDITOR offers no Maximize");
+    lab.layout_mut().set_maximized(true);
     shell.step_with_ui(&mut lab, input(Vec::new())).unwrap();
-    capture(&shell, "form-editor-maximized");
-    assert!(lab.layout().maximized());
-    assert!(lab.panes().left.unwrap().top() < 1.0, "the header and project bar are hidden");
+    assert!(!lab.layout().maximized());
+    assert!(lab.panes().left.unwrap().top() > 50.0, "the header and project bar stay visible");
+
+    // Escape cancels the Save dialog without writing.
+    key(&mut shell, &mut lab, egui::Key::S, egui::Modifiers::COMMAND);
+    assert!(lab.artifact_dialog().is_open(), "Ctrl/Cmd+S opens Save");
+    capture(&shell, "form-editor-save-dialog");
     key(&mut shell, &mut lab, egui::Key::Escape, egui::Modifiers::NONE);
-    assert!(!lab.layout().maximized(), "Escape restores");
+    assert!(!lab.artifact_dialog().is_open(), "Escape cancels Save");
+
+    // Recipes and the Script Reference are separate pages.
+    use form_editor::reference_dialog::ReferencePage;
+    let recipes = lab.control_rect("recipes").expect("Recipes is drawn");
+    click(&mut shell, &mut lab, recipes.center());
+    assert_eq!(lab.reference_dialog().page(), Some(ReferencePage::Recipes));
+    key(&mut shell, &mut lab, egui::Key::Escape, egui::Modifiers::NONE);
+    let reference = lab.control_rect("script-reference").expect("Script Reference is drawn");
+    click(&mut shell, &mut lab, reference.center());
+    assert_eq!(lab.reference_dialog().page(), Some(ReferencePage::ScriptReference));
 }
 
 #[test]

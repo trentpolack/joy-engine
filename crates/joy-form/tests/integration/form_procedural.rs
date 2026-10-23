@@ -12,10 +12,8 @@ use serde_json::json;
 
 #[test]
 fn constants_reject_resource_mutation_through_every_alias() {
-    let setup = "let source = box(1,1,1)\naddAttribute(source,\"points\",\"weight\",1)\nlet before = source\nconst fixed = source\nlet after = fixed\n";
+    let setup = "let source = box(1,1,1)\naddAttribute(source,\"points\",\"weight\",1)\nconst fixed = source\nlet after = fixed\n";
     for operation in [
-        "translate(source,vector(1,0,0))",
-        "rotate(before,vector(0,1,0))",
         "scale(after,vector(2,2,2))",
         "append(fixed,box(1,1,1))",
         "color(fixed,rgba(1,0,0,1))",
@@ -32,18 +30,41 @@ fn constants_reject_resource_mutation_through_every_alias() {
     ] {
         let error = compile(&format!("{setup}{operation}"), &json!({}), None).unwrap_err();
         assert!(error.message.contains("constant"), "{operation}: {error}");
-        assert_eq!(error.line, 6);
+        assert_eq!(error.line, 5);
     }
     let error =
         compile("let g=box(1,1,1) wrangle points in g as point { const p=point }", &json!({}), None).unwrap_err();
     assert!(error.message.contains("wrangle element"), "{error}");
-    let error = compile(
+}
+
+#[test]
+fn constants_snapshot_shared_geometry_without_freezing_its_source() {
+    // Declaring a constant from a variable must not retroactively freeze that variable or its earlier aliases.
+    let source = r#"
+        let shape = box(1,1,1)
+        let before = shape
+        const finished = shape
+        translate(shape,vector(2,0,0))
+        rotate(before,vector(0,0,0))
+        const moved = translate(shape,vector(1,0,0))
+        translate(shape,vector(1,0,0))
+        output("Finished",finished)
+        output("Shape",shape)
+        output("Moved",moved)
+    "#;
+    let result = compile(source, &json!({}), None).unwrap();
+    let outputs = result.outputs.unwrap();
+    assert_eq!(outputs[0].geometry.positions[0], -0.5);
+    assert_eq!(outputs[1].geometry.positions[0], 3.5);
+    assert_eq!(outputs[2].geometry.positions[0], 2.5);
+
+    // A wrangle may capture its own target in a constant; the snapshot leaves the target editable for finalization.
+    compile(
         "let g=box(1,1,1) wrangle points in g as point { point.position += vector(1,0,0) const frozen=g }",
         &json!({}),
         None,
     )
-    .unwrap_err();
-    assert!(error.message.contains("constant"), "finalization cannot mutate frozen geometry: {error}");
+    .unwrap();
 }
 
 #[test]
@@ -74,10 +95,10 @@ fn constants_allow_reading_and_editing_independent_copies() {
 
 #[test]
 fn constants_freeze_instance_attributes_but_copies_remain_editable() {
-    let setup = "let sites=geometry() addPoint(sites,vector(0,0,0)) let group=instances(box(1,1,1),sites) addAttribute(group,\"instances\",\"weight\",1) const frozen=group\n";
+    let setup = "let sites=geometry() addPoint(sites,vector(0,0,0)) let group=instances(box(1,1,1),sites) addAttribute(group,\"instances\",\"weight\",1) const frozen=group\naddAttribute(group,\"instances\",\"editable\",0)\n";
     for operation in [
-        "addAttribute(group,\"instances\",\"other\",0)",
-        "wrangle instances in group as item { item.position=vector(1,0,0) }",
+        "addAttribute(frozen,\"instances\",\"other\",0)",
+        "wrangle instances in frozen as item { item.position=vector(1,0,0) }",
     ] {
         let error = compile(&format!("{setup}{operation}"), &json!({}), None).unwrap_err();
         assert!(error.message.contains("constant"), "{operation}: {error}");

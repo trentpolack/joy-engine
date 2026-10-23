@@ -6,6 +6,12 @@
 //! insertion, hover documentation for keywords, functions, fields, and inputs, diagnostics underlined and marked in
 //! the gutter with go-to-line, Ctrl/Cmd+Enter to run, and a read-only mode with language tools off for JSON.
 //!
+//! Editing follows VS Code where egui's text edit does not already: Tab and Shift+Tab (or Ctrl/Cmd+] and Ctrl/Cmd+[)
+//! indent and outdent the selected lines, Ctrl/Cmd+/ toggles line comments, Enter keeps the line's indentation, `}`
+//! lines up with its block, trackpad scrolling follows the predominant axis, and hover popups wait for scrolling to
+//! stop. Copy, cut, paste, select all, undo (Ctrl/Cmd+Z), and redo (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y) are the text
+//! edit's own; browsers depend on `joy-ui`'s input translation for them.
+//!
 //! The editor borrows the script text (`&mut String`) each frame and owns only presentation state (completion,
 //! diagnostics, pending navigation). Script undo is the text edit's own history, separate from property history;
 //! [`ScriptEditor::reset_history`] starts a new history when the owner switches documents, so programmatic refreshes
@@ -106,6 +112,17 @@ impl ScriptEditorResponse {
             if self.line_count == 1 { "line" } else { "lines" }
         )
     }
+}
+
+/// A shortcut that edits whole lines.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LineCommand {
+    /// Tab with a multi-line selection, or Ctrl/Cmd+].
+    Indent,
+    /// Shift+Tab or Ctrl/Cmd+[.
+    Outdent,
+    /// Ctrl/Cmd+/.
+    ToggleComment,
 }
 
 /// An open completion list.
@@ -258,6 +275,8 @@ impl ScriptEditor {
         let mut state = egui::text_edit::TextEditState::load(&context, text_id).unwrap_or_default();
         let mut state_changed = false;
         let mut scroll_to_cursor = false;
+        // Whether the editor itself changed the text this frame (line commands), beyond the text edit's own changes.
+        let mut edited = false;
 
         if std::mem::take(&mut self.reset_requested) {
             state.clear_undoer();
@@ -274,15 +293,29 @@ impl ScriptEditor {
         if std::mem::take(&mut self.focus_requested) {
             context.memory_mut(|memory| memory.request_focus(text_id));
         }
-        let focused = context.memory(|memory| memory.has_focus(text_id));
+        // Keys belong to a modal dialog above the editor (Escape closes it), not to the editor under it.
+        let focused = context.memory(|memory| memory.has_focus(text_id) && memory.allows_interaction(ui.layer_id()));
         let cursor_before = state.cursor.char_range().map_or(0, |range| range.primary.index.0);
 
         // Keys the editor handles before the text edit sees them.
+        let selection = state
+            .cursor
+            .char_range()
+            .map_or((cursor_before, cursor_before), |range| (range.secondary.index.0, range.primary.index.0));
+        let spans_lines = text
+            .as_str()
+            .chars()
+            .skip(selection.0.min(selection.1))
+            .take(selection.0.abs_diff(selection.1))
+            .any(|character| character == '\n');
         let mut run_requested = false;
         let mut explicit_completion = false;
         let mut accept: Option<usize> = None;
+        let mut line_command = None;
+        let mut closing_brace = false;
         if focused {
             let completion_open = self.completion_open();
+            let line_comment = self.syntax.line_comment();
             ui.input_mut(|input| {
                 if !read_only && input.consume_key(Modifiers::COMMAND, Key::Enter) {
                     run_requested = true;
@@ -306,10 +339,70 @@ impl ScriptEditor {
                         self.completion = None;
                     }
                 }
-                if !read_only && input.consume_key(Modifiers::NONE, Key::Tab) {
-                    input.events.push(egui::Event::Text(INDENT.to_owned()));
+                if read_only {
+                    return;
                 }
+
+                // VS Code line shortcuts. Shift+Tab is checked before Tab, because a shortcut without Shift also
+                // matches a press with it.
+                if input.consume_key(Modifiers::SHIFT, Key::Tab)
+                    || input.consume_key(Modifiers::COMMAND, Key::OpenBracket)
+                {
+                    line_command = Some(LineCommand::Outdent);
+                } else if input.consume_key(Modifiers::COMMAND, Key::CloseBracket) {
+                    line_command = Some(LineCommand::Indent);
+                } else if line_comment.is_some() && input.consume_key(Modifiers::COMMAND, Key::Slash) {
+                    line_command = Some(LineCommand::ToggleComment);
+                } else if input.consume_key(Modifiers::NONE, Key::Tab) {
+                    if spans_lines {
+                        line_command = Some(LineCommand::Indent);
+                    } else {
+                        input.events.push(egui::Event::Text(INDENT.to_owned()));
+                    }
+                }
+
+                // Enter keeps the line's indentation (one level deeper after an opening bracket). A plain newline stays
+                // the text edit's own Enter, because it ignores a bare "\n" text event.
+                let start = selection.0.min(selection.1);
+                let newline = script_language_tools::newline_with_indent(text.as_str(), start, INDENT);
+                if (newline.len() > 1) && input.consume_key(Modifiers::NONE, Key::Enter) {
+                    input.events.push(egui::Event::Text(newline));
+                }
+                closing_brace = (selection.0 == selection.1)
+                    && input.events.iter().any(|event| matches!(event, egui::Event::Text(text) if text == "}"));
             });
+        }
+
+        // Line commands and the closing-brace outdent edit the text directly, as one undo step.
+        if let Some(command) = line_command
+            && text.is_mutable()
+        {
+            let (anchor, cursor) = selection;
+            let edit = match command {
+                LineCommand::Indent => script_language_tools::shift_lines(text.as_str(), anchor, cursor, INDENT, false),
+                LineCommand::Outdent => script_language_tools::shift_lines(text.as_str(), anchor, cursor, INDENT, true),
+                LineCommand::ToggleComment => script_language_tools::toggle_line_comment(
+                    text.as_str(),
+                    anchor,
+                    cursor,
+                    self.syntax.line_comment().unwrap_or_default(),
+                ),
+            };
+            if edit.text != text.as_str() {
+                text.replace_with(&edit.text);
+                edited = true;
+            }
+            state.cursor.set_char_range(Some(CCursorRange::two(CCursor::new(edit.anchor), CCursor::new(edit.cursor))));
+            state_changed = true;
+        }
+        if closing_brace && text.is_mutable() {
+            let outdent = script_language_tools::closing_brace_outdent(text.as_str(), selection.1, INDENT);
+            if outdent > 0 {
+                text.delete_char_range(CharIndex(selection.1 - outdent)..CharIndex(selection.1));
+                state.cursor.set_char_range(Some(CCursorRange::one(CCursor::new(selection.1 - outdent))));
+                state_changed = true;
+                edited = true;
+            }
         }
 
         // Accept a completion before drawing so the text edit shows the result.
@@ -337,6 +430,13 @@ impl ScriptEditor {
         let mut layouter = |ui: &Ui, buffer: &dyn TextBuffer, _wrap_width: f32| -> Arc<Galley> {
             ui.painter().layout_job(highlight_job(syntax, buffer.as_str(), &font))
         };
+
+        // Scroll along the predominant axis only, as VS Code does, so a vertical trackpad swipe never drifts sideways
+        // through long lines (and a horizontal one never nudges the view up or down).
+        if ui.rect_contains_pointer(ui.available_rect_before_wrap()) {
+            ui.input_mut(|input| lock_predominant_scroll_axis(&mut input.smooth_scroll_delta));
+        }
+        let scrolling = ui.input(|input| input.is_scrolling());
 
         let frame = egui::Frame::new().fill(self.background).stroke(Stroke::new(layout::BORDER_THIN, colors::LINE));
         let scroll_id = self.id.with("scroll");
@@ -420,9 +520,15 @@ impl ScriptEditor {
         );
 
         // Completion: open while typing a word or on request, follow the word, close when it ends.
-        let changed = response.changed() || accepted;
+        let changed = response.changed() || accepted || edited;
         if tools {
-            self.update_completion(text.as_str(), cursor, changed && !accepted, explicit_completion, has_focus);
+            self.update_completion(
+                text.as_str(),
+                cursor,
+                response.changed() && !accepted,
+                explicit_completion,
+                has_focus,
+            );
         } else {
             self.completion = None;
         }
@@ -446,7 +552,9 @@ impl ScriptEditor {
 
         // Hover documentation (diagnostics take precedence).
         let mut response = response;
-        if let Some(message) = hovered_diagnostic {
+        if scrolling {
+            // Hover popups wait until scrolling settles, so they never flicker over lines sliding past the pointer.
+        } else if let Some(message) = hovered_diagnostic {
             response = response.on_hover_text_at_pointer(message);
         } else if let (Some(catalog), false) = (&self.catalog, read_only)
             && let Some(pointer) = response.hover_pos()
@@ -636,6 +744,15 @@ impl ScriptEditor {
             }
         }
         hovered
+    }
+}
+
+/// Keep only the larger component of a scroll delta.
+fn lock_predominant_scroll_axis(delta: &mut egui::Vec2) {
+    if delta.x.abs() > delta.y.abs() {
+        delta.y = 0.0;
+    } else {
+        delta.x = 0.0;
     }
 }
 

@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The Script Reference dialog (UI module): the FORM SCRIPT field guide with searchable, appendable Recipes from
-//! `script_guide`. Appending never replaces source or touches parameters.
+//! The FORM SCRIPT documentation dialog (UI module), with two separate pages: the Script Reference (the language field
+//! guide) and Recipes (searchable, appendable starting points from `script_guide`). Each page opens on its own and
+//! links to the other. Appending a recipe never replaces source or touches parameters.
 
 use joy_engine::development::components;
 use joy_engine::egui::{
@@ -13,12 +14,17 @@ use joy_engine::egui::{
 use joy_engine::runtime::theme::{
     colors,
     layout,
+    text_styles,
 };
 
 use crate::script_guide::{
     RECIPES,
     matching_recipes,
 };
+
+/// Documentation uses most of the workspace while leaving a visible backdrop around the modal.
+const DIALOG_SCREEN_FRACTION: f32 = 0.86;
+const DIALOG_MAX_WIDTH: f32 = 1160.0;
 
 /// A block of the field guide.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,7 +57,7 @@ output(\"Shrine\", merge(base, dome, pillar))",
     ),
     (
         ReferenceBlock::Paragraph,
-        "`output(\"Name\", value)` adds a result to the build; `inspect(\"Name\", value)` keeps a snapshot for inspection only. Choose a result above the viewport, then open ATTRIBUTES. Export always uses every output.",
+        "`output(\"Name\", value)` adds a result to the build; `inspect(\"Name\", value)` keeps a snapshot for inspection only. Choose one under SHOW above the preview, then open ATTRIBUTES. Export always includes every output and never an inspect snapshot.",
     ),
     (ReferenceBlock::Heading, "DECIDE AND ITERATE"),
     (
@@ -69,7 +75,7 @@ for i in 0..12 {
     ),
     (
         ReferenceBlock::Paragraph,
-        "Comparisons produce `true` or `false`, and `if` requires them; compare numbers explicitly (`count > 0`). `AND`, `OR`, and `NOT` are written in capitals and skip the right side once the answer is known. `number(flag)` turns true and false into 1 and 0. `let` declares a variable in the current block; `name = value` and `+=`, `-=`, `*=`, `/=` update the nearest existing one, so loops can count. Parameters and loop bindings are read-only. `const` declares immutable values: geometry and instance aliases are frozen too. Use `copy(value)` for an editable copy.",
+        "Comparisons produce `true` or `false`, and `if` requires them; compare numbers explicitly (`count > 0`). `AND`, `OR`, and `NOT` are written in capitals and skip the right side once the answer is known. `number(flag)` turns true and false into 1 and 0. `let` declares a variable in the current block; `name = value` and `+=`, `-=`, `*=`, `/=` update the nearest existing one, so loops can count. Parameters and loop bindings are read-only. `const` declares immutable values: a constant read from geometry or instances holds a frozen snapshot and leaves the source variable editable. Use `copy(value)` for an editable copy of a constant.",
     ),
     (
         ReferenceBlock::Code,
@@ -198,118 +204,175 @@ rand() # 0–1, deterministic each run",
 /// The budgets line at the end of the guide.
 pub const LIMITS: &str = "Limits: 150,000 vertices · 180,000 triangles · 2 million operations · 2 second worker timeout. Point previews sample at most 40,000 markers; exports contain every point.";
 
-/// The dialog's state: whether it is open and the recipe search.
+/// A page of the documentation dialog.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReferencePage {
+    /// The FORM SCRIPT language field guide.
+    ScriptReference,
+    /// Searchable recipes to append to the script.
+    Recipes,
+}
+
+impl ReferencePage {
+    /// The page's name, as its button and caption read.
+    pub fn title(self) -> &'static str {
+        match self {
+            Self::ScriptReference => "Script Reference",
+            Self::Recipes => "Recipes",
+        }
+    }
+
+    /// The other page, which the header links to.
+    fn other(self) -> Self {
+        match self {
+            Self::ScriptReference => Self::Recipes,
+            Self::Recipes => Self::ScriptReference,
+        }
+    }
+}
+
+/// The dialog's state: the open page (if any) and the recipe search.
 #[derive(Clone, Debug, Default)]
 pub struct ReferenceDialog {
-    open: bool,
+    page: Option<ReferencePage>,
     /// Recipe search text.
     pub search: String,
-    scroll_to_recipes: bool,
 }
 
 impl ReferenceDialog {
-    /// Open the guide (Script Reference, or `?`).
+    /// Open the Script Reference page (Script Reference, or `?`).
     pub fn open(&mut self) {
-        self.open = true;
+        self.page = Some(ReferencePage::ScriptReference);
     }
 
-    /// Open the guide at the recipes (Recipes ↗).
+    /// Open the Recipes page.
     pub fn open_recipes(&mut self) {
-        self.open = true;
-        self.scroll_to_recipes = true;
+        self.page = Some(ReferencePage::Recipes);
     }
 
-    /// Whether the guide is open.
+    /// Whether a page is open.
     pub fn is_open(&self) -> bool {
-        self.open
+        self.page.is_some()
     }
 
-    /// Close the guide.
+    /// The open page.
+    pub fn page(&self) -> Option<ReferencePage> {
+        self.page
+    }
+
+    /// Close the dialog.
     pub fn close(&mut self) {
-        self.open = false;
+        self.page = None;
     }
 
-    /// Draw the guide when open; returns the index of a recipe to append.
+    /// Draw the open page; returns the index of a recipe to append.
     pub fn show(&mut self, context: &egui::Context) -> Option<usize> {
-        if !self.open {
-            return None;
-        }
+        let page = self.page?;
         let mut appended = None;
         let screen = context.content_rect();
+        let size = egui::vec2(
+            (screen.width() * DIALOG_SCREEN_FRACTION).min(DIALOG_MAX_WIDTH),
+            screen.height() * DIALOG_SCREEN_FRACTION,
+        );
         let response = egui::Modal::new(egui::Id::new("form-editor-reference")).show(context, |ui| {
-            ui.set_width((screen.width() - 80.0).clamp(320.0, 760.0));
+            ui.set_width(size.x);
+            ui.set_height(size.y);
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
                     ui.label(
-                        RichText::new("THE FORM SCRIPT FIELD GUIDE")
+                        RichText::new(page.title().to_uppercase())
                             .color(colors::ACCENT)
-                            .size(layout::TYPE_XS)
-                            .strong(),
+                            .size(layout::TYPE_LG)
+                            .text_style(egui::TextStyle::Button),
                     );
-                    ui.label(RichText::new("A FEW WORDS.\nINFINITE WHAT-IFS.").size(22.0).strong());
+                    let heading = match page {
+                        ReferencePage::ScriptReference => "A FEW WORDS.\nINFINITE WHAT-IFS.",
+                        ReferencePage::Recipes => "FIND A\nSTARTING POINT.",
+                    };
+                    ui.label(RichText::new(heading).text_style(text_styles::display()));
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                    if ui.button("Close").on_hover_text("Close language reference").clicked() {
-                        self.open = false;
+                    if ui.add(components::button("Close")).on_hover_text("Close (Escape)").clicked() {
+                        self.page = None;
+                    }
+                    let other = page.other();
+                    let link = ui.add(components::button(other.title()));
+                    if link.on_hover_text(format!("Open {}", other.title())).clicked() {
+                        self.page = Some(other);
                     }
                 });
             });
-            egui::ScrollArea::vertical().max_height((screen.height() - 160.0).max(200.0)).show(ui, |ui| {
-                paragraph(ui, INTRODUCTION);
-                ui.add_space(layout::SPACE_MD);
-                let recipes =
-                    ui.label(RichText::new("FIND A STARTING POINT").color(colors::MUTED).size(layout::TYPE_XS));
-                if std::mem::take(&mut self.scroll_to_recipes) {
-                    recipes.scroll_to_me(Some(egui::Align::TOP));
-                }
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.search)
-                        .hint_text("Search recipes: surface, attributes, topology, assembly…")
-                        .desired_width(f32::INFINITY),
-                );
-                let matches = matching_recipes(&self.search);
-                if matches.is_empty() {
-                    components::guidance(ui, "No matching recipes. Try geometry, field, or assembly.");
-                }
-                for index in matches {
-                    let recipe = &RECIPES[index];
-                    components::panel_frame().show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.label(RichText::new(recipe.title).strong());
-                        components::guidance(ui, recipe.description);
-                        ui.label(RichText::new(recipe.code_for("study")).monospace().size(layout::TYPE_SM));
-                        if ui.button("Append recipe ↗").on_hover_text(format!("Append {}", recipe.title)).clicked() {
-                            appended = Some(index);
-                        }
-                    });
-                }
-                ui.add_space(layout::SPACE_MD);
-                for (kind, text) in REFERENCE {
-                    match kind {
-                        ReferenceBlock::Heading => {
-                            ui.add_space(layout::SPACE_SM);
-                            ui.label(RichText::new(*text).color(colors::ACCENT).strong());
-                        }
-                        ReferenceBlock::Paragraph => paragraph(ui, text),
-                        ReferenceBlock::Code => {
-                            egui::Frame::new().fill(colors::SCRIPT).inner_margin(6).show(ui, |ui| {
-                                ui.label(RichText::new(*text).monospace().size(layout::TYPE_SM));
-                            });
-                        }
-                    }
-                }
-                ui.add_space(layout::SPACE_SM);
-                components::guidance(ui, LIMITS);
-            });
+            ui.add_space(layout::SPACE_SM);
+            // Each page keeps its own scroll position.
+            egui::ScrollArea::vertical()
+                .id_salt(page.title())
+                .auto_shrink([false, false])
+                .max_height(ui.available_height())
+                .show(ui, |ui| match page {
+                    ReferencePage::ScriptReference => script_reference_page(ui),
+                    ReferencePage::Recipes => appended = recipes_page(ui, &mut self.search),
+                });
         });
-        if response.should_close() {
-            self.open = false;
-        }
-        if appended.is_some() {
-            self.open = false;
+        if response.should_close() || appended.is_some() {
+            self.page = None;
         }
         appended
     }
+}
+
+/// The Script Reference page: the introduction, the field guide, and the limits.
+fn script_reference_page(ui: &mut Ui) {
+    paragraph(ui, INTRODUCTION);
+    ui.add_space(layout::SPACE_MD);
+    for (kind, text) in REFERENCE {
+        match kind {
+            ReferenceBlock::Heading => {
+                ui.add_space(layout::SPACE_SM);
+                ui.label(RichText::new(*text).color(colors::ACCENT).strong());
+            }
+            ReferenceBlock::Paragraph => paragraph(ui, text),
+            ReferenceBlock::Code => {
+                egui::Frame::new().fill(colors::SCRIPT).inner_margin(6).show(ui, |ui| {
+                    ui.label(RichText::new(*text).monospace().size(layout::TYPE_SM));
+                });
+            }
+        }
+    }
+    ui.add_space(layout::SPACE_SM);
+    components::guidance(ui, LIMITS);
+}
+
+/// The Recipes page: a search field and a card per matching recipe. Returns a recipe to append.
+fn recipes_page(ui: &mut Ui, search: &mut String) -> Option<usize> {
+    let mut appended = None;
+    components::guidance(ui, "Append a recipe to the end of your script; nothing you wrote is replaced.");
+    ui.add(
+        egui::TextEdit::singleline(search)
+            .hint_text("Search recipes: surface, attributes, topology, assembly…")
+            .desired_width(f32::INFINITY)
+            .margin(egui::vec2(layout::SPACE_SM, layout::SPACE_SM)),
+    );
+    let matches = matching_recipes(search);
+    if matches.is_empty() {
+        components::guidance(ui, "No matching recipes. Try geometry, field, or assembly.");
+    }
+    for index in matches {
+        let recipe = &RECIPES[index];
+        components::panel_frame().show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(recipe.title).text_style(egui::TextStyle::Button).size(layout::TYPE_LG));
+            components::guidance(ui, recipe.description);
+            ui.label(RichText::new(recipe.code_for("study")).monospace().size(layout::TYPE_SM));
+            if ui
+                .add(components::primary_button("Append recipe"))
+                .on_hover_text(format!("Append {}", recipe.title))
+                .clicked()
+            {
+                appended = Some(index);
+            }
+        });
+    }
+    appended
 }
 
 /// Prose with `code` spans in the script font.

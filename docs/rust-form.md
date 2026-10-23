@@ -119,14 +119,16 @@ Read fields with `record.name`, `record["name"]`, or `record[member]` with an en
 
 `const name = value` declares an immutable value in the same scopes. Reassignment, compound assignment, redeclaring that name in the same block, or passing it through `ref` is an error. An inner block may shadow it. Prefer `const` for lookup tables, fixed calculations, and finished geometry; use `let` for accumulators and geometry or instance builders that will be edited.
 
-Geometry and instance constants freeze the shared value, including aliases created before or after the declaration. Mutation built-ins and wrangle attribute writes through any alias fail. Read-only inspection and wrangles remain valid. `copy(value)`, `geometry(existingGeometry)`, and existing operations that make copies produce independent editable values; ordinary function arguments also remain independent copies. A `let` alias alone does not unfreeze a value:
+A geometry or instance constant is frozen. A fresh value (`const shape = box(1, 1, 1)`) freezes where it is; a value another binding still shares (`const finished = builder`) is captured as a frozen snapshot, so declaring a constant never freezes the variable it was read from. Mutation built-ins and wrangle attribute writes through the constant or any alias of it fail; read-only inspection and wrangles remain valid. `copy(value)`, `geometry(existingGeometry)`, and existing operations that make copies produce independent editable values; ordinary function arguments also remain independent copies. A `let` alias of a constant does not unfreeze it:
 
 ```text
 let builder = box(2, 3, 2)
 const original = builder
+translate(builder, vector(4, 0, 0))  # builder stays editable; original keeps its shape and position
 let edited = copy(original)
-translate(edited, vector(4, 0, 0))
+scale(edited, vector(2, 1, 2))
 output("Original", original)
+output("Builder", builder)
 output("Edited", edited)
 ```
 
