@@ -14,7 +14,7 @@
 //!   to [`MAX_POINT_LIGHTS`] that matter most to each view draw, binned into light clusters, with optional soft
 //!   shadows from a shared atlas). Opaque surfaces shade deferred where the device allows and forward on WebGL 2.
 //! - The procedural atmosphere sky driven by an environment frame and [`SkyOptions`].
-//! - HDR scene targets, scene effects, bloom, and filmic (Ushimura/GT-style curve) or AgX (or no tonemapping).
+//! - HDR scene targets, scene effects, bloom, and Filmic (Uchimura/GT-style curve), AgX, or Khronos PBR Neutral (or none).
 //!
 //! The renderer owns every GPU resource it creates; scenes, cameras, and frame inputs are borrowed per frame.
 //!

@@ -12,7 +12,7 @@
     "shape": {"enum": ["box", "sphere"]},
     "halfExtents": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number", "exclusiveMinimum": 0}},
     "radius": {"type": "number", "exclusiveMinimum": 0},
-    "toneMapper": {"enum": ["filmic", "agx", "none"]},
+    "toneMapper": {"enum": ["filmic", "agx", "neutral", "none"]},
     "agxLook": {"enum": ["default", "punchy"]},
     "bloomQuality": {"enum": ["low", "medium", "high", "ultra"]}
   },

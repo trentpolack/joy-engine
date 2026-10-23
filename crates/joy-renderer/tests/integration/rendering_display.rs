@@ -265,37 +265,40 @@ fn hdr_output_keeps_midtones_and_lifts_highlights_into_the_headroom() {
     let Some(gpu) = gpu() else {
         return;
     };
-    let tone_mapped = settings(ToneMapper::Agx);
-    let standard = standard_bands(&gpu, &tone_mapped);
-    let encoded =
-        extended_bands(&gpu, &tone_mapped, DisplayOutput::extended(OutputEncoding::ExtendedSrgb, HEADROOM, 1.0));
-    let peak = encode(HEADROOM);
+    for mapper in [ToneMapper::Agx, ToneMapper::Neutral] {
+        let tone_mapped = settings(mapper);
+        let standard = standard_bands(&gpu, &tone_mapped);
+        let encoded =
+            extended_bands(&gpu, &tone_mapped, DisplayOutput::extended(OutputEncoding::ExtendedSrgb, HEADROOM, 1.0));
+        let peak = encode(HEADROOM);
 
-    // The midtone is untouched; the brightest light rises well above SDR white but stays within the headroom.
-    assert!((encoded[0] - standard[0]).abs() <= ENCODED_TOLERANCE, "midtone {encoded:?} vs SDR {standard:?}");
-    assert!(encoded[3] > 1.2 && encoded[3] <= peak + 0.01, "highlight {encoded:?} against peak {peak}");
-    assert!(encoded.windows(2).all(|pair| pair[0] < pair[1]), "brighter light stays brighter: {encoded:?}");
+        // The midtone is untouched; the brightest light rises well above SDR white but stays within the headroom.
+        assert!((encoded[0] - standard[0]).abs() <= ENCODED_TOLERANCE, "midtone {encoded:?} vs SDR {standard:?}");
+        assert!(encoded[3] > 1.2 && encoded[3] <= peak + 0.01, "highlight {encoded:?} against peak {peak}");
+        assert!(encoded.windows(2).all(|pair| pair[0] < pair[1]), "brighter light stays brighter: {encoded:?}");
 
-    // An extended surface on a display without headroom shows exactly the standard image.
-    let no_headroom =
-        extended_bands(&gpu, &tone_mapped, DisplayOutput::extended(OutputEncoding::ExtendedSrgb, 1.0, 1.0));
-    for (band, (extended, standard)) in no_headroom.iter().zip(standard).enumerate() {
-        assert!((extended - standard).abs() <= ENCODED_TOLERANCE, "band {band}: {no_headroom:?} vs SDR {standard}");
+        // An extended surface on a display without headroom shows exactly the standard image.
+        let no_headroom =
+            extended_bands(&gpu, &tone_mapped, DisplayOutput::extended(OutputEncoding::ExtendedSrgb, 1.0, 1.0));
+        for (band, (extended, standard)) in no_headroom.iter().zip(standard).enumerate() {
+            assert!((extended - standard).abs() <= ENCODED_TOLERANCE, "band {band}: {no_headroom:?} vs SDR {standard}");
+        }
+
+        // Extended linear output is the same image as light, with SDR white at the display's SDR white level.
+        let linear = extended_bands(
+            &gpu,
+            &tone_mapped,
+            DisplayOutput::extended(OutputEncoding::ExtendedLinear, HEADROOM, SDR_WHITE_LEVEL),
+        );
+        for (band, (light, encoded)) in linear.iter().zip(encoded).enumerate() {
+            let expected = decode(encoded) * SDR_WHITE_LEVEL;
+            assert!((light - expected).abs() <= expected * 0.01 + 1e-3, "band {band}: {linear:?} vs {expected}");
+        }
+        assert!(linear[3] <= HEADROOM * SDR_WHITE_LEVEL * 1.01, "linear peak {linear:?}");
     }
-
-    // Extended linear output is the same image as light, with SDR white at the display's SDR white level.
-    let linear = extended_bands(
-        &gpu,
-        &tone_mapped,
-        DisplayOutput::extended(OutputEncoding::ExtendedLinear, HEADROOM, SDR_WHITE_LEVEL),
-    );
-    for (band, (light, encoded)) in linear.iter().zip(encoded).enumerate() {
-        let expected = decode(encoded) * SDR_WHITE_LEVEL;
-        assert!((light - expected).abs() <= expected * 0.01 + 1e-3, "band {band}: {linear:?} vs {expected}");
-    }
-    assert!(linear[3] <= HEADROOM * SDR_WHITE_LEVEL * 1.01, "linear peak {linear:?}");
 
     // Without a tone mapper, scene light shows as it is up to the display's peak.
+    let peak = encode(HEADROOM);
     let untouched = extended_bands(
         &gpu,
         &settings(ToneMapper::None),
@@ -303,6 +306,43 @@ fn hdr_output_keeps_midtones_and_lifts_highlights_into_the_headroom() {
     );
     assert!((untouched[1] - 1.0).abs() <= ENCODED_TOLERANCE, "SDR white {untouched:?}");
     assert!((untouched[2] - peak).abs() <= 0.01 && (untouched[3] - peak).abs() <= 0.01, "clamped {untouched:?}");
+}
+
+#[test]
+fn neutral_preserves_material_colors_and_compresses_saturated_highlights() {
+    let Some(gpu) = gpu() else {
+        return;
+    };
+    let config = settings(ToneMapper::Neutral);
+    let display = DisplayOutput::extended(OutputEncoding::ExtendedLinear, 1.0, 1.0);
+
+    // Published PBR Neutral equations: black, the dark toe, compensated material color, and the shoulder boundary.
+    let colors = [[0.0; 3], [0.04; 3], [0.2, 0.4, 0.6], [0.8, 0.3, 0.1]];
+    let expected = [[0.0; 3], [0.01; 3], [0.16, 0.36, 0.56], [0.76, 0.26, 0.06]];
+    let output = extended_colors(&gpu, &config, display, &colors);
+    for (actual, expected) in output.iter().zip(expected) {
+        for (actual, expected) in actual.iter().zip(expected) {
+            assert!((actual - expected).abs() < 0.001, "Neutral color: {output:?}");
+        }
+    }
+
+    // Saturated highlights retain hue ordering while approaching white instead of clipping to a primary color.
+    let highlights = extended_colors(
+        &gpu,
+        &config,
+        display,
+        &[[1.0, 0.0, 0.0], [8.0, 0.0, 0.0], [256.0, 0.0, 0.0], [65504.0, 0.0, 0.0]],
+    );
+    for color in highlights {
+        assert!(color.iter().all(|value| value.is_finite() && (0.0..=1.0).contains(value)), "bounded {highlights:?}");
+        assert!(color[0] >= color[1] && color[1] == color[2], "hue {highlights:?}");
+    }
+    assert!((highlights[0][0] - 0.88).abs() < 0.001, "shoulder {highlights:?}");
+    assert!(
+        highlights.windows(2).all(|pair| pair[0][0] <= pair[1][0] && pair[0][1] < pair[1][1]),
+        "rolloff {highlights:?}"
+    );
+    assert!(highlights[2][1] > 0.97 && highlights[3][1] > 0.99, "bright highlights approach white {highlights:?}");
 }
 
 #[test]
@@ -314,7 +354,9 @@ fn filmic_keeps_middle_gray_and_rolls_highlights_toward_white() {
     let bands = extended_bands(&gpu, &settings(ToneMapper::Filmic), standard);
     assert!((bands[0] - 0.18).abs() < 0.01, "middle gray: {bands:?}");
     assert!(bands[1] < 1.0 && bands[3] > 0.99, "shoulder approaches white: {bands:?}");
-    assert!(bands.windows(2).all(|pair| pair[0] < pair[1]), "monotonic: {bands:?}");
+    // The half-float output can round more than one bright sample to white.
+    assert!(bands.iter().all(|value| value.is_finite() && (0.0..=1.0).contains(value)), "bounded: {bands:?}");
+    assert!(bands.windows(2).all(|pair| pair[0] < pair[1] || pair == [1.0, 1.0]), "monotonic: {bands:?}");
 
     // More contrast steepens the linear section around middle gray.
     let contrasty = PostProcessSettings {

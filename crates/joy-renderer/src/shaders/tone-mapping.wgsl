@@ -7,14 +7,16 @@
 // - Filmic: a parametric toe, linear section, and shoulder per channel (Uchimura 2017, "HDR Theory and Practice"), the
 //   classic game curve with controls.
 // - AgX: log-encoded sigmoid in an inset gamut, with Blender's punchy look as an option.
+// - Neutral: Khronos PBR Neutral, preserving material colors and smoothly desaturating bright highlights.
 const TONE_MAPPER_NONE: f32 = 0.0;
 const TONE_MAPPER_FILMIC: f32 = 1.0;
 const TONE_MAPPER_AGX: f32 = 2.0;
+const TONE_MAPPER_NEUTRAL: f32 = 3.0;
 
 /**
  * The selected display transform of exposed scene light. `filmic` holds the curve's contrast, linear-section start,
  * linear-section length, and toe; `look` is one for AgX's punchy look. The result is display-linear and at most one
- * (SDR white).
+ * (SDR white), except None, which preserves exposed scene light.
  */
 fn toneMap(color: vec3f, mapper: f32, look: f32, filmic: vec4f) -> vec3f {
   let exposed = max(color, vec3f(0.0));
@@ -22,10 +24,45 @@ fn toneMap(color: vec3f, mapper: f32, look: f32, filmic: vec4f) -> vec3f {
     return filmicToneMap(exposed, filmic);
   } else if(mapper == TONE_MAPPER_AGX) {
     return agxToneMap(exposed, look);
+  } else if(mapper == TONE_MAPPER_NEUTRAL) {
+    return neutralToneMap(exposed);
   }
 
   // No tonemapper.
   return exposed;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Neutral
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Khronos PBR Neutral, implemented from the published equations:
+ * https://github.com/KhronosGroup/ToneMapping/tree/main/PBR_Neutral#pbr-neutral-specification
+ * Remove the neutral dielectric reflection offset, compress the peak channel, and reduce saturation toward white
+ * only in the shoulder. Input and output are linear Rec.709; HDR extension belongs to the display resolve.
+ */
+fn neutralToneMap(color: vec3f) -> vec3f {
+  let reflection = 0.04;
+  let compressionStart = 0.8 - reflection;
+  let desaturationRate = 0.15;
+
+  // Clamping the toe's input makes the quadratic offset constant above twice the dielectric reflection.
+  let darkest = min(min(color.r, color.g), color.b);
+  let toeInput = min(darkest, 2.0*reflection);
+  let offset = toeInput - ((toeInput*toeInput)/(4.0*reflection));
+  let compensated = color - vec3f(offset);
+  let peak = max(max(compensated.r, compensated.g), compensated.b);
+  if(peak <= compressionStart) {
+    // Includes black, so the shoulder never divides by a zero peak.
+    return compensated;
+  }
+
+  let shoulderRange = 1.0 - compressionStart;
+  let compressedPeak = 1.0 - ((shoulderRange*shoulderRange)/(peak + 1.0 - (2.0*compressionStart)));
+  let retainedSaturation = 1.0/(1.0 + (desaturationRate*(peak - compressedPeak)));
+  let compressed = compensated*(compressedPeak/peak);
+  return mix(vec3f(compressedPeak), compressed, retainedSaturation);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

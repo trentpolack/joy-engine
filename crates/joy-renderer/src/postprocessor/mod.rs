@@ -580,6 +580,7 @@ impl PostProcessor {
             ToneMapper::None => 0.0,
             ToneMapper::Filmic => 1.0,
             ToneMapper::Agx => 2.0,
+            ToneMapper::Neutral => 3.0,
         };
         let look = if config.agx_look == AgxLook::Punchy { 1.0 } else { 0.0 };
         let bloom_strength = if levels > 0 { config.bloom_strength } else { 0.0 };

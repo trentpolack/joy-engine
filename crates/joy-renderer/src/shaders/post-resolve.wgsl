@@ -122,7 +122,7 @@ fn vignette(coordinate: vec2f) -> f32 {
 }
 
 /**
- * Extend tone-mapped highlights into the display's HDR headroom. The filmic and AgX transforms end at SDR white, so on
+ * Extend tone-mapped highlights into the display's HDR headroom. Filmic, AgX, and Neutral end at SDR white, so on
  * an HDR display the brightest part of their shoulder is stretched toward the headroom: colors scale by a factor that
  * stays at one up to half of SDR white luminance and rises smoothly to the headroom at SDR white. Normally lit content,
  * and therefore the look tuned on standard displays, is unchanged; highlights keep their hue because every channel
@@ -167,7 +167,7 @@ fn interleavedGradientNoise(pixel: vec2f) -> f32 {
   }
   color = color*vignette(input.coordinate);
 
-  // Display transform. Filmic and AgX end at SDR white and extend into the headroom; no tonemapping does not.
+  // Display transform. Filmic, AgX, and Neutral end at SDR white and extend into the headroom; None does not.
   let headroom = resolve.output.x;
   color = toneMap(color, resolve.display.y, resolve.display.z, resolve.filmic);
   if(resolve.encoding.y < 0.5) {

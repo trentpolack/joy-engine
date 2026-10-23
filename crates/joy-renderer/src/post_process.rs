@@ -40,6 +40,8 @@ pub enum ToneMapper {
     Filmic,
     /// AgX, with an optional punchy look.
     Agx,
+    /// Khronos PBR Neutral: preserves well-exposed material colors and rolls bright highlights toward white.
+    Neutral,
     /// Exposed linear light with a display clamp.
     None,
 }
@@ -128,6 +130,7 @@ impl PostProcessSettings {
     };
 
     /// Linear scene color resolved straight to the display: no tone curve or optional effects.
+    /// This bypass preset uses [`ToneMapper::None`], not the [`ToneMapper::Neutral`] display transform.
     pub const NEUTRAL: Self = Self {
         tone_mapper: ToneMapper::None,
         ..Self::DEFAULT
@@ -356,7 +359,7 @@ const fn choice(
 // One control per row keeps the table scannable; rustfmt would split each row across many lines.
 #[rustfmt::skip]
 pub const POST_PROCESS_CONTROLS: &[PostProcessControl] = &[
-    choice("toneMapper", "Tone Mapper", "Display", "filmic", &["filmic", "agx", "none"], "Display transform: the parametric filmic curve, AgX, or none."),
+    choice("toneMapper", "Tone Mapper", "Display", "filmic", &["filmic", "agx", "neutral", "none"], "Display transform: the parametric filmic curve, AgX, Khronos PBR Neutral, or none."),
     choice("agxLook", "AgX Look", "Display", "default", &["default", "punchy"], "Punchy adds AgX's power and saturation look before the display transform."),
     number("exposure", "Exposure", "Display", 1.0, (Some(0.0), false, None, Some(4.0)), 0.01, "Linear multiplier on scene light before bloom and the display transform; adaptive exposure multiplies it."),
     number("filmicContrast", "Contrast", "Filmic", 1.0, (Some(0.1), false, Some(3.0), Some(2.0)), 0.01, "Slope of the curve's linear section."),

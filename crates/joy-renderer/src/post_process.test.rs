@@ -57,18 +57,21 @@ fn invalid_values_are_rejected_and_leave_overrides_unchanged() {
 
 #[test]
 fn blending_moves_numbers_exposure_and_choices_toward_the_overrides() {
-    let target = overrides(json!({"filmicContrast": 2, "exposure": 4, "toneMapper": "filmic"}));
+    let target = overrides(json!({"filmicContrast": 2, "exposure": 4, "toneMapper": "neutral"}));
     let base = PostProcessSettings {
         tone_mapper: ToneMapper::Agx,
         ..PostProcessSettings::DEFAULT
     };
     assert_eq!(base.blend_toward(&target, 0.0), base);
     let full = base.with_overrides(&target);
-    assert_eq!((full.filmic_contrast, full.exposure, full.tone_mapper), (2.0, 4.0, ToneMapper::Filmic));
+    assert_eq!((full.filmic_contrast, full.exposure), (2.0, 4.0));
+    assert_eq!(full.to_record().get("toneMapper"), Some(&json!("neutral")));
+    let round_trip: PostProcessSettings = serde_json::from_value(Value::Object(full.to_record())).unwrap();
+    assert_eq!(round_trip, full);
     assert_eq!(full.bloom_scatter, base.bloom_scatter, "omitted settings are unchanged");
 
     // Exposure interpolates in stops, so half weight from 1 toward 4 is 2; choices switch at half weight.
     let half = base.blend_toward(&target, 0.5);
-    assert_eq!((half.filmic_contrast, half.exposure, half.tone_mapper), (1.5, 2.0, ToneMapper::Filmic));
+    assert_eq!((half.filmic_contrast, half.exposure, half.tone_mapper), (1.5, 2.0, full.tone_mapper));
     assert_eq!(base.blend_toward(&target, 0.49).tone_mapper, ToneMapper::Agx);
 }

@@ -3,6 +3,9 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 10-23-2026
+### Rendering
+- Added Khronos PBR Neutral tone mapping (`ToneMapper::Neutral`, `"toneMapper": "neutral"`), available through post-process volumes and the shared editor controls. It preserves well-exposed material colors and rolls highlights toward white, with the existing SDR/HDR presentation path. Filmic remains the default; the `PostProcessSettings::NEUTRAL` bypass preset still uses no tone mapper.
+
 ### FORM Language
 - A `const` read from a geometry or instance variable now holds a frozen snapshot instead of freezing the variable it came from, so `let shape = box(1, 1, 1)` stays editable after `const finished = shape`. Fresh values (`const shape = box(1, 1, 1)`) still freeze in place, and aliases of a constant still cannot edit it.
 - The FORM catalog reader (`scripts/form-reference.mjs`, exported as `joy-engine/form/catalog`) also returns each keyword's hover documentation, so tools outside the engine can present the same completion and hover text as FORM EDITOR.
