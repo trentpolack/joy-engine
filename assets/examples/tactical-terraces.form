@@ -11,21 +11,21 @@ param random_seed = 19 meta(min=1, max=9999, step=1)
 # ---- Palette.
 # Dry tiles shade from `lowland` green to `highland` sand by height; flooded tiles turn `flooded` blue. Everything
 # visible is graded by `warm`, FORM's classic tint.
-let warm = rgba(0.929, 0.424, 0.224, 1)
-let lowland = rgba(0.25, 0.48, 0.32, 1)
-let highland = rgba(0.85, 0.71, 0.4, 1)
-let flooded = rgba(0.15, 0.39, 0.58, 1)
-let water_color = rgba(0.1, 0.33, 0.48, 0.65)*warm
+const warm = rgba(0.929, 0.424, 0.224, 1)
+const lowland = rgba(0.25, 0.48, 0.32, 1)
+const highland = rgba(0.85, 0.71, 0.4, 1)
+const flooded = rgba(0.15, 0.39, 0.58, 1)
+const water_color = rgba(0.1, 0.33, 0.48, 0.65)*warm
 
 # ---- Tiles.
 # One point per grid cell at the top of its column, stepped into quarter-unit terraces by noise. Each point's
 # record is the tile's gameplay data; every field becomes a point attribute.
 let tiles = geometry()
-repeat rows as row {
-  repeat columns as column {
-    let field = noise(column*0.3, row*0.3, random_seed)
-    let height = 0.3 + floor((field + 1)*elevation*2)/4
-    let tileData = {
+for row in 0..rows {
+  for column in 0..columns {
+    const field = noise(column*0.3, row*0.3, random_seed)
+    const height = 0.3 + floor((field + 1)*elevation*2)/4
+    const tileData = {
       kind: "tile",
       id: pointCount(tiles),
       grid: vector(column, 0, row),
@@ -60,7 +60,7 @@ inspect("Tiles", tiles)
 
 # ---- Terrain and water.
 # Build downward so each tile's position stays at the top of its column. The column takes its tile's color.
-let columnMesh = color(translate(box(1, 1, 1), vector(0, -0.5, 0)), warm)
+const columnMesh = color(translate(box(1, 1, 1), vector(0, -0.5, 0)), warm)
 output("Terrain columns", instances(columnMesh, tiles))
-let water = color(translate(box(columns*cellSize, 0.06, rows*cellSize), vector(0, waterLevel - 0.03, 0)), water_color)
+const water = color(translate(box(columns*cellSize, 0.06, rows*cellSize), vector(0, waterLevel - 0.03, 0)), water_color)
 output("Water", water)

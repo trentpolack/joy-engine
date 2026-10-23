@@ -131,6 +131,7 @@ pub enum StmtKind {
         otherwise: Option<Vec<Statement>>,
     },
     Let(String, Expression),
+    Const(String, Expression),
     Assign {
         name: String,
         operator: AssignmentOperator,
@@ -142,9 +143,15 @@ pub enum StmtKind {
         metadata: Vec<(String, Expression)>,
         presentation: ParameterPresentation,
     },
-    Repeat {
+    For {
         name: String,
-        expression: Expression,
+        start: Expression,
+        end: Expression,
+        body: Vec<Statement>,
+    },
+    ForEach {
+        name: String,
+        collection: Expression,
         body: Vec<Statement>,
     },
     Function(Rc<FunctionDefinition>),

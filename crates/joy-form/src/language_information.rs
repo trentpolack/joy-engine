@@ -23,9 +23,9 @@ use joy_core::scripting::{
 };
 
 /// FORM language keywords in their stable catalog order.
-pub const FORM_KEYWORDS: [&str; 23] = [
-    "project", "param", "meta", "let", "if", "else", "match", "case", "repeat", "as", "wrangle", "in", "fn", "return",
-    "ref", "enum", "use", "AND", "OR", "NOT", "true", "false", "null",
+pub const FORM_KEYWORDS: [&str; 25] = [
+    "project", "param", "meta", "let", "const", "if", "else", "match", "case", "for", "foreach", "as", "wrangle", "in",
+    "fn", "return", "ref", "enum", "use", "AND", "OR", "NOT", "true", "false", "null",
 ];
 
 /// Attribute domains (`points`, `faces`, `corners`, `instances`), highlighted as keywords inside wrangles.
@@ -193,17 +193,22 @@ pub fn form_document_symbols(source: &str, cursor: usize) -> Vec<ScriptLanguageS
         let token = &tokens[index];
         let before_cursor = (token.line, token.column) < cursor_position;
         match token.text.as_str() {
-            "{" if before_cursor => scan.open_block(),
+            "{" if before_cursor => scan.open_block(index),
             "}" if before_cursor => scan.close_block(),
-            "let" if before_cursor => scan.local(name_at(&tokens, index + 1), "variable"),
-            "repeat" | "wrangle" if before_cursor => {
-                // The loop name follows `as` and belongs to the block that follows it.
-                if let Some(name) = name_after_as(&tokens, index) {
-                    scan.pending_block_names
-                        .push((name, if token.text == "repeat" { "loop counter" } else { "wrangle element" }));
-                    if token.text == "wrangle" {
-                        scan.pending_block_names.push(("index".to_owned(), "element index"));
-                    }
+            "let" if before_cursor => scan.local(name_at(&tokens, index + 1), "variable", true),
+            "const" if before_cursor => scan.local(name_at(&tokens, index + 1), "constant", false),
+            "for" | "foreach" if before_cursor => {
+                if let (Some(name), Some(open)) = (name_at(&tokens, index + 1), body_open(&tokens, index + 3)) {
+                    let detail = if token.text == "for" { "loop index" } else { "loop item" };
+                    scan.pending_block_names.push((open, name, detail, false));
+                }
+            }
+            "wrangle" if before_cursor => {
+                if let Some(name) = name_after_as(&tokens, index)
+                    && let Some(open) = body_open(&tokens, index + 1)
+                {
+                    scan.pending_block_names.push((open, name, "wrangle element", false));
+                    scan.pending_block_names.push((open, "index".to_owned(), "element index", false));
                 }
             }
             "param" => scan.global(name_at(&tokens, index + 1), ScriptSymbolKind::Variable, "parameter".to_owned()),
@@ -211,9 +216,9 @@ pub fn form_document_symbols(source: &str, cursor: usize) -> Vec<ScriptLanguageS
                 if let Some(name) = name_at(&tokens, index + 1) {
                     let (parameters, signature) = function_signature(&tokens, index + 2, &name);
                     scan.global(Some(name), ScriptSymbolKind::Function, signature);
-                    if before_cursor {
+                    if let Some(open) = body_open(&tokens, index + 2).filter(|_| before_cursor) {
                         for parameter in parameters {
-                            scan.pending_block_names.push((parameter, "function parameter"));
+                            scan.pending_block_names.push((open, parameter, "function parameter", true));
                         }
                     }
                 }
@@ -256,25 +261,33 @@ struct SymbolScan {
     blocks: Vec<Vec<ScriptLanguageSymbol>>,
     top_level: Vec<ScriptLanguageSymbol>,
     attributes: Vec<String>,
-    // Names a `repeat`, `wrangle`, or `fn` header binds inside the block that opens next.
-    pending_block_names: Vec<(String, &'static str)>,
+    // The body token index prevents record literals in loop headers from consuming the bindings.
+    pending_block_names: Vec<(usize, String, &'static str, bool)>,
 }
 
 impl SymbolScan {
-    fn open_block(&mut self) {
-        let names = std::mem::take(&mut self.pending_block_names);
-        self.blocks.push(names.into_iter().map(|(name, detail)| variable(name, detail.to_owned())).collect());
+    fn open_block(&mut self, index: usize) {
+        let mut block = Vec::new();
+        self.pending_block_names.retain(|(open, name, detail, writable)| {
+            if *open == index {
+                block.push(variable(name.clone(), (*detail).to_owned(), *writable));
+                false
+            } else {
+                true
+            }
+        });
+        self.blocks.push(block);
     }
 
     fn close_block(&mut self) {
         self.blocks.pop();
     }
 
-    fn local(&mut self, name: Option<String>, detail: &str) {
+    fn local(&mut self, name: Option<String>, detail: &str, writable: bool) {
         let Some(name) = name else {
             return;
         };
-        let symbol = variable(name, detail.to_owned());
+        let symbol = variable(name, detail.to_owned(), writable);
         match self.blocks.last_mut() {
             Some(block) => block.push(symbol),
             None => self.top_level.push(symbol),
@@ -323,14 +336,14 @@ impl SymbolScan {
     }
 }
 
-fn variable(name: String, detail: String) -> ScriptLanguageSymbol {
+fn variable(name: String, detail: String, writable: bool) -> ScriptLanguageSymbol {
     ScriptLanguageSymbol {
         documentation: format!("{name}: {detail}."),
         name,
         kind: ScriptSymbolKind::Variable,
         detail,
         signatures: Vec::new(),
-        writable: Some(true),
+        writable: Some(writable),
     }
 }
 
@@ -371,7 +384,29 @@ fn name_at(tokens: &[Token], index: usize) -> Option<String> {
     tokens.get(index).filter(|token| is_name(&token.text)).map(|token| token.text.clone())
 }
 
-/// The name after the first `as` on a `repeat`, `wrangle`, or `use` header, before its block opens.
+/// Find a statement body, skipping calls, indexing, and record/list literals in its header.
+fn body_open(tokens: &[Token], start: usize) -> Option<usize> {
+    let mut depth: usize = 0;
+    let mut expects_value = true;
+    for (index, token) in tokens.iter().enumerate().skip(start) {
+        match token.text.as_str() {
+            "(" | "[" => depth += 1,
+            "{" if depth == 0 && !expects_value => return Some(index),
+            "{" => depth += 1,
+            ";" | "}" if depth == 0 => return None,
+            ")" | "]" | "}" => {
+                depth = depth.saturating_sub(1);
+                expects_value = false;
+            }
+            ".." | "+" | "-" | "*" | "/" | "%" | "^" | "==" | "!=" | "<" | ">" | "<=" | ">=" | "AND" | "OR" | "NOT"
+            | "in" | "as" => expects_value = true,
+            _ => expects_value = false,
+        }
+    }
+    None
+}
+
+/// The name after the first `as` on a `wrangle` or `use` header, before its block opens.
 fn name_after_as(tokens: &[Token], start: usize) -> Option<String> {
     let mut index = start + 1;
     while let Some(token) = tokens.get(index) {
@@ -431,14 +466,25 @@ fn keyword_documentation(keyword: &str) -> &'static str {
         "param" => "param name = default meta(…) exposes a tunable parameter.",
         "meta" => "Metadata for a parameter or project: bounds, labels, groups, kinds, and options.",
         "let" => "let name = value declares a variable in the current block.",
+        "const" => {
+            "const name = value declares an immutable value; geometry and instance aliases are frozen too. Use copy() for an editable copy."
+        }
         "if" | "else" => "if condition { … } else if condition { … } else { … }; conditions must be true or false.",
         "match" | "case" => "match value { case a, b { … } else { … } } runs the first case equal to the value.",
-        "repeat" => "repeat count as index { … } runs a block count times.",
-        "as" => "Names a loop counter, wrangle element, or module.",
-        "wrangle" | "in" => "wrangle points in geometry as point { … } visits every element of a domain.",
+        "for" => {
+            "for index in start..end { … } visits ascending integer indices, excluding end; the index is read-only."
+        }
+        "foreach" => {
+            "foreach item in collection { … } visits list, vector, or color values in order; the item binding is read-only."
+        }
+        "as" => "Names a wrangle element or module.",
+        "in" => "Introduces the range or collection in a loop, or the target of a wrangle.",
+        "wrangle" => "wrangle points in geometry as point { … } visits every element of a domain.",
         "fn" | "return" => "fn name(a, ref b) { … return value } declares a reusable function.",
         "ref" => "Marks a function parameter (and its argument) that edits the caller's variable in place.",
-        "enum" => "enum Name { a, b } declares named choices, read as Name.a.",
+        "enum" => {
+            "Declares named choices, read as Kind.Tower. Use PascalCase entries on separate lines: enum Kind {\n  Tower,\n  Block\n}"
+        }
         "use" => "use \"path.form\" as name loads a module's functions, enums, and constants.",
         "AND" => "True when both sides are true; the right side is skipped when the left is false.",
         "OR" => "True when either side is true; the right side is skipped when the left is true.",

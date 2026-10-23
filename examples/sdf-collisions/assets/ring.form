@@ -8,16 +8,16 @@ param detail = 40 meta(min=12, max=64, step=4)
 
 # ---- Palette.
 # The ring's rose is graded by `warm`, FORM's classic tint, which gives the prop its deep red.
-let warm = rgba(0.929, 0.424, 0.224, 1)
-let ring_color = rgba(0.86, 0.3, 0.44, 1)*warm
+const warm = rgba(0.929, 0.424, 0.224, 1)
+const ring_color = rgba(0.86, 0.3, 0.44, 1)*warm
 
 # ---- Profile.
 # A closed circle of the minor radius, offset by the major radius, then swept around Y.
 let profile = geometry()
-repeat 17 as i {
-  let angle = i/16*tau
+for i in 0..17 {
+  const angle = i/16*tau
   addPoint(profile, vector(major + cos(angle)*minor, sin(angle)*minor, 0))
 }
-let ring = color(revolve(profile, detail), ring_color)
+const ring = color(revolve(profile, detail), ring_color)
 
 output("Ring", smoothNormals(ring))

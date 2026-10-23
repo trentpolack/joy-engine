@@ -11,12 +11,12 @@ param random_seed = 21 meta(min=1, max=99, step=1)
 # towers turn redder, and each gets a little random green.
 seed(random_seed)
 let city = geometry()
-repeat blocks as x {
-  repeat blocks as z {
-    let h = ((rand()^2)*height) + 0.5
-    let px = (x - ((blocks - 1)/2))*spacing
-    let pz = (z - ((blocks - 1)/2))*spacing
-    let facade = rgba(0.5 + h/height*0.45, 0.35 + rand()*0.2, 0.25, 1)
+for x in 0..blocks {
+  for z in 0..blocks {
+    const h = ((rand()^2)*height) + 0.5
+    const px = (x - ((blocks - 1)/2))*spacing
+    const pz = (z - ((blocks - 1)/2))*spacing
+    const facade = rgba(0.5 + h/height*0.45, 0.35 + rand()*0.2, 0.25, 1)
     let tower = color(place(meshBox(1, h, 1), vector(px, h/2, pz)), facade)
 
     # Every face records its tower: the grid cell (x and z; y is unused) and its height.

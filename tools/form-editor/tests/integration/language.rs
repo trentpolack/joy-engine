@@ -29,7 +29,7 @@ fn points(body: &str) -> String {
 #[test]
 fn expressions_lexical_loops_and_point_data() {
     let mesh = compile(
-        &points("let size = 2 + 3 * 4\nrepeat 3 as i { addPoint(points, vector(i, size, sin(pi/2))) }"),
+        &points("let size = 2 + 3 * 4\nfor i in 0..3 { addPoint(points, vector(i, size, sin(pi/2))) }"),
         json!({}),
         None,
     );
@@ -55,14 +55,14 @@ output(\"Surface\", surface)",
 
 #[test]
 fn random_output_is_reproducible_and_independent_per_compile() {
-    let script = points("seed(42)\nrepeat 10 as i { addPoint(points, vector(rand(), rand(), rand())) }");
+    let script = points("seed(42)\nfor i in 0..10 { addPoint(points, vector(rand(), rand(), rand())) }");
     assert_eq!(compile(&script, json!({}), None), compile(&script, json!({}), None));
 }
 
 #[test]
 fn nested_loops_preserve_outer_variables() {
     let mesh =
-        compile(&points("repeat 2 as i { repeat 2 as j { addPoint(points, vector(i, j, 0)) } }"), json!({}), None);
+        compile(&points("for i in 0..2 { for j in 0..2 { addPoint(points, vector(i, j, 0)) } }"), json!({}), None);
     assert_eq!(mesh.positions, [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0]);
 }
 
@@ -121,9 +121,9 @@ output(\"Shape\", merge(triangle, dot))",
 #[test]
 fn rejects_arbitrary_javascript_oversized_work_invalid_topology_and_arity() {
     rejects("fetch(\"https://example.com\")");
-    let message = rejects(&points("repeat 10000000 as i { addPoint(points, vector(0, 0, 0)) }")).message;
+    let message = rejects(&points("for i in 0..10000000 { addPoint(points, vector(0, 0, 0)) }")).message;
     assert!(message.contains("limit") || message.contains("between"), "{message}");
-    let nested = points("repeat 1000 as i { repeat 1000 as j { addPoint(points, vector(i, j, 0)) } }");
+    let nested = points("for i in 0..1000 { for j in 0..1000 { addPoint(points, vector(i, j, 0)) } }");
     assert!(rejects(&nested).message.contains("limit"));
     assert!(rejects("output(\"Grid\", grid(0, 2, 4, 4))").message.contains("between"));
     assert!(rejects(&points("addPoint(points, vector(1, 2))")).message.contains("3 arguments"));
@@ -208,7 +208,7 @@ fn project_metadata_travels_with_generated_geometry_and_rejects_duplicates() {
         "project meta(name=\"A\", name=\"B\")",
         "project meta(name=12)",
         "project meta(name=\"A\", unknown=\"B\")",
-        "repeat 1 as i { project meta(name=\"A\") }",
+        "for i in 0..1 { project meta(name=\"A\") }",
     ] {
         rejects(source);
     }

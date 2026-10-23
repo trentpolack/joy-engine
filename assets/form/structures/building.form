@@ -1,4 +1,9 @@
-project meta(name="Building shell", info="FORM RUNTIME ASSET / METERS / Y-UP")
+project meta(
+  name="Building shell",
+  info="FORM RUNTIME ASSET / METERS / Y-UP"
+)
+
+# Parameters.
 param width = 8 meta(min=4, max=30, step=0.25)
 param depth = 6 meta(min=4, max=30, step=0.25)
 param height = 6 meta(min=3, max=30, step=0.25)
@@ -14,24 +19,25 @@ param wall_finish = materialPbr(wall_tint,0,0.85)
 param roof_finish = materialPbr(roof_tint,0.1,0.55)
 param window_piece = meshBox(1,1,0.12)
 
+# Apply a random seed (via the property).
 seed(random_seed)
 
 # ---- Finishes.
 # White vertices, so each material's base color shows as authored; window panes add a random cool tint.
-let white = rgba(1,1,1,1)
-let trim = materialPbr(rgba(0.12,0.16,0.19,1),0,0.7)
-let glass = materialPbr(rgba(0.16,0.46,0.58,1),0.3,0.2)
+const white = rgba(1,1,1,1)
+const trim = materialPbr(rgba(0.12,0.16,0.19,1),0,0.7)
+const glass = materialPbr(rgba(0.16,0.46,0.58,1),0.3,0.2)
 
 # ---- Proportions.
-let unit = meshBox(1,1,1)
-let floor_count = floor(floors)
-let floor_height = height/floor_count
-let window_height = min(1.3,floor_height*0.55)
-let columns = max(1,floor((width - 1)/window_spacing))
-let side_columns = max(1,floor((depth - 1)/window_spacing))
-let doors = max(1,floor(width/door_spacing))
-let no_turn = vector(0,0,0)
-let quarter_turn = vector(0,pi/2,0)
+const unit = meshBox(1,1,1)
+const floor_count = floor(floors)
+const floor_height = height/floor_count
+const window_height = min(1.3,floor_height*0.55)
+const columns = max(1,floor((width - 1)/window_spacing))
+const side_columns = max(1,floor((depth - 1)/window_spacing))
+const doors = max(1,floor(width/door_spacing))
+const no_turn = vector(0,0,0)
+const quarter_turn = vector(0,pi/2,0)
 
 # ---- Helpers.
 # A white box: the unit mesh placed at `center`, turned by `rotation`, stretched to `size`, and given `finish`.
@@ -41,8 +47,8 @@ fn block(center, rotation, size, finish) {
 
 # A trim frame with a tinted glass pane standing just proud of it.
 fn window(frame_center, pane_center, rotation) {
-  let frame = block(frame_center,rotation,vector(1.25,window_height + 0.18,0.18),trim)
-  let pane_tint = rgba(0.7 + rand()*0.3,0.7 + rand()*0.3,1,1)
+  const frame = block(frame_center,rotation,vector(1.25,window_height + 0.18,0.18),trim)
+  const pane_tint = rgba(0.7 + rand()*0.3,0.7 + rand()*0.3,1,1)
   let pane = place(window_piece,pane_center,rotation,vector(1,window_height,1))
   return merge(frame,material(color(pane,pane_tint),glass))
 }
@@ -50,9 +56,9 @@ fn window(frame_center, pane_center, rotation) {
 # A door with its canopy. Every face records its entrance: `kind`, the door `index`, and the `doorstep` where the
 # door meets the ground (`position` is reserved for point positions).
 fn entrance(index, x) {
-  let door_height = min(2.2,floor_height*0.8)
-  let door = block(vector(x,door_height/2,depth/2 + 0.16),no_turn,vector(1.4,door_height,0.15),trim)
-  let canopy = block(vector(x,door_height + 0.2,depth/2 + 0.5),no_turn,vector(2,0.14,0.9),roof_finish)
+  const door_height = min(2.2,floor_height*0.8)
+  const door = block(vector(x,door_height/2,depth/2 + 0.16),no_turn,vector(1.4,door_height,0.15),trim)
+  const canopy = block(vector(x,door_height + 0.2,depth/2 + 0.5),no_turn,vector(2,0.14,0.9),roof_finish)
   let parts = merge(door,canopy)
   addAttribute(parts,"faces","kind","entrance")
   addAttribute(parts,"faces","index",index)
@@ -66,34 +72,34 @@ let walls = merge(
   block(vector(0,height/2,-depth/2),no_turn,vector(width,height,0.2),wall_finish),
   block(vector(0,height/2,depth/2),no_turn,vector(width,height,0.2),wall_finish)
 )
-repeat 2 as side {
-  let sign = side*2 - 1
+for side in 0..2 {
+  const sign = side*2 - 1
   append(walls,block(vector(sign*width/2,height/2,0),no_turn,vector(0.2,height,depth),wall_finish))
 }
 
 # ---- Floor bands.
 # Floor bands and foundations are also reused boxes, not a host geometry generator.
 let bands = geometry()
-repeat floor_count + 1 as level {
+for level in 0..floor_count + 1 {
   append(bands,block(vector(0,level*floor_height,0),no_turn,vector(width + 0.3,0.16,depth + 0.3),trim))
 }
 
 # ---- Windows.
 let windows = geometry()
-repeat floor_count as level {
-  let y = (level + 0.5)*floor_height
-  repeat 2 as side {
-    let sign = side*2 - 1
-    let front = side == 1
-    repeat columns as column {
-      let x = (column - (columns - 1)/2)*window_spacing
+for level in 0..floor_count {
+  const y = (level + 0.5)*floor_height
+  for side in 0..2 {
+    const sign = side*2 - 1
+    const front = side == 1
+    for column in 0..columns {
+      const x = (column - (columns - 1)/2)*window_spacing
       # Ground front is reserved for doors, avoiding overlapped panels.
       if level > 0 OR NOT front {
         append(windows,window(vector(x,y,sign*(depth/2 + 0.15)),vector(x,y,sign*(depth/2 + 0.26)),no_turn))
       }
     }
-    repeat side_columns as column {
-      let z = (column - (side_columns - 1)/2)*window_spacing
+    for column in 0..side_columns {
+      const z = (column - (side_columns - 1)/2)*window_spacing
       append(windows,window(vector(sign*(width/2 + 0.15),y,z),vector(sign*(width/2 + 0.26),y,z),quarter_turn))
     }
   }
@@ -101,7 +107,7 @@ repeat floor_count as level {
 
 # ---- Entrances.
 let entrances = geometry()
-repeat doors as door {
+for door in 0..doors {
   append(entrances,entrance(door,(door - (doors - 1)/2)*door_spacing))
 }
 
@@ -111,11 +117,11 @@ let roof = geometry()
 if roof_shape < 0.5 {
   append(roof,block(vector(0,height + 0.25,0),no_turn,vector(width + 0.7,0.35,depth + 0.7),roof_finish))
 } else {
-  let half = width/2 + 0.35
-  let slope = atan2(roof_rise,half)
-  let length = sqrt(half*half + roof_rise*roof_rise)
-  repeat 2 as side {
-    let sign = side*2 - 1
+  const half = width/2 + 0.35
+  const slope = atan2(roof_rise,half)
+  const length = sqrt(half*half + roof_rise*roof_rise)
+  for side in 0..2 {
+    const sign = side*2 - 1
     append(roof,block(vector(sign*half/2,height + roof_rise/2,0),vector(0,0,-sign*slope),vector(length,0.2,depth + 0.7),roof_finish))
   }
   let gables = geometry()

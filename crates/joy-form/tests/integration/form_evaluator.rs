@@ -37,8 +37,113 @@ fn failure(source: &str) -> (String, usize, usize) {
 }
 
 #[test]
+fn constants_preserve_values_scope_and_reject_replacement() {
+    assert_eq!(
+        numbers("const data = {height: 3}\nconst height = data.height + 1\nif true { let height = 8 }", &["height"]),
+        vec![4.0]
+    );
+    for statement in
+        ["value = 2", "value += 2", "let value = 2", "const value = 2", "param value = 2 meta(min=0,max=3,step=1)"]
+    {
+        let (message, line, _) = failure(&format!("const value = 1\n{statement}"));
+        assert!(message.contains("constant"), "{statement}: {message}");
+        assert_eq!(line, 2);
+    }
+    let (message, line, _) = failure("fn edit(ref value) { missing() }\nconst fixed = 1\nedit(ref fixed)");
+    assert!(message.contains("constant"), "ref must reject before running missing(): {message}");
+    assert_eq!(line, 3);
+}
+
+#[test]
+fn constants_in_modules_freeze_captured_and_returned_geometry() {
+    let loader = |_: &str| {
+        Ok::<_, String>(
+            "const shape = box(1,1,1)\nfn alias() { return shape }\nfn edit() { translate(shape,vector(1,0,0)) }"
+                .into(),
+        )
+    };
+    for operation in ["translate(kit.shape,vector(1,0,0))", "translate(kit.alias(),vector(1,0,0))", "kit.edit()"] {
+        let source = format!("use \"kit.form\" as kit\n{operation}");
+        let script = CompiledScript::parse_with_modules(&source, "main.form", &loader).unwrap();
+        let error = script.evaluate(&json!({}), None).unwrap_err();
+        assert!(error.message.contains("constant"), "{operation}: {error}");
+        assert_eq!(error.line, 2);
+    }
+    let script =
+        CompiledScript::parse_with_modules("use \"kit.form\" as kit\nconst alias = kit", "main.form", &loader).unwrap();
+    assert!(script.evaluate(&json!({}), None).unwrap_err().message.contains("module"));
+}
+
+#[test]
+fn range_loops_use_exclusive_bounds_and_evaluate_each_bound_once() {
+    let source = r#"
+        let trace = 0
+        fn bound(ref trace, value) { trace = trace*10 + value return value }
+        let sum = 0
+        let end = 5
+        for index in bound(ref trace,2)..bound(ref trace,end) { sum += index end = 0 }
+        for index in -2..1 { sum += index }
+        for index in 3..3 { sum = 999 }
+        for index in 5..2 { sum = 999 }
+        const decimal = 1. + .5 + 2e-1
+    "#;
+    assert_eq!(numbers(source, &["sum", "trace", "decimal"]), vec![6.0, 25.0, 1.7]);
+    assert_eq!(numbers("let sum=0 for i in 9007199254740990..9007199254740991 { sum += 1 }", &["sum"]), vec![1.0]);
+    for source in [
+        "for i in 0..1.5 {}",
+        "for i in -9007199254740992..0 {}",
+        "for i in 0..9007199254740992 {}",
+        "for i in 0..150001 {}",
+    ] {
+        let (message, _, _) = failure(source);
+        assert!(message.contains("integer") || message.contains("iteration limit"), "{source}: {message}");
+    }
+    assert!(failure("for i in 0..1 { i = 3 }").0.contains("loop value"));
+    for declaration in ["let", "const"] {
+        assert!(failure(&format!("for i in 0..1 {{ {declaration} i = 3 }}")).0.contains("loop value"));
+        assert!(failure(&format!("foreach item in [1] {{ {declaration} item = 3 }}")).0.contains("loop value"));
+    }
+    assert_eq!(numbers("let sum=0 for i in 2..4 { if true { let i=8 sum+=i } sum+=i }", &["sum"]), vec![21.0]);
+    assert!(failure("for i in 0..1 {} let outside=i").0.contains("Unknown variable"));
+}
+
+#[test]
+fn foreach_loops_visit_values_in_order_and_capture_the_collection_once() {
+    let source = r#"
+        let calls = 0
+        fn source(ref calls) { calls += 1 return [{x:2}, {x:4}, {x:8}] }
+        let ordered = 0
+        foreach instance in source(ref calls) { ordered = ordered*10 + instance.x }
+        let items = [1,2]
+        let total = 0
+        foreach item in items { total += item items = [99] }
+        foreach item in [] { total = 999 }
+        foreach nested in [[3,4], [5,6]] { foreach item in nested { total += item } }
+        foreach component in vector(1,2,3) { total += component }
+        foreach component in rgba(1,0,0,1) { total += component }
+        let flags = 0
+        foreach item in [true,"ok",null] {
+            if flags == 0 { if item { flags += 1 } }
+            else if flags == 1 { if item == "ok" { flags += 1 } }
+            else { if item == null { flags += 1 } }
+        }
+    "#;
+    assert_eq!(numbers(source, &["ordered", "calls", "total", "flags"]), vec![248.0, 1.0, 29.0, 3.0]);
+    for expression in ["2", "true", "null", "\"text\"", "{x:1}", "geometry()"] {
+        let (message, _, _) = failure(&format!("foreach item in {expression} {{}}"));
+        assert!(message.contains("foreach expects"), "{expression}: {message}");
+    }
+    assert!(failure("foreach item in [1] { item = 2 }").0.contains("loop value"));
+    assert!(failure("foreach item in [1] {} let outside=item").0.contains("Unknown variable"));
+    assert_eq!(
+        numbers("fn first(items) { foreach item in items { return item } return 0 }", &["first([7,9])"]),
+        vec![7.0]
+    );
+}
+
+#[test]
 fn compiled_evaluations_are_owned_deterministic_and_ignore_unknown_overrides() {
-    let source = "param width=2 meta(min=1,max=4,step=0.25)\nlet size=width+1\nlet g=geometry()\nrepeat 2 as i { addPoint(g, vector(size,i,rand())) }\noutput(\"Points\", g)";
+    let source = "param width=2 meta(min=1,max=4,step=0.25)\nlet size=width+1\nlet g=geometry()\nfor i in 0..2 { addPoint(g, vector(size,i,rand())) }\noutput(\"Points\", g)";
     let script = CompiledScript::parse(source).unwrap();
     let mut first = script.evaluate(&json!({"width":100,"removed":999}), None).unwrap();
     let second = script.evaluate(&json!({"width":100}), None).unwrap();
@@ -83,7 +188,7 @@ fn actual_form_precedence_vector_math_and_legacy_parameters_are_preserved() {
 fn conditions_branch_on_true_or_false_and_logic_short_circuits() {
     let prelude = r#"
         let flags = 0
-        repeat 6 as i {
+        for i in 0..6 {
             if i == 0 { flags += 1 } else if i % 2 == 0 AND NOT (i == 4) { flags += 10 } else { flags += 100 }
         }
         # The right side of AND or OR would fail if it ran.
@@ -111,7 +216,7 @@ fn assignments_update_enclosing_variables_while_let_ends_with_its_block() {
     let prelude = r#"
         let total = 0
         let last = -1
-        repeat 4 as i {
+        for i in 0..4 {
             let doubled = i * 2
             total += doubled
             last = i
@@ -121,10 +226,10 @@ fn assignments_update_enclosing_variables_while_let_ends_with_its_block() {
     "#;
     assert_eq!(numbers(prelude, &["total", "last", "shadowed"]), vec![12.0, 3.0, 5.0]);
 
-    assert_eq!(failure("repeat 2 as i { let inner = i }\nlet a = inner").0, "Unknown variable 'inner'.");
+    assert_eq!(failure("for i in 0..2 { let inner = i }\nlet a = inner").0, "Unknown variable 'inner'.");
     assert_eq!(failure("x = 3").0, "Unknown variable 'x'; declare it with let before assigning it.");
     assert_eq!(failure("param w = 2 meta(min=1,max=3,step=1)\nw = 4").0, "Cannot assign to the parameter 'w'.");
-    assert_eq!(failure("repeat 2 as i { i = 4 }").0, "Cannot assign to the loop value 'i'.");
+    assert_eq!(failure("for i in 0..2 { i = 4 }").0, "Cannot assign to the loop value 'i'.");
     assert_eq!(failure("pi = 3").0, "Cannot assign to the constant 'pi'.");
 }
 
@@ -266,9 +371,9 @@ fn retired_drawing_commands_explain_their_replacements() {
 fn runtime_failures_retain_actual_expression_or_statement_locations() {
     let (message, line, column) = failure("\nlet a = unknown + 1");
     assert_eq!((message.as_str(), line, column), ("Unknown variable 'unknown'.", 2, 9));
-    let (message, line, column) = failure("\nrepeat \"three\" as i { }");
+    let (message, line, column) = failure("\nfor i in 0..\"three\" { }");
     assert_eq!((message.as_str(), line, column), ("Expected a number; found text.", 2, 1));
-    let (message, _, _) = failure("repeat 150000 as i { repeat 150000 as j {} }");
+    let (message, _, _) = failure("for i in 0..150000 { for j in 0..150000 {} }");
     assert_eq!(message, "Operation limit exceeded (2,000,000).");
 }
 

@@ -10,15 +10,15 @@ param tint = rgba(0.23, 0.66, 0.66, 1)
 
 # ---- Palette.
 # The pipe blends from `tint` at the base to `glow` at the top; both are graded by `warm`, FORM's classic tint.
-let warm = rgba(0.929, 0.424, 0.224, 1)
-let glow = rgba(0.94, 0.68, 0.34, 1)
+const warm = rgba(0.929, 0.424, 0.224, 1)
+const glow = rgba(0.94, 0.68, 0.34, 1)
 
 # ---- Path.
 # A helix: one point per segment, climbing `rise` over `turns` full turns.
 let path = geometry()
-repeat segments + 1 as i {
-  let t = i/segments
-  let angle = t*turns*tau
+for i in 0..segments + 1 {
+  const t = i/segments
+  const angle = t*turns*tau
   addPoint(path, vector(cos(angle)*radius, t*rise, sin(angle)*radius))
 }
 

@@ -19,6 +19,20 @@ fn assert_error(source: &str, message: &str, line: usize, column: usize) {
 }
 
 #[test]
+fn loops_distinguish_ranges_collections_and_retired_repeat_syntax() {
+    for (source, guidance) in [
+        ("repeat 3 as i {}", "for"),
+        ("for item in [1,2] {}", "foreach"),
+        ("foreach item in 0..3 {}", "for"),
+        ("for i in 0..=3 {}", "exclusive"),
+    ] {
+        let error = CompiledScript::parse(source).unwrap_err();
+        assert!(error.message.contains(guidance), "{source}: {error}");
+    }
+    assert!(CompiledScript::parse("for i in 0..3 {} foreach item in [{x:1}] { const x=item.x }").is_ok());
+}
+
+#[test]
 fn parses_complete_statement_and_data_syntax() {
     let source = r#"
         # Headers and semicolons can separate statements.
@@ -34,7 +48,7 @@ fn parses_complete_statement_and_data_syntax() {
         }
         let g = geometry()
         let count = 0
-        repeat width as i {
+        for i in 0..width {
             if i >= 1 AND NOT (i == 3) { count += 1 } else if i == 0 OR false { count -= 1 } else { count *= 2 }
         }
         match Kind.hall { case Kind.tower, Kind.hall { count /= 2 } else { } }
@@ -61,7 +75,7 @@ else { }",
         2,
         1,
     );
-    assert_error("repeat 2 as i { fn f() { } }", "Declare functions at the top level of a script.", 1, 17);
+    assert_error("for i in 0..2 { fn f() { } }", "Declare functions at the top level of a script.", 1, 17);
     assert_error("return 1", "'return' is only allowed inside a function.", 1, 1);
     assert_error("if true { enum A { x } }", "Declare enums at the top level of a script.", 1, 11);
     assert_error("enum A { }", "An enum requires 1 to 32 members.", 1, 8);
@@ -130,7 +144,7 @@ fn rejects_trailing_commas_and_unterminated_blocks() {
     assert_error("f(1,)", "Expected an expression, found ')'.", 1, 5);
     assert_error("let x = [1,]", "Expected an expression, found ']'.", 1, 12);
     assert_error("let x = {a:1,}", "Expected a variable name.", 1, 14);
-    assert_error("repeat 2 as i {", "Expected '}', found '<end>'.", 1, 16);
+    assert_error("for i in 0..2 {", "Expected '}', found '<end>'.", 1, 16);
     assert_error("}", "Unexpected '}'.", 1, 1);
     assert_error("let x = \"bad\\q\"", "Invalid quoted text.", 1, 9);
     assert_error("let x = \"line\nline\"", "Unexpected character '\"'.", 1, 9);

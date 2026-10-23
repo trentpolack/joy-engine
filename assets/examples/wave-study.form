@@ -8,7 +8,7 @@ param resolution = 64 meta(min=8, max=120, step=1)
 param tint = rgba(0.93, 0.42, 0.22, 1)
 
 # ---- Palette.
-let accent_color = rgba(1, 0.82, 0.4, 1)
+const accent_color = rgba(1, 0.82, 0.4, 1)
 
 # ---- Wave.
 # The landscape's height at any X/Z position; the surface and the points above it share it.
@@ -31,9 +31,9 @@ color(surface, tint)
 # A scattering of warm points above the surface.
 seed(19)
 let accents = geometry()
-repeat 500 as i {
-  let px = (rand() - 0.5)*24
-  let pz = (rand() - 0.5)*24
+for i in 0..500 {
+  const px = (rand() - 0.5)*24
+  const pz = (rand() - 0.5)*24
   addPoint(accents, vector(px, wave(px, pz) + 0.18, pz), {kind: "accent", study: "wave"})
 }
 color(accents, accent_color)

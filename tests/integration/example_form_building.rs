@@ -137,7 +137,7 @@ fn failed_evaluations_keep_the_previous_building() {
     assert_eq!(building.recipe(), recipe);
     for source in [
         "box(0,1,1)",
-        "let g = geometry()\nrepeat 20000 as i { append(g, box(1,1,1)) }",
+        "let g = geometry()\nfor i in 0..20000 { append(g, box(1,1,1)) }",
         "let x = nope(1)",
         "if 1 OR 0 { output(\"Box\", box(1,1,1)) }",
     ] {

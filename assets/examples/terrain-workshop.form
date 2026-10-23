@@ -12,7 +12,7 @@ param finish = materialPbr(rgba(0.93, 0.42, 0.22, 1), 0.2, 0.5)
 
 # ---- Palette.
 # Everything visible is graded by `warm`, FORM's classic tint.
-let warm = rgba(0.929, 0.424, 0.224, 1)
+const warm = rgba(0.929, 0.424, 0.224, 1)
 
 # ---- Terrain.
 # A flat grid lifted into rolling waves. Density marks the crests, where columns will gather.
@@ -20,7 +20,7 @@ let terrain = grid(32, 32, 22, 22)
 addAttribute(terrain, "points", "density", 0)
 color(terrain, lowColor)
 wrangle points in terrain as element {
-  let wave = sin(element.position.x*frequency)*cos(element.position.z*frequency)
+  const wave = sin(element.position.x*frequency)*cos(element.position.z*frequency)
   element.position = vector(element.position.x, wave*height, element.position.z)
   element.density = clamp((wave + 0.3)*1.4, 0, 1)
   element.color = mix(lowColor, highColor, element.density)*warm
@@ -35,7 +35,7 @@ addAttribute(sites, "points", "rotation", vector(0, 0, 0))
 seed(random_seed)
 wrangle points in sites as element {
   # Each column gets a random height (standing on the surface) and a random turn.
-  let tall = 0.4 + rand()*2.2
+  const tall = 0.4 + rand()*2.2
   element.position = vector(element.position.x, element.position.y + tall/2, element.position.z)
   element.scale = vector(1, tall, 1)
   element.rotation = vector(0, rand()*tau, 0)
@@ -46,12 +46,12 @@ wrangle points in sites as element {
 addAttribute(sites, "points", "kind", "column-site")
 addAttribute(sites, "points", "index", 0)
 addAttribute(sites, "points", "source", "terrain-scatter")
-repeat pointCount(sites) as i {
+for i in 0..pointCount(sites) {
   setAttribute(sites, "points", "index", i, i)
 }
 inspect("Sites", sites)
 
 # ---- Columns.
 # White sites leave each column's graded color as it is; the finish supplies the base color.
-let columns = instances(color(geometry(column), warm), sites, finish)
+const columns = instances(color(geometry(column), warm), sites, finish)
 output("Columns", columns)

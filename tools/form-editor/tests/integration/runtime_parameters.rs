@@ -24,7 +24,7 @@ param tint = rgba(0.3, 0.6, 0.9, 1)
 param piece = meshBox(1, 2, 1)
 param finish = materialPbr(tint, 0.1, 0.7)
 let bridge = geometry()
-repeat count as i {
+for i in 0..count {
   append(bridge, place(piece, vector(origin.x + i * 2, origin.y, origin.z)))
 }
 output(\"Bridge\", material(bridge, finish))";
@@ -69,7 +69,7 @@ output(\"Shapes\", merge(geometry(base), geometry(moved)))",
     let error = joy_engine::form::compile(RECIPE, &json!({"piece": 3}), None).unwrap_err();
     assert!(error.message.to_lowercase().contains("mesh"), "{error}");
     let error = joy_engine::form::compile(
-        "let many = geometry()\nrepeat 20000 as i { append(many, geometry(meshBox(1, 1, 1))) }\noutput(\"Many\", many)",
+        "let many = geometry()\nfor i in 0..20000 { append(many, geometry(meshBox(1, 1, 1))) }\noutput(\"Many\", many)",
         &json!({}),
         None,
     )

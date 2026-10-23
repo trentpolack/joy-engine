@@ -9,14 +9,55 @@ use crate::procedural::{
 };
 use serde_json::Value as Json;
 use std::{
-    cell::RefCell,
+    cell::{
+        Cell,
+        Ref,
+        RefCell,
+        RefMut,
+    },
     rc::Rc,
 };
 
 pub type SharedObject = Rc<RefCell<Json>>;
-pub type SharedGeometry = Rc<RefCell<Geometry>>;
-pub type SharedInstances = Rc<RefCell<Instances>>;
+pub type SharedGeometry = Rc<SharedValue<Geometry>>;
+pub type SharedInstances = Rc<SharedValue<Instances>>;
 pub type SharedBudget = Rc<RefCell<Budget>>;
+
+const CONSTANT_RESOURCE_ERROR: &str =
+    "Cannot modify a constant value; use copy() to create editable geometry or instances.";
+
+/// One shared resource identity. Freezing protects every alias; copying its data creates a fresh mutable identity.
+#[derive(Debug)]
+pub struct SharedValue<T> {
+    value: RefCell<T>,
+    frozen: Cell<bool>,
+}
+
+impl<T> SharedValue<T> {
+    pub fn new(value: T) -> Self {
+        Self {
+            value: RefCell::new(value),
+            frozen: Cell::new(false),
+        }
+    }
+
+    pub fn borrow(&self) -> Ref<'_, T> {
+        self.value.borrow()
+    }
+
+    pub fn borrow_mut(&self) -> Result<RefMut<'_, T>, String> {
+        self.ensure_mutable()?;
+        Ok(self.value.borrow_mut())
+    }
+
+    pub fn freeze(&self) {
+        self.frozen.set(true);
+    }
+
+    pub fn ensure_mutable(&self) -> Result<(), String> {
+        if self.frozen.get() { Err(CONSTANT_RESOURCE_ERROR.into()) } else { Ok(()) }
+    }
+}
 
 /// Most operations one evaluation may spend, counting statements, expressions, and per-element procedural work.
 pub const OPERATION_LIMIT: usize = 2_000_000;
@@ -118,10 +159,35 @@ impl Value {
         Self::Object(Rc::new(RefCell::new(value)))
     }
     pub fn geometry(value: Geometry) -> Self {
-        Self::Geometry(Rc::new(RefCell::new(value)))
+        Self::Geometry(Rc::new(SharedValue::new(value)))
     }
     pub fn instances(value: Instances) -> Self {
-        Self::Instances(Rc::new(RefCell::new(value)))
+        Self::Instances(Rc::new(SharedValue::new(value)))
+    }
+
+    /// Freeze mutable resources without copying them, so aliases cannot bypass a constant declaration.
+    pub fn freeze(&self) -> Result<(), String> {
+        match self {
+            Self::Geometry(value) => value.freeze(),
+            Self::Instances(value) => value.freeze(),
+            Self::Element(_) | Self::Module(_) => {
+                return Err(format!(
+                    "Cannot store {} in a constant; capture a field or exported value instead.",
+                    self.describe()
+                ));
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Reject write access to a frozen resource, including when a writable variable aliases it.
+    pub fn ensure_mutable(&self) -> Result<(), String> {
+        match self {
+            Self::Geometry(value) => value.ensure_mutable(),
+            Self::Instances(value) => value.ensure_mutable(),
+            _ => Ok(()),
+        }
     }
 
     /// A short description of the value's type for diagnostics, such as "text" or "a vector".

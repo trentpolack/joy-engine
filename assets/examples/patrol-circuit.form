@@ -12,20 +12,20 @@ param arrivalRadius = 0.4 meta(min=0.1, max=0.8, step=0.05)
 # ---- Palette.
 # Waypoints shade from `moving` to `waiting` by how long an agent pauses there. Everything visible is graded by
 # `warm`, FORM's classic tint.
-let warm = rgba(0.929, 0.424, 0.224, 1)
-let moving = rgba(0.18, 0.65, 0.7, 1)
-let waiting = rgba(1, 0.65, 0.2, 1)
-let guide_color = rgba(0.22, 0.45, 0.52, 1)*warm
-let platform_color = rgba(0.2, 0.28, 0.36, 1)*warm
+const warm = rgba(0.929, 0.424, 0.224, 1)
+const moving = rgba(0.18, 0.65, 0.7, 1)
+const waiting = rgba(1, 0.65, 0.2, 1)
+const guide_color = rgba(0.22, 0.45, 0.52, 1)*warm
+const platform_color = rgba(0.2, 0.28, 0.36, 1)*warm
 
 # ---- Waypoints.
 # A wavy loop around the center. Each point's record is its gameplay data; every field becomes a point attribute.
 let waypoints = geometry()
-repeat count as i {
-  let angle = i/count*tau
-  let distance = radius*(1 + sin(angle*3)*bend)
-  let location = vector(cos(angle)*distance, 1 + (sin(angle*2) + 1)*rise/2, sin(angle)*distance)
-  let waypointData = {
+for i in 0..count {
+  const angle = i/count*tau
+  const distance = radius*(1 + sin(angle*3)*bend)
+  const location = vector(cos(angle)*distance, 1 + (sin(angle*2) + 1)*rise/2, sin(angle)*distance)
+  const waypointData = {
     kind: "waypoint",
     id: i,
     route: "perimeter",
@@ -55,12 +55,12 @@ inspect("Waypoints", waypoints)
 # ---- Route guide.
 # A thin tube through every waypoint, closed back at the first.
 let path = geometry()
-repeat count as i { addPoint(path, attribute(waypoints, "points", "position", i)) }
+for i in 0..count { addPoint(path, attribute(waypoints, "points", "position", i)) }
 addPoint(path, attribute(waypoints, "points", "position", 0))
 output("Route guide", color(tube(path, 0.08, 6), guide_color))
 
 # ---- Markers and platform.
 # Each marker takes its waypoint's color and data.
-let marker = color(geometry(meshSphere(0.3, 6)), warm)
+const marker = color(geometry(meshSphere(0.3, 6)), warm)
 output("Waypoint markers", instances(marker, waypoints))
 output("Center platform", color(box(radius*0.7, 0.3, radius*0.7), platform_color))

@@ -90,10 +90,10 @@ impl Target {
         }
     }
 
-    fn borrow_mut(&self) -> RefMut<'_, Geometry> {
+    fn borrow_mut(&self) -> Result<RefMut<'_, Geometry>, String> {
         match self {
             Self::Geometry(geometry) => geometry.borrow_mut(),
-            Self::Sites(collection) => RefMut::map(collection.borrow_mut(), |collection| &mut collection.sites),
+            Self::Sites(collection) => Ok(RefMut::map(collection.borrow_mut()?, |collection| &mut collection.sites)),
         }
     }
 }
@@ -232,7 +232,7 @@ impl Procedural {
                 // A mesh becomes new geometry here, so `translate(meshBox(…), offset)` returns a placed copy.
                 let geometry = self.geometry(&values[0])?;
                 self.spend(geometry.borrow().size() as f64)?;
-                store::transform(&mut geometry.borrow_mut(), name, &values[1].vector()?)?;
+                store::transform(&mut *geometry.borrow_mut()?, name, &values[1].vector()?)?;
                 Value::Geometry(geometry)
             }
             "append" => {
@@ -241,7 +241,7 @@ impl Procedural {
                 let target = self.editable(&values[0], name)?;
                 let source = self.combinable(&values[1])?;
                 self.spend(source.size() as f64)?;
-                combine::append(&mut self.store, &mut target.borrow_mut(), source)?;
+                combine::append(&mut self.store, &mut *target.borrow_mut()?, source)?;
                 Value::Geometry(target)
             }
             "color" => {
@@ -257,7 +257,7 @@ impl Procedural {
                 if self.current.is_some() {
                     return Err("Color whole geometry outside wrangles; inside one, assign 'point.color'.".into());
                 }
-                let mut geometry = geometry.borrow_mut();
+                let mut geometry = geometry.borrow_mut()?;
                 let length = geometry.count(DomainKind::Points);
                 self.spend(length as f64)?;
                 // Painting replaces any per-face or per-corner colors, so the whole geometry takes the color.
@@ -284,7 +284,7 @@ impl Procedural {
                     );
                 }
                 let material = material_record(&values[1])?;
-                let mut geometry_data = geometry.borrow_mut();
+                let mut geometry_data = geometry.borrow_mut()?;
                 let faces = geometry_data.count(DomainKind::Faces);
                 self.spend(faces as f64)?;
                 self.store.add_material_attribute(&mut geometry_data)?;
@@ -313,7 +313,7 @@ impl Procedural {
                     );
                 }
                 let geometry = self.editable(&values[0], name)?;
-                let mut geometry = geometry.borrow_mut();
+                let mut geometry = geometry.borrow_mut()?;
                 let index = self.store.add_point(&mut geometry, &values[1].vector()?)?;
                 if let Some(record) = values.get(2) {
                     self.set_point_record(&mut geometry, index, record)?;
@@ -329,14 +329,14 @@ impl Procedural {
                     .iter()
                     .map(|v| integer_range(v.scalar()?, 0.0, length as f64 - 1.0))
                     .collect::<Result<Vec<_>, _>>()?;
-                let index = self.store.add_face(&mut geometry.borrow_mut(), &indices)?;
+                let index = self.store.add_face(&mut *geometry.borrow_mut()?, &indices)?;
                 Value::Number(index as f64)
             }
             "removePoint" | "removeFace" => {
                 self.allow_topology()?;
                 arity(name, values, 2)?;
                 let geometry = self.editable(&values[0], name)?;
-                let mut geometry = geometry.borrow_mut();
+                let mut geometry = geometry.borrow_mut()?;
                 self.spend(geometry.size() as f64)?;
                 let domain = if name == "removePoint" { DomainKind::Points } else { DomainKind::Faces };
                 let index = integer_range(values[1].scalar()?, 0.0, geometry.count(domain) as f64 - 1.0)?;
@@ -387,7 +387,7 @@ impl Procedural {
                 } else {
                     (Target::Geometry(self.editable(&values[0], name)?), DomainKind::parse(requested)?)
                 };
-                let mut geometry = target.borrow_mut();
+                let mut geometry = target.borrow_mut()?;
                 self.spend(geometry.count(domain) as f64)?;
                 if attribute_name == MATERIAL_ATTRIBUTE && domain == DomainKind::Faces {
                     self.store.add_material_attribute(&mut geometry)?;
@@ -409,7 +409,7 @@ impl Procedural {
                 arity(name, values, 3)?;
                 let geometry = self.editable(&values[0], name)?;
                 self.store.remove_attribute(
-                    &mut geometry.borrow_mut(),
+                    &mut *geometry.borrow_mut()?,
                     DomainKind::parse(text(&values[1])?)?,
                     text(&values[2])?,
                 )?;
@@ -421,7 +421,7 @@ impl Procedural {
                 }
                 arity(name, values, 5)?;
                 let geometry = self.editable(&values[0], name)?;
-                let mut geometry = geometry.borrow_mut();
+                let mut geometry = geometry.borrow_mut()?;
                 let domain = DomainKind::parse(text(&values[1])?)?;
                 let attribute_name = text(&values[2])?;
                 let index = values[3].scalar()?;
@@ -544,7 +544,7 @@ impl Procedural {
     pub fn write(&mut self, name: &str, value: &Value) -> Result<(), String> {
         let current = self.current.clone().ok_or("Attribute assignment requires a wrangle.")?;
         self.read(name)?;
-        let mut geometry = current.target.borrow_mut();
+        let mut geometry = current.target.borrow_mut()?;
         if name == MATERIAL_ATTRIBUTE && current.domain == DomainKind::Faces {
             return self.store.set_material(&mut geometry, current.index, &material_record(value)?);
         }
@@ -595,7 +595,7 @@ impl Procedural {
         if let Some(current) = self.current.take()
             && self.positions_changed
         {
-            let mut geometry = current.target.borrow_mut();
+            let mut geometry = current.target.borrow_mut()?;
             for domain in [DomainKind::Corners, DomainKind::Faces] {
                 geometry.domain_mut(domain).remove("normal");
             }

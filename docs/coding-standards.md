@@ -13,6 +13,21 @@ Games own tuning and palettes in Rust configuration modules. External documents 
 
 Preserve time units, update order, random-number consumption, collision behavior, and rendering order during structural refactors. Keep intentional behavior changes separate. Gameplay randomness stays independent from cosmetic randomness; deterministic scenarios use seeded streams and portable numerical helpers.
 
+## FORM Authoring
+Use `const` for immutable values, lookup tables, fixed calculations, and finished geometry. Keep `let` for reassignment, `ref` arguments, and geometry or instance builders that will be edited. A constant freezes shared geometry or instance aliases; use `copy()` when a separate editable value is needed.
+
+Use `for index in start..end` for ascending, exclusive integer ranges, and `foreach item in collection` when only list values are needed. Use `wrangle` for geometry and instance attribute domains. Author enums on multiple lines with PascalCase entries, preserving member order and keeping FORM spellings separate from persistent game IDs when they differ:
+
+```text
+enum Kind {
+  Tower,
+  Block,
+  Hall,
+  Stack,
+  Relay
+}
+```
+
 ## Node and Extension Tooling
 JavaScript remains appropriate for build orchestration, captures, deployment, patch delivery, and browser infrastructure. The VS Code extension may use TypeScript for its host API. These tools must not become a second game or engine implementation.
 

@@ -33,8 +33,8 @@ pub const RECIPES: [Recipe; 8] = [
         title: "Assemble colored parts",
         description: "Name each part, color it from a small palette, and output the merged result. Functions keep \
                       repeated parts readable.",
-        code: "let $id_wall = rgba(0.82,0.74,0.6,1)
-let $id_roof = rgba(0.36,0.2,0.14,1)
+        code: "const $id_wall = rgba(0.82,0.74,0.6,1)
+const $id_roof = rgba(0.36,0.2,0.14,1)
 fn $id_post(x, z) {
   return translate(box(0.3, 2, 0.3), vector(x, 1, z))
 }
@@ -46,14 +46,17 @@ output(\"$id\", merge(color($id_posts, $id_wall), color($id_cap, $id_roof)))",
         title: "Place objects with attributes",
         description: "Isolated points with attributes are placements: hosts spawn the named object at each point. \
                       Logic picks which object goes where.",
-        code: "enum $id_Kind { tree, rock }
+        code: "enum $id_Kind {
+  Tree,
+  Rock
+}
 let $id = geometry()
 seed(7)
-repeat 16 as i {
-  let angle = i/16*tau
-  let kind = $id_Kind.tree
-  if rand() > 0.7 { kind = $id_Kind.rock }
-  let size = 0.8 + rand()*0.4
+for i in 0..16 {
+  const angle = i/16*tau
+  let kind = $id_Kind.Tree
+  if rand() > 0.7 { kind = $id_Kind.Rock }
+  const size = 0.8 + rand()*0.4
   addPoint($id, vector(cos(angle)*8, 0, sin(angle)*8), {kind: kind, scale: vector(size, size, size)})
 }
 output(\"$id\", $id)",
@@ -67,7 +70,7 @@ addPoint($id_profile, vector(0,0,0))
 addPoint($id_profile, vector(2,0,0))
 addPoint($id_profile, vector(2.5,2,0))
 addPoint($id_profile, vector(1,4,0))
-let $id = revolve($id_profile, 32)
+const $id = revolve($id_profile, 32)
 output(\"$id\", $id)",
     },
     Recipe {
@@ -75,11 +78,11 @@ output(\"$id\", $id)",
         description: "Generate a cable or pipe around ordered XYZ points. Returns ordinary geometry with smooth normals \
                       and corner UVs.",
         code: "let $id_path = geometry()
-repeat 41 as i {
-  let t = i/40*tau
+for i in 0..41 {
+  const t = i/40*tau
   addPoint($id_path, vector(cos(t)*3, i*0.12, sin(t)*3))
 }
-let $id = tube($id_path, 0.3, 12)
+const $id = tube($id_path, 0.3, 12)
 output(\"$id\", $id)",
     },
     Recipe {
@@ -90,7 +93,7 @@ output(\"$id\", $id)",
 addAttribute($id, \"points\", \"density\", 0)
 color($id, rgba(1,1,1,1))
 wrangle points in $id as element {
-  let h = noise(element.position.x*0.3, element.position.z*0.3, 7777)
+  const h = noise(element.position.x*0.3, element.position.z*0.3, 7777)
   element.position = element.position + vector(0, h*3, 0)
   element.density = smoothstep(-0.5, 0.5, h)
   element.color = mix(rgba(0.12,0.28,0.31,1), rgba(0.5,0.7,0.5,1), element.density)
@@ -101,9 +104,9 @@ output(\"$id\", $id)",
         title: "Build topology from scratch",
         description: "Create empty geometry, add points, and connect a face. Face winding controls the surface normal.",
         code: "let $id = geometry()
-let $id_a = addPoint($id, vector(-2,0,-2))
-let $id_b = addPoint($id, vector(2,0,-2))
-let $id_c = addPoint($id, vector(0,0,2))
+const $id_a = addPoint($id, vector(-2,0,-2))
+const $id_b = addPoint($id, vector(2,0,-2))
+const $id_c = addPoint($id, vector(0,0,2))
 addFace($id, $id_a, $id_c, $id_b)
 addAttribute($id, \"faces\", \"region\", 0)
 wrangle faces in $id as element { element.region = element.index }
@@ -114,8 +117,8 @@ output(\"$id\", $id)",
         description: "A ring of logical instances. Change the source mesh, placement formula, or scale attributes \
                       independently.",
         code: "let $id = geometry()
-repeat 24 as i {
-  let angle = i/24*tau
+for i in 0..24 {
+  const angle = i/24*tau
   addPoint($id, vector(cos(angle)*6, 0, sin(angle)*6))
 }
 addAttribute($id, \"points\", \"rotation\", vector(0,0,0))
@@ -124,7 +127,7 @@ wrangle points in $id as element {
   element.rotation = vector(0, -element.index/24*tau, 0)
   element.scale = vector(1, 1 + sin(element.index*0.7)*0.5, 1)
 }
-let $id_assembly = instances(meshBox(0.5,2,0.5), $id,
+const $id_assembly = instances(meshBox(0.5,2,0.5), $id,
   materialPbr(rgba(0.93,0.42,0.22,1), 0.2, 0.5))
 output(\"$id\", $id_assembly)",
     },
@@ -137,7 +140,7 @@ scale($id, vector(1.2, 0.8, 1))
 rotate($id, vector(0, 0.25, 0))
 color($id, rgba(1,1,1,1))
 wrangle points in $id as element {
-  let n = noise(element.position.x*0.8, element.position.y*0.8, element.position.z*0.8 + 7777)
+  const n = noise(element.position.x*0.8, element.position.y*0.8, element.position.z*0.8 + 7777)
   element.position = element.position*(1 + n*0.3)
   element.position = vector(element.position.x, max(-1.3, element.position.y), element.position.z)
   element.color = mix(rgba(0.16,0.22,0.28,1), rgba(0.5,0.56,0.62,1), (n + 1)/2)

@@ -17,22 +17,22 @@ seed(random_seed)
 
 # ---- Span.
 # White vertices, so the finish's color shows as authored.
-let white = rgba(1, 1, 1, 1)
-let dx = end.x - start.x
-let dz = end.z - start.z
-let span = sqrt(dx*dx + dz*dz)
-let heading = -atan2(dz, dx)
+const white = rgba(1, 1, 1, 1)
+const dx = end.x - start.x
+const dz = end.z - start.z
+const span = sqrt(dx*dx + dz*dz)
+const heading = -atan2(dz, dx)
 
 # ---- Deck.
 # Planks hang along a sine sag between the endpoints, each tilted to the curve's slope with a little random wobble.
 # Every plank's faces record its index and position along the span (0 at start, 1 at end) for a game to read.
 let deck = geometry()
-repeat count as i {
-  let t = i / (count - 1)
-  let px = mix(start.x, end.x, t)
-  let py = mix(start.y, end.y, t) - sin(t*pi)*sag
-  let pz = mix(start.z, end.z, t)
-  let slope = atan2(end.y - start.y - cos(t*pi)*pi*sag, max(span, 0.01))
+for i in 0..count {
+  const t = i / (count - 1)
+  const px = mix(start.x, end.x, t)
+  const py = mix(start.y, end.y, t) - sin(t*pi)*sag
+  const pz = mix(start.z, end.z, t)
+  const slope = atan2(end.y - start.y - cos(t*pi)*pi*sag, max(span, 0.01))
   let board = place(plank, vector(px, py, pz),
     vector((rand() - 0.5)*variation, heading, slope),
     vector(max(span, 0.1)/count*0.9, 1, width))
@@ -44,7 +44,7 @@ repeat count as i {
 
 # ---- Supports.
 # Reusable geometry can also be deformed before placing: this post rises from its base.
-let support = deform(meshBox(0.35, 3, 0.35), x, y + 1.5, z)
+const support = deform(meshBox(0.35, 3, 0.35), x, y + 1.5, z)
 
 # A post at one end of the bridge; `endpoint` is "start" or "end".
 fn post(position, endpoint) {
@@ -54,6 +54,6 @@ fn post(position, endpoint) {
   return part
 }
 
-let supports = merge(post(start, "start"), post(end, "end"))
+const supports = merge(post(start, "start"), post(end, "end"))
 
 output("Parametric bridge", material(color(merge(deck, supports), white), finish))

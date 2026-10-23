@@ -3,7 +3,7 @@
 
 //! Lexical variable scopes: script-level bindings per module, plus a stack of block frames.
 //!
-//! Every block (`if`, `repeat`, `wrangle`, `match`, and function bodies) pushes a frame, so a `let` inside a block ends
+//! Every block (`if`, `for`, `foreach`, `wrangle`, `match`, and function bodies) pushes a frame, so a `let` inside a block ends
 //! with it. Assignment (`name = value`) updates the nearest existing binding instead, which is how a loop accumulates
 //! a count it reads afterwards. Functions see their own frames and their module's script-level bindings, and may read
 //! but not assign script-level variables.
@@ -25,9 +25,9 @@ pub enum BindingRole {
     Variable,
     /// A script parameter declared with `param`.
     Parameter,
-    /// A `repeat` counter, a wrangle binding, or a wrangle's `index`.
+    /// A `for` index, a `foreach` item, a wrangle binding, or a wrangle's `index`.
     LoopValue,
-    /// A built-in constant (`pi`, `tau`, `e`) or a sampled coordinate in `deform`.
+    /// An authored `const`, a built-in constant (`pi`, `tau`, `e`), or a sampled coordinate in `deform`.
     Constant,
     /// An `enum` or a `use` alias.
     Declaration,

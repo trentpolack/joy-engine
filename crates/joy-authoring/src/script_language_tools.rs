@@ -143,6 +143,10 @@ impl ScriptSyntax {
             } else if self.strings && character == '"' {
                 position += string_length(rest);
                 TokenKind::String
+            } else if !self.json && rest.starts_with("..") {
+                position += 2;
+                component = false;
+                TokenKind::Operator
             } else if let Some(length) = number_length(rest, self.json) {
                 position += length;
                 TokenKind::Number
@@ -226,7 +230,7 @@ fn number_length(text: &str, json: bool) -> Option<usize> {
     }
     let integer = digits(length);
     length += integer;
-    if bytes.get(length) == Some(&b'.') {
+    if bytes.get(length) == Some(&b'.') && bytes.get(length + 1) != Some(&b'.') {
         let fraction = digits(length + 1);
         if integer == 0 && fraction == 0 {
             return None;

@@ -64,8 +64,9 @@ type Result<T> = std::result::Result<T, Failure>;
 /// keeps the whole evaluation within browser and worker stacks.
 const CALL_DEPTH_LIMIT: usize = 32;
 
-/// Most `repeat` iterations one loop may run.
-const REPEAT_LIMIT: f64 = 150_000.0;
+/// Most iterations one range or collection loop may run.
+const ITERATION_LIMIT: usize = 150_000;
+const MAXIMUM_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 
 /// Built-in constants every module can read.
 const CONSTANTS: [(&str, f64); 3] =
@@ -367,7 +368,12 @@ impl Runtime<'_> {
             }
             StmtKind::Let(name, expression) => {
                 let value = self.expression(expression, scope)?;
-                self.bind(scope, name, value, BindingRole::Variable);
+                self.bind(scope, name, value, BindingRole::Variable)?;
+            }
+            StmtKind::Const(name, expression) => {
+                let value = self.expression(expression, scope)?;
+                value.freeze()?;
+                self.bind(scope, name, value, BindingRole::Constant)?;
             }
             StmtKind::Assign {
                 name,
@@ -408,17 +414,50 @@ impl Runtime<'_> {
                     self.track_mesh(&value.json())?;
                 }
                 self.output.data.parameters.push(parameter);
-                self.bind(scope, name, value, BindingRole::Parameter);
+                self.bind(scope, name, value, BindingRole::Parameter)?;
             }
-            StmtKind::Repeat {
+            StmtKind::For {
                 name,
-                expression,
+                start,
+                end,
                 body,
             } => {
-                let count = integer_range(self.expression(expression, scope)?.scalar()?, 0.0, REPEAT_LIMIT)?;
-                for index in 0..count {
+                let start = range_bound(&self.expression(start, scope)?)?;
+                let end = range_bound(&self.expression(end, scope)?)?;
+                if end - start > ITERATION_LIMIT as i64 {
+                    return Err(format!("Loop iteration limit exceeded ({ITERATION_LIMIT}).").into());
+                }
+                for index in start..end {
                     self.spend(&statement.token)?;
                     let frame = Frame::from([loop_binding(name, Value::Number(index as f64))]);
+                    let flow = self.block(body, scope, frame)?;
+                    if let Flow::Return(_) = flow {
+                        return Ok(flow);
+                    }
+                }
+            }
+            StmtKind::ForEach {
+                name,
+                collection,
+                body,
+            } => {
+                let collection = self.expression(collection, scope)?;
+                let count = match &collection {
+                    Value::Data(data) if data.is_array() => data.as_array().unwrap().len(),
+                    Value::Array(components) => components.len(),
+                    other => {
+                        return Err(
+                            format!("foreach expects a list, vector, or color; found {}.", other.describe()).into()
+                        );
+                    }
+                };
+                if count > ITERATION_LIMIT {
+                    return Err(format!("Loop iteration limit exceeded ({ITERATION_LIMIT}).").into());
+                }
+                for index in 0..count {
+                    self.spend(&statement.token)?;
+                    let value = element_at(&collection, &Value::Number(index as f64))?;
+                    let frame = Frame::from([loop_binding(name, value)]);
                     let flow = self.block(body, scope, frame)?;
                     if let Flow::Return(_) = flow {
                         return Ok(flow);
@@ -458,7 +497,18 @@ impl Runtime<'_> {
     }
 
     /// Declare `name` in the innermost frame, or as a script-level binding at the top level.
-    fn bind(&mut self, scope: &mut Scope, name: &str, value: Value, role: BindingRole) {
+    fn bind(&mut self, scope: &mut Scope, name: &str, value: Value, role: BindingRole) -> Result<()> {
+        let existing = match scope.frames.last() {
+            Some(frame) => frame.get(name),
+            None => self.modules[scope.module].globals.get(name),
+        };
+        if let Some(binding) =
+            existing.filter(|binding| matches!(binding.role, BindingRole::Constant | BindingRole::LoopValue))
+        {
+            return Err(
+                format!("Cannot redeclare the {} '{name}' in the same scope.", binding.role.description()).into()
+            );
+        }
         let binding = Binding {
             value,
             role,
@@ -467,6 +517,28 @@ impl Runtime<'_> {
             Some(frame) => frame.insert(name.into(), binding),
             None => self.modules[scope.module].globals.insert(name.into(), binding),
         };
+        Ok(())
+    }
+
+    /// Check a reference before executing the callee, which would otherwise mutate aliased resources before copy-back.
+    fn reference_value(&self, scope: &Scope, name: &str) -> Result<Value> {
+        let binding = if let Some(binding) = scope.find(name) {
+            binding
+        } else {
+            let binding = self.modules[scope.module].globals.get(name).ok_or_else(|| unknown_assignment(name))?;
+            if scope.in_function {
+                return Err(format!(
+                    "Functions can't assign the script-level variable '{name}'; return a value or pass it with ref."
+                )
+                .into());
+            }
+            binding
+        };
+        if binding.role != BindingRole::Variable {
+            return Err(format!("Cannot pass the {} '{name}' by ref.", binding.role.description()).into());
+        }
+        binding.value.ensure_mutable()?;
+        Ok(binding.value.clone())
     }
 
     /// Replace the nearest existing variable named `name`.
@@ -730,9 +802,8 @@ impl Runtime<'_> {
         for (parameter, argument) in definition.parameters.iter().zip(arguments) {
             let value = match (&argument.kind, parameter.by_reference) {
                 (ExprKind::Reference(variable), true) => {
-                    let value = self
-                        .lookup(caller, variable)
-                        .ok_or_else(|| Diagnostic::at(format!("Unknown variable '{variable}'."), &argument.token))?;
+                    let value =
+                        self.reference_value(caller, variable).map_err(|failure| failure.at(&argument.token))?;
                     references.push((parameter.name.clone(), variable.clone()));
                     value
                 }
@@ -957,6 +1028,15 @@ fn loop_binding(name: &str, value: Value) -> (String, Binding) {
             role: BindingRole::LoopValue,
         },
     )
+}
+
+/// Range arithmetic stays exact on native and WebAssembly targets, including negative endpoints.
+fn range_bound(value: &Value) -> Result<i64> {
+    let number = value.scalar()?;
+    if number.fract() != 0.0 || number.abs() > MAXIMUM_SAFE_INTEGER {
+        return Err("Range bounds must be integers between -9007199254740991 and 9007199254740991.".to_owned().into());
+    }
+    Ok(number as i64)
 }
 
 fn constant_binding(value: Value) -> Binding {

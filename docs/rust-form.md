@@ -52,7 +52,7 @@ Geometry is Y-up; lengths use script units (meters for game assets by convention
 
 These words belong to the grammar and cannot name variables, parameters, functions, enums, members, or modules (they remain valid as record keys and attribute names):
 <!-- form-keywords:start -->
-`project`, `param`, `meta`, `let`, `if`, `else`, `match`, `case`, `repeat`, `as`, `wrangle`, `in`, `fn`, `return`, `ref`, `enum`, `use`, `AND`, `OR`, `NOT`, `true`, `false`, `null`
+`project`, `param`, `meta`, `let`, `const`, `if`, `else`, `match`, `case`, `for`, `foreach`, `as`, `wrangle`, `in`, `fn`, `return`, `ref`, `enum`, `use`, `AND`, `OR`, `NOT`, `true`, `false`, `null`
 <!-- form-keywords:end -->
 
 The attribute domains `points`, `faces`, `corners`, and `instances` follow `wrangle` and appear as text in attribute functions. The constants `pi`, `tau`, and `e` are read-only.
@@ -68,7 +68,7 @@ The attribute domains `points`, `faces`, `corners`, and `instances` follow `wran
 | Record | `{kind: "tower", height: 40}` | Immutable fields read with `.name` or `record["name"]`. |
 | List | `[400, 900, 1600]` | Immutable items read with `list[index]`. |
 | Null | `null` | An empty record value; also clears a face material. |
-| Enum member | `Kind.tower` | A member of a script-declared `enum`. |
+| Enum member | `Kind.Tower` | A member of a script-declared `enum`. |
 | Mesh | `meshBox(…)`, `meshSphere(…)`, a mesh parameter | An immutable resource; convert with `geometry(mesh)` to edit it. |
 | Material | `materialPbr(…)`, a material parameter | An immutable PBR material resource. |
 | Geometry | `geometry()`, `box(…)`, `grid(…)`, … | Editable points, faces, attributes, and face materials. |
@@ -97,33 +97,71 @@ Arithmetic on true/false is an error. Where a flag must become a number, write `
 `<`, `>`, `<=`, and `>=` compare numbers. `==` and `!=` (and `match`) compare numbers, true/false values, text, enum members of the same enum, an enum member with text (a member equals its own name), and `null` with records (only `null` equals `null`). Comparing values of different kinds is an authoring mistake and fails rather than reporting "unequal"; vectors and colors compare by component (`a.x == b.x`).
 
 ### Text and Enums
-Text compares exactly and case-sensitively. `enum Kind { tower, block, hall }` declares named choices at the top level of a script or module (1–32 members); read a member as `Kind.tower`. Members compare with `==`, select record fields (`heights[kind]`), and store as their name when they become attributes or record fields, so `Kind.tower == "tower"` is true and consumers read plain text. Members of two different enums never compare, even when their names match. An enum-typed parameter (`param kind = Kind.tower`) becomes a choice control; see [Parameters](#parameters).
+Write enums on multiple lines with PascalCase members:
+
+```text
+enum Kind {
+  Tower,
+  Block,
+  Hall
+}
+```
+
+Text compares exactly and case-sensitively. An enum declares named choices at the top level of a script or module (1–32 members); read a member as `Kind.Tower`. Members compare with `==`, select record fields (`heights[kind]`), and store as their name when they become attributes or record fields, so `Kind.Tower == "Tower"` is true and consumers read plain text. Members of two different enums never compare, even when their names match. An enum-typed parameter (`param kind = Kind.Tower`) becomes a choice control; see [Parameters](#parameters).
 
 ### Records and Lists
 `{name: value, "quoted key": value}` builds a record and `[a, b, c]` a list. Fields and items hold numbers, true/false, text, vectors, colors, enum members (stored by name), records, lists, and `null`; geometry, instance collections, and resources cannot be stored. Keys are identifiers or quoted text of 1–64 characters, unique within the record; `__proto__`, `prototype`, and `constructor` are reserved because records can reach JavaScript glTF consumers. Fields evaluate and keep their authored order.
 
 Read fields with `record.name`, `record["name"]`, or `record[member]` with an enum member, and items with `list[index]` (a whole number from 0 to the last index; anything else is an error). A stored list of three or four numbers reads back as a vector or color. `itemCount(value)` counts a list's items, a record's fields, or a vector's or color's components. Records and lists are values: there is no field or item assignment, so build a new record instead.
 
-### Variables and Assignment
-`let name = value` declares a variable in the current block: the script's top level, or the body of an `if` branch, `match` case, `repeat`, `wrangle`, or function. A block's variables end with it, and a later `let` of the same name in the same block replaces the earlier one; a `let` in an inner block shadows outer names, including parameters.
+### Constants, Variables, and Assignment
+`let name = value` declares a variable in the current block: the script's top level, or the body of an `if` branch, `match` case, `for`, `foreach`, `wrangle`, or function. A block's variables end with it, and a later `let` of the same name in the same block replaces the earlier one; a `let` in an inner block shadows outer names, including parameters.
+
+`const name = value` declares an immutable value in the same scopes. Reassignment, compound assignment, redeclaring that name in the same block, or passing it through `ref` is an error. An inner block may shadow it. Prefer `const` for lookup tables, fixed calculations, and finished geometry; use `let` for accumulators and geometry or instance builders that will be edited.
+
+Geometry and instance constants freeze the shared value, including aliases created before or after the declaration. Mutation built-ins and wrangle attribute writes through any alias fail. Read-only inspection and wrangles remain valid. `copy(value)`, `geometry(existingGeometry)`, and existing operations that make copies produce independent editable values; ordinary function arguments also remain independent copies. A `let` alias alone does not unfreeze a value:
+
+```text
+let builder = box(2, 3, 2)
+const original = builder
+let edited = copy(original)
+translate(edited, vector(4, 0, 0))
+output("Original", original)
+output("Edited", edited)
+```
+
+Records, lists, and their nested fields already have immutable value semantics. A live wrangle element or module handle cannot initialize a constant; capture an element field or an exported module value instead. `ref` arguments are checked for assignability and frozen resources before the function body runs.
 
 `name = value` assigns the nearest existing variable, and `+=`, `-=`, `*=`, and `/=` update it, so loops accumulate without scratch geometry:
 
 ```text
 let total = 0
-repeat floors as floor_index {
+for floor_index in 0..floors {
   total += floor_height(floor_index)
 }
 ```
 
-Assigning a name nobody declared is an error (`declare it with let before assigning it`). Parameters, `repeat` counters, wrangle bindings and `index`, `deform`'s per-vertex inputs, the constants `pi`, `tau`, and `e`, enums, and module aliases are read-only. Wrangles assign element attributes with the same operators (`point.height += 1`).
+Assigning a name nobody declared is an error (`declare it with let before assigning it`). Parameters, `for` indices, `foreach` items, wrangle bindings and `index`, `deform`'s per-vertex inputs, the constants `pi`, `tau`, and `e`, enums, and module aliases are read-only. Wrangles assign element attributes with the same operators (`point.height += 1`).
 
 ### Control Flow
 `if condition { … } else if condition { … } else { … }` runs the first branch whose condition is true.
 
-`match value { case a, b { … } case c { … } else { … } }` runs the first case with a value equal to the subject under the equality rules above, trying values left to right; `else` is optional and must come last, and a match needs at least one case. Case values are ordinary expressions, so `case Kind.tower` and `case "Brick"` both work.
+`match value { case a, b { … } case c { … } else { … } }` runs the first case with a value equal to the subject under the equality rules above, trying values left to right; `else` is optional and must come last, and a match needs at least one case. Case values are ordinary expressions, so `case Kind.Tower` and `case "Brick"` both work.
 
-`repeat count as index { … }` runs its block `count` times with a zero-based, read-only `index`; `count` is a whole number from 0 to 150,000. Each iteration gets a fresh block, so its `let` variables start over.
+`for index in start..end { … }` visits ascending integer indices, excluding `end`. `for index in 0..arraySize` is the standard indexed loop. Both bounds evaluate once, left to right, and must be finite integers in ±9,007,199,254,740,991. Equal or descending bounds produce an empty loop; at most 150,000 iterations are allowed.
+
+`foreach item in collection { … }` visits list elements, or vector/color components, in order. The collection evaluates once; rebinding its original variable does not change the values being visited. Each item has the same representation as indexed access, including nested records and lists. Empty collections run no iterations. Text, records, geometry, and retained instance collections are not iterable; use `wrangle` for geometry and instance attribute domains.
+
+```text
+const placements = [{x: 0, height: 2}, {x: 3, height: 4}]
+let towers = geometry()
+foreach placement in placements {
+  append(towers, place(box(1, placement.height, 1), vector(placement.x, placement.height/2, 0)))
+}
+output("Towers", towers)
+```
+
+Both loop bindings are read-only and scoped to a fresh block for each iteration. Both enforce the 150,000-iteration limit and share the evaluation operation budget. The keywords are distinct: `for` requires a range, and `foreach` requires a collection. The retired `repeat count as index` spelling reports a migration error; replace it with `for index in 0..count`.
 
 `wrangle domain in geometry as element { … }` visits every element of an attribute domain; see [Wrangles](#wrangles).
 
@@ -150,16 +188,16 @@ A function body sees its own parameters and blocks plus its module's script-leve
 ```text
 use "building-kit.form" as kit
 
-let building = kit.header(kit.Kind.block, 4.4)
+let building = kit.header(kit.Kind.Block, 4.4)
 append(shell, kit.boxPart(center, size, vector(0, 0, 0), wall, chunk))
 ```
 
-`use "path.form" as alias` loads another script as a module at the top level, and the script reads its declarations through the alias: `alias.function(…)`, `alias.Enum.member`, and `alias.constant` for its script-level `let` values. Modules share code between scripts in one project.
+`use "path.form" as alias` loads another script as a module at the top level, and the script reads its declarations through the alias: `alias.function(…)`, `alias.Enum.member`, and `alias.constant` for its script-level `const` and `let` values. Modules share code between scripts in one project.
 
-- A module may contain only `fn`, `enum`, `let`, and `use` declarations; anything that would produce geometry (outputs, parameters, project metadata, or other statements) belongs to the script that uses it.
+- A module may contain only `fn`, `enum`, `const`, `let`, and `use` declarations; anything that would produce geometry (outputs, parameters, project metadata, or other statements) belongs to the script that uses it.
 - Paths are relative to the folder of the file that declares the `use`, use forward slashes, name a `.form` file, and may climb with `..` but never above the loader's root. Absolute paths, backslashes, and drive letters are rejected.
 - Each module loads once per script, however many files use it, so its enums are one definition everywhere. A cycle of `use` declarations is an error.
-- A module's top-level `let` statements run once, in dependency order, before the using script's first statement. They share the evaluation's random stream, so a `rand()` in a module constant consumes draws before the script's own `seed` runs.
+- A module's top-level `const` and `let` statements run once, in dependency order, before the using script's first statement. They share the evaluation's random stream, so a `rand()` in a module constant consumes draws before the script's own `seed` runs.
 - A module function runs against its own module's script-level bindings, never the caller's.
 - A script loads at most 32 files, counting itself, through `use` chains at most 16 files deep. Each module has its own source and token budget; evaluation limits are shared.
 
@@ -178,7 +216,7 @@ Modules are resolved while parsing, so evaluation stays deterministic and never 
 | True/false | `param ridges = true` or `param ridges = 1 meta(kind="bool")` | `true` or `false` | Toggle |
 | Text | `param label = "Gate"` | Text, one line of at most 128 characters | Text field |
 | Choice by options | `param style = "Brick" meta(options=["Brick", "Glass"])` or a zero-based index default | The chosen option's text | Choice |
-| Choice by enum | `param kind = Kind.tower` | The chosen enum member | Choice |
+| Choice by enum | `param kind = Kind.Tower` | The chosen enum member | Choice |
 | Mesh | `param piece = meshBox(1, 1, 0.12)` | A mesh resource | Mesh source |
 | Material | `param finish = materialPbr(rgba(0.66, 0.48, 0.3, 1), 0, 0.85)` | A material resource | Material editor |
 
@@ -225,7 +263,7 @@ Realization reads these standard names: `position` (points only), `normal` (vect
 let terrain = grid(32, 32, 20, 20)
 addAttribute(terrain, "points", "density", 0)
 wrangle points in terrain as point {
-  let height = noise(point.position.x*0.3, point.position.z*0.3, 7777)
+  const height = noise(point.position.x*0.3, point.position.z*0.3, 7777)
   point.position += vector(0, height*2, 0)
   point.density = smoothstep(-0.4, 0.6, height)
 }
@@ -375,7 +413,7 @@ Every evaluation creates its own geometry, random stream, material-identity regi
 | Mesh resources (cumulative) | 150,000 vertices |
 | Attributes | 64 per domain; text values of at most 256 characters |
 | Outputs and inspections | 16 per evaluation, 150,000 realized preview vertices together |
-| `repeat` iterations | 150,000 per loop |
+| `for` / `foreach` iterations | 150,000 per loop |
 | Function calls | 32 nested calls |
 | Modules | 32 files per script (counting the script), 16 levels of `use` |
 | Records and lists | 250,000 values, 2,000,000 text characters (keys included), and depth 32 per evaluation |

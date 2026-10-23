@@ -15,6 +15,24 @@ fn kinds(syntax: &ScriptSyntax, source: &str) -> Vec<(String, TokenKind)> {
 }
 
 #[test]
+fn form_iteration_highlighting_keeps_ranges_separate_from_decimals_and_properties() {
+    let tokens = kinds(
+        &ScriptSyntax::form(),
+        "const count = 3 for i in 0..count { foreach item in items { item.x } } 1. .5 1e-3",
+    );
+    for word in ["const", "for", "foreach"] {
+        assert!(tokens.contains(&(word.to_owned(), TokenKind::Keyword)), "{word}");
+    }
+    assert!(tokens.contains(&("0".to_owned(), TokenKind::Number)));
+    assert!(tokens.contains(&("..".to_owned(), TokenKind::Operator)));
+    assert!(tokens.contains(&("x".to_owned(), TokenKind::Property)));
+    assert!(!tokens.contains(&("count".to_owned(), TokenKind::Property)));
+    for number in ["1.", ".5", "1e-3"] {
+        assert!(tokens.contains(&(number.to_owned(), TokenKind::Number)));
+    }
+}
+
+#[test]
 fn form_highlighting_follows_the_lab_stream_language() {
     let source = "param width = 2 meta(min=1)\n# note\nlet p = box(width, 1e-3, .5).x\n@bad \"text\" true";
     let tokens = kinds(&ScriptSyntax::form(), source);

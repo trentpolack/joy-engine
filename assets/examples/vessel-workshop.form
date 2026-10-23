@@ -10,8 +10,8 @@ param tint = rgba(0.92, 0.43, 0.24, 1)
 
 # ---- Palette.
 # The glaze lightens from `tint` toward `cream` as it rises; both are graded by `warm`, FORM's classic tint.
-let warm = rgba(0.929, 0.424, 0.224, 1)
-let cream = rgba(0.98, 0.78, 0.47, 1)
+const warm = rgba(0.929, 0.424, 0.224, 1)
+const cream = rgba(0.98, 0.78, 0.47, 1)
 
 # ---- Profile.
 # Profile points run bottom to top: X is radius, Y is height.
@@ -31,11 +31,11 @@ addAttribute(vessel, "points", "kind", "vessel-surface")
 addAttribute(vessel, "points", "profile", "sculpted")
 color(vessel, tint)
 wrangle points in vessel as element {
-  let angle = atan2(element.position.z, element.position.x)
-  let ripple = 1 + sin(angle*flutes)*0.05
+  const angle = atan2(element.position.z, element.position.x)
+  const ripple = 1 + sin(angle*flutes)*0.05
   element.position = vector(element.position.x*ripple, element.position.y, element.position.z*ripple)
   element.color = mix(tint, cream, element.position.y/height*0.55)*warm
 }
-let finished = smoothNormals(vessel)
+const finished = smoothNormals(vessel)
 output("Vessel", finished)
 inspect("Profile", profile)

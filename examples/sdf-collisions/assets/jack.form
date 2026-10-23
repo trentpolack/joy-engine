@@ -7,13 +7,13 @@ param cap = 0.24 meta(min=0.1, max=0.4, step=0.01)
 
 # ---- Finish.
 # White vertices, so the material's base color shows as authored.
-let white = rgba(1, 1, 1, 1)
-let finish = materialPbr(rgba(0.3, 0.86, 0.82, 1), 0.05, 0.45)
+const white = rgba(1, 1, 1, 1)
+const finish = materialPbr(rgba(0.3, 0.86, 0.82, 1), 0.05, 0.45)
 
 # ---- Parts.
-let unit = meshBox(1, 1, 1)
-let reach = span/2 - cap/2
-let arm = span - cap
+const unit = meshBox(1, 1, 1)
+const reach = span/2 - cap/2
+const arm = span - cap
 
 # An axis-aligned box: the unit mesh placed at `center` and stretched to `size`.
 fn block(center, size) {
@@ -21,7 +21,7 @@ fn block(center, size) {
 }
 
 # One bar along each axis, crossing at the center.
-let bars = merge(
+const bars = merge(
   block(vector(0, 0, 0), vector(arm, bar, bar)),
   block(vector(0, 0, 0), vector(bar, arm, bar)),
   block(vector(0, 0, 0), vector(bar, bar, arm))
@@ -29,9 +29,9 @@ let bars = merge(
 
 # A cube cap on both ends of every bar.
 let caps = geometry()
-let cap_size = vector(cap, cap, cap)
-repeat 2 as side {
-  let sign = side*2 - 1
+const cap_size = vector(cap, cap, cap)
+for side in 0..2 {
+  const sign = side*2 - 1
   append(caps, block(vector(sign*reach, 0, 0), cap_size))
   append(caps, block(vector(0, sign*reach, 0), cap_size))
   append(caps, block(vector(0, 0, sign*reach), cap_size))

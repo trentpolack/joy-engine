@@ -11,6 +11,84 @@ use joy_form::{
 use serde_json::json;
 
 #[test]
+fn constants_reject_resource_mutation_through_every_alias() {
+    let setup = "let source = box(1,1,1)\naddAttribute(source,\"points\",\"weight\",1)\nlet before = source\nconst fixed = source\nlet after = fixed\n";
+    for operation in [
+        "translate(source,vector(1,0,0))",
+        "rotate(before,vector(0,1,0))",
+        "scale(after,vector(2,2,2))",
+        "append(fixed,box(1,1,1))",
+        "color(fixed,rgba(1,0,0,1))",
+        "material(fixed,materialPbr(rgba(1,1,1,1),0,1))",
+        "addPoint(fixed,vector(0,0,0))",
+        "addFace(fixed,0,1,2)",
+        "removePoint(fixed,0)",
+        "removeFace(fixed,0)",
+        "addAttribute(fixed,\"points\",\"other\",0)",
+        "removeAttribute(fixed,\"points\",\"weight\")",
+        "setAttribute(fixed,\"points\",\"weight\",0,2)",
+        "wrangle points in fixed as point { point.weight = 2 }",
+        "fn edit(ref target) { missing() } edit(ref after)",
+    ] {
+        let error = compile(&format!("{setup}{operation}"), &json!({}), None).unwrap_err();
+        assert!(error.message.contains("constant"), "{operation}: {error}");
+        assert_eq!(error.line, 6);
+    }
+    let error =
+        compile("let g=box(1,1,1) wrangle points in g as point { const p=point }", &json!({}), None).unwrap_err();
+    assert!(error.message.contains("wrangle element"), "{error}");
+    let error = compile(
+        "let g=box(1,1,1) wrangle points in g as point { point.position += vector(1,0,0) const frozen=g }",
+        &json!({}),
+        None,
+    )
+    .unwrap_err();
+    assert!(error.message.contains("constant"), "finalization cannot mutate frozen geometry: {error}");
+}
+
+#[test]
+fn constants_allow_reading_and_editing_independent_copies() {
+    let source = r#"
+        const original = box(2,2,2)
+        let total = 0
+        wrangle points in original as point { total += 1 }
+        fn moved(shape) { translate(shape,vector(5,0,0)) return shape }
+        let duplicate = copy(original)
+        translate(duplicate,vector(3,0,0))
+        let converted = geometry(original)
+        scale(converted,vector(2,2,2))
+        output("Original",original)
+        output("Copy",duplicate)
+        output("Argument",moved(original))
+        output("Converted",converted)
+        let count=geometry() addPoint(count,vector(total,0,0)) output("Count",count)
+    "#;
+    let result = compile(source, &json!({}), None).unwrap();
+    let outputs = result.outputs.unwrap();
+    assert_eq!(outputs[0].geometry.positions[0], -1.0);
+    assert_eq!(outputs[1].geometry.positions[0], 2.0);
+    assert_eq!(outputs[2].geometry.positions[0], 4.0);
+    assert_eq!(outputs[3].geometry.positions[0], -2.0);
+    assert_eq!(outputs[4].geometry.positions[0], 8.0);
+}
+
+#[test]
+fn constants_freeze_instance_attributes_but_copies_remain_editable() {
+    let setup = "let sites=geometry() addPoint(sites,vector(0,0,0)) let group=instances(box(1,1,1),sites) addAttribute(group,\"instances\",\"weight\",1) const frozen=group\n";
+    for operation in [
+        "addAttribute(group,\"instances\",\"other\",0)",
+        "wrangle instances in group as item { item.position=vector(1,0,0) }",
+    ] {
+        let error = compile(&format!("{setup}{operation}"), &json!({}), None).unwrap_err();
+        assert!(error.message.contains("constant"), "{operation}: {error}");
+    }
+    let result = compile(&format!("{setup}let duplicate=copy(frozen) wrangle instances in duplicate as item {{ item.position=vector(3,0,0) }} output(\"Original\",frozen) output(\"Copy\",duplicate)"), &json!({}), None).unwrap();
+    let outputs = result.outputs.unwrap();
+    assert_eq!(outputs[0].geometry.positions[0], -0.5);
+    assert_eq!(outputs[1].geometry.positions[0], 2.5);
+}
+
+#[test]
 fn aliases_copies_output_snapshots_and_new_attribute_defaults_are_distinct() {
     let result = compile(
         r#"

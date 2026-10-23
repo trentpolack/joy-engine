@@ -39,10 +39,10 @@ pub const REFERENCE: &[(ReferenceBlock, &str)] = &[
     (ReferenceBlock::Heading, "MAKE SOMETHING"),
     (
         ReferenceBlock::Code,
-        "let stone = rgba(0.62, 0.6, 0.55, 1)
-let base = color(box(4, 1, 4), stone)
-let dome = translate(sphere(1.5, 24), vector(0, 1.5, 0))
-let pillar = place(meshBox(0.4, 3, 0.4), vector(1.6, 2, 1.6))
+        "const stone = rgba(0.62, 0.6, 0.55, 1)
+const base = color(box(4, 1, 4), stone)
+const dome = translate(sphere(1.5, 24), vector(0, 1.5, 0))
+const pillar = place(meshBox(0.4, 3, 0.4), vector(1.6, 2, 1.6))
 output(\"Shrine\", merge(base, dome, pillar))",
     ),
     (
@@ -53,11 +53,11 @@ output(\"Shrine\", merge(base, dome, pillar))",
         ReferenceBlock::Paragraph,
         "`output(\"Name\", value)` adds a result to the build; `inspect(\"Name\", value)` keeps a snapshot for inspection only. Choose a result above the viewport, then open ATTRIBUTES. Export always uses every output.",
     ),
-    (ReferenceBlock::Heading, "DECIDE AND REPEAT"),
+    (ReferenceBlock::Heading, "DECIDE AND ITERATE"),
     (
         ReferenceBlock::Code,
         "let count = 0
-repeat 12 as i {
+for i in 0..12 {
   if i % 3 == 0 AND NOT (i == 6) {
     count += 1
   } else if i > 9 OR i == 1 {
@@ -69,25 +69,42 @@ repeat 12 as i {
     ),
     (
         ReferenceBlock::Paragraph,
-        "Comparisons produce `true` or `false`, and `if` requires them; compare numbers explicitly (`count > 0`). `AND`, `OR`, and `NOT` are written in capitals and skip the right side once the answer is known. `number(flag)` turns true and false into 1 and 0. `let` declares a variable in the current block; `name = value` and `+=`, `-=`, `*=`, `/=` update the nearest existing one, so loops can count. Parameters and loop indices are read-only.",
+        "Comparisons produce `true` or `false`, and `if` requires them; compare numbers explicitly (`count > 0`). `AND`, `OR`, and `NOT` are written in capitals and skip the right side once the answer is known. `number(flag)` turns true and false into 1 and 0. `let` declares a variable in the current block; `name = value` and `+=`, `-=`, `*=`, `/=` update the nearest existing one, so loops can count. Parameters and loop bindings are read-only. `const` declares immutable values: geometry and instance aliases are frozen too. Use `copy(value)` for an editable copy.",
+    ),
+    (
+        ReferenceBlock::Code,
+        "const placements = [{x: 0, height: 2}, {x: 3, height: 4}]
+let towers = geometry()
+foreach placement in placements {
+  append(towers, place(box(1, placement.height, 1), vector(placement.x, placement.height/2, 0)))
+}
+output(\"Towers\", towers)",
+    ),
+    (
+        ReferenceBlock::Paragraph,
+        "`for index in start..end` visits ascending integer indices, excluding end. `foreach item in collection` visits list, vector, or color values in order. Both evaluate their input once and allow at most 150,000 iterations. Use `wrangle` to edit geometry or retained instance attributes.",
     ),
     (ReferenceBlock::Heading, "NAME YOUR CHOICES"),
     (
         ReferenceBlock::Code,
-        "enum Roof { flat, gable, dome }
-param roof = Roof.gable
-param sign = \"OPEN\"
-let heights = {flat: 0.2, gable: 1.5, dome: 2}
-match roof {
-  case Roof.flat, Roof.gable { let pitch = heights[roof] }
-  else { let pitch = 0 }
+        "enum Roof {
+  Flat,
+  Gable,
+  Dome
 }
-let widths = [2, 4, 8]
-let widest = widths[itemCount(widths) - 1]",
+param roof = Roof.Gable
+param sign = \"OPEN\"
+const heights = {Flat: 0.2, Gable: 1.5, Dome: 2}
+match roof {
+  case Roof.Flat, Roof.Gable { const pitch = heights[roof] }
+  else { const pitch = 0 }
+}
+const widths = [2, 4, 8]
+const widest = widths[itemCount(widths) - 1]",
     ),
     (
         ReferenceBlock::Paragraph,
-        "Enums name choices; `param roof = Roof.gable` becomes a choice control. Text compares with `==`, and an enum member equals its name as text. `param style = \"Brick\" meta(options=[\"Brick\", \"Glass\"])` reads as the chosen text; `param sign = \"OPEN\"` is free text. Records `{key: value}` and lists `[a, b]` hold numbers, text, true/false, and nested records; read them with `record.key`, `record[key]` (text or enum), and `list[index]`.",
+        "Enums name choices; `param roof = Roof.Gable` becomes a choice control. Text compares with `==`, and an enum member equals its name as text. `param style = \"Brick\" meta(options=[\"Brick\", \"Glass\"])` reads as the chosen text; `param sign = \"OPEN\"` is free text. Records `{key: value}` and lists `[a, b]` hold numbers, text, true/false, and nested records; read them with `record.key`, `record[key]` (text or enum), and `list[index]`.",
     ),
     (ReferenceBlock::Heading, "REUSE IT"),
     (
@@ -99,7 +116,7 @@ fn column(height) {
 }
 
 fn add_columns(ref target, count) {
-  repeat count as i {
+  for i in 0..count {
     append(target, translate(column(3), vector(i * 2, 0, 0)))
   }
 }
@@ -110,7 +127,7 @@ output(\"Colonnade\", colonnade)",
     ),
     (
         ReferenceBlock::Paragraph,
-        "Functions are declared at the top level with `fn`, can appear anywhere in the script, and `return` a value. Arguments are copies, so a function never changes your geometry by accident; mark a parameter `ref` (and pass `ref name`) to edit the caller's variable in place. Functions read script-level variables and parameters but cannot assign them. `use \"path.form\" as kit` loads another script's functions, enums, and constants relative to this script's folder; modules declare only `fn`, `enum`, `let`, and `use`.",
+        "Functions are declared at the top level with `fn`, can appear anywhere in the script, and `return` a value. Arguments are copies, so a function never changes your geometry by accident; mark a parameter `ref` (and pass `ref name`) to edit the caller's variable in place. Functions read script-level variables and parameters but cannot assign them. `use \"path.form\" as kit` loads another script's functions, enums, and constants relative to this script's folder; modules declare only `fn`, `enum`, `const`, `let`, and `use`.",
     ),
     (ReferenceBlock::Heading, "GEOMETRY YOU CAN KEEP WORKING ON"),
     (
@@ -149,7 +166,7 @@ param height = 3 meta(min=0, max=10, step=0.1)
 param lit = true
 param tint = rgba(1, 0.4, 0.2, 1)
 
-let bent = deform(plank, x, y + x*x, z)
+const bent = deform(plank, x, y + x*x, z)
 let boards = merge(place(plank, vector(0, 1, 0)), place(bent, vector(3, 0, 0)))
 material(boards, finish)
 if lit { color(boards, tint) }
@@ -174,7 +191,7 @@ rand() # 0–1, deterministic each run",
     ),
     (
         ReferenceBlock::Paragraph,
-        "Vectors and colors support `+ - * /` with each other or with numbers. Colors are linear: RGB may exceed one for HDR glow; alpha is 0–1. Use `floor()` for calculated repeat counts. Scripts cannot access the network or JavaScript; modules are read through the host.",
+        "Vectors and colors support `+ - * /` with each other or with numbers. Colors are linear: RGB may exceed one for HDR glow; alpha is 0–1. Use `floor()` for calculated range bounds. Scripts cannot access the network or JavaScript; modules are read through the host.",
     ),
 ];
 

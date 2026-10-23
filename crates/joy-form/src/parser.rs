@@ -74,16 +74,19 @@ pub(crate) const OPERATOR_OR: &str = "OR";
 pub(crate) const OPERATOR_NOT: &str = "NOT";
 
 /// Words the grammar owns. They cannot name variables, parameters, functions, enums, members, or modules.
-pub(crate) const RESERVED_WORDS: [&str; 23] = [
+pub(crate) const RESERVED_WORDS: [&str; 26] = [
     "project",
     "param",
     "meta",
     "let",
+    "const",
     "if",
     "else",
     "match",
     "case",
     "repeat",
+    "for",
+    "foreach",
     "as",
     "wrangle",
     "in",
@@ -232,20 +235,58 @@ impl Parser {
                 self.cursor += 1;
                 self.match_statement()?
             }
-            "let" => {
+            "let" | "const" => {
                 self.cursor += 1;
                 let name = self.declared_name()?;
                 self.expect("=")?;
-                StmtKind::Let(name, self.expression(0)?)
+                let expression = self.expression(0)?;
+                if token.text == "const" { StmtKind::Const(name, expression) } else { StmtKind::Let(name, expression) }
             }
             "repeat" => {
+                return Err(Diagnostic::at(
+                    "'repeat count as index' was removed; use 'for index in 0..count' instead.",
+                    &token,
+                ));
+            }
+            "for" => {
                 self.cursor += 1;
-                let expression = self.expression(0)?;
-                self.expect("as")?;
                 let name = self.declared_name()?;
-                StmtKind::Repeat {
+                self.expect("in")?;
+                let start = self.expression(0)?;
+                if !self.take("..") {
+                    return Err(Diagnostic::at(
+                        "for requires a range, 'for index in start..end'; use 'foreach item in collection' for values.",
+                        self.current(),
+                    ));
+                }
+                if self.current().text == "=" {
+                    return Err(Diagnostic::at(
+                        "for ranges use an exclusive end: write start..end, not start..=end.",
+                        self.current(),
+                    ));
+                }
+                let end = self.expression(0)?;
+                StmtKind::For {
                     name,
-                    expression,
+                    start,
+                    end,
+                    body: self.braced_block()?,
+                }
+            }
+            "foreach" => {
+                self.cursor += 1;
+                let name = self.declared_name()?;
+                self.expect("in")?;
+                let collection = self.expression(0)?;
+                if self.current().text == ".." {
+                    return Err(Diagnostic::at(
+                        "foreach visits collection values; use 'for index in start..end' for a range.",
+                        self.current(),
+                    ));
+                }
+                StmtKind::ForEach {
+                    name,
+                    collection,
                     body: self.braced_block()?,
                 }
             }

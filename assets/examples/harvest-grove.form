@@ -12,22 +12,22 @@ param harvestedFraction = 0 meta(min=0, max=1, step=0.05)
 
 # ---- Palette.
 # Every color is graded by `warm`, FORM's classic tint, for a low late-afternoon light over the grove.
-let warm = rgba(0.929, 0.424, 0.224, 1)
-let bark = rgba(0.38, 0.21, 0.12, 1)*warm
-let leaves = rgba(0.25, 0.65, 0.43, 1)*warm
-let soil = rgba(0.16, 0.24, 0.23, 1)*warm
+const warm = rgba(0.929, 0.424, 0.224, 1)
+const bark = rgba(0.38, 0.21, 0.12, 1)*warm
+const leaves = rgba(0.25, 0.65, 0.43, 1)*warm
+const soil = rgba(0.16, 0.24, 0.23, 1)*warm
 
 # ---- Resource nodes.
 # Each point marks a tree's position. Its ID lets a game keep track of that tree, and the record beside it is the
 # tree's gameplay data: every field becomes a point attribute.
 let nodes = geometry()
 seed(random_seed)
-repeat rows as row {
-  repeat columns as column {
-    let px = (column - (columns - 1)/2)*spacing + (rand() - 0.5)*jitter
-    let pz = (row - (rows - 1)/2)*spacing + (rand() - 0.5)*jitter
-    let size = 0.75 + rand()*0.5
-    let resourceData = {
+for row in 0..rows {
+  for column in 0..columns {
+    const px = (column - (columns - 1)/2)*spacing + (rand() - 0.5)*jitter
+    const pz = (row - (rows - 1)/2)*spacing + (rand() - 0.5)*jitter
+    const size = 0.75 + rand()*0.5
+    const resourceData = {
       kind: "resource-node",
       id: pointCount(nodes),
       resource: "timber",
@@ -51,10 +51,10 @@ inspect("Resource nodes", nodes)
 
 # ---- Trees.
 # One trunk and one tapered crown, instanced on every node. Instances carry their node's data.
-let trunk = color(translate(box(0.35, 1.5, 0.35), vector(0, 0.75, 0)), bark)
+const trunk = color(translate(box(0.35, 1.5, 0.35), vector(0, 0.75, 0)), bark)
 output("Trunks", instances(trunk, nodes))
 
-let crown = color(geometry(deform(meshBox(1.9, 2.4, 1.9), x*(0.7 - y*0.4), y + 2.2, z*(0.7 - y*0.4))), leaves)
+const crown = color(geometry(deform(meshBox(1.9, 2.4, 1.9), x*(0.7 - y*0.4), y + 2.2, z*(0.7 - y*0.4))), leaves)
 let foliage = copy(nodes)
 wrangle points in foliage as tree {
   # Harvested trees keep a little foliage so they're still easy to find.
@@ -63,5 +63,5 @@ wrangle points in foliage as tree {
 output("Canopies", instances(crown, foliage))
 
 # ---- Ground.
-let ground = color(translate(box(columns*spacing, 0.2, rows*spacing), vector(0, -0.15, 0)), soil)
+const ground = color(translate(box(columns*spacing, 0.2, rows*spacing), vector(0, -0.15, 0)), soil)
 output("Ground", ground)

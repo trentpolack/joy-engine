@@ -176,10 +176,14 @@ fn validate_module(statements: &[Statement]) -> Result<(), Diagnostic> {
     for statement in statements {
         if !matches!(
             statement.kind,
-            StmtKind::Function(_) | StmtKind::Enum { .. } | StmtKind::Use { .. } | StmtKind::Let(..)
+            StmtKind::Function(_)
+                | StmtKind::Enum { .. }
+                | StmtKind::Use { .. }
+                | StmtKind::Let(..)
+                | StmtKind::Const(..)
         ) {
             return Err(Diagnostic::at(
-                "Modules may only declare fn, enum, let, and use; move other statements into the script that uses this module.",
+                "Modules may only declare fn, enum, const, let, and use; move other statements into the script that uses this module.",
                 &statement.token,
             ));
         }

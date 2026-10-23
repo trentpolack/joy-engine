@@ -6,6 +6,31 @@
 use super::*;
 
 #[test]
+fn iteration_and_constant_symbols_follow_their_scopes_and_mutability() {
+    let source = "const records = [{height: 2}]\nfor index in 0..itemCount(records) {\n  let total = 0\n  foreach item in [{height: 3}] {\n    const height = item.height\n    \n  }\n}\n";
+    let cursor = source.find("    \n").unwrap() + 4;
+    let symbols = form_document_symbols(source, cursor);
+    for name in ["records", "index", "item", "height"] {
+        let symbol = symbols.iter().find(|symbol| symbol.name == name).unwrap_or_else(|| panic!("missing {name}"));
+        assert_eq!(symbol.writable, Some(false), "{name} is read-only");
+    }
+    assert_eq!(symbols.iter().find(|symbol| symbol.name == "total").unwrap().writable, Some(true));
+    let after = form_document_symbols(source, source.chars().count());
+    assert!(!after.iter().any(|symbol| ["index", "item", "height", "total"].contains(&symbol.name.as_str())));
+    let catalog = form_language_catalog();
+    for name in ["const", "for", "foreach"] {
+        assert!(catalog.symbols.iter().any(|symbol| symbol.name == name));
+    }
+    assert!(!catalog.symbols.iter().any(|symbol| symbol.name == "repeat"));
+    for header in ["foreach item in {items: [1,2]}.items", "for item in {start:0}.start..{end:2}.end"] {
+        let source = format!("{header} {{\n  \n}}");
+        let cursor = source.find("  \n").unwrap() + 2;
+        let symbols = form_document_symbols(&source, cursor);
+        assert!(symbols.iter().any(|symbol| symbol.name == "item" && symbol.writable == Some(false)), "{header}");
+    }
+}
+
+#[test]
 fn every_cataloged_builtin_is_one_the_evaluator_runs() {
     let catalog = form_language_catalog();
     assert_eq!(catalog.id, "form");
@@ -24,7 +49,7 @@ fn every_cataloged_builtin_is_one_the_evaluator_runs() {
 
 #[test]
 fn document_symbols_follow_block_scope_at_the_cursor() {
-    let source = "param width = 2\nfn wall(ref target, height) {\n  let inner = 1\n}\nenum Kind { tower, hall }\nlet shell = geometry()\naddAttribute(shell, \"points\", \"density\", 0)\nrepeat 3 as row {\n  let column = row\n  \n}\n";
+    let source = "param width = 2\nfn wall(ref target, height) {\n  let inner = 1\n}\nenum Kind {\n  Tower,\n  Hall\n}\nlet shell = geometry()\naddAttribute(shell, \"points\", \"density\", 0)\nfor row in 0..3 {\n  let column = row\n  \n}\n";
     let inside_loop = source.find("  \n}").unwrap() + 2;
     let names = |cursor: usize| -> Vec<String> {
         form_document_symbols(source, cursor).into_iter().map(|symbol| symbol.name).collect()

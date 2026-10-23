@@ -21,7 +21,7 @@ pub(crate) const END_TOKEN: &str = "<end>";
 const BYTE_ORDER_MARK: char = '\u{feff}';
 
 /// Two-character operators, matched before their one-character prefixes.
-const TWO_CHARACTER_OPERATORS: [&str; 8] = ["==", "!=", "<=", ">=", "+=", "-=", "*=", "/="];
+const TWO_CHARACTER_OPERATORS: [&str; 9] = ["==", "!=", "<=", ">=", "+=", "-=", "*=", "/=", ".."];
 
 /// One-character operators and punctuation.
 const ONE_CHARACTER_OPERATORS: &[u8] = b"<>+-*/%^=(),{};.[]:";
@@ -140,7 +140,7 @@ fn token_length(source: &str) -> Option<usize> {
         while bytes.get(length).is_some_and(u8::is_ascii_digit) {
             length += 1;
         }
-        if bytes.get(length) == Some(&b'.') {
+        if bytes.get(length) == Some(&b'.') && bytes.get(length + 1) != Some(&b'.') {
             length += 1;
             while bytes.get(length).is_some_and(u8::is_ascii_digit) {
                 length += 1;

@@ -24,7 +24,7 @@ fn request(source: &str) -> CompileRequest {
 /// A script that outputs `count` isolated points along X.
 fn points_script(count: usize) -> String {
     format!(
-        "let points = geometry()\nrepeat {count} as i {{ addPoint(points, vector(i, 0, 0)) }}\noutput(\"Points\", points)"
+        "let points = geometry()\nfor i in 0..{count} {{ addPoint(points, vector(i, 0, 0)) }}\noutput(\"Points\", points)"
     )
 }
 
