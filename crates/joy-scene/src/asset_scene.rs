@@ -5,7 +5,7 @@
 //!
 //! This owner belongs to the rendering layer because it presents meshes and effects. Entities' `render` components
 //! resolve FORM and
-//! FORM LAB meshes through a [`FormAssetLibrary`] and draw through [`LevelScene`]; `effect` components play `.joyfx`
+//! FORM EDITOR meshes through a [`FormAssetLibrary`] and draw through [`LevelScene`]; `effect` components play `.joyfx`
 //! effects attached to the entity transform, with the component's `seed`, `loop`, `enabled`, and `parameters`.
 //!
 //! Synchronization is staged: [`AssetScene::prepare`] reads, compiles, decodes, and starts every
@@ -17,7 +17,10 @@
 //! Textured and flipbook effects are supported (draw them with [`AssetScene::particle_batches`] and
 //! [`AssetScene::transparent_draws`]), and particle lights are available in world space.
 
-use std::collections::HashMap;
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -79,7 +82,14 @@ use crate::form_assets::{
     FormAssetLibrary,
     FormMeshError,
 };
+use crate::form_placements::{
+    FormPlacement,
+    PLACEMENT_ID_SEPARATOR,
+    PlacementLimitError,
+    placement_entities,
+};
 use crate::level_scene::{
+    LevelEntity,
     LevelScene,
     LevelSceneError,
 };
@@ -118,7 +128,7 @@ pub enum AssetSceneError {
         /// The reader's error message.
         message: String,
     },
-    /// A FORM or FORM LAB mesh failed to compile.
+    /// A FORM or FORM EDITOR mesh failed to compile.
     #[error("{path}: {source}")]
     Mesh {
         /// The mesh asset path.
@@ -159,6 +169,15 @@ pub enum AssetSceneError {
     /// Presenting the entities failed.
     #[error(transparent)]
     Level(#[from] LevelSceneError),
+    /// A FORM asset named more object placements than one asset may spawn.
+    #[error(transparent)]
+    Placements(#[from] PlacementLimitError),
+    /// A spawned placement entity's id is already used by an authored entity.
+    #[error("Entity {entity}: a FORM placement entity already has this id.")]
+    PlacementId {
+        /// The conflicting id.
+        entity: String,
+    },
 }
 
 /// A running per-entity effect.
@@ -180,18 +199,35 @@ impl EffectInstance {
     }
 }
 
-/// A prepared replacement presentation; pass it to [`AssetScene::commit`]. Dropping it discards its effects.
-pub struct AssetSceneStage {
-    generation: u64,
-    entities: Vec<EntityDefinition>,
+/// A FORM placement expanded into an entity of its own: the placement (to follow its parent) and the resolved entity.
+#[derive(Clone, Debug)]
+struct SpawnedEntity {
+    placement: FormPlacement,
+    definition: EntityDefinition,
+}
+
+/// Resources gathered while staging; becomes the displayed presentation at commit.
+#[derive(Default)]
+struct Staging {
     meshes: HashMap<String, MeshAsset>,
+    placements: HashMap<String, Arc<[FormPlacement]>>,
     effects: Vec<(String, StagedEffect)>,
     effect_cache: HashMap<String, CompiledParticleEffect>,
     textures: HashMap<Arc<str>, TextureAsset>,
 }
 
+/// A prepared replacement presentation; pass it to [`AssetScene::commit`]. Dropping it discards its effects.
+pub struct AssetSceneStage {
+    generation: u64,
+    entities: Vec<EntityDefinition>,
+    spawned: IndexMap<String, Vec<SpawnedEntity>>,
+    staging: Staging,
+}
+
 impl AssetSceneStage {
-    /// The resolved entities (linked objects expanded) this stage presents.
+    /// The resolved entities this stage presents: linked objects expanded, followed by the entities spawned for FORM
+    /// object placements (see [`placement_entities`](crate::placement_entities)). Games hand this list to a
+    /// `LevelRuntime` so spawned entities simulate like authored ones.
     pub fn entities(&self) -> &[EntityDefinition] {
         &self.entities
     }
@@ -214,6 +250,8 @@ pub struct AssetScene {
     level: LevelScene,
     entities: Vec<EntityDefinition>,
     meshes: HashMap<String, MeshAsset>,
+    placements: HashMap<String, Arc<[FormPlacement]>>,
+    spawned: IndexMap<String, Vec<SpawnedEntity>>,
     effects: IndexMap<String, EffectInstance>,
     textures: ParticleTextureSet,
 
@@ -240,6 +278,8 @@ impl AssetScene {
             level: LevelScene::new(),
             entities: Vec::new(),
             meshes: HashMap::new(),
+            placements: HashMap::new(),
+            spawned: IndexMap::new(),
             effects: IndexMap::new(),
             textures: ParticleTextureSet::new(),
             library: FormAssetLibrary::new(),
@@ -252,7 +292,8 @@ impl AssetScene {
 
     /// Resolve, read, compile, and start everything `entities` need, without changing the displayed presentation.
     ///
-    /// `read` receives validated `assets/…` paths (`.joyobject`, `.form`, `.formlab`, `.joyfx`) and returns their text;
+    /// `read` receives validated `assets/…` paths (`.joyobject`, `.form`, `.forminst`, `.joyfx`, and the scripts and
+    /// modules FORM assets reference) and returns their text;
     /// each path is read at most once per preparation, and the reader must enforce its own project boundary. Changed
     /// effects start with their component seed (default 7777) and parameters and advance one fixed step; effects whose
     /// asset text and settings are unchanged keep running. Starting a preparation supersedes earlier uncommitted ones.
@@ -286,6 +327,28 @@ impl AssetScene {
         result
     }
 
+    /// [`prepare`](Self::prepare) a whole level and return it ready to run: linked objects resolved and FORM object
+    /// placements expanded into entities, in the order [`AssetSceneStage::entities`] lists them.
+    ///
+    /// This is the one call a game needs to build its world from an authored level:
+    ///
+    /// ```ignore
+    /// let (runtime_level, stage) = assets.prepare_level(&level, |path| game_assets.read(path))?;
+    /// let runtime = LevelRuntime::new(&runtime_level, registry)?;
+    /// assets.commit(&mut scene, stage, None)?;
+    /// // Every frame: assets.follow(&mut scene, runtime.world().presented_entities(), None)?;
+    /// ```
+    pub fn prepare_level<E: Display>(
+        &mut self,
+        level: &LevelData,
+        read: impl FnMut(&str) -> Result<String, E>,
+    ) -> Result<(LevelData, AssetSceneStage), AssetSceneError> {
+        let stage = self.prepare(&level.entities, read)?;
+        let mut runtime_level = level.clone();
+        runtime_level.entities = stage.entities.clone();
+        Ok((runtime_level, stage))
+    }
+
     /// Replace the displayed presentation with `stage` and present it in `scene` with `selected` highlighted.
     ///
     /// Returns `Ok(false)`, discarding the stage, when a newer preparation or [`cancel_pending`](Self::cancel_pending)
@@ -301,10 +364,15 @@ impl AssetScene {
         }
         let AssetSceneStage {
             entities,
-            meshes,
-            effects,
-            effect_cache,
-            textures,
+            spawned,
+            staging:
+                Staging {
+                    meshes,
+                    placements,
+                    effects,
+                    effect_cache,
+                    textures,
+                },
             ..
         } = stage;
 
@@ -331,6 +399,8 @@ impl AssetScene {
 
         self.effects = running;
         self.meshes = meshes;
+        self.placements = placements;
+        self.spawned = spawned;
         self.effect_cache = effect_cache;
         self.textures = ParticleTextureSet::from_textures(textures);
         let displayed = &self.meshes;
@@ -358,9 +428,10 @@ impl AssetScene {
         self.generation += 1;
     }
 
-    /// Copy current transforms and selection without reading assets or restarting effects.
+    /// Copy current transforms and selection of authored `entities` without reading assets or restarting effects.
     ///
-    /// Entities without a prepared mesh draw their fallback primitive. Does nothing after destruction.
+    /// Entities spawned for FORM object placements follow their parent's current transform (unless `entities` already
+    /// lists them). Entities without a prepared mesh draw their fallback primitive. Does nothing after destruction.
     pub fn update(
         &mut self,
         scene: &mut RenderScene,
@@ -370,9 +441,47 @@ impl AssetScene {
         if self.destroyed {
             return Ok(());
         }
+        let presented = self.with_spawned(entities);
         let meshes = &self.meshes;
-        self.level.sync_with(scene, entities, selected, |id, _| Ok(meshes.get(id).cloned()))?;
-        self.entities = entities.to_vec();
+        self.level.sync_with(scene, &presented, selected, |id, _| Ok(meshes.get(id).cloned()))?;
+        self.entities = presented;
+        Ok(())
+    }
+
+    /// Present running entities (for example `World::presented_entities`) with the prepared assets, at their current
+    /// transforms, without reading assets or restarting effects.
+    ///
+    /// Use this when a `LevelRuntime` built from [`AssetSceneStage::entities`] owns the simulation: spawned placement
+    /// entities are runtime entities then, so they move (or disappear) with the simulation rather than their parent.
+    /// Entities the stage did not prepare draw their `render` primitives and `light` components. Does nothing after
+    /// destruction.
+    pub fn follow<'a, E: LevelEntity + 'a>(
+        &mut self,
+        scene: &mut RenderScene,
+        entities: impl IntoIterator<Item = &'a E>,
+        selected: Option<&str>,
+    ) -> Result<(), AssetSceneError> {
+        if self.destroyed {
+            return Ok(());
+        }
+        let presented: Vec<EntityDefinition> = {
+            let prepared: HashMap<&str, &EntityDefinition> =
+                self.entities.iter().map(|entity| (entity.id.as_str(), entity)).collect();
+            entities
+                .into_iter()
+                .map(|entity| {
+                    let mut definition = match prepared.get(entity.entity_id()) {
+                        Some(definition) => (*definition).clone(),
+                        None => runtime_definition(entity),
+                    };
+                    definition.transform = *entity.entity_transform();
+                    definition
+                })
+                .collect()
+        };
+        let meshes = &self.meshes;
+        self.level.sync_with(scene, &presented, selected, |id, _| Ok(meshes.get(id).cloned()))?;
+        self.entities = presented;
         Ok(())
     }
 
@@ -500,6 +609,8 @@ impl AssetScene {
         }
         self.effects.clear();
         self.meshes.clear();
+        self.placements.clear();
+        self.spawned.clear();
         self.library.clear();
         self.effect_cache.clear();
         self.textures.clear();
@@ -514,6 +625,16 @@ impl AssetScene {
     /// The compiled mesh presenting `entity_id`'s `render` asset.
     pub fn mesh(&self, entity_id: &str) -> Option<&MeshAsset> {
         self.meshes.get(entity_id)
+    }
+
+    /// The placements `entity_id`'s FORM asset tagged, in the asset's local space (empty when it has none).
+    pub fn placements(&self, entity_id: &str) -> &[FormPlacement] {
+        self.placements.get(entity_id).map(|placements| &placements[..]).unwrap_or_default()
+    }
+
+    /// Every displayed entity's placements, by entity id, in the asset's local space.
+    pub fn all_placements(&self) -> impl Iterator<Item = (&str, &[FormPlacement])> {
+        self.placements.iter().map(|(id, placements)| (id.as_str(), &placements[..]))
     }
 
     /// The running effect of `entity_id`.
@@ -546,6 +667,10 @@ impl AssetScene {
     // -----------------------------------------------------------------------------------------------------------------
 
     /// Build a stage for `entities`; touches only the mesh cache (pruned by the caller on failure).
+    ///
+    /// FORM placements that name `.joyobject` templates become entities of their own, one level deep: a spawned
+    /// entity's own FORM asset is staged (and its placements reported), but its object placements are not expanded
+    /// again, so content cannot recurse without bound.
     fn stage(
         &mut self,
         generation: u64,
@@ -554,97 +679,163 @@ impl AssetScene {
     ) -> Result<AssetSceneStage, AssetSceneError> {
         let mut level = LevelData::new(PRESENTATION_NAME);
         level.entities = entities.to_vec();
-        let resolved = resolve_level_objects(&level, &mut *read)?.entities;
-        let mut read_asset = |path: &str| {
-            read(path).map_err(|message| AssetSceneError::Read {
-                path: path.to_owned(),
-                message,
-            })
-        };
-
-        let mut meshes = HashMap::new();
-        let mut effects = Vec::new();
-        let mut effect_cache: HashMap<String, CompiledParticleEffect> = HashMap::new();
-        let mut textures: HashMap<Arc<str>, TextureAsset> = HashMap::new();
+        let mut resolved = resolve_level_objects(&level, &mut *read)?.entities;
+        let mut staging = Staging::default();
         for entity in &resolved {
-            let component_error = |source| AssetSceneError::Component {
-                entity: entity.id.clone(),
-                source,
-            };
-
-            // Validate presentation records now so commit cannot fail on them.
-            if let Some(record) = entity.components.get(component_type::LIGHT) {
-                LightComponent::read(record).map_err(component_error)?;
-            }
-            if let Some(record) = entity.components.get(component_type::RENDER)
-                && let RenderSource::Mesh {
-                    asset,
-                    parameters,
-                } = RenderComponent::read(record).map_err(component_error)?.source
-            {
-                let text = read_asset(&asset)?;
-                let mesh = self.library.resolve(&asset, &text, &parameters, ShadingModel::Lit).map_err(|source| {
-                    AssetSceneError::Mesh {
-                        path: asset.clone(),
-                        source,
-                    }
-                })?;
-                meshes.insert(entity.id.clone(), mesh);
-            }
-
-            let Some(settings) = entity.components.get(component_type::EFFECT) else {
-                continue;
-            };
-            let enabled = settings.get("enabled") != Some(&Value::Bool(false));
-            // A disabled effect, or one with no asset assigned (absent, null, or empty), shows nothing.
-            let path = match settings.get("asset") {
-                _ if !enabled => continue,
-                None | Some(Value::Null) => continue,
-                Some(Value::String(path)) if path.is_empty() => continue,
-                Some(Value::String(path)) => asset_path(path, &EFFECT_EXTENSIONS)
-                    .map_err(|error| component_error(ComponentError::AssetPath(error)))?
-                    .to_owned(),
-                Some(_) => return Err(component_error(ComponentError::AssetPath(AssetPathError::OutsideAssets))),
-            };
-            let text = read_asset(&path)?;
-            let definition = match effect_cache.get(&text).or_else(|| self.effect_cache.get(&text)) {
-                Some(definition) => definition.clone(),
-                None => parse_particle_effect(&text).map_err(|source| AssetSceneError::Effect {
-                    path: path.clone(),
-                    source,
-                })?,
-            };
-            effect_cache.insert(text.clone(), definition.clone());
-            for source in textured_sources(&definition) {
-                if textures.contains_key(&source) {
-                    continue;
-                }
-                let texture = match self.textures.get(&source) {
-                    Ok(existing) => existing.clone(),
-                    Err(_) => ParticleTextureSet::decode(&source).map_err(|error| AssetSceneError::Texture {
-                        path: path.clone(),
-                        source: error,
-                    })?,
-                };
-                textures.insert(source, texture);
-            }
-
-            let key = serde_json::json!([text, settings]).to_string();
-            if self.effects.get(&entity.id).is_some_and(|previous| previous.key == key) {
-                effects.push((entity.id.clone(), StagedEffect::Reuse));
-                continue;
-            }
-            let instance = start_effect(&entity.id, &definition, settings, key)?;
-            effects.push((entity.id.clone(), StagedEffect::Created(Box::new(instance))));
+            self.stage_entity(entity, read, &mut staging)?;
         }
+
+        // Expand object placements into resolved entities that follow their parents.
+        let authored_ids: HashSet<String> = resolved.iter().map(|entity| entity.id.clone()).collect();
+        let mut spawned: IndexMap<String, Vec<SpawnedEntity>> = IndexMap::new();
+        let mut children = Vec::new();
+        for parent in &resolved {
+            let Some(placements) = staging.placements.get(&parent.id).cloned() else {
+                continue;
+            };
+            let linked = placement_entities(parent, &placements)?;
+            if linked.is_empty() {
+                continue;
+            }
+            let mut linked_level = LevelData::new(PRESENTATION_NAME);
+            linked_level.entities = linked;
+            let mut records = Vec::new();
+            for definition in resolve_level_objects(&linked_level, &mut *read)?.entities {
+                if authored_ids.contains(&definition.id) {
+                    return Err(AssetSceneError::PlacementId {
+                        entity: definition.id,
+                    });
+                }
+                let Some(placement) =
+                    placement_index(&parent.id, &definition.id).and_then(|index| placements.get(index))
+                else {
+                    continue;
+                };
+                children.push(definition.clone());
+                records.push(SpawnedEntity {
+                    placement: placement.clone(),
+                    definition,
+                });
+            }
+            spawned.insert(parent.id.clone(), records);
+        }
+        for child in &children {
+            self.stage_entity(child, read, &mut staging)?;
+        }
+        resolved.extend(children);
+
         Ok(AssetSceneStage {
             generation,
             entities: resolved,
-            meshes,
-            effects,
-            effect_cache,
-            textures,
+            spawned,
+            staging,
         })
+    }
+
+    /// Validate one resolved entity's presentation records and stage its FORM mesh, placements, and effect.
+    fn stage_entity(
+        &mut self,
+        entity: &EntityDefinition,
+        read: &mut impl FnMut(&str) -> Result<String, String>,
+        staging: &mut Staging,
+    ) -> Result<(), AssetSceneError> {
+        let component_error = |source| AssetSceneError::Component {
+            entity: entity.id.clone(),
+            source,
+        };
+        let read_error = |path: &str, message: String| AssetSceneError::Read {
+            path: path.to_owned(),
+            message,
+        };
+
+        // Validate presentation records now so commit cannot fail on them.
+        if let Some(record) = entity.components.get(component_type::LIGHT) {
+            LightComponent::read(record).map_err(component_error)?;
+        }
+        if let Some(record) = entity.components.get(component_type::RENDER)
+            && let RenderSource::Mesh {
+                asset,
+                parameters,
+                variant,
+            } = RenderComponent::read(record).map_err(component_error)?.source
+        {
+            let text = read(&asset).map_err(|message| read_error(&asset, message))?;
+            let compiled = self
+                .library
+                .resolve_asset(&asset, &text, &mut *read, variant.as_deref(), &parameters, ShadingModel::Lit)
+                .map_err(|source| AssetSceneError::Mesh {
+                    path: asset.clone(),
+                    source,
+                })?;
+            if !compiled.placements.is_empty() {
+                staging.placements.insert(entity.id.clone(), compiled.placements);
+            }
+            staging.meshes.insert(entity.id.clone(), compiled.mesh);
+        }
+
+        let Some(settings) = entity.components.get(component_type::EFFECT) else {
+            return Ok(());
+        };
+        let enabled = settings.get("enabled") != Some(&Value::Bool(false));
+        // A disabled effect, or one with no asset assigned (absent, null, or empty), shows nothing.
+        let path = match settings.get("asset") {
+            _ if !enabled => return Ok(()),
+            None | Some(Value::Null) => return Ok(()),
+            Some(Value::String(path)) if path.is_empty() => return Ok(()),
+            Some(Value::String(path)) => asset_path(path, &EFFECT_EXTENSIONS)
+                .map_err(|error| component_error(ComponentError::AssetPath(error)))?
+                .to_owned(),
+            Some(_) => return Err(component_error(ComponentError::AssetPath(AssetPathError::OutsideAssets))),
+        };
+        let text = read(&path).map_err(|message| read_error(&path, message))?;
+        let definition = match staging.effect_cache.get(&text).or_else(|| self.effect_cache.get(&text)) {
+            Some(definition) => definition.clone(),
+            None => parse_particle_effect(&text).map_err(|source| AssetSceneError::Effect {
+                path: path.clone(),
+                source,
+            })?,
+        };
+        staging.effect_cache.insert(text.clone(), definition.clone());
+        for source in textured_sources(&definition) {
+            if staging.textures.contains_key(&source) {
+                continue;
+            }
+            let texture = match self.textures.get(&source) {
+                Ok(existing) => existing.clone(),
+                Err(_) => ParticleTextureSet::decode(&source).map_err(|error| AssetSceneError::Texture {
+                    path: path.clone(),
+                    source: error,
+                })?,
+            };
+            staging.textures.insert(source, texture);
+        }
+
+        let key = serde_json::json!([text, settings]).to_string();
+        if self.effects.get(&entity.id).is_some_and(|previous| previous.key == key) {
+            staging.effects.push((entity.id.clone(), StagedEffect::Reuse));
+            return Ok(());
+        }
+        let instance = start_effect(&entity.id, &definition, settings, key)?;
+        staging.effects.push((entity.id.clone(), StagedEffect::Created(Box::new(instance))));
+        Ok(())
+    }
+
+    /// `entities` followed by the spawned placement entities of each, at their parent's current transform; spawned
+    /// entities `entities` already lists are not repeated.
+    fn with_spawned(&self, entities: &[EntityDefinition]) -> Vec<EntityDefinition> {
+        let listed: HashSet<&str> = entities.iter().map(|entity| entity.id.as_str()).collect();
+        let mut presented = entities.to_vec();
+        for parent in entities {
+            for child in self.spawned.get(&parent.id).into_iter().flatten() {
+                if listed.contains(child.definition.id.as_str()) {
+                    continue;
+                }
+                let mut definition = child.definition.clone();
+                definition.transform = child.placement.world_transform(&parent.transform);
+                presented.push(definition);
+            }
+        }
+        presented
     }
 
     /// Entities that have a running effect, in entity order.
@@ -699,6 +890,22 @@ fn start_effect(
         key,
         looping,
     })
+}
+
+/// The placement index encoded in a spawned entity id (`<parent id>/<index>`).
+fn placement_index(parent_id: &str, entity_id: &str) -> Option<usize> {
+    entity_id.strip_prefix(parent_id)?.strip_prefix(PLACEMENT_ID_SEPARATOR)?.parse().ok()
+}
+
+/// A presentation record for a running entity the stage did not prepare: its `render` and `light` components only.
+fn runtime_definition<E: LevelEntity>(entity: &E) -> EntityDefinition {
+    let mut definition = EntityDefinition::new(entity.entity_id());
+    for kind in [component_type::RENDER, component_type::LIGHT] {
+        if let Some(record) = entity.entity_component(kind) {
+            definition.components.insert(kind.to_owned(), record.clone());
+        }
+    }
+    definition
 }
 
 /// The camera basis expressed in an entity's rotated frame, so attached particles stay camera-facing.

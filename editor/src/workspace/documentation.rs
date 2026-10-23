@@ -8,8 +8,8 @@ pub const SECTIONS: [(&str, &[&str]); 5] = [
     (
         "New and Import",
         &[
-            "New creates a starter asset in this project. Choose FORM LAB document (.formlab) to keep the script, parameter overrides, materials and variants together. Level, Object and Particle effect create their respective documents.",
-            "Import copies an existing .form, .formlab, .joyfx, .joylevel or .joyobject file into the project without replacing project content. A raw .form keeps its script format: parameter sliders affect its preview; edit script defaults to persist values. Saved Inspector material edits and variants require .formlab.",
+            "New creates a starter asset in this project. A FORM script (.form) is a recipe; a FORM instance (.forminst) keeps a script (packed, or referenced by path) with parameter overrides, materials and variants. Level, Object and Particle effect create their respective documents.",
+            "Import copies an existing .form, .forminst, .joyfx, .joylevel or .joyobject file into the project without replacing project content. A .form keeps its script format: parameter sliders affect its preview; edit script defaults to persist values. Saved Inspector material edits and variants require a .forminst.",
             "GLB geometry can be loaded into a FORM mesh parameter. That geometry-only import does not preserve a full scene or its materials; workspace Import accepts the editable formats listed above.",
         ],
     ),

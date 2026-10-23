@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! egui presentation shared by the editor's panels: the palette (built on `runtime::theme`), captions in the engine's
+//! egui presentation shared by the editor's panels: the shared Joy tokens (`runtime::theme`), captions in the engine's
 //! HUD typography, flat buttons, painted icons, draft-backed text and number fields, panel regions, and resize
 //! dividers. Everything here is UI; document rules live in the model modules.
 
@@ -39,51 +39,13 @@ use joy_engine::runtime::hud_text::{
 };
 use joy_engine::theme::{
     self,
-    tokens,
+    colors,
+    layout,
 };
 
 use joy_engine::development::lab_values::StepScale;
 
 use super::numeric_controls::Draft;
-
-/// Editor colors: the authoring kit's Joy tokens plus the workspace's layered surfaces.
-pub mod palette {
-    use joy_engine::egui::Color32;
-    use joy_engine::theme::tokens;
-
-    /// Accent for primary actions, selection, and headings.
-    pub const ACCENT: Color32 = tokens::ACCENT;
-    /// Primary text.
-    pub const TEXT: Color32 = tokens::TEXT;
-    /// Secondary text.
-    pub const MUTED: Color32 = tokens::MUTED;
-    /// Panel fill (Content Browser, outliner, inspector).
-    pub const PANEL: Color32 = tokens::PANEL;
-    /// Separators between regions.
-    pub const LINE: Color32 = Color32::from_rgb(0x2c, 0x39, 0x4b);
-    /// Control borders.
-    pub const BORDER: Color32 = tokens::BORDER;
-    /// Window background behind documents.
-    pub const CANVAS: Color32 = tokens::CANVAS;
-    /// Header and footer fill.
-    pub const HEADER: Color32 = Color32::from_rgb(0x15, 0x1e, 0x2b);
-    /// Document area fill.
-    pub const DOCUMENT: Color32 = Color32::from_rgb(0x11, 0x1b, 0x29);
-    /// Tab strip fill.
-    pub const TABS: Color32 = Color32::from_rgb(0x10, 0x19, 0x25);
-    /// Text field fill.
-    pub const FIELD: Color32 = tokens::FIELD;
-    /// Raised controls and the active tab.
-    pub const SURFACE: Color32 = tokens::SURFACE;
-    /// Selected rows.
-    pub const SELECTED: Color32 = Color32::from_rgb(0x2a, 0x36, 0x47);
-    /// Destructive actions and invalid input.
-    pub const DANGER: Color32 = tokens::DANGER;
-    /// Confirmations and live status.
-    pub const SUCCESS: Color32 = tokens::SUCCESS;
-    /// Text on the accent fill.
-    pub const ON_ACCENT: Color32 = tokens::CANVAS;
-}
 
 /// Named control rectangles from the latest frame, so tests (and accessibility tooling) can find controls by name.
 #[derive(Clone, Debug, Default)]
@@ -170,7 +132,7 @@ pub fn region<R>(
 
 /// A thin separator line along one edge of `rect`.
 pub fn edge(ui: &Ui, from: Pos2, to: Pos2) {
-    ui.painter().line_segment([from, to], Stroke::new(1.0, palette::LINE));
+    ui.painter().line_segment([from, to], Stroke::new(1.0, colors::LINE));
 }
 
 /// A small uppercase, letter-spaced caption in the HUD typography (`CONTENT BROWSER`, `TRANSFORM`).
@@ -184,12 +146,17 @@ pub fn caption(ui: &mut Ui, text: &str, color: Color32) -> Response {
 
 /// An accent section heading (`SCENE`, `INSPECTOR`, `COMPONENTS`).
 pub fn heading(ui: &mut Ui, text: &str) -> Response {
-    caption(ui, text, palette::ACCENT)
+    caption(ui, text, colors::ACCENT)
 }
 
 /// A standard button in the authoring look.
 pub fn button(ui: &mut Ui, label: &str) -> Response {
-    ui.add(egui::Button::new(RichText::new(label).size(tokens::TYPE_SM)))
+    ui.add(egui::Button::new(RichText::new(label).size(layout::TYPE_SM)))
+}
+
+/// The kit's shortcut button: `label`, then `key` in a keycap.
+pub fn shortcut_button(ui: &mut Ui, label: &str, key: &str) -> Response {
+    components::shortcut_button(ui, label, key)
 }
 
 /// The kit's primary action button.
@@ -212,10 +179,10 @@ pub fn icon_button(ui: &mut Ui, icon: Icon, side: f32, color: Color32, highlight
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(side), Sense::click());
     let painter = ui.painter();
     let hovered = response.hovered() || response.has_focus();
-    let stroke_color = if highlight || hovered { palette::ACCENT } else { palette::LINE };
-    painter.rect_filled(rect, 0.0, if hovered { palette::SELECTED } else { palette::PANEL });
+    let stroke_color = if highlight || hovered { colors::ACCENT } else { colors::LINE };
+    painter.rect_filled(rect, 0.0, if hovered { colors::SELECTED_ROW } else { colors::PANEL });
     painter.rect_stroke(rect, 0.0, Stroke::new(1.0, stroke_color), StrokeKind::Inside);
-    paint_icon(painter, rect.shrink(side * 0.25), icon, if highlight { palette::ACCENT } else { color });
+    paint_icon(painter, rect.shrink(side * 0.25), icon, if highlight { colors::ACCENT } else { color });
     response
 }
 
@@ -342,13 +309,13 @@ pub fn draft_field(
     let escape = focused && ui.input(|input| input.key_pressed(Key::Escape));
     let mut text = draft.map_or_else(|| value.to_owned(), |draft| draft.text.clone());
     let invalid = draft.is_some_and(|draft| draft.error.is_some());
-    let stroke_color = if invalid { palette::DANGER } else { palette::LINE };
+    let stroke_color = if invalid { colors::DANGER } else { colors::LINE };
     let response = ui
         .scope(|ui| {
-            ui.visuals_mut().extreme_bg_color = palette::FIELD;
+            ui.visuals_mut().extreme_bg_color = colors::FIELD;
             ui.visuals_mut().widgets.inactive.bg_stroke = Stroke::new(1.0, stroke_color);
             ui.visuals_mut().widgets.hovered.bg_stroke =
-                Stroke::new(1.0, if invalid { palette::DANGER } else { palette::ACCENT });
+                Stroke::new(1.0, if invalid { colors::DANGER } else { colors::ACCENT });
             TextEdit::singleline(&mut text)
                 .id(id)
                 .hint_text(hint)
@@ -372,7 +339,7 @@ pub fn draft_field(
     }
     // The message rides on the field (and the status line) so rows of fields keep their layout.
     let response = match draft.and_then(|draft| draft.error.as_deref()) {
-        Some(error) => response.on_hover_text(RichText::new(error).color(palette::DANGER)),
+        Some(error) => response.on_hover_text(RichText::new(error).color(colors::DANGER)),
         None => response,
     };
     (response, event)
@@ -386,7 +353,7 @@ pub fn divider(ui: &mut Ui, id: Id, rect: Rect, key_step: f32) -> (f32, bool) {
     if active {
         ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
     }
-    let color = if active { palette::ACCENT } else { palette::LINE };
+    let color = if active { colors::ACCENT } else { colors::LINE };
     ui.painter()
         .line_segment([rect.center_top(), rect.center_bottom()], Stroke::new(if active { 2.0 } else { 1.0 }, color));
     if response.clicked() {
@@ -414,8 +381,8 @@ pub fn badge(painter: &egui::Painter, rect: Rect, text: &str, fill: Color32, col
 /// The theme's standard overlay frame for dialogs.
 pub fn dialog_frame() -> egui::Frame {
     theme::panel_frame()
-        .fill(palette::PANEL)
-        .stroke(Stroke::new(tokens::BORDER_THIN, palette::ACCENT))
+        .fill(colors::PANEL)
+        .stroke(Stroke::new(layout::BORDER_THIN, colors::ACCENT))
         .corner_radius(CornerRadius::ZERO)
-        .inner_margin(egui::Margin::same(tokens::SPACE_XL as i8))
+        .inner_margin(egui::Margin::same(layout::SPACE_XL as i8))
 }

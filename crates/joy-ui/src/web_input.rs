@@ -6,8 +6,15 @@
 //! egui-winit does not build for WebAssembly in the pinned release, so browsers use this small translator. It covers
 //! what HUDs and development panels need: pointer and touch presses, wheel scrolling, keys, text entry, clipboard
 //! copy, cut, and paste, and focus. Touches drive the primary pointer, so on-screen buttons work on phones.
+//!
+//! Like egui-winit, shortcuts held with Ctrl or Cmd never also type their letter. winit cancels every key press on the
+//! canvas (so Cmd+S or Ctrl+Z never reach the page), which would also cancel the browser's copy, cut, and paste events;
+//! while egui has keyboard focus, a capturing listener lets those three shortcuts through to the browser instead.
 
-use std::cell::RefCell;
+use std::cell::{
+    Cell,
+    RefCell,
+};
 use std::rc::Rc;
 
 use wasm_bindgen::JsCast;
@@ -23,12 +30,17 @@ use winit::event::{
 use winit::window::Window;
 
 use crate::{
+    egui_layer::browser_clipboard_shortcut,
     egui_layer::browser_modifiers,
+    egui_layer::browser_types_text,
     egui_layer::claims_press,
 };
 
 /// A page clipboard listener, kept so it can be removed.
 type ClipboardListener = (&'static str, Closure<dyn FnMut(web_sys::ClipboardEvent)>);
+
+/// The capturing key listener that keeps clipboard shortcuts away from winit's cancelling canvas listener.
+type ShortcutListener = Closure<dyn FnMut(web_sys::KeyboardEvent)>;
 
 /// Accumulates egui events between frames for one browser canvas.
 pub(crate) struct WebEguiInput {
@@ -44,6 +56,9 @@ pub(crate) struct WebEguiInput {
     /// Copy, cut, and paste events from the page, which winit does not report.
     clipboard: Rc<RefCell<Vec<egui::Event>>>,
     clipboard_listeners: Vec<ClipboardListener>,
+    /// Whether egui had keyboard focus after the last frame, read by the shortcut listener between frames.
+    keyboard_focus: Rc<Cell<bool>>,
+    shortcut_listener: Option<ShortcutListener>,
 }
 
 impl WebEguiInput {
@@ -70,18 +85,29 @@ impl WebEguiInput {
                 }
             }
         }
+        let apple = apple_platform();
+        let keyboard_focus = Rc::new(Cell::new(false));
+        let shortcut_listener = clipboard_shortcut_listener(keyboard_focus.clone(), apple);
         Self {
             started: Instant::now(),
             pointer: None,
             modifiers: egui::Modifiers::default(),
-            apple: apple_platform(),
+            apple,
             focused: true,
             cursor_visible: true,
             max_texture_side,
             events: Vec::new(),
             clipboard,
             clipboard_listeners,
+            keyboard_focus,
+            shortcut_listener,
         }
+    }
+
+    /// Record whether egui wants keyboard input after this frame (a focused text field), so clipboard shortcuts reach
+    /// the browser only then and games keep every key press otherwise.
+    pub fn set_keyboard_focus(&mut self, focused: bool) {
+        self.keyboard_focus.set(focused);
     }
 
     /// Carry out egui's platform requests: cursor visibility, clipboard writes, and opening links.
@@ -233,6 +259,7 @@ impl WebEguiInput {
                     });
                 }
                 if pressed
+                    && browser_types_text(self.modifiers)
                     && let Some(text) = &event.text
                     && text.chars().all(|character| !character.is_control())
                 {
@@ -291,7 +318,41 @@ impl Drop for WebEguiInput {
                 let _ = document.remove_event_listener_with_callback(kind, listener.as_ref().unchecked_ref());
             }
         }
+        if let (Some(window), Some(listener)) = (web_sys::window(), self.shortcut_listener.take()) {
+            let _ =
+                window.remove_event_listener_with_callback_and_bool("keydown", listener.as_ref().unchecked_ref(), true);
+        }
     }
+}
+
+/// Listen for key presses before they reach the canvas. While egui has keyboard focus and the canvas is the page's
+/// focused element, a copy, cut, or paste shortcut stops here, so winit never cancels it and the browser fires the
+/// clipboard event the page listeners turn into egui's `Copy`, `Cut`, and `Paste`.
+fn clipboard_shortcut_listener(keyboard_focus: Rc<Cell<bool>>, apple: bool) -> Option<ShortcutListener> {
+    let window = web_sys::window()?;
+    let listener: ShortcutListener = Closure::new(move |event: web_sys::KeyboardEvent| {
+        let shortcut = browser_clipboard_shortcut(
+            &event.key(),
+            &event.code(),
+            event.ctrl_key(),
+            event.meta_key(),
+            event.alt_key(),
+            apple,
+        );
+        if shortcut && keyboard_focus.get() && canvas_focused() {
+            event.stop_immediate_propagation();
+        }
+    });
+    window.add_event_listener_with_callback_and_bool("keydown", listener.as_ref().unchecked_ref(), true).ok()?;
+    Some(listener)
+}
+
+/// Whether a canvas (the game or tool surface) is the page's focused element, rather than a page form field.
+fn canvas_focused() -> bool {
+    web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.active_element())
+        .is_some_and(|element| element.tag_name().eq_ignore_ascii_case("canvas"))
 }
 
 /// egui's button for a winit mouse button.

@@ -66,6 +66,7 @@ impl FileInputRequest {
                             Ok(contents) => FileDialogEvent::Opened(OpenedFile {
                                 name,
                                 contents,
+                                path: None,
                             }),
                             Err(message) => FileDialogEvent::Failed(message),
                         }

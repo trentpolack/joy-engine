@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! GLB/glTF mesh decoding (strides, sparse accessors, embedded buffers, and a FORM LAB export) checked against
+//! GLB/glTF mesh decoding (strides, sparse accessors, embedded buffers, and a FORM EDITOR export) checked against
 //! `tests/fixtures/glb/glb-reference.json`, a golden recording of each fixture mesh or its rejection message. Comparisons
 //! are exact. Re-record with `JOY_UPDATE_FIXTURES=1` when decoding changes on purpose.
 

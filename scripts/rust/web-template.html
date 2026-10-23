@@ -7,14 +7,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
   <link rel="icon" href="data:,">
+  <link rel="preload" href="fonts/ArchivoBlack-Regular.ttf" as="font" type="font/ttf" crossorigin>
   <title>{{title}}</title>
+  <style>
+{{status_styles}}
+  </style>
   <style>
     html, body {
       margin: 0;
       height: 100%;
       overflow: hidden;
-      background: #0d1a20;
-      color: #e8eeee;
+      background: var(--joy-status-navy);
+      color: var(--joy-status-text);
       font: 14px system-ui, sans-serif;
     }
 
@@ -27,31 +31,206 @@
       touch-action: none;
     }
 
-    #joy-loading {
-      position: fixed;
-      inset: 0;
-      display: grid;
-      place-items: center;
-      letter-spacing: 0.2em;
-      pointer-events: none;
+    /* The shell sets data-ready after its first presented frame, so the screen clears even if its script fails. */
+    #{{canvas}}[data-ready] + #joy-loading {
+      opacity: 0;
+      visibility: hidden;
     }
 
-    #{{canvas}}[data-ready] + #joy-loading {
+    /* A startup failure moves the engine's failure panel text into the loading screen. */
+    #joy-loading[data-state="failed"] ~ #joy-failure {
       display: none;
     }
   </style>
 </head>
 <body>
   <canvas id="{{canvas}}" tabindex="0"></canvas>
-  <div id="joy-loading">LOADING</div>
+  <div id="joy-loading" class="joy-status" data-state="loading" aria-busy="true">
+    <section class="joy-status-panel">
+      <p class="joy-status-kicker">
+        <span class="joy-status-brand"><span class="joy-status-indicator"></span>{{kicker}}</span>
+      </p>
+      <h1 class="joy-status-title">{{heading}}</h1>
+      <p class="joy-status-subtitle">{{subtitle}}</p>
+      <div class="joy-status-stage">
+        <p class="joy-status-stage-label" data-field="stage" role="status" aria-live="polite">Loading</p>
+        <p class="joy-status-figure" data-field="figure"></p>
+      </div>
+      <div class="joy-status-meter" data-field="meter"><div class="joy-status-fill"></div></div>
+      <ol class="joy-status-steps">
+        <li data-step="download">Download</li>
+        <li data-step="compile">Compile</li>
+        <li data-step="warm-up">Warm up</li>
+      </ol>
+      <p class="joy-status-detail" data-field="detail"></p>
+      <div class="joy-status-actions" data-field="actions"></div>
+    </section>
+  </div>
   <script type="module">
     import start from '{{module}}';
 
+    // Size of the uncompressed WebAssembly module, written at build time. Hosts usually compress it in transit, so the
+    // response's own Content-Length cannot measure download progress.
+    const WASM_BYTES = {{wasm_bytes}};
+    const WASM_URL = new URL('{{wasm}}', import.meta.url);
+    const BYTES_PER_MEGABYTE = 1024*1024;
+
+    /** The loading screen's stage, meter, steps, and failure state. */
+    class LoadingScreen {
+      constructor(element) {
+        this.element = element;
+        this.stageLabel = element.querySelector('[data-field="stage"]');
+        this.figureLabel = element.querySelector('[data-field="figure"]');
+        this.detailLabel = element.querySelector('[data-field="detail"]');
+        this.meter = element.querySelector('[data-field="meter"]');
+        this.actions = element.querySelector('[data-field="actions"]');
+        this.steps = [...element.querySelectorAll('[data-step]')];
+      }
+
+      /** True once the first frame presented or startup failed; later updates are ignored. */
+      get settled() {
+        return this.element.dataset.state !== 'loading';
+      }
+
+      /** Activate step `name`, complete the steps before it, and show its stage label and detail. */
+      step(name, label, detail = '') {
+        if(this.settled) {
+          return;
+        }
+
+        const activeIndex = this.steps.findIndex(step => step.dataset.step === name);
+        for(const [index, step] of this.steps.entries()) {
+          step.dataset.status = index < activeIndex ? 'done' : (index === activeIndex ? 'active' : 'pending');
+        }
+
+        this.stageLabel.textContent = label;
+        this.detailLabel.textContent = detail;
+        this.figureLabel.textContent = '';
+        delete this.meter.dataset.determinate;
+      }
+
+      /** Show measured progress as a 0 to 1 fraction with its figure text. */
+      progress(fraction, figure) {
+        if(this.settled) {
+          return;
+        }
+
+        this.meter.dataset.determinate = '';
+        this.meter.style.setProperty('--joy-status-progress', String(Math.min(Math.max(fraction, 0), 1)));
+        this.figureLabel.textContent = figure;
+      }
+
+      /** Fade the screen out over the presented canvas. */
+      finish() {
+        if(this.settled) {
+          return;
+        }
+
+        this.element.dataset.state = 'ready';
+        this.element.removeAttribute('aria-busy');
+      }
+
+      /** Keep the screen up with the failure and a way to retry. */
+      fail(message) {
+        if(this.settled) {
+          return;
+        }
+
+        this.element.dataset.state = 'failed';
+        this.element.removeAttribute('aria-busy');
+        this.stageLabel.textContent = 'Couldn’t start';
+        this.figureLabel.textContent = '';
+        this.detailLabel.textContent = message;
+
+        const reload = document.createElement('button');
+        reload.className = 'joy-status-button';
+        reload.type = 'button';
+        reload.textContent = 'Reload';
+        reload.addEventListener('click', () => location.reload());
+        this.actions.replaceChildren(reload);
+      }
+    }
+
     const canvas = document.getElementById('{{canvas}}');
-    // The shell sets data-ready after its first presented frame; CSS then hides the loading label.
-    start().then(() => canvas.focus()).catch(error => {
-      document.getElementById('joy-loading').textContent = `Unable to start: ${error}`;
-    });
+    const loading = new LoadingScreen(document.getElementById('joy-loading'));
+    watchStartup(canvas, loading);
+
+    try {
+      loading.step('download', 'Downloading');
+      const module = await downloadModule(
+        receivedBytes => loading.progress(receivedBytes/WASM_BYTES, downloadFigure(receivedBytes)),
+        () => loading.step('compile', 'Compiling', 'Preparing WebAssembly')
+      );
+      await start({module_or_path: module});
+      loading.step('warm-up', 'Warming up', 'Starting the renderer');
+      canvas.focus();
+    } catch(error) {
+      loading.fail(String(error?.message ?? error));
+    }
+
+    /**
+     * Fetch the WebAssembly module, reporting received bytes as it streams in and calling `onComplete` once the last
+     * byte arrives. Returns a response the bindings compile while it downloads.
+     */
+    async function downloadModule(onBytes, onComplete) {
+      const response = await fetch(WASM_URL);
+      if(!response.ok) {
+        throw new Error(`Downloading ${WASM_URL.pathname} failed with HTTP ${response.status}.`);
+      }
+
+      // Without readable streams the bindings take the whole response, and the meter stays open-ended.
+      if(!response.body || typeof TransformStream === 'undefined') {
+        return response;
+      }
+
+      let receivedBytes = 0;
+      const counter = new TransformStream({
+        transform(chunk, controller) {
+          receivedBytes+= chunk.byteLength;
+          onBytes(receivedBytes);
+          controller.enqueue(chunk);
+        },
+        flush() {
+          onComplete();
+        }
+      });
+      return new Response(response.body.pipeThrough(counter), {headers: {'Content-Type': 'application/wasm'}});
+    }
+
+    /** "42% · 3.4 / 8.1 MB" for the download figure. */
+    function downloadFigure(receivedBytes) {
+      const percent = Math.min(Math.round((receivedBytes/WASM_BYTES)*100), 100);
+      const received = (receivedBytes/BYTES_PER_MEGABYTE).toFixed(1);
+      const total = (WASM_BYTES/BYTES_PER_MEGABYTE).toFixed(1);
+      return `${percent}% · ${received} / ${total} MB`;
+    }
+
+    /**
+     * Clear the screen when the shell marks the canvas ready, and take over the engine's failure panel when startup
+     * fails before then. Both observers stop once startup settles; later runtime failures keep the engine's panel.
+     */
+    function watchStartup(canvas, loading) {
+      const readiness = new MutationObserver(() => {
+        if(canvas.hasAttribute('data-ready')) {
+          loading.finish();
+          stop();
+        }
+      });
+      const failures = new MutationObserver(() => {
+        const failure = document.getElementById('joy-failure');
+        if(failure) {
+          loading.fail(failure.textContent);
+          stop();
+        }
+      });
+      const stop = () => {
+        readiness.disconnect();
+        failures.disconnect();
+      };
+
+      readiness.observe(canvas, {attributes: true, attributeFilter: ['data-ready']});
+      failures.observe(document.body, {childList: true});
+    }
   </script>
 </body>
 </html>

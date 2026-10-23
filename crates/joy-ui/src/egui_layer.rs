@@ -121,6 +121,8 @@ impl EguiLayer {
         let raw_input = self.state.take_input(window);
         let mut full_output = self.context.run_ui(raw_input, |ui| build(ui.ctx()));
         let platform_output = std::mem::take(&mut full_output.platform_output);
+        #[cfg(target_arch = "wasm32")]
+        self.state.set_keyboard_focus(self.context.egui_wants_keyboard_input());
         self.state.handle_platform_output(window, platform_output);
 
         let Some(composite) = &mut self.composite else {
@@ -210,6 +212,30 @@ pub(crate) fn browser_modifiers(alt: bool, ctrl: bool, shift: bool, meta: bool, 
         mac_cmd: apple && meta,
         command: if apple { meta } else { ctrl },
     }
+}
+
+/// Whether a browser key press should become egui text. A held Ctrl or Cmd makes it a command instead (Cmd+Z, Ctrl+S,
+/// Cmd+A, …), as egui-winit treats it natively; otherwise the shortcut would also type its letter.
+#[cfg(any(test, target_arch = "wasm32"))]
+pub(crate) fn browser_types_text(modifiers: egui::Modifiers) -> bool {
+    !(modifiers.ctrl || modifiers.command || modifiers.mac_cmd)
+}
+
+/// Whether a browser key press is the platform's copy, cut, or paste shortcut (Cmd on Apple platforms, Ctrl elsewhere,
+/// without Alt). `key` is the layout's character and `code` the physical key, so non-Latin layouts still match.
+#[cfg(any(test, target_arch = "wasm32"))]
+pub(crate) fn browser_clipboard_shortcut(
+    key: &str,
+    code: &str,
+    ctrl: bool,
+    meta: bool,
+    alt: bool,
+    apple: bool,
+) -> bool {
+    let shortcut = if apple { meta } else { ctrl };
+    let clipboard_key =
+        matches!(key.to_ascii_lowercase().as_str(), "c" | "x" | "v") || matches!(code, "KeyC" | "KeyX" | "KeyV");
+    shortcut && !alt && clipboard_key
 }
 
 /// Whether egui claims a press at `position` (points): a widget already holds the pointer, or an interactable area

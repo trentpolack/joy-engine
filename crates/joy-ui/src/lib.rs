@@ -11,6 +11,8 @@ mod egui_layer;
 pub mod hud_text;
 mod linear_composite;
 pub mod theme;
+#[cfg(test)]
+mod theme_build;
 #[cfg(target_arch = "wasm32")]
 mod web_input;
 

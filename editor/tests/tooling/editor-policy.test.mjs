@@ -8,25 +8,34 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { findWorkspaceRoot, isEditorEnabled, readEditorPolicy } from '../../tooling/editor-policy.mjs';
 
-test('production policy preserves independent lab flags and hosted editor requirements', async t => {
+test('production policy preserves independent tool editor flags and hosted editor requirements', async t => {
   const root = await mkdtemp(join(tmpdir(), 'joy-editor-policy-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const config = join(root, 'joy.joyconfig');
-  assert.deepEqual(await readEditorPolicy(root), { joyEditor: false, formLab: true, particleLab: true });
+  assert.deepEqual(await readEditorPolicy(root), { joyEditor: false, formEditor: true, joyfxEditor: true });
 
-  await writeFile(config, JSON.stringify({ editors: { formLab: { productionEnabled: false } } }));
+  await writeFile(config, JSON.stringify({ editors: { formEditor: { productionEnabled: false } } }));
   const disabled = await readEditorPolicy(root);
-  assert.equal(isEditorEnabled('form-lab', disabled), false);
-  assert.equal(isEditorEnabled('particle-lab', disabled), true);
+  assert.equal(isEditorEnabled('form-editor', disabled), false);
+  assert.equal(isEditorEnabled('joyfx-editor', disabled), true);
   assert.equal(isEditorEnabled('game', disabled), true);
-  assert.deepEqual(await readEditorPolicy(root, true), { joyEditor: true, formLab: true, particleLab: true });
+  assert.deepEqual(await readEditorPolicy(root, true), { joyEditor: true, formEditor: true, joyfxEditor: true });
+
+  // Configs written before the rename keep their flags; the current key wins over its legacy spelling.
+  await writeFile(config, JSON.stringify({ editors: { particleLab: { productionEnabled: false } } }));
+  assert.equal(isEditorEnabled('joyfx-editor', await readEditorPolicy(root)), false);
+  await writeFile(config, JSON.stringify({ editors: {
+    formLab: { productionEnabled: false },
+    formEditor: { productionEnabled: true }
+  } }));
+  assert.equal(isEditorEnabled('form-editor', await readEditorPolicy(root)), true);
 
   await writeFile(config, JSON.stringify({ editors: {
     joyEditor: { productionEnabled: true },
-    formLab: { productionEnabled: false },
-    particleLab: { productionEnabled: false }
+    formEditor: { productionEnabled: false },
+    joyfxEditor: { productionEnabled: false }
   } }));
-  assert.deepEqual(await readEditorPolicy(root), { joyEditor: true, formLab: true, particleLab: true });
+  assert.deepEqual(await readEditorPolicy(root), { joyEditor: true, formEditor: true, joyfxEditor: true });
 
   for(const editors of [{ joyEdtor: {} }, { joyEditor: { productionEnabled: 'false' } }]) {
     await writeFile(config, JSON.stringify({ editors }));

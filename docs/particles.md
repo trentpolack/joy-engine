@@ -70,4 +70,4 @@ Use `create_particle_effect_batches` for mixed materials. It returns owned `{ ve
 
 
 ## Files and Authoring
-`.joyfx` files contain JSON. Embed or load their text, then call `parse_particle_effect`; use `compile_particle_effect` for already-parsed documents. PARTICLE LAB edits the same format that games consume. The renderer owns GPU texture resources; project effects own simulation state and must be released or reset with the session.
+`.joyfx` files contain JSON. Embed or load their text, then call `parse_particle_effect`; use `compile_particle_effect` for already-parsed documents. JOYFX EDITOR edits the same format that games consume. The renderer owns GPU texture resources; project effects own simulation state and must be released or reset with the session.

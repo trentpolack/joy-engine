@@ -5,10 +5,10 @@
 //! post-processing editor, scene effect preview controls, config panels, and live tuning (`joy-devtools`). Production
 //! builds disable the overlay through `ShellOptions::development` and do not create editors.
 //!
-//! The authoring kit shared by FORM LAB, PARTICLE LAB, and Joy Editor lives here too (`joy-authoring`): lab controls
+//! The authoring kit shared by FORM EDITOR, JOYFX EDITOR, and Joy Editor lives here too (`joy-authoring`): lab controls
 //! ([`NumberField`], [`ScalarControl`], [`ComponentGroup`], [`ColorControl`]) with [`NumericDrafts`],
 //! [`PropertyHistory`], [`PanelLayout`], the [`ScriptEditor`], and the shared Joy look in [`components`] (see
-//! `docs/rust-authoring.md`). [`AuthoringTool`] is the contract that lets authoring tools such as FORM LAB run
+//! `docs/rust-authoring.md`). [`AuthoringTool`] is the contract that lets authoring tools such as FORM EDITOR run
 //! standalone and as Joy Editor tabs.
 
 pub use joy_authoring::{
@@ -51,11 +51,13 @@ pub use joy_authoring::{
     Token,
     TokenKind,
     ToolDocument,
+    ToolFileReader,
     ToolHosting,
     ValueCheck,
     ViewportActions,
     ViewportGesture,
     ViewportShortcut,
+    choice_control,
     components,
     file_dialogs,
     is_modified,
@@ -64,12 +66,17 @@ pub use joy_authoring::{
     modified_marker,
     paint_checkerboard,
     panel_layout,
+    rerolled_seed,
     reset_button,
     script_language_tools,
+    seed_control,
+    toggle_control,
     token_color,
     viewport_input,
 };
 pub use joy_devtools::{
+    ASSET_POLL_SECONDS,
+    AssetReadError,
     ConfigChangeAdapter,
     ConfigEditor,
     ConfigEditorOptions,
@@ -82,10 +89,14 @@ pub use joy_devtools::{
     ConsoleError,
     ConsoleLine,
     ConsoleVariables,
+    DevEditors,
+    DevEditorsOptions,
     DevTools,
     EffectPreset,
     EffectQuality,
     EffectTuning,
+    EmbeddedAsset,
+    GameAssets,
     LineKind,
     LiveTuning,
     PostProcessConflict,
@@ -98,9 +109,11 @@ pub use joy_devtools::{
     StatOverlays,
     TuningError,
     TuningField,
+    TuningPanel,
     VariableDefinition,
     VariableKind,
     VariableValue,
+    development_file,
     dock,
     render_variables,
 };

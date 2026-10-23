@@ -85,6 +85,36 @@ pub struct ConfigField {
     pub apply_mode: ConfigApplyMode,
 }
 
+impl ConfigField {
+    /// A field from its text, shipped value, `(min, max, step)` range, units, and apply mode, one argument per record
+    /// property, so tuning tables read as one row per field.
+    #[allow(clippy::too_many_arguments)] // Mirrors the record property by property.
+    pub fn new(
+        key: &str,
+        label: &str,
+        group: &str,
+        description: &str,
+        default_value: f64,
+        range: (f64, f64, f64),
+        units: &str,
+        apply_mode: ConfigApplyMode,
+    ) -> Self {
+        let (min, max, step) = range;
+        Self {
+            key: key.to_owned(),
+            label: label.to_owned(),
+            group: group.to_owned(),
+            description: description.to_owned(),
+            default_value,
+            min,
+            max,
+            step,
+            units: units.to_owned(),
+            apply_mode,
+        }
+    }
+}
+
 /// A complete, independently owned value record keyed by field key, in field order.
 pub type ConfigValues = IndexMap<String, f64>;
 

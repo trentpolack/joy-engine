@@ -8,6 +8,7 @@ pub mod constants;
 pub mod documentation;
 pub mod documents;
 pub mod main;
+pub mod play;
 pub mod session;
 pub mod tool_bridge;
 pub mod ui;

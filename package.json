@@ -20,6 +20,7 @@
   ],
   "exports": {
     "./development/patches": "./scripts/patching/index.mjs",
+    "./form/catalog": "./scripts/form-reference.mjs",
     "./schemas/*": "./schemas/*",
     "./tsconfig.base.json": "./tsconfig.base.json",
     "./package.json": "./package.json"
@@ -35,7 +36,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "check": "cargo +nightly fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts tests/tooling editor/tooling editor/tests/tooling tools/form-lab/tests/tooling",
+    "check": "cargo +nightly fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && node scripts/check-boundaries.mjs && node scripts/check-javascript.mjs scripts tests/tooling editor/tooling editor/tests/tooling tools/form-editor/tests/tooling",
     "test": "cargo test --workspace && npm run test:tooling",
     "test:tooling": "node --test tests/tooling/*.test.mjs editor/tests/tooling/*.test.mjs",
     "fetch-joy-engine-patch": "node scripts/patching/fetch-joy-engine-patch.mjs",

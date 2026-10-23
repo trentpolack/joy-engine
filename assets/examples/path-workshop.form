@@ -8,20 +8,29 @@ param thickness = 0.3 meta(min=0.1, max=0.8, step=0.05)
 param segments = 80 meta(min=24, max=128, step=4)
 param tint = rgba(0.23, 0.66, 0.66, 1)
 
+# ---- Palette.
+# The pipe blends from `tint` at the base to `glow` at the top; both are graded by `warm`, FORM's classic tint.
+const warm = rgba(0.929, 0.424, 0.224, 1)
+const glow = rgba(0.94, 0.68, 0.34, 1)
+
+# ---- Path.
+# A helix: one point per segment, climbing `rise` over `turns` full turns.
 let path = geometry()
-repeat segments + 1 as i {
-  let t = i/segments
-  let angle = t*turns*tau
+for i in 0..segments + 1 {
+  const t = i/segments
+  const angle = t*turns*tau
   addPoint(path, vector(cos(angle)*radius, t*rise, sin(angle)*radius))
 }
+
+# ---- Pipe.
+# Sweep a 12-sided tube along the path, then shade it by height.
 let pipe = tube(path, thickness, 12)
-repeat pointCount(pipe) as i {
-  setUserData(pipe, i, {kind: "swept-pipe", path: "helix"})
-}
+addAttribute(pipe, "points", "kind", "swept-pipe")
+addAttribute(pipe, "points", "path", "helix")
+# Color the pipe first, so the wrangle below has a color attribute to write.
 color(pipe, tint)
 wrangle points in pipe as element {
-  element.color = mix(tint, rgba(0.94,0.68,0.34,1), clamp(element.position.y/rise,0,1))
+  element.color = mix(tint, glow, clamp(element.position.y/rise, 0, 1))*warm
 }
 output("Pipe", pipe)
 inspect("Path", path)
-

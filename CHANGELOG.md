@@ -1,8 +1,80 @@
 # Changelog
 
-This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM LAB, PARTICLE LAB and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
+This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
-## 10-20-2026
+## 10-23-2026
+### FORM Language
+- A `const` read from a geometry or instance variable now holds a frozen snapshot instead of freezing the variable it came from, so `let shape = box(1, 1, 1)` stays editable after `const finished = shape`. Fresh values (`const shape = box(1, 1, 1)`) still freeze in place, and aliases of a constant still cannot edit it.
+- The FORM catalog reader (`scripts/form-reference.mjs`, exported as `joy-engine/form/catalog`) also returns each keyword's hover documentation, so tools outside the engine can present the same completion and hover text as FORM EDITOR.
+
+### Script Editing
+- The shared script editor (FORM EDITOR and JOYFX EDITOR) follows VS Code: Tab/Shift+Tab and Ctrl/Cmd+]/[ indent and outdent selected lines, Ctrl/Cmd+/ toggles `#` comments, Enter keeps indentation (deeper after an opening bracket), and `}` lines up with its block. Trackpad scrolling locks to the predominant axis, and hover popups wait until scrolling stops.
+- Browser builds no longer type a shortcut's letter when Ctrl or Cmd is held (Cmd+Z, Cmd+S, and Cmd+A previously also inserted `z`, `s`, or `a`), and copy, cut, and paste reach text fields: winit cancelled those key presses, which suppressed the browser's clipboard events.
+
+### FORM EDITOR
+- Lighting settings use the parameter inspector's grouped XYZ direction and RGB color controls, including the color picker, with full-width titles, consistent checkbox and button styling, and Balanced shadows by default. Removed the backend note and limited Reset params to the Parameters tab.
+- Enlarged the shared workspace headings and the Recipes/Reference dialogs, standardized their action buttons, and replaced the project-info triangle glyphs with a drawn disclosure arrow.
+- The script pane ends in one status bar matching the preview's statistics bar (build status, Go to error, and cursor position). RECIPES and REFERENCE moved to the header and open separate documentation pages that link to each other.
+- The project bar shows the open file's name and kind (`wave-study.form · FORM SCRIPT`) with an unsaved-edits dot, replacing the field that edited the script's project name. Save and Export suggest the file's name.
+- Escape (or a click outside) cancels the Save/Export dialog and the replace-study confirmation.
+- Removed Maximize: nothing hides the header or project bar. `MaximizeMode::Workspace` is replaced by `MaximizeMode::None`, which FORM EDITOR and JOYFX EDITOR use (JOYFX EDITOR's header and project bar also stay visible).
+- ATTRIBUTES is a full button. The preview's RESULT toolbar is now SHOW (**All outputs** or one `output`/`inspect` snapshot), with a note on how the choice relates to Export instead of "Full build · export source".
+- Added `components::shortcut_button`, which shows a key in an outlined keycap; Frame `F` and Reset `0` in FORM EDITOR and JOYFX EDITOR and Joy Editor's level FRAME `F` use it.
+
+## 10-21-2026
+### FORM v2 (Breaking)
+- Added deeply immutable `const` values, including geometry and instance aliases, with editable explicit copies. Replaced `repeat` with exclusive integer `for index in start..end` loops and added ordered `foreach item in collection` iteration. Migrated engine assets, packed instances, editor recipes, completion, highlighting, and references; authored enums use multiline PascalCase entries.
+- Removed FORM's immediate mode: scripts build explicit geometry values and only `output(name, geometry)` adds to the result. The pen built-ins (`color(r, g, b)`, one-argument `material`, `uv`, `normal`, `point`, `triangle`, `surface`, `instance`, positional `box`/`sphere`, `userData`, `with userData`, and `setUserData`) fail with migration messages. Added `merge`, `append`, `place`, `realize`, `color(geometry, rgba)`, `material(geometry, material | "PaletteName" | null)`, `addPoint` attribute records, `hasAttribute`, and `removeAttribute`.
+- Added logic and structure to the language: booleans with `true`/`false`/`null`, `AND`/`OR`/`NOT` (conditions require booleans; `number(flag)` converts), `if`/`else if`/`else`, `match`/`case`, block-scoped `let` with `=`, `+=`, `-=`, `*=`, and `/=` assignment, `enum` declarations, text comparison, records and lists with indexing and `itemCount`, `fn` functions whose arguments are copies unless declared `ref`, and `use "path.form" as alias` modules.
+- Parameters accept booleans, free text, option text, and enum members (`param kind = Kind.tower`), and the evaluator reports wrong-typed values by kind ("Expected a number; found text.").
+- Custom attributes are typed (numbers, vectors, colors, text, true/false, and face materials) and realize into `GeometryData::vertex_attributes` and `triangle_attributes` (`AttributeColumn`, `vertex_record`, and `triangle_record`), replacing `GeometryData::user_data`. Named outputs are typed `NamedOutput` values whose snapshot converts to JSON on demand (`OutputValue::json`); serialized results keep the same shape.
+- Procedural geometry moved from JSON records to native columns, with snapshots converted only when read. Heavy scripts evaluate two to four times faster than v1 (FRAMEBREAK's district 26 ms to 6 ms; orbital bloom 114 ms to 55 ms); small scripts cost a few milliseconds more in the interpreter.
+- FORM EDITOR's script editor completes keywords, built-ins with signatures, and the names in scope at the cursor (`form_document_symbols`, the `BUILTINS` catalog, and `ScriptEditor::with_document_symbols`).
+- Migrated every engine FORM asset, example, and the building structures to v2. FORM placements are isolated points that set at least one attribute, and their `scale` is FORM's standard XYZ vector.
+
+### FORM Instances
+- Renamed `.formlab` documents to `.forminst` FORM instances (`FormInstance`, version 2) that reference a `.form` script by relative path (`"form"`) or pack one (`"source"`), with overrides, materials, and variants. FORM EDITOR opens version 1 `.formlab` files as packed instances. The engine structures and form-building presets now share one `building.form`.
+- `FormAssetLibrary::resolve` and `resolve_asset` take a reader for referenced scripts and modules, and their cache keys include those files. Hosted tools receive a project file reader (`ToolFileReader`, `AuthoringTool::set_file_reader`), documents carry their project path (`ToolDocument::path`), and Joy Editor saves an instance's script with it (`save_dependencies`).
+- The `render` component's asset kinds are `form` and `forminst` (`component_asset_kind::FORM_INSTANCE`).
+
+### Tool Names
+- FORM LAB is now FORM EDITOR (`tools/form-editor`, package `form-editor`) and PARTICLE LAB is now JOYFX EDITOR (`tools/joyfx-editor`, package `joyfx-editor`), across packages, UI, and docs.
+
+### Browser Loading Screen
+- Web builds open on a stylized loading screen in the Joy Games site's look (navy, orange rules, Archivo Black, and hard offset shadows) that steps through download (with measured progress against the module's build-time size), compile, and warm-up, then fades out over the first presented frame. Startup failures, including the engine's failure panel, stay on the screen with a reload button.
+- Added `scripts/rust/web-status.css`, which `build-web.mjs` inlines into every page alongside copies of the Archivo fonts, and which hosting development servers can serve for matching building and update screens. Titles such as `"LUNA · The Hollow Observatory"` split into a heading and subtitle.
+- Browser captures detect startup failures through the loading screen's `data-state="failed"` and wait for it to clear before capturing.
+
+### Authoring UI
+- UI palettes and font choices now come from `assets/ui/theme-default.json`, with shared dimensions in `assets/ui/layout.json`. Cargo generates native/browser constants directly from those files and rejects invalid values. Removed the duplicated Rust definitions and comparison test; migrated editor, lab, and development widgets to separate `theme::colors` and `theme::layout` values and renamed `apply_authoring` to `apply_editor`.
+- Simplified PARTICLE LAB to a compact single-row header matching FORM LAB and removed its standalone bottom strip. Joy Editor's Content Browser now reserves the actual height of Project Details and Documentation, with long metadata scrolling above the button instead of covering it with the status bar.
+- Matched the authoring chrome more closely to the deployed JS/TS FORM LAB: heavier Archivo weights, blue panel hierarchy, full-height controls, outlined sliders and preview modes, parameter spacing, and script leading. Bundled Apache-licensed Meslo LG S for Menlo-like code typography using the shared code-size setting, restored FORM's default pane proportions without overwriting saved layouts, and kept preview controls usable in narrow panes. Web builds include the font's upstream attribution and license.
+- Registered the shared authoring font families before the first UI pass, fixing the `joy-display` startup panic in Joy Editor and the labs while preserving games' default body font.
+- Numeric sliders snap to hundredths by default or to an authored step, without decimal noise. Removed PARTICLE LAB's coarser step overrides while preserving exact authored values, and covered dragging and short-script focus through real input events.
+
+### FORM Assets in Levels
+- FORM parameters accept presentation metadata in `meta(...)`: `label`, `group`, `info`, `kind` (`int`, `bool`, `seed`, or `enum`), and `options`. Whole-number kinds round overrides, booleans accept JSON flags, and `joy_engine::form::parameter_control` and friends read the descriptors.
+- FORM LAB and Joy Editor's level inspector show script labels, groups, and help, with toggles, option choices, and seeds with a reroll button (`toggle_control`, `choice_control`, and `seed_control` in the authoring kit).
+- `FormAssetLibrary::resolve_asset` returns a `FormAsset` with the mesh and its placements: the points a script tags with user data. Placements naming an `object` template spawn level entities (`<parent>/<index>`, one level deep, at most 4,096 per asset), which Joy Editor shows and games simulate.
+- `render` components take an optional FORM LAB `variant`; `AssetScene::prepare_level` builds a run-ready level from authored documents and `AssetScene::follow` presents runtime entities with the prepared assets.
+
+### Hot Reload and Development
+- Added `GameAssets` with `game_assets!` and `source_root!`: games embed text assets and, in native development builds, read them from the project folder and poll for edits (see `docs/hot-reload.md`).
+- Added `DevEditors`, `DevEditorsOptions`, `TuningPanel`, and `development_file`, the standard post-processing and TUNE editors games attach, plus `ConfigField::new`.
+- `HeadlessShell::new_or_skip`, `HeadlessShell::save_capture`, and `region_mean_color` replace the helpers every game's render tests carried.
+
+### Joy Editor
+- Restored **Play**: the native editor runs the selected project's game (`npm run dev`) in its own window, with Stop, and ends it when the editor closes; saved assets reach games that use `GameAssets` live.
+- Added Ctrl/Cmd+O (open a project folder) and Alt+1–9 (switch tabs) to the editor, and Ctrl/Cmd+O to standalone FORM LAB, plus Ctrl/Cmd+S and Ctrl/Cmd+O to standalone PARTICLE LAB.
+
+### Authoring Look
+- The authoring theme installs the Archivo family (Archivo, Archivo SemiBold, and Archivo Black, under the SIL Open Font License) and registers semantic text styles (`display`, `title`, `caption`, and `status`); buttons and headings use the semibold face.
+- Design tokens now live in `assets/theme/joy-tokens.json`, verified against the Rust constants by a test, and gained the workspace surfaces and development overlay fills. Joy Editor's private palette and the development dock's own colors now read the shared tokens, and the editor's literal type sizes follow the token scale.
+- Added shared chrome to the authoring kit (`app_title`, `header_rule`, `project_marker`, `status_bar`, `list_row`, `caption`, and letter-spaced `spaced` text); Joy Editor, FORM LAB, and PARTICLE LAB draw their titles with it, PARTICLE LAB's footer is the shared status bar, and `panel_heading` uses the real fonts.
+
+### Repository Guidance
+- Engine work that absorbs consumer behavior now migrates those consumers in the same change; completion reports have their own section, agents that cannot file issues propose them in reports, and the Node spacing rules live only in the coding standards.
+
 ### Rendering
 - Fixed a startup validation panic by removing the stale ACES uniform binding from the display resolve layout.
 

@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 //! UI-free language tools behind the script editor: catalog-driven syntax highlighting, completion entries and
-//! filtering, call insertion, symbol lookup
-//! for hover documentation, and diagnostic positions.
+//! filtering, call insertion, symbol lookup for hover documentation, diagnostic positions, and the line edits behind
+//! the editor's VS Code-style shortcuts (indent and outdent, toggle comment, and indentation-preserving Enter).
 //!
 //! Positions are character indices (Unicode scalar values) into the script, as egui's text cursors count them.
 //! Diagnostics from FORM and particle scripts carry one-based lines and character columns, which
@@ -17,6 +17,9 @@ use joy_core::scripting::{
     ScriptLanguageSymbol,
     ScriptSymbolKind,
 };
+
+/// The line comment prefix FORM and JOYFX scripts are authored with (`//` also reads as a comment).
+const LINE_COMMENT: &str = "#";
 
 /// What a highlighted span is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -85,7 +88,7 @@ impl ScriptSyntax {
     }
 
     /// FORM: the FORM catalog plus attribute-domain keywords, quoted strings, `param` declarations highlighted as
-    /// parameters wherever they are used afterwards, components after `.`, and `@` names marked invalid (the FORM LAB
+    /// parameters wherever they are used afterwards, components after `.`, and `@` names marked invalid (the FORM EDITOR
     /// stream language).
     pub fn form() -> Self {
         let mut syntax = Self::from_catalog(&joy_form::form_language_catalog());
@@ -97,7 +100,7 @@ impl ScriptSyntax {
         syntax
     }
 
-    /// JOYFX particle scripts: the particle catalog's keywords and functions (the PARTICLE LAB stream language).
+    /// JOYFX particle scripts: the particle catalog's keywords and functions (the JOYFX EDITOR stream language).
     pub fn particle() -> Self {
         Self::from_catalog(&joy_fx::particle_language_catalog())
     }
@@ -114,6 +117,11 @@ impl ScriptSyntax {
     /// Plain text without highlighting.
     pub fn plain() -> Self {
         Self::default()
+    }
+
+    /// The prefix that starts a line comment, for Ctrl/Cmd+/ (`None` when the language has no comments).
+    pub fn line_comment(&self) -> Option<&'static str> {
+        self.comments.then_some(LINE_COMMENT)
     }
 
     /// Also highlight these names as parameters (for example an effect's named parameters).
@@ -143,6 +151,10 @@ impl ScriptSyntax {
             } else if self.strings && character == '"' {
                 position += string_length(rest);
                 TokenKind::String
+            } else if !self.json && rest.starts_with("..") {
+                position += 2;
+                component = false;
+                TokenKind::Operator
             } else if let Some(length) = number_length(rest, self.json) {
                 position += length;
                 TokenKind::Number
@@ -226,7 +238,7 @@ fn number_length(text: &str, json: bool) -> Option<usize> {
     }
     let integer = digits(length);
     length += integer;
-    if bytes.get(length) == Some(&b'.') {
+    if bytes.get(length) == Some(&b'.') && bytes.get(length + 1) != Some(&b'.') {
         let fraction = digits(length + 1);
         if integer == 0 && fraction == 0 {
             return None;
@@ -478,6 +490,185 @@ pub fn line_and_column(text: &str, index: usize) -> (usize, usize) {
 /// Number of lines (an empty script has one).
 pub fn line_count(text: &str) -> usize {
     text.split('\n').count()
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Line editing
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// A whole-text edit the script editor applies as one undo step: the new text and the selection afterwards (character
+/// indices; `anchor` stays put while `cursor` moves, as when extending a selection with Shift).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LineEdit {
+    /// The whole text after the edit.
+    pub text: String,
+    /// The selection end that stays put.
+    pub anchor: usize,
+    /// The selection end that moves (the caret).
+    pub cursor: usize,
+}
+
+/// One line's change: remove `removed` characters at `column`, then insert `inserted` there.
+struct LineChange {
+    column: usize,
+    removed: usize,
+    inserted: String,
+}
+
+/// Indent (or outdent) every line the selection `anchor..cursor` touches by one `indent`, as Tab and Shift+Tab do with a
+/// multi-line selection. Indenting skips blank lines; outdenting removes up to one indent's worth of leading spaces.
+pub fn shift_lines(text: &str, anchor: usize, cursor: usize, indent: &str, outdent: bool) -> LineEdit {
+    let indent_width = indent.chars().count();
+    let lines: Vec<&str> = text.split('\n').collect();
+    let touched = touched_lines(text, anchor, cursor);
+    let changes = lines
+        .iter()
+        .enumerate()
+        .map(|(number, line)| {
+            if !touched.contains(&number) {
+                return None;
+            }
+            if outdent {
+                let removed = line.chars().take(indent_width).take_while(|character| *character == ' ').count();
+                let removed = if removed == 0 && line.starts_with('\t') { 1 } else { removed };
+                return (removed > 0).then(|| LineChange {
+                    column: 0,
+                    removed,
+                    inserted: String::new(),
+                });
+            }
+            let blank = line.trim().is_empty();
+            (!blank || touched.len() == 1).then(|| LineChange {
+                column: 0,
+                removed: 0,
+                inserted: indent.to_owned(),
+            })
+        })
+        .collect();
+    apply_line_changes(&lines, changes, anchor, cursor)
+}
+
+/// Comment or uncomment every line the selection touches with `prefix`, as Ctrl/Cmd+/ does. When every non-blank line
+/// is already commented, the prefix (and one following space) is removed; otherwise `prefix ` is inserted at the
+/// shallowest indentation so the block keeps its shape.
+pub fn toggle_line_comment(text: &str, anchor: usize, cursor: usize, prefix: &str) -> LineEdit {
+    let lines: Vec<&str> = text.split('\n').collect();
+    let touched = touched_lines(text, anchor, cursor);
+    let leading = |line: &str| line.chars().take_while(|character| character.is_whitespace()).count();
+    let content: Vec<usize> = touched.clone().filter(|number| !lines[*number].trim().is_empty()).collect();
+    // A single blank line still takes a comment, so Ctrl/Cmd+/ on an empty line starts one.
+    let content = if content.is_empty() { vec![touched.start] } else { content };
+    let commented = content.iter().all(|number| lines[*number].trim_start().starts_with(prefix));
+    let column = content.iter().map(|number| leading(lines[*number])).min().unwrap_or(0);
+    let prefix_width = prefix.chars().count();
+
+    let changes = lines
+        .iter()
+        .enumerate()
+        .map(|(number, line)| {
+            if !content.contains(&number) {
+                return None;
+            }
+            if commented {
+                let start = leading(line);
+                let after: String = line.chars().skip(start + prefix_width).take(1).collect();
+                return Some(LineChange {
+                    column: start,
+                    removed: prefix_width + usize::from(after == " "),
+                    inserted: String::new(),
+                });
+            }
+            Some(LineChange {
+                column,
+                removed: 0,
+                inserted: format!("{prefix} "),
+            })
+        })
+        .collect();
+    apply_line_changes(&lines, changes, anchor, cursor)
+}
+
+/// The text Enter inserts at `cursor`: a newline plus the current line's indentation, one `indent` deeper after an
+/// opening `{`, `(`, or `[`.
+pub fn newline_with_indent(text: &str, cursor: usize, indent: &str) -> String {
+    let (line, column) = line_and_column(text, cursor);
+    let before: String = text.split('\n').nth(line - 1).unwrap_or_default().chars().take(column - 1).collect();
+    let whitespace: String = before.chars().take_while(|character| *character == ' ' || *character == '\t').collect();
+    let opens_block = before.trim_end().ends_with(['{', '(', '[']);
+    format!("\n{whitespace}{}", if opens_block { indent } else { "" })
+}
+
+/// How many characters to remove before `cursor` when `}` is typed, so a closing brace on an otherwise blank line
+/// lines up with its block: one `indent` when only spaces precede the cursor on its line, otherwise none.
+pub fn closing_brace_outdent(text: &str, cursor: usize, indent: &str) -> usize {
+    let (line, column) = line_and_column(text, cursor);
+    let before: String = text.split('\n').nth(line - 1).unwrap_or_default().chars().take(column - 1).collect();
+    let indent_width = indent.chars().count();
+    if before.chars().count() >= indent_width && before.chars().all(|character| character == ' ') {
+        indent_width
+    } else {
+        0
+    }
+}
+
+/// The zero-based lines `anchor..cursor` touches. A selection that ends at the very start of a line leaves that line
+/// out, as in VS Code, so selecting whole lines with Shift+Down does not also shift the next one.
+fn touched_lines(text: &str, anchor: usize, cursor: usize) -> Range<usize> {
+    let (start, end) = (anchor.min(cursor), anchor.max(cursor));
+    let (first, _) = line_and_column(text, start);
+    let (last, last_column) = line_and_column(text, end);
+    let last = if (last > first) && (last_column == 1) { last - 1 } else { last };
+    (first - 1)..last
+}
+
+/// Rebuild `lines` with `changes` (one optional change per line) and carry the selection through them.
+fn apply_line_changes(lines: &[&str], changes: Vec<Option<LineChange>>, anchor: usize, cursor: usize) -> LineEdit {
+    let mut text = String::new();
+    let mut old_start = 0;
+    let mut new_anchor = anchor;
+    let mut new_cursor = cursor;
+    for (number, (line, change)) in lines.iter().zip(changes).enumerate() {
+        if number > 0 {
+            text.push('\n');
+        }
+        let width = line.chars().count();
+        let new_start = text.chars().count();
+        let map = |position: usize, change: &Option<LineChange>| -> usize {
+            let column = position - old_start;
+            let column = match change {
+                None => column,
+                Some(change) if column < change.column => column,
+                Some(change) if column >= (change.column + change.removed) => {
+                    column - change.removed + change.inserted.chars().count()
+                }
+                Some(change) => change.column + change.inserted.chars().count(),
+            };
+            new_start + column
+        };
+        let in_line = |position: usize| (position >= old_start) && (position <= old_start + width);
+        if in_line(anchor) {
+            new_anchor = map(anchor, &change);
+        }
+        if in_line(cursor) {
+            new_cursor = map(cursor, &change);
+        }
+        match &change {
+            Some(change) => {
+                let kept_before: String = line.chars().take(change.column).collect();
+                let kept_after: String = line.chars().skip(change.column + change.removed).collect();
+                text.push_str(&kept_before);
+                text.push_str(&change.inserted);
+                text.push_str(&kept_after);
+            }
+            None => text.push_str(line),
+        }
+        old_start += width + 1;
+    }
+    LineEdit {
+        text,
+        anchor: new_anchor,
+        cursor: new_cursor,
+    }
 }
 
 #[cfg(test)]

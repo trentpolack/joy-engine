@@ -8,51 +8,59 @@ param elevation = 3 meta(min=0.5, max=5, step=0.1)
 param waterLevel = 1.5 meta(min=0, max=3, step=0.1)
 param random_seed = 19 meta(min=1, max=9999, step=1)
 
+# ---- Palette.
+# Dry tiles shade from `lowland` green to `highland` sand by height; flooded tiles turn `flooded` blue. Everything
+# visible is graded by `warm`, FORM's classic tint.
+const warm = rgba(0.929, 0.424, 0.224, 1)
+const lowland = rgba(0.25, 0.48, 0.32, 1)
+const highland = rgba(0.85, 0.71, 0.4, 1)
+const flooded = rgba(0.15, 0.39, 0.58, 1)
+const water_color = rgba(0.1, 0.33, 0.48, 0.65)*warm
+
+# ---- Tiles.
+# One point per grid cell at the top of its column, stepped into quarter-unit terraces by noise. Each point's
+# record is the tile's gameplay data; every field becomes a point attribute.
 let tiles = geometry()
-addAttribute(tiles,"points","height",0)
-addAttribute(tiles,"points","walkable",1)
-addAttribute(tiles,"points","moveCost",1)
-addAttribute(tiles,"points","scale",vector(1,1,1))
-color(tiles,rgba(1,1,1,1))
-repeat rows as row {
-  repeat columns as column {
-    let field = noise(column*0.3,row*0.3,random_seed)
-    let height = 0.3 + floor((field + 1)*elevation*2)/4
-    let id = addPoint(tiles,vector((column - (columns - 1)/2)*cellSize,height,(row - (rows - 1)/2)*cellSize))
-    let tileData = {
+for row in 0..rows {
+  for column in 0..columns {
+    const field = noise(column*0.3, row*0.3, random_seed)
+    const height = 0.3 + floor((field + 1)*elevation*2)/4
+    const tileData = {
       kind: "tile",
-      id: id,
-      grid: {x: column, z: row},
-      cellSize: cellSize
+      id: pointCount(tiles),
+      grid: vector(column, 0, row),
+      cellSize: cellSize,
+      height: height,
+      walkable: true,
+      moveCost: 1,
+      scale: vector(1, 1, 1)
     }
-    setUserData(tiles,id,tileData)
-    setAttribute(tiles,"points","height",id,height)
+    addPoint(tiles, vector((column - (columns - 1)/2)*cellSize, height, (row - (rows - 1)/2)*cellSize), tileData)
   }
 }
+
+# Color the points first, so the wrangle below has a color attribute to write.
+color(tiles, rgba(1, 1, 1, 1))
 wrangle points in tiles as tile {
   # Higher tiles cost more to cross.
   tile.moveCost = 1 + tile.height/elevation
-  tile.walkable = 1
-  tile.color = mix(rgba(0.25,0.48,0.32,1),rgba(0.85,0.71,0.4,1),clamp(tile.height/elevation,0,1))
-  if tile.height < waterLevel {
-    tile.walkable = 0
-    tile.color = rgba(0.15,0.39,0.58,1)
+  tile.walkable = tile.height >= waterLevel
+  tile.color = mix(lowland, highland, clamp(tile.height/elevation, 0, 1))
+  if NOT tile.walkable {
+    tile.color = flooded
   }
-  tile.scale = vector(cellSize*0.94,tile.height,cellSize*0.94)
+  tile.scale = vector(cellSize*0.94, tile.height, cellSize*0.94)
 }
-inspect("Tiles",tiles)
+inspect("Tiles", tiles)
 
-# Choose "Tiles" to inspect the grid. Each tile has an ID and X/Z grid coordinates.
-# A game can use walkable (1 = yes, 0 = no) and moveCost to plan movement.
+# Choose "Tiles" to inspect the grid. Each tile has an ID and X/Z grid coordinates (grid.x and grid.z).
+# A game can use walkable (true or false) and moveCost to plan movement.
 # Track units and buildings by tile ID. Rebuild that list if the grid size changes.
 # Try raising waterLevel to see which tiles become blocked.
 
-# Build downward so each tile's position stays at the top of its column.
-let columnMesh = box(1,1,1)
-translate(columnMesh,vector(0,-0.5,0))
-output("Terrain columns",instances(columnMesh,tiles))
-let water = box(columns*cellSize,0.06,rows*cellSize)
-translate(water,vector(0,waterLevel - 0.03,0))
-color(water,rgba(0.1,0.33,0.48,0.65))
-output("Water",water)
-
+# ---- Terrain and water.
+# Build downward so each tile's position stays at the top of its column. The column takes its tile's color.
+const columnMesh = color(translate(box(1, 1, 1), vector(0, -0.5, 0)), warm)
+output("Terrain columns", instances(columnMesh, tiles))
+const water = color(translate(box(columns*cellSize, 0.06, rows*cellSize), vector(0, waterLevel - 0.03, 0)), water_color)
+output("Water", water)

@@ -27,6 +27,14 @@ winit.workspace = true
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egui-winit.workspace = true
 
+[build-dependencies]
+# Compile appearance and layout assets into constants for every target.
+serde_json.workspace = true
+
+[dev-dependencies]
+# Exercise asset validation and the resulting egui style.
+serde_json.workspace = true
+
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 # The scRGB UI composite test waits on a headless device and its readback.
 pollster.workspace = true

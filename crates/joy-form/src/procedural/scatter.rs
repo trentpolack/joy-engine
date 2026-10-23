@@ -4,17 +4,18 @@
 //! Area- and weight-proportional point scattering.
 
 use super::{
+    geometry::{
+        Column,
+        DomainKind,
+        Element,
+        Geometry,
+        POSITION_ATTRIBUTE,
+    },
     shapes::{
         cross,
         subtract,
     },
-    store::{
-        self,
-        Store,
-        attribute_at,
-        number,
-        numbers,
-    },
+    store::Store,
 };
 use crate::{
     math::{
@@ -24,26 +25,22 @@ use crate::{
     value::integer_range,
 };
 use joy_core::math::deterministic;
-use serde_json::{
-    Value as Json,
-    json,
-};
 
 /// Area times linearly interpolated point density; its PRNG is local to this call.
-pub fn scatter(store: &mut Store, source: &Json, amount: f64, seed: f64, weight: &str) -> Result<Json, String> {
+pub fn scatter(store: &mut Store, source: &Geometry, amount: f64, seed: f64, weight: &str) -> Result<Geometry, String> {
     let amount = integer_range(amount, 0.0, 150_000.0)?;
-    let attributes = &source["attributes"]["points"];
-    let positions = attributes["position"]["values"].as_array().unwrap();
-    let weights = if weight.is_empty() { None } else { attributes.get(weight) };
-    if !weight.is_empty()
-        && weights.is_none_or(|weights| {
-            weights["size"] != 1
-                || weights["values"].as_array().unwrap().iter().any(|v| v.as_f64().is_none_or(|v| v < 0.0))
-        })
-    {
-        return Err("Scatter weight must name a nonnegative scalar point attribute.".into());
-    }
-    let mut result = store::create();
+    let weights = if weight.is_empty() {
+        None
+    } else {
+        match source.points.get(weight) {
+            Some(Column::Number {
+                size: 1,
+                values,
+            }) if values.iter().all(|value| *value >= 0.0) => Some(values.as_slice()),
+            _ => return Err("Scatter weight must name a nonnegative scalar point attribute.".into()),
+        }
+    };
+    let mut result = Geometry::default();
     if !seed.is_finite() || seed.fract() != 0.0 {
         return Err("Random seed must be a finite integer.".into());
     }
@@ -52,17 +49,14 @@ pub fn scatter(store: &mut Store, source: &Json, amount: f64, seed: f64, weight:
         state = state.wrapping_mul(1664525).wrapping_add(1013904223);
         state as f64 / 4294967296.0
     };
-    let faces = source["faces"].as_array().unwrap();
+    let density = |point: usize| weights.map_or(1.0, |weights| weights[point]);
     let mut total = 0.0;
-    let mut cumulative = Vec::new();
-    for face in faces {
-        let indices = face.as_array().unwrap().iter().map(|v| number(v) as usize).collect::<Vec<_>>();
-        let [a, b, c] =
-            [numbers(&positions[indices[0]]), numbers(&positions[indices[1]]), numbers(&positions[indices[2]])];
+    let mut cumulative = Vec::with_capacity(source.faces.len());
+    for face in &source.faces {
+        let [a, b, c] = face.map(|point| source.position(point));
         let normal = cross(&subtract(&b, &a), &subtract(&c, &a));
-        let density =
-            weights.map_or(1.0, |w| indices.iter().map(|index| number(&w["values"][index])).sum::<f64>() / 3.0);
-        total += hypot(&normal) * 0.5 * density;
+        let face_density = face.iter().map(|point| density(*point)).sum::<f64>() / 3.0;
+        total += hypot(&normal) * 0.5 * face_density;
         if !total.is_finite() {
             return Err("Scatter area/weight overflow.".into());
         }
@@ -83,9 +77,8 @@ pub fn scatter(store: &mut Store, source: &Json, amount: f64, seed: f64, weight:
                 high = middle;
             }
         }
-        let indices = faces[low].as_array().unwrap().iter().map(|v| number(v) as usize).collect::<Vec<_>>();
-        let densities =
-            indices.iter().map(|index| weights.map_or(1.0, |w| number(&w["values"][index]))).collect::<Vec<_>>();
+        let face = source.faces[low];
+        let densities = face.map(density);
         let choice = random() * densities.iter().sum::<f64>();
         let selected = if choice < densities[0] {
             0
@@ -94,62 +87,60 @@ pub fn scatter(store: &mut Store, source: &Json, amount: f64, seed: f64, weight:
         } else {
             2
         };
-        let mut barycentric = Vec::new();
-        for corner in 0..3 {
-            let mut sample = -deterministic::ln(random().max(f64::from_bits(1)));
+        let mut barycentric = [0.0; 3];
+        for (corner, sample) in barycentric.iter_mut().enumerate() {
+            *sample = -deterministic::ln(random().max(f64::from_bits(1)));
             if corner == selected {
-                sample += -deterministic::ln(random().max(f64::from_bits(1)));
+                *sample += -deterministic::ln(random().max(f64::from_bits(1)));
             }
-            barycentric.push(sample);
         }
         let sum = barycentric.iter().sum::<f64>();
-        let blend = barycentric.iter().map(|v| v / sum).collect::<Vec<_>>();
-        let interpolate = |name: &str| -> Result<Json, String> {
-            let values = indices
-                .iter()
-                .map(|index| attribute_at(source, "points", name, *index as f64))
-                .collect::<Result<Vec<_>, _>>()?;
-            if values[0].is_number() {
-                Ok(json!(
-                    values.iter().enumerate().fold(0.0, |sum, (corner, value)| sum + number(value) * blend[corner])
-                ))
-            } else {
-                Ok(json!(
-                    (0..values[0].as_array().unwrap().len())
-                        .map(|axis| values
-                            .iter()
-                            .enumerate()
-                            .fold(0.0, |sum, (corner, value)| sum + number(&value[axis]) * blend[corner]))
-                        .collect::<Vec<_>>()
-                ))
+        let blend = barycentric.map(|sample| sample / sum);
+        let interpolate = |column: &Column| -> Element {
+            match column {
+                // Text and true/false cannot blend; samples take the value of the corner they were drawn toward.
+                Column::Number {
+                    size,
+                    ..
+                } => Element::Numbers(
+                    (0..*size)
+                        .map(|axis| {
+                            face.iter()
+                                .enumerate()
+                                .fold(0.0, |sum, (corner, point)| sum + column.numbers(*point)[axis] * blend[corner])
+                        })
+                        .collect(),
+                ),
+                _ => column.get(face[selected]),
             }
         };
-        let index = store.add_point(&mut result, &numbers(&interpolate("position")?))?;
-        for name in attributes.as_object().unwrap().keys() {
-            if name != "position" && name != "normal" {
-                let mut value = interpolate(name)?;
-                if name == "color" {
-                    // Interpolation cannot leave the corners' range, but rounding can step just outside it.
-                    let channels: Vec<f64> = numbers(&value)
-                        .iter()
-                        .enumerate()
-                        .map(|(index, channel)| if index == 3 { channel.clamp(0.0, 1.0) } else { channel.max(0.0) })
-                        .collect();
-                    value = json!(channels);
-                }
-                store.set(&mut result, "points", name, index, &value, false)?;
+        let position = interpolate(source.points.get(POSITION_ATTRIBUTE).expect("geometry always has positions"));
+        let Element::Numbers(position) = position else { unreachable!("positions are numeric") };
+        let index = store.add_point(&mut result, &position)?;
+        for (name, column) in source.points.iter() {
+            if name == POSITION_ATTRIBUTE || name == "normal" {
+                continue;
             }
+            let mut value = interpolate(column);
+            if name == "color"
+                && let Element::Numbers(channels) = &mut value
+            {
+                // Interpolation cannot leave the corners' range, but rounding can step just outside it.
+                for (channel, component) in channels.iter_mut().enumerate() {
+                    *component = if channel == 3 { component.clamp(0.0, 1.0) } else { component.max(0.0) };
+                }
+            }
+            store.set(&mut result, DomainKind::Points, name, index, &value, false)?;
         }
-        let [a, b, c] =
-            [numbers(&positions[indices[0]]), numbers(&positions[indices[1]]), numbers(&positions[indices[2]])];
+        let [a, b, c] = face.map(|point| source.position(point));
         let normal = cross(&subtract(&b, &a), &subtract(&c, &a));
         let length = hypot(&normal);
         store.set(
             &mut result,
-            "points",
+            DomainKind::Points,
             "normal",
             index,
-            &json!(normal.iter().map(|v| v / length).collect::<Vec<_>>()),
+            &Element::Numbers(normal.iter().map(|component| component / length).collect()),
             false,
         )?;
     }

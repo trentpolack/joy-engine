@@ -30,7 +30,7 @@ use joy_fx::{
 use crate::particles::ParticleBatch;
 
 /// Decode one embedded PNG particle texture source into an image, for previews of textures that are not part of a
-/// prepared definition yet (PARTICLE LAB's sprite thumbnail).
+/// prepared definition yet (JOYFX EDITOR's sprite thumbnail).
 pub fn decode_particle_texture(source: &str) -> Result<TextureAsset, ParticleTextureError> {
     ParticleTextureSet::decode(source)
 }

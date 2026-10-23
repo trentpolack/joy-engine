@@ -46,7 +46,10 @@ use egui::{
     vec2,
 };
 
-use joy_ui::theme::tokens;
+use joy_ui::theme::{
+    colors,
+    layout,
+};
 
 use crate::lab_values::{
     self,
@@ -550,9 +553,9 @@ fn show_editing(
         .font(FontId::monospace(12.0))
         .text_color(color)
         .horizontal_align(spec.align)
-        .margin(vec2(tokens::SPACE_XS, 2.0))
+        .margin(vec2(layout::SPACE_XS, 2.0))
         .min_size(size)
-        .desired_width(size.x - (2.0 * tokens::SPACE_XS))
+        .desired_width(size.x - (2.0 * layout::SPACE_XS))
         .show(ui);
     let response = output.response.response.clone();
 
@@ -625,7 +628,7 @@ impl<'a> ScalarControl<'a> {
             value,
             rules: NumericRules::default(),
             step: 0.01,
-            slider_step: None,
+            slider_step: Some(0.01),
             default: None,
             label: None,
             name: None,
@@ -651,16 +654,18 @@ impl<'a> ScalarControl<'a> {
     pub fn integer(mut self) -> Self {
         self.rules.integer = true;
         self.step = self.step.max(1.0);
+        self.slider_step = Some(self.slider_step.unwrap_or_default().max(1.0));
         self
     }
 
-    /// Keyboard and scrub step for the exact field.
+    /// Keyboard, scrub, and slider step. Sliders default to hundredths until the authored control supplies its step.
     pub fn step(mut self, step: f64) -> Self {
         self.step = step;
+        self.slider_step = Some(step);
         self
     }
 
-    /// Snap slider drags to multiples of `step` from the minimum (continuous by default).
+    /// Override the slider step independently of the exact field.
     pub fn slider_step(mut self, step: f64) -> Self {
         self.slider_step = Some(step);
         self
@@ -720,7 +725,7 @@ impl<'a> ScalarControl<'a> {
                 if let Some(label) = &label {
                     let (rect, _) =
                         ui.allocate_exact_size(vec2(SCALAR_LABEL_WIDTH, ui.spacing().interact_size.y), Sense::hover());
-                    paint_label(ui, rect, label, tokens::MUTED, tokens::TYPE_SM);
+                    paint_label(ui, rect, label, colors::MUTED, layout::TYPE_SM);
                 }
                 let reset_width = if default.is_some() { RESET_BUTTON_SIZE + ui.spacing().item_spacing.x } else { 0.0 };
                 if slider && let Some(range) = rules.slider_range() {
@@ -819,7 +824,7 @@ impl<'a> ComponentGroup<'a> {
         self
     }
 
-    /// Keyboard and scrub step.
+    /// Keyboard, scrub, and slider step (default 0.01).
     pub fn step(mut self, step: f64) -> Self {
         self.step = step;
         self
@@ -911,7 +916,7 @@ fn component_column(
     let mut reset = None;
     ui.horizontal(|ui| {
         let (rect, _) = ui.allocate_exact_size(vec2(width - RESET_BUTTON_SIZE, 14.0), Sense::hover());
-        paint_label(ui, rect, label, tokens::MUTED, tokens::TYPE_XS);
+        paint_label(ui, rect, label, colors::MUTED, layout::TYPE_XS);
         if let Some(default) = default {
             reset = Some((reset_button(ui, modified, default), default));
         }
@@ -925,7 +930,7 @@ fn component_column(
         .label(format!("{accessible} value"))
         .show(ui, drafts);
     if slider && let Some(range) = rules.slider_range() {
-        let slider = slider_control(ui, value, range, None, width, Some(COMPONENT_SLIDER_HEIGHT));
+        let slider = slider_control(ui, value, range, Some(step), width, Some(COMPONENT_SLIDER_HEIGHT));
         let current = *value;
         slider.response.widget_info(|| egui::WidgetInfo::slider(true, current, format!("{accessible} slider")));
         if slider.changed {
@@ -977,8 +982,9 @@ fn slider_control(
 
 /// The lab range slider: a thin rail with an accent fill up to the value and a round accent thumb. Pressing or dragging
 /// sets the value from the pointer, snapped to multiples of `step` from the minimum when given; arrow keys move it by a
-/// step (or a hundredth of the range) while focused. A value it did not edit is never clamped or rounded, even outside
-/// the range. Returns a response marked changed when the value changed.
+/// step (or a hundredth of the range) while focused. Both endpoints remain reachable, and generated steps retain the
+/// minimum's and step's decimal precision. A value it did not edit is never clamped or rounded, even outside the range.
+/// Returns a response marked changed when the value changed.
 pub fn lab_slider(
     ui: &mut Ui,
     value: &mut f64,
@@ -992,13 +998,7 @@ pub fn lab_slider(
     let left = rect.left() + thumb_radius;
     let right = (rect.right() - thumb_radius).max(left + 1.0);
     let span = maximum - minimum;
-    let snap = |candidate: f64| -> f64 {
-        let snapped = match step.filter(|step| *step > 0.0) {
-            Some(step) => minimum + (((candidate - minimum) / step).round() * step),
-            None => candidate,
-        };
-        snapped.clamp(minimum, maximum)
-    };
+    let snap = |candidate| lab_values::snapped_slider_value(candidate, minimum, maximum, step);
     let mut next = None;
     if span > 0.0
         && (response.is_pointer_button_down_on() || response.dragged())
@@ -1036,18 +1036,24 @@ pub fn lab_slider(
     let painter = ui.painter_at(rect.expand(2.0));
     let fraction = if span > 0.0 { ((*value - minimum) / span).clamp(0.0, 1.0) as f32 } else { 0.0 };
     let center = pos2(left + ((right - left) * fraction), rect.center().y);
-    let rail = Rect::from_min_max(pos2(left, rect.center().y - 2.0), pos2(right, rect.center().y + 2.0));
-    painter.rect_filled(rail, CornerRadius::same(2), tokens::BUTTON);
+    let rail = Rect::from_min_max(pos2(left, rect.center().y - 3.5), pos2(right, rect.center().y + 3.5));
+    painter.rect_filled(rail, CornerRadius::same(4), colors::BUTTON);
     painter.rect_filled(
         Rect::from_min_max(rail.min, pos2(center.x, rail.max.y)),
-        CornerRadius::same(2),
-        tokens::ACCENT,
+        CornerRadius::same(4),
+        colors::ACCENT,
+    );
+    painter.rect_stroke(
+        rail,
+        CornerRadius::same(4),
+        Stroke::new(layout::BORDER_THIN, colors::SLIDER_EDGE),
+        StrokeKind::Inside,
     );
     let active = response.dragged() || response.has_focus();
-    let thumb = if response.hovered() || active { tokens::ACCENT_HOVER } else { tokens::ACCENT };
-    painter.circle(center, thumb_radius, thumb, Stroke::new(tokens::BORDER_FOCUS, tokens::FIELD));
+    let thumb = if response.hovered() || active { colors::ACCENT_HOVER } else { colors::ACCENT };
+    painter.circle(center, thumb_radius, thumb, Stroke::new(layout::BORDER_FOCUS, colors::SLIDER_EDGE));
     if response.has_focus() {
-        painter.circle_stroke(center, thumb_radius + 2.5, Stroke::new(tokens::BORDER_THIN, tokens::ACCENT));
+        painter.circle_stroke(center, thumb_radius + 2.5, Stroke::new(layout::BORDER_THIN, colors::ACCENT));
     }
     response
 }
@@ -1158,7 +1164,7 @@ fn picker_contents(
     memory: &mut PickerMemory,
 ) -> (bool, EditPhase) {
     if let Err(message) = drafts.require_valid() {
-        ui.colored_label(tokens::DANGER, message);
+        ui.colored_label(colors::DANGER, message);
         return (false, EditPhase::Idle);
     }
     let mut changed = false;
@@ -1188,7 +1194,7 @@ fn picker_contents(
     }
 
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("sRGB").color(tokens::MUTED).size(tokens::TYPE_SM));
+        ui.label(egui::RichText::new("sRGB").color(colors::MUTED).size(layout::TYPE_SM));
         let response = ui.add(TextEdit::singleline(&mut memory.hex).font(FontId::monospace(12.0)).desired_width(90.0));
         if response.lost_focus() {
             match lab_values::picked_color_hex(&memory.hex, values, minimums, maximums) {
@@ -1208,9 +1214,9 @@ fn picker_contents(
         }
     });
     if let Some(message) = &memory.hex_error {
-        ui.colored_label(tokens::DANGER, message);
+        ui.colored_label(colors::DANGER, message);
     }
-    ui.label(egui::RichText::new(COLOR_PICKER_HINT).color(tokens::MUTED).size(tokens::TYPE_XS));
+    ui.label(egui::RichText::new(COLOR_PICKER_HINT).color(colors::MUTED).size(layout::TYPE_XS));
     (changed, phase)
 }
 
@@ -1235,11 +1241,11 @@ pub fn reset_button(ui: &mut Ui, modified: bool, default: f64) -> Response {
     let (rect, response) =
         ui.allocate_exact_size(Vec2::splat(RESET_BUTTON_SIZE), if modified { Sense::click() } else { Sense::hover() });
     let color = if !modified {
-        tokens::BORDER
+        colors::BORDER
     } else if response.hovered() {
-        tokens::ACCENT_HOVER
+        colors::ACCENT_HOVER
     } else {
-        tokens::ACCENT
+        colors::ACCENT
     };
     paint_reset_icon(ui, rect, color);
     if modified { response.on_hover_text(format!("Reset to default {}", format_number(default))) } else { response }
@@ -1248,7 +1254,7 @@ pub fn reset_button(ui: &mut Ui, modified: bool, default: f64) -> Response {
 /// The accent dot after a modified property's heading.
 pub fn modified_marker(ui: &mut Ui, modified: bool) {
     if modified {
-        ui.label(egui::RichText::new("•").color(tokens::ACCENT)).on_hover_text("Modified from its default");
+        ui.label(egui::RichText::new("•").color(colors::ACCENT)).on_hover_text("Modified from its default");
     }
 }
 
@@ -1258,31 +1264,31 @@ pub fn modified_marker(ui: &mut Ui, modified: bool) {
 
 fn text_color(rejected: bool, modified: bool) -> Color32 {
     if rejected {
-        tokens::DANGER
+        colors::DANGER
     } else if modified {
-        tokens::ACCENT
+        colors::ACCENT
     } else {
-        tokens::TEXT
+        colors::TEXT
     }
 }
 
 fn paint_field(ui: &Ui, rect: Rect, focused: bool, rejected: bool, text: &str, color: Color32, align: Align) {
     let stroke_color = if rejected {
-        tokens::DANGER
+        colors::DANGER
     } else if focused {
-        tokens::ACCENT
+        colors::ACCENT
     } else {
-        tokens::BORDER
+        colors::BORDER
     };
     let painter = ui.painter_at(rect.expand(1.0));
     painter.rect(
         rect,
         CornerRadius::ZERO,
-        tokens::FIELD,
-        Stroke::new(tokens::BORDER_THIN, stroke_color),
+        colors::FIELD,
+        Stroke::new(layout::BORDER_THIN, stroke_color),
         StrokeKind::Inside,
     );
-    let inner = rect.shrink2(vec2(tokens::SPACE_XS, 0.0));
+    let inner = rect.shrink2(vec2(layout::SPACE_XS, 0.0));
     let (anchor, position) = match align {
         Align::Min => (Align2::LEFT_CENTER, inner.left_center()),
         Align::Center => (Align2::CENTER_CENTER, inner.center()),
@@ -1298,7 +1304,7 @@ fn paint_label(ui: &Ui, rect: Rect, text: &str, color: Color32, size: f32) {
 fn show_draft_error(ui: &mut Ui, message: &str, width: f32) {
     ui.scope(|ui| {
         ui.set_max_width(width.max(120.0));
-        ui.label(egui::RichText::new(message).color(tokens::DANGER).size(tokens::TYPE_XS));
+        ui.label(egui::RichText::new(message).color(colors::DANGER).size(layout::TYPE_XS));
     });
 }
 
@@ -1318,9 +1324,9 @@ fn paint_swatch(ui: &Ui, rect: Rect, color: Color32, focused: bool) {
     let painter = ui.painter_at(rect.expand(2.0));
     painter.rect_filled(rect, CornerRadius::ZERO, color);
     let stroke = if focused {
-        Stroke::new(tokens::BORDER_FOCUS, tokens::ACCENT)
+        Stroke::new(layout::BORDER_FOCUS, colors::ACCENT)
     } else {
-        Stroke::new(tokens::BORDER_THIN, tokens::BORDER)
+        Stroke::new(layout::BORDER_THIN, colors::BORDER)
     };
     painter.rect_stroke(rect, CornerRadius::ZERO, stroke, StrokeKind::Inside);
 }

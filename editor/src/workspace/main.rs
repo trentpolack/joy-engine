@@ -10,7 +10,10 @@
 
 use std::collections::BTreeSet;
 
-use joy_engine::development::ToolDocument;
+use joy_engine::development::{
+    ToolDocument,
+    ToolFileReader,
+};
 use joy_engine::runtime::{
     StartContext,
     Storage,
@@ -29,6 +32,10 @@ use super::constants::{
     REFRESH_SECONDS,
 };
 use super::documents::WorkspaceDocument;
+use super::play::{
+    PlaySession,
+    PlayState,
+};
 use super::session::{
     LayoutPreferences,
     WorkspaceSession,
@@ -190,12 +197,15 @@ pub struct Workspace {
     filters: BTreeSet<String>,
     selected_asset: Option<String>,
 
+    // The game Play started, ended when Play stops or the workspace drops.
+    play: PlaySession,
+
     // Session, timers, and messages.
     session: WorkspaceSession,
     status: String,
     next_poll: f64,
     next_refresh: f64,
-    /// Whether the active tab temporarily hides the Content Browser (lab Maximize).
+    /// Whether the active tab temporarily hides the Content Browser (tool Maximize).
     pub maximized: bool,
 }
 
@@ -217,6 +227,7 @@ impl Workspace {
             search: String::new(),
             filters: BTreeSet::new(),
             selected_asset: None,
+            play: PlaySession::new(),
             session,
             status: "Connecting to local project…".to_owned(),
             next_poll: POLL_SECONDS,
@@ -270,12 +281,39 @@ impl Workspace {
         self.projects.iter().find(|project| project.id == self.project)
     }
 
+    /// Where Play stands.
+    pub fn play_state(&self) -> PlayState {
+        self.play.state()
+    }
+
+    /// Whether Play can run the selected project: a native editor with a project folder on disk.
+    pub fn can_play(&self) -> bool {
+        PlaySession::available() && self.writable() && self.project_summary().is_some()
+    }
+
+    /// Run the selected project's game in its own window (see [`PlaySession`]), reporting the outcome in the status.
+    pub fn play(&mut self) {
+        let Some(project) = self.project_summary().cloned() else {
+            return;
+        };
+        match self.play.start(&project.name, std::path::Path::new(&project.location)) {
+            Ok(()) => self.set_status(format!("Playing {} in its own window; saved assets reload live.", project.name)),
+            Err(message) => self.set_status(message),
+        }
+    }
+
+    /// Stop the running game.
+    pub fn stop_play(&mut self) {
+        self.play.stop();
+        self.set_status("Play stopped.");
+    }
+
     /// Every supported asset in the project.
     pub fn files(&self) -> &[AssetEntry] {
         &self.files
     }
 
-    /// Assets matching the search text and type filters (FORM covers `.form` and `.formlab`).
+    /// Assets matching the search text and type filters (FORM covers `.form` and `.forminst`).
     pub fn filtered_files(&self) -> Vec<&AssetEntry> {
         let query = self.search.to_lowercase();
         self.files
@@ -587,6 +625,15 @@ impl Workspace {
             self.status = "Resolve the disk conflict before saving.".to_owned();
             return;
         }
+        let dependencies = match &tab.content {
+            TabContent::Tool(tool) => tool.dependencies(),
+            _ => Vec::new(),
+        };
+        if let Err(message) = self.save_dependencies(dependencies) {
+            self.status = message;
+            return;
+        }
+        let tab = &mut self.tabs[index];
         let snapshot = tab.document.snapshot();
         tab.document.saving = true;
         let result = self.store.save(&project, path, &snapshot.text, &snapshot.revision);
@@ -806,6 +853,9 @@ impl Workspace {
         if time_seconds >= self.next_poll {
             self.next_poll = time_seconds + POLL_SECONDS;
             self.poll();
+            if let Some(message) = self.play.poll() {
+                self.set_status(message);
+            }
         }
         if time_seconds >= self.next_refresh {
             self.next_refresh = time_seconds + REFRESH_SECONDS;
@@ -951,7 +1001,7 @@ impl Workspace {
     }
 
     /// The editor for a document's text.
-    fn content_for(&self, path: &str, text: &str) -> TabContent {
+    fn content_for(&mut self, path: &str, text: &str) -> TabContent {
         let extension = asset_kind(path).unwrap_or_default();
         match asset_editor(path) {
             AssetEditor::Level => match LevelEditor::load(path, text) {
@@ -965,13 +1015,16 @@ impl Workspace {
             AssetEditor::Tool => match self.tools.create(&extension) {
                 Some(tool) => {
                     let name = path.rsplit('/').next().unwrap_or(path).to_owned();
-                    TabContent::Tool(Box::new(ToolTab::new(
+                    let mut tab = ToolTab::new(
                         tool,
                         ToolDocument {
                             name,
                             contents: text.to_owned(),
+                            path: path.to_owned(),
                         },
-                    )))
+                    );
+                    tab.set_file_reader(self.script_reader());
+                    TabContent::Tool(Box::new(tab))
                 }
                 None => TabContent::Source(SourceView {
                     text: text.to_owned(),
@@ -999,6 +1052,7 @@ impl Workspace {
                 .open(ToolDocument {
                     name,
                     contents: text.to_owned(),
+                    path: path.clone(),
                 })
                 .map_err(|message| (message, AssetEditor::Tool)),
             TabContent::Source(view) => {
@@ -1054,12 +1108,60 @@ impl Workspace {
 
     /// Committed source changed: dependent previews re-read their content while keeping their history.
     fn notify_assets(&mut self, changed: &str) {
+        // Tools read scripts and modules from a snapshot; refresh it when a script changes.
+        let reader = changed.ends_with(".form").then(|| self.script_reader());
         for tab in &mut self.tabs {
-            if tab.document.path != changed
-                && let TabContent::Level(level) = &mut tab.content
-            {
-                level.assets_changed();
+            if tab.document.path == changed {
+                continue;
+            }
+            match &mut tab.content {
+                TabContent::Level(level) => level.assets_changed(),
+                TabContent::Tool(tool) => {
+                    if let Some(reader) = &reader {
+                        tool.set_file_reader(reader.clone());
+                    }
+                }
+                TabContent::Source(_) => {}
             }
         }
+    }
+
+    /// A reader over the project's FORM scripts as they are on disk now, for the scripts FORM instances refer to and
+    /// the modules scripts use. The project store is not shared with tools, so tools read this snapshot.
+    fn script_reader(&mut self) -> Option<ToolFileReader> {
+        if self.project.is_empty() {
+            return None;
+        }
+        let entries = self.store.list_files(&self.project).ok()?;
+        let mut scripts = std::collections::HashMap::new();
+        for entry in entries.iter().filter(|entry| entry.path.ends_with(".form")) {
+            if let Ok(disk) = self.store.read(&self.project, &entry.path) {
+                scripts.insert(entry.path.clone(), disk.text);
+            }
+        }
+        Some(std::sync::Arc::new(move |path: &str| {
+            scripts.get(path).cloned().ok_or_else(|| format!("{path} is not a script in this project"))
+        }))
+    }
+
+    /// Write the other files a tool asked to save with its document (an instance's edited script), against their disk
+    /// revisions. A file open with unsaved edits in its own tab is left alone.
+    fn save_dependencies(&mut self, documents: Vec<ToolDocument>) -> Result<(), String> {
+        for document in documents {
+            if self.tabs.iter().any(|tab| tab.document.path == document.path && tab.document.dirty()) {
+                return Err(format!("{} has unsaved edits in its own tab; save or close it first.", document.path));
+            }
+            let project = self.project.clone();
+            let written = match self.store.read(&project, &document.path) {
+                Ok(disk) => self.store.save(&project, &document.path, &document.contents, &disk.revision),
+                Err(_) => self.store.create(&project, &document.path, &document.contents),
+            };
+            written.map_err(|error| format!("{}: {error}", document.path))?;
+            if let Some(index) = self.index_of(&document.path) {
+                self.load_content(index, &document.contents);
+            }
+            self.notify_assets(&document.path);
+        }
+        Ok(())
     }
 }

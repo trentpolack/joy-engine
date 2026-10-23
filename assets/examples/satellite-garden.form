@@ -6,12 +6,23 @@ param loops = 3 meta(min=1, max=8, step=1)
 param offset = vector(0, 0, 0) meta(min=-5, max=5, step=0.1)
 param radius = 6 meta(min=2, max=10, step=0.1)
 
-repeat count as i {
-  let t = i/count
-  let a = t*tau*loops
-  let satellite = meshSphere((t*0.55) + 0.25, 16)
-  color(0.95, 0.35 + t*0.45, 0.2 + t*0.4)
-  with userData({kind: "satellite", index: i, orbit: {turns: loops, phase: t}}) {
-    instance(satellite, vector(cos(a)*radius + offset.x, (t - 0.5)*14 + offset.y, sin(a)*radius + offset.z))
-  }
+# ---- Garden.
+# Satellites spiral upward around a column, `loops` times. Along the spiral they grow larger and shift from red
+# toward pale gold.
+let garden = geometry()
+for i in 0..count {
+  const t = i/count
+  const a = t*tau*loops
+  const position = vector(cos(a)*radius + offset.x, (t - 0.5)*14 + offset.y, sin(a)*radius + offset.z)
+  const shade = rgba(0.95, 0.35 + t*0.45, 0.2 + t*0.4, 1)
+  let satellite = color(place(meshSphere((t*0.55) + 0.25, 16), position), shade)
+
+  # Every face records its satellite: its index and its orbit (turns around the column and phase from 0 to 1).
+  addAttribute(satellite, "faces", "kind", "satellite")
+  addAttribute(satellite, "faces", "index", i)
+  addAttribute(satellite, "faces", "orbitTurns", loops)
+  addAttribute(satellite, "faces", "orbitPhase", t)
+  append(garden, satellite)
 }
+
+output("Satellite garden", garden)

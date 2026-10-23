@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The contract between authoring tools (FORM LAB, PARTICLE LAB) and Joy Editor.
+//! The contract between authoring tools (FORM EDITOR, JOYFX EDITOR) and Joy Editor.
 //!
 //! A tool is a [`App`]: run standalone it gets its own window or page through [`run`](joy_app::run) and owns
 //! its file workflow (open, save, export). Hosted in Joy Editor it becomes a tab: the editor owns project files and
@@ -20,11 +20,18 @@ use joy_app::{
 /// A text document a tool opens or saves: a file name with its extension and the file's contents.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ToolDocument {
-    /// File name with extension, such as `tower.formlab`; the extension selects the format.
+    /// File name with extension, such as `tower.forminst`; the extension selects the format.
     pub name: String,
     /// The file's text.
     pub contents: String,
+    /// The document's path relative to the host's [`ToolFileReader`] root (for example `assets/form/tower.forminst`),
+    /// used to resolve files it refers to; empty when the host has no project.
+    pub path: String,
 }
+
+/// Reads a project file for a hosted tool by its path relative to the project root, such as the script a FORM
+/// instance refers to or a module a script uses. Returns the file's text or a short reason it could not be read.
+pub type ToolFileReader = std::sync::Arc<dyn Fn(&str) -> Result<String, String> + Send + Sync>;
 
 /// Where a tool runs.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -43,10 +50,10 @@ pub enum ToolHosting {
 
 /// Implemented by authoring tools so the same tool runs standalone and as a Joy Editor tab.
 pub trait AuthoringTool: App {
-    /// Display name, for example `FORM LAB`.
+    /// Display name, for example `FORM EDITOR`.
     fn tool_name(&self) -> &'static str;
 
-    /// File extensions the tool opens, without dots, for example `["form", "formlab"]`.
+    /// File extensions the tool opens, without dots, for example `["form", "forminst"]`.
     fn document_extensions(&self) -> &'static [&'static str];
 
     /// Replace the working document. A document the tool cannot accept returns an error and leaves the current
@@ -54,8 +61,19 @@ pub trait AuthoringTool: App {
     fn open_document(&mut self, document: ToolDocument) -> Result<(), String>;
 
     /// The contents to write for `name`; the extension picks the format (for example raw script for `.form` and the
-    /// full document for `.formlab`). Fails when the current document cannot be saved, such as an invalid draft.
+    /// instance for `.forminst`). Fails when the current document cannot be saved, such as an invalid draft.
     fn save_document(&mut self, name: &str) -> Result<String, String>;
+
+    /// Other project files the host should write with the next save, by path relative to the project root: for
+    /// example the script a FORM instance refers to, after its source was edited in the instance's tab. Empty by
+    /// default.
+    fn save_dependencies(&self) -> Vec<ToolDocument> {
+        Vec::new()
+    }
+
+    /// Give the tool read access to the host's project files (`None` removes it). Hosts call this before opening a
+    /// document whose [`ToolDocument::path`] is set. Tools that never read other files ignore it.
+    fn set_file_reader(&mut self, _reader: Option<ToolFileReader>) {}
 
     /// Whether the document changed since it was opened or last marked saved.
     fn has_unsaved_changes(&self) -> bool;

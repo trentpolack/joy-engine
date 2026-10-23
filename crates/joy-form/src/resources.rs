@@ -4,21 +4,21 @@
 //! Reusable mesh and material resource values.
 
 use crate::{
-    builder::Builder,
+    builder::{
+        MeshArrays,
+        box_arrays,
+        sphere_arrays,
+    },
     materials::{
+        DEFAULT_MATERIAL_NAME,
         default_material,
         read_materials,
     },
-    value::Budget,
 };
 use joy_core::math::deterministic;
 use serde_json::{
     Value as Json,
     json,
-};
-use std::{
-    cell::RefCell,
-    rc::Rc,
 };
 
 const MAX_VERTICES: usize = 150_000;
@@ -26,15 +26,11 @@ const MAX_INDICES: usize = 180_000 * 3;
 
 /// Create reusable, centered Y-up geometry in script units.
 pub fn mesh_box(width: f64, height: f64, depth: f64) -> Result<Json, String> {
-    let mut builder = Builder::new(None, Rc::new(RefCell::new(Budget::default())))?;
-    builder.box_geometry(&[0.0, 0.0, 0.0, width, height, depth])?;
-    Ok(from_builder("Box", builder))
+    Ok(mesh_json("Box", &box_arrays(width, height, depth)?))
 }
 
 pub fn mesh_sphere(radius: f64, segments: f64) -> Result<Json, String> {
-    let mut builder = Builder::new(None, Rc::new(RefCell::new(Budget::default())))?;
-    builder.sphere(&[0.0, 0.0, 0.0, radius, segments])?;
-    Ok(from_builder("Sphere", builder))
+    Ok(mesh_json("Sphere", &sphere_arrays(radius, segments)?))
 }
 
 /// Color is linear RGBA; metallic and roughness are normalized factors.
@@ -44,7 +40,9 @@ pub fn material_pbr(color: &[f64], metallic: f64, roughness: f64) -> Result<Json
     material["metallic"] = json!(metallic);
     material["roughness"] = json!(roughness);
     material["alphaMode"] = json!(if color.get(3).is_some_and(|alpha| *alpha < 1.0) { "BLEND" } else { "OPAQUE" });
+    // The record is validated under its palette name; report problems against the call's own arguments instead.
     read_material_value(&json!({"kind":"material", "material":material}))
+        .map_err(|message| message.replacen(&format!("{DEFAULT_MATERIAL_NAME}."), "materialPbr ", 1))
 }
 
 /// Validate and own borrowed mesh arrays. Zero normals request flat shading.
@@ -128,10 +126,22 @@ pub fn transform_mesh(mesh: &Json, translation: &[f64], rotation: &[f64], scale:
     read_mesh(&result)
 }
 
-fn from_builder(name: &str, builder: Builder) -> Json {
-    let data = builder.data;
-    json!({"kind":"mesh", "name":name, "positions":data.positions,
-        "normals":data.normals, "uvs":data.uvs, "indices":data.triangles})
+fn mesh_json(name: &str, mesh: &MeshArrays) -> Json {
+    json!({"kind":"mesh", "name":name, "positions":mesh.positions,
+        "normals":mesh.normals, "uvs":mesh.uvs, "indices":mesh.indices})
+}
+
+/// A validated mesh resource's arrays.
+pub fn mesh_arrays(mesh: &Json) -> MeshArrays {
+    let numbers = |name: &str| -> Vec<f64> {
+        mesh[name].as_array().map(|values| values.iter().filter_map(Json::as_f64).collect()).unwrap_or_default()
+    };
+    MeshArrays {
+        positions: numbers("positions"),
+        normals: numbers("normals"),
+        uvs: numbers("uvs"),
+        indices: numbers("indices").into_iter().map(|index| index as u32).collect(),
+    }
 }
 
 fn numbers(value: &Json, limit: usize, name: &str) -> Result<Vec<f64>, String> {

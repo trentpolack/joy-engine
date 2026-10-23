@@ -16,15 +16,11 @@ use joy_engine::gameplay::{
     parse_object,
 };
 use joy_engine::particles::parse_particle_effect;
-use joy_engine::serde_json::{
-    self,
-    Value,
-    json,
-};
+use joy_engine::serde_json::json;
 
 #[test]
 fn new_workspace_assets_open_in_their_editor_with_immediately_usable_content() {
-    for extension in ["form", "formlab", "joyfx", "joyobject", "joylevel"] {
+    for extension in ["form", "forminst", "joyfx", "joyobject", "joylevel"] {
         let path = format!("assets/new.{extension}");
         assert!(is_supported_asset_path(&path));
         let text = create_asset_text(&path).expect("starter content");
@@ -33,11 +29,12 @@ fn new_workspace_assets_open_in_their_editor_with_immediately_usable_content() {
                 assert!(text.starts_with("project meta(name=\"new\")"));
                 assert!(!joy_engine::form::compile(&text, &json!({}), None).unwrap().triangles.is_empty());
             }
-            "formlab" => {
-                let document: Value = serde_json::from_str(&text).unwrap();
-                assert_eq!(document["version"], 1);
-                assert_eq!(document["overrides"], json!({}));
-                let source = document["source"].as_str().unwrap();
+            "forminst" => {
+                let instance = joy_engine::form::FormInstance::read(&text).unwrap();
+                assert!(instance.overrides.is_empty());
+                let joy_engine::form::InstanceScript::Packed(source) = &instance.script else {
+                    panic!("new instances pack their starter script");
+                };
                 assert!(!joy_engine::form::compile(source, &json!({}), None).unwrap().triangles.is_empty());
             }
             "joyfx" => assert_eq!(parse_particle_effect(&text).unwrap().emitters().len(), 1),
@@ -49,7 +46,7 @@ fn new_workspace_assets_open_in_their_editor_with_immediately_usable_content() {
         }
         assert!(text.ends_with('\n'));
         let expected = match extension {
-            "joyfx" | "form" | "formlab" => AssetEditor::Tool,
+            "joyfx" | "form" | "forminst" => AssetEditor::Tool,
             _ => AssetEditor::Level,
         };
         assert_eq!(asset_editor(&path), expected);
@@ -61,7 +58,7 @@ fn new_workspace_assets_open_in_their_editor_with_immediately_usable_content() {
 
 #[test]
 fn new_asset_names_use_safe_segments_and_add_their_extension() {
-    assert_eq!(new_asset_path("tower", "formlab").unwrap(), "assets/tower.formlab");
+    assert_eq!(new_asset_path("tower", "forminst").unwrap(), "assets/tower.forminst");
     assert_eq!(new_asset_path("levels/track-1.joylevel", "joylevel").unwrap(), "assets/levels/track-1.joylevel");
     assert_eq!(new_asset_path("  spaced_name ", "joyfx").unwrap(), "assets/spaced_name.joyfx");
     assert_eq!(new_asset_path("", "joyfx").unwrap_err(), "Name the new asset before creating it.");

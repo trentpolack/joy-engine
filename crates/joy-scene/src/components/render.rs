@@ -36,7 +36,7 @@ use super::{
 };
 
 /// File extensions accepted for `render.asset`.
-const MESH_EXTENSIONS: [&str; 2] = [".form", ".formlab"];
+const MESH_EXTENSIONS: [&str; 2] = [".form", ".forminst"];
 
 /// Values assumed for omitted `render` fields. Size is full dimensions in meters before entity scale; colors are linear
 /// and documents store them as `[red, green, blue]`. FORM meshes keep their authored colors (a white tint) unless a color
@@ -61,12 +61,14 @@ pub const RENDER_COMPONENT_DEFAULTS: RenderComponentDefaults = RenderComponentDe
 /// What a `render` component draws.
 #[derive(Clone, Debug, PartialEq)]
 pub enum RenderSource {
-    /// A compiled FORM or FORM LAB mesh.
+    /// A compiled FORM script or FORM instance mesh.
     Mesh {
-        /// Validated `.form` or `.formlab` asset path.
+        /// Validated `.form` or `.forminst` asset path.
         asset: String,
         /// FORM parameter overrides; omitted parameters use the script defaults.
         parameters: JsonRecord,
+        /// A FORM instance's named variant, applied beneath `parameters`.
+        variant: Option<String>,
     },
     /// A unit primitive scaled by `size` (only boxes and spheres are drawable).
     Primitive(PrimitiveShape),
@@ -88,9 +90,10 @@ pub struct RenderComponent {
 impl RenderComponent {
     /// Interpret an authored `render` record.
     ///
-    /// An assigned `asset` (any value but absent, null, or an empty path) must be a safe `.form`/`.formlab` path, and
-    /// its `parameters`, when present, an object; these are the only failures. Malformed `size` and `color` fall back
-    /// to defaults, and an unsupported shape makes the component hidden rather than invalid.
+    /// An assigned `asset` (any value but absent, null, or an empty path) must be a safe `.form`/`.forminst` path, its
+    /// `parameters`, when present, an object, and its `variant`, when present, text; these are the only failures.
+    /// Malformed `size` and `color` fall back to defaults, and an unsupported shape makes the component hidden rather
+    /// than invalid.
     pub fn read(record: &JsonRecord) -> Result<Self, ComponentError> {
         let source = if names_asset(record.get("asset")) {
             let Some(Value::String(path)) = record.get("asset") else {
@@ -102,9 +105,16 @@ impl RenderComponent {
                 Some(Value::Object(parameters)) => parameters.clone(),
                 Some(_) => return Err(ComponentError::InvalidParameters),
             };
+            let variant = match record.get("variant") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(name)) if name.trim().is_empty() => None,
+                Some(Value::String(name)) => Some(name.trim().to_owned()),
+                Some(_) => return Err(ComponentError::InvalidVariant),
+            };
             RenderSource::Mesh {
                 asset,
                 parameters,
+                variant,
             }
         } else {
             match record.get("shape").and_then(Value::as_str).and_then(PrimitiveShape::parse) {
@@ -145,9 +155,14 @@ pub(super) fn render_schema() -> ComponentSchema {
         fields: vec![
             ComponentFieldSchema {
                 label: text("FORM mesh"),
-                description: text("Replaces the primitive shape with a compiled FORM or FORM LAB mesh."),
-                asset_kinds: strings(&[component_asset_kind::FORM, component_asset_kind::FORM_LAB]),
+                description: text("Replaces the primitive shape with a compiled FORM script or FORM instance mesh."),
+                asset_kinds: strings(&[component_asset_kind::FORM, component_asset_kind::FORM_INSTANCE]),
                 ..ComponentFieldSchema::new("asset", ComponentFieldKind::Asset)
+            },
+            ComponentFieldSchema {
+                label: text("Variant"),
+                description: text("A FORM instance's named variant, applied beneath the parameter overrides."),
+                ..ComponentFieldSchema::new("variant", ComponentFieldKind::Text)
             },
             ComponentFieldSchema {
                 description: text("FORM parameter overrides; omitted parameters use the script defaults."),

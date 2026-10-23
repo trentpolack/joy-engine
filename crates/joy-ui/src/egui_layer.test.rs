@@ -53,3 +53,18 @@ fn presses_are_claimed_only_over_interactable_areas() {
     assert!(!claims_press(&context, egui::pos2(205.0, 14.0)), "information panels let presses through");
     assert!(!claims_press(&context, egui::pos2(400.0, 300.0)), "the scene gets presses elsewhere");
 }
+
+#[test]
+fn browser_shortcuts_neither_type_letters_nor_block_the_clipboard() {
+    // Cmd+Z, Ctrl+S, and similar shortcuts must not also insert their letter into a focused text field.
+    assert!(browser_types_text(browser_modifiers(false, false, true, false, true)));
+    assert!(!browser_types_text(browser_modifiers(false, false, false, true, true)));
+    assert!(!browser_types_text(browser_modifiers(false, true, false, false, false)));
+
+    // Copy, cut, and paste use the platform's shortcut key; the browser must see them to fire clipboard events.
+    assert!(browser_clipboard_shortcut("v", "KeyV", false, true, false, true));
+    assert!(browser_clipboard_shortcut("с", "KeyC", true, false, false, false), "non-Latin layouts match the key");
+    assert!(!browser_clipboard_shortcut("v", "KeyV", true, false, false, true), "Ctrl+V is not paste on a Mac");
+    assert!(!browser_clipboard_shortcut("z", "KeyZ", false, true, false, true));
+    assert!(!browser_clipboard_shortcut("c", "KeyC", true, false, true, false));
+}

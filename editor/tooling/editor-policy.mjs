@@ -8,12 +8,16 @@ import path from 'node:path';
 // Workspace-level settings file; its directory is the authoring workspace root.
 export const WORKSPACE_CONFIG_FILE = 'joy.joyconfig';
 
-const productionDefaults = {joyEditor: false, formLab: true, particleLab: true};
+const productionDefaults = {joyEditor: false, formEditor: true, joyfxEditor: true};
 const editorKeys = {
   'joy-editor': 'joyEditor',
-  'form-lab': 'formLab',
-  'particle-lab': 'particleLab'
+  'form-editor': 'formEditor',
+  'joyfx-editor': 'joyfxEditor'
 };
+
+// Settings keys from before FORM LAB and PARTICLE LAB became FORM EDITOR and JOYFX EDITOR. Existing
+// workspace configs keep their production flags; the current key wins when a config holds both.
+const legacyEditorKeys = {formLab: 'formEditor', particleLab: 'joyfxEditor'};
 
 /**
  * Find the nearest directory at or above startDirectory that holds joy.joyconfig.
@@ -39,12 +43,12 @@ export function findWorkspaceRoot(startDirectory) {
 
 /**
  * Read build-time availability. Development always enables all editors; the
- * workspace requires both labs regardless of their individual production flags.
+ * workspace requires both tool editors regardless of their individual production flags.
  * Missing settings use defaults, but malformed settings fail the build.
  * @param {string | null} [rootDirectory] Workspace containing joy.joyconfig; defaults to
  * the nearest one above the current directory, and null uses the defaults.
  * @param {boolean} [development] Whether this is a development session.
- * @returns {Promise<{joyEditor:boolean, formLab:boolean, particleLab:boolean}>}
+ * @returns {Promise<{joyEditor:boolean, formEditor:boolean, joyfxEditor:boolean}>}
  */
 export async function readEditorPolicy(rootDirectory = findWorkspaceRoot(process.cwd()), development = false) {
   let config = {};
@@ -61,30 +65,35 @@ export async function readEditorPolicy(rootDirectory = findWorkspaceRoot(process
   const editors = config.editors ?? {};
   assertRecord(editors, 'editors');
   const policy = {...productionDefaults};
-  for(const key of Object.keys(editors)) {
+  for(const name of Object.keys(editors)) {
+    const key = legacyEditorKeys[name] ?? name;
     if(!Object.hasOwn(productionDefaults, key)) {
-      throw new Error(`Unknown editor setting: editors.${key}`);
+      throw new Error(`Unknown editor setting: editors.${name}`);
     }
-    const settings = editors[key];
-    assertRecord(settings, `editors.${key}`);
+    const settings = editors[name];
+    assertRecord(settings, `editors.${name}`);
     for(const setting of Object.keys(settings)) {
       if(setting !== 'productionEnabled') {
-        throw new Error(`Unknown editor setting: editors.${key}.${setting}`);
+        throw new Error(`Unknown editor setting: editors.${name}.${setting}`);
       }
+    }
+    const supersededByCurrentKey = (key !== name) && Object.hasOwn(editors, key);
+    if(supersededByCurrentKey) {
+      continue;
     }
     if(Object.hasOwn(settings, 'productionEnabled')) {
       if(typeof settings.productionEnabled !== 'boolean') {
-        throw new Error(`editors.${key}.productionEnabled must be a boolean.`);
+        throw new Error(`editors.${name}.productionEnabled must be a boolean.`);
       }
       policy[key] = settings.productionEnabled;
     }
   }
   if(development) {
-    return {joyEditor: true, formLab: true, particleLab: true};
+    return {joyEditor: true, formEditor: true, joyfxEditor: true};
   }
   if(policy.joyEditor) {
-    policy.formLab = true;
-    policy.particleLab = true;
+    policy.formEditor = true;
+    policy.joyfxEditor = true;
   }
   return policy;
 }

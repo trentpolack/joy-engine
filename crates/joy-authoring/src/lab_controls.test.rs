@@ -179,6 +179,65 @@ fn slider_presses_and_drags_are_one_gesture_committed_on_release() {
 }
 
 #[test]
+fn sliders_snap_to_hundredths_and_respect_explicit_steps() {
+    fn click_slider(minimum: f64, maximum: f64, step: Option<f64>, fraction: f32) -> f64 {
+        let context = egui::Context::default();
+        let mut drafts = NumericDrafts::default();
+        let mut value = minimum;
+        let frame = |events: Vec<egui::Event>, value: &mut f64, drafts: &mut NumericDrafts| {
+            let mut slider = Rect::NOTHING;
+            pass(&context, events, |ui| {
+                ui.set_width(300.0);
+                let mut control = ScalarControl::new("value", value).range(minimum, maximum);
+                if let Some(step) = step {
+                    control = control.step(step);
+                }
+                let response = control.show(ui, drafts);
+                slider = response.response.rect;
+                slider.max.x -= NUMBER_FIELD_WIDTH + ui.spacing().item_spacing.x;
+            });
+            slider
+        };
+        let rect = frame(vec![], &mut value, &mut drafts);
+        let rail = rect.shrink2(vec2(6.0, 0.0));
+        let position = pos2(rail.left() + (rail.width() * fraction), rail.center().y);
+        frame(vec![egui::Event::PointerMoved(position)], &mut value, &mut drafts);
+        for pressed in [true, false] {
+            frame(
+                vec![egui::Event::PointerButton {
+                    pos: position,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                }],
+                &mut value,
+                &mut drafts,
+            );
+        }
+        frame(vec![], &mut value, &mut drafts);
+        value
+    }
+
+    for (minimum, maximum, step, fraction, expected) in [
+        (0.0, 1.0, None, 0.35, "0.35"),
+        (0.0, 1.0, None, 0.57, "0.57"),
+        (0.0, 1.0, None, 0.7, "0.7"),
+        (0.005, 1.005, None, 0.35, "0.355"),
+        (-0.005, 0.995, None, 0.57, "0.565"),
+        (0.0, 1.0, Some(0.25), 0.37, "0.25"),
+        (0.005, 1.005, Some(0.25), 0.51, "0.505"),
+        (0.0, 0.1, Some(0.001), 0.57, "0.057"),
+        (0.0, 1e-13, Some(1e-15), 0.57, "5.7e-14"),
+        (1.0, 1.000_000_000_001, Some(1e-14), 0.35, "1.00000000000035"),
+        (0.123_456_789_012_345_67, 1.123_456_789_012_345_7, None, 0.0, "0.12345678901234566"),
+        (0.03, 0.9, Some(0.25), 1.0, "0.9"),
+    ] {
+        let value = click_slider(minimum, maximum, step, fraction);
+        assert_eq!(format_number(value), expected, "range {minimum}..={maximum}, step {step:?}, position {fraction}");
+    }
+}
+
+#[test]
 fn displaying_controls_never_rounds_or_clamps_authored_values() {
     let context = egui::Context::default();
     let mut drafts = NumericDrafts::default();

@@ -7,15 +7,18 @@
 //! [`LevelScene`] presents authored levels and runtime entities, [`AssetScene`] adds FORM meshes and per-entity particle
 //! effects, [`PostProcessVolumes`] resolves `postProcess` volumes into the renderer's post-processing at a view point,
 //! the presentation components' readers and schemas live in [`components`](RenderComponent) beside them, and the FORM
-//! adapters ([`compile_form_mesh`], [`form_mesh_asset`], [`FormAssetLibrary`]) are the only path
-//! from FORM output to the screen, and [`environment_lighting`] lights frames from the environment simulation, so games, tools, and previews present the same content the same way. Everything here
-//! draws through `joy-renderer`'s retained [`RenderScene`](joy_renderer::RenderScene); `joy_engine::rendering` combines
-//! both crates for games and tools.
+//! adapters ([`compile_form_mesh`], [`form_mesh_asset`], [`FormAssetLibrary`]) are the only path from FORM output to
+//! the screen. [`FormPlacement`]s carry the points a FORM asset tags for its host, and [`placement_entities`] turns
+//! their `object` templates into level entities, so levels can be built from procedural assets. [`environment_lighting`]
+//! lights frames from the environment simulation, so games, tools, and previews present the same content the same way.
+//! Everything here draws through `joy-renderer`'s retained [`RenderScene`](joy_renderer::RenderScene);
+//! `joy_engine::rendering` combines both crates for games and tools.
 
 mod asset_scene;
 mod components;
 mod environment;
 mod form_assets;
+mod form_placements;
 mod level_scene;
 mod post_process_volumes;
 
@@ -45,6 +48,7 @@ pub use components::{
 };
 pub use environment::environment_lighting;
 pub use form_assets::{
+    FormAsset,
     FormAssetLibrary,
     FormMeshError,
     FormTextureCache,
@@ -53,6 +57,19 @@ pub use form_assets::{
     form_mesh_asset_with_textures,
     primitive_box,
     primitive_sphere,
+};
+pub use form_placements::{
+    FormPlacement,
+    MAXIMUM_OBJECT_PLACEMENTS,
+    PLACEMENT_COMPONENT,
+    PLACEMENT_KIND,
+    PLACEMENT_OBJECT,
+    PLACEMENT_ROTATION,
+    PLACEMENT_SCALE,
+    PlacementLimitError,
+    form_placements,
+    placement_entities,
+    placement_entity_id,
 };
 pub use level_scene::{
     LevelEntity,

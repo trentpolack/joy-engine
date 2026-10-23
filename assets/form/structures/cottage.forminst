@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "name": "cottage",
+  "form": "building.form",
+  "overrides": {
+    "width": 8,
+    "depth": 6,
+    "height": 3.5,
+    "floors": 1,
+    "roof_shape": 1,
+    "roof_rise": 2,
+    "random_seed": 42
+  }
+}

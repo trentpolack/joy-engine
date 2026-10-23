@@ -78,7 +78,7 @@ impl App for StubTool {
         let button = egui::Area::new(egui::Id::new("stub-tool"))
             .fixed_pos(area.min + egui::vec2(20.0, 20.0))
             .show(context, |ui| {
-                ui.label(format!("STUB LAB · {text}"));
+                ui.label(format!("STUB TOOL · {text}"));
                 ui.button("Append")
             })
             .inner;
@@ -91,11 +91,11 @@ impl App for StubTool {
 
 impl AuthoringTool for StubTool {
     fn tool_name(&self) -> &'static str {
-        "STUB LAB"
+        "STUB TOOL"
     }
 
     fn document_extensions(&self) -> &'static [&'static str] {
-        &["form", "formlab", "joyfx"]
+        &["form", "forminst", "joyfx"]
     }
 
     fn open_document(&mut self, document: ToolDocument) -> Result<(), String> {
@@ -158,9 +158,12 @@ pub fn stub_tools() -> (ToolRegistry, StubInstances) {
 fn workspace_with_tools() -> TempFolder {
     let workspace = TempFolder::new("hosting");
     workspace.project("demo", "Demo", &[]);
-    workspace.write("projects/demo/assets/tower.formlab", "{\"version\": 1, \"source\": \"box(0, 0, 0, 1, 1, 1)\"}\n");
+    workspace.write(
+        "projects/demo/assets/tower.forminst",
+        "{\"version\": 2, \"name\": \"Tower\", \"source\": \"output(\\\"Tower\\\", box(1, 1, 1))\"}\n",
+    );
     workspace.write("projects/demo/assets/spark.joyfx", "{\"name\": \"spark\"}\n");
-    workspace.write("projects/demo/assets/broken.formlab", "INVALID\n");
+    workspace.write("projects/demo/assets/broken.forminst", "INVALID\n");
     workspace.write("projects/demo/assets/track.joylevel", &level_text("Track"));
     workspace
 }
@@ -173,14 +176,14 @@ fn hosted_tools_start_open_draw_in_the_tab_and_suspend_while_inactive() {
     let workspace = workspace_with_tools();
     let (tools, instances) = stub_tools();
     let mut driver = Driver::start(shell, editor(&workspace.root, None, tools, Some("demo")));
-    assert_eq!(driver.editor.workspace().tool_names(), ["STUB LAB"]);
+    assert_eq!(driver.editor.workspace().tool_names(), ["STUB TOOL"]);
 
-    driver.click("row:assets/tower.formlab");
+    driver.click("row:assets/tower.forminst");
     let tower = instances.borrow().last().cloned().unwrap();
     {
         let state = tower.borrow();
         assert_eq!(state.starts, 1, "the tool started once with the shared renderer");
-        assert_eq!(state.opened, ["tower.formlab"]);
+        assert_eq!(state.opened, ["tower.forminst"]);
         assert!(state.activations >= 1, "activation re-applies renderer settings");
         assert!(state.frames > 0 && state.renders > 0 && state.uis > 0);
         let area = state.hosting.expect("hosted area");
@@ -197,7 +200,7 @@ fn hosted_tools_start_open_draw_in_the_tab_and_suspend_while_inactive() {
     assert_eq!(tower.borrow().frames, suspended, "inactive tabs receive no phases");
     assert!(spark.borrow().frames >= 5);
 
-    driver.click("tab:assets/tower.formlab");
+    driver.click("tab:assets/tower.forminst");
     assert!(tower.borrow().activations > activations, "returning to a tab activates it again");
     assert!(tower.borrow().frames > suspended);
     assert_eq!(tower.borrow().starts, 1, "tabs keep their tool and state");
@@ -212,7 +215,7 @@ fn hosted_edits_save_through_the_workspace_and_rejected_documents_open_for_repai
     let workspace = workspace_with_tools();
     let (tools, instances) = stub_tools();
     let mut driver = Driver::start(shell, editor(&workspace.root, None, tools, Some("demo")));
-    driver.click("row:assets/tower.formlab");
+    driver.click("row:assets/tower.forminst");
     let tower = instances.borrow().last().cloned().unwrap();
 
     // The tool's own button, inside its tab area, receives the click.
@@ -224,26 +227,26 @@ fn hosted_edits_save_through_the_workspace_and_rejected_documents_open_for_repai
     assert!(driver.editor.workspace().active_tab().unwrap().dirty());
     driver.press("KeyS", egui::Modifiers::COMMAND);
     assert!(
-        workspace.read("projects/demo/assets/tower.formlab").ends_with(" edited"),
+        workspace.read("projects/demo/assets/tower.forminst").ends_with(" edited"),
         "Save writes the tool's document"
     );
     assert!(!driver.editor.workspace().active_tab().unwrap().dirty(), "Save marks the tool saved");
-    assert_eq!(driver.status(), "Saved assets/tower.formlab");
+    assert_eq!(driver.status(), "Saved assets/tower.forminst");
 
     // A document the tool rejects opens as editable source; saving a fix reopens the tool.
-    driver.click("row:assets/broken.formlab");
-    assert!(driver.has("repair:assets/broken.formlab"), "{:?}", driver.editor.view().controls.names());
+    driver.click("row:assets/broken.forminst");
+    assert!(driver.has("repair:assets/broken.forminst"), "{:?}", driver.editor.view().controls.names());
     assert!(driver.status().contains("Stub cannot read this document."));
     {
-        let tab = driver.editor.workspace_mut().tab_mut("assets/broken.formlab").unwrap();
+        let tab = driver.editor.workspace_mut().tab_mut("assets/broken.forminst").unwrap();
         let TabContent::Source(view) = &mut tab.content else { panic!("repair view") };
         view.text = "FIXED\n".to_owned();
         tab.document.edit("FIXED\n");
     }
     driver.press("KeyS", egui::Modifiers::COMMAND);
     driver.frames(2);
-    assert_eq!(workspace.read("projects/demo/assets/broken.formlab"), "FIXED\n");
-    let tab = driver.editor.workspace().tab("assets/broken.formlab").unwrap();
+    assert_eq!(workspace.read("projects/demo/assets/broken.forminst"), "FIXED\n");
+    let tab = driver.editor.workspace().tab("assets/broken.forminst").unwrap();
     assert!(matches!(tab.content, TabContent::Tool(_)), "the repaired document reopens in its tool");
     assert_eq!(instances.borrow().last().unwrap().borrow().text, "FIXED\n");
 }
@@ -264,17 +267,17 @@ fn formats_without_a_tool_open_as_editable_source() {
 }
 
 #[test]
-fn form_lab_opens_form_documents_as_a_hosted_tab() {
+fn form_editor_opens_form_documents_as_a_hosted_tab() {
     let Some(shell) = ui_shell() else {
         return;
     };
-    let workspace = TempFolder::new("form-lab");
+    let workspace = TempFolder::new("form-editor");
     workspace.project("demo", "Demo", &[]);
-    let script = "project meta(name=\"Pillar\")\nparam height = 2 meta(min=0.5, max=5, step=0.1)\nbox(0, height*0.5, 0, 1, height, 1)\n";
+    let script = "project meta(name=\"Pillar\")\nparam height = 2 meta(min=0.5, max=5, step=0.1)\noutput(\"Pillar\", translate(box(1, height, 1), vector(0, height*0.5, 0)))\n";
     workspace.write("projects/demo/assets/pillar.form", script);
     let mut tools = ToolRegistry::new();
     tools.register(|| {
-        Box::new(form_lab::FormLab::with_storage(
+        Box::new(form_editor::FormEditor::with_storage(
             ToolHosting::Hosted {
                 area: egui::Rect::NOTHING,
             },
@@ -282,47 +285,54 @@ fn form_lab_opens_form_documents_as_a_hosted_tab() {
         ))
     });
     let mut driver = Driver::start(shell, editor(&workspace.root, None, tools, Some("demo")));
-    assert_eq!(driver.editor.workspace().tool_names(), ["FORM LAB"]);
+    assert_eq!(driver.editor.workspace().tool_names(), ["FORM EDITOR"]);
 
     driver.click("row:assets/pillar.form");
     driver.frames(10);
     let document = driver.editor.view().document_rect;
     let tab = driver.editor.workspace().active_tab().unwrap();
-    let TabContent::Tool(tool) = &tab.content else { panic!("FORM LAB tab, found a repair view: {}", driver.status()) };
-    assert_eq!(tool.tool_name(), "FORM LAB");
+    let TabContent::Tool(tool) = &tab.content else {
+        panic!("FORM EDITOR tab, found a repair view: {}", driver.status())
+    };
+    assert_eq!(tool.tool_name(), "FORM EDITOR");
     assert!(tool.started());
-    assert_eq!(tool.area(), Some(document), "FORM LAB draws in the tab area");
+    assert_eq!(tool.area(), Some(document), "FORM EDITOR draws in the tab area");
     assert!(!tab.dirty(), "opening a document leaves it clean");
-    driver.capture("form-lab-tab");
+    driver.capture("form-editor-tab");
 
-    // Saving writes FORM LAB's own serialization of the document back through the workspace.
+    // Saving writes FORM EDITOR's own serialization of the document back through the workspace.
     driver.press("KeyS", egui::Modifiers::COMMAND);
-    assert!(workspace.read("projects/demo/assets/pillar.form").contains("box(0, height*0.5, 0, 1, height, 1)"));
+    assert!(
+        workspace
+            .read("projects/demo/assets/pillar.form")
+            .contains("output(\"Pillar\", translate(box(1, height, 1), vector(0, height*0.5, 0)))")
+    );
     driver.click("close:assets/pillar.form");
     assert!(driver.editor.workspace().tabs().is_empty());
 }
 
 #[test]
-fn particle_lab_opens_effects_as_a_hosted_tab_beside_form_lab() {
+fn joyfx_editor_opens_effects_as_a_hosted_tab_beside_form_editor() {
     let Some(shell) = ui_shell() else {
         return;
     };
-    let workspace = TempFolder::new("particle-lab");
+    let workspace = TempFolder::new("joyfx-editor");
     workspace.project("demo", "Demo", &[]);
     workspace.write("projects/demo/assets/spark.joyfx", &crate::level_editor::spark_effect());
-    workspace.write("projects/demo/assets/pillar.form", "box(0, 0.5, 0, 1, 1, 1)\n");
+    workspace
+        .write("projects/demo/assets/pillar.form", "output(\"Pillar\", translate(box(1, 1, 1), vector(0, 0.5, 0)))\n");
     let mut tools = ToolRegistry::new();
     tools.register(|| {
-        Box::new(form_lab::FormLab::with_storage(
+        Box::new(form_editor::FormEditor::with_storage(
             ToolHosting::Hosted {
                 area: egui::Rect::NOTHING,
             },
             None,
         ))
     });
-    tools.register(|| Box::new(particle_lab::ParticleLabTool::with_storage(None)));
+    tools.register(|| Box::new(joyfx_editor::JoyfxEditorTool::with_storage(None)));
     let mut driver = Driver::start(shell, editor(&workspace.root, None, tools, Some("demo")));
-    assert_eq!(driver.editor.workspace().tool_names(), ["FORM LAB", "PARTICLE LAB"]);
+    assert_eq!(driver.editor.workspace().tool_names(), ["FORM EDITOR", "JOYFX EDITOR"]);
 
     driver.click("row:assets/spark.joyfx");
     driver.frames(10);
@@ -330,23 +340,23 @@ fn particle_lab_opens_effects_as_a_hosted_tab_beside_form_lab() {
     {
         let tab = driver.editor.workspace().active_tab().unwrap();
         let TabContent::Tool(tool) = &tab.content else {
-            panic!("PARTICLE LAB tab, found a repair view: {}", driver.status())
+            panic!("JOYFX EDITOR tab, found a repair view: {}", driver.status())
         };
-        assert_eq!(tool.tool_name(), "PARTICLE LAB");
-        assert!(tool.started() && tool.area() == Some(document), "PARTICLE LAB draws in the tab area");
+        assert_eq!(tool.tool_name(), "JOYFX EDITOR");
+        assert!(tool.started() && tool.area() == Some(document), "JOYFX EDITOR draws in the tab area");
         assert!(!tab.dirty(), "opening an effect leaves it clean");
     }
-    driver.capture("particle-lab-tab");
+    driver.capture("joyfx-editor-tab");
 
-    // Both labs keep their own tabs; switching suspends one and resumes the other.
+    // Both tool editors keep their own tabs; switching suspends one and resumes the other.
     driver.click("row:assets/pillar.form");
     driver.frames(4);
     assert_eq!(driver.editor.workspace().tabs().len(), 2);
     driver.click("tab:assets/spark.joyfx");
     driver.frames(2);
     let tab = driver.editor.workspace().active_tab().unwrap();
-    assert!(matches!(&tab.content, TabContent::Tool(tool) if tool.tool_name() == "PARTICLE LAB"));
+    assert!(matches!(&tab.content, TabContent::Tool(tool) if tool.tool_name() == "JOYFX EDITOR"));
     driver.press("KeyS", egui::Modifiers::COMMAND);
     let saved = workspace.read("projects/demo/assets/spark.joyfx");
-    assert!(joy_engine::particles::parse_particle_effect(&saved).is_ok(), "PARTICLE LAB saves a valid effect: {saved}");
+    assert!(joy_engine::particles::parse_particle_effect(&saved).is_ok(), "JOYFX EDITOR saves a valid effect: {saved}");
 }

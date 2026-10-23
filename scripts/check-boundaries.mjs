@@ -63,7 +63,7 @@ function checkEngineCrateDependencies() {
 }
 
 /**
- * Keep the workspace's apps (Joy Editor and the labs) on the public API: their manifests may name the facade but no
+ * Keep the workspace's apps (Joy Editor and the tool editors) on the public API: their manifests may name the facade but no
  * engine crate or backend crate, so `joy_engine::physics` and `joy_engine::egui` are the only paths their source has.
  */
 function checkAppManifests() {

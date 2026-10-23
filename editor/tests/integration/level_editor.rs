@@ -295,7 +295,7 @@ fn schema_driven_properties_add_fields_dim_inactive_fields_and_show_issues() {
 
 #[test]
 fn asset_selectors_keep_missing_references_and_expose_parameter_defaults() {
-    let form = "project meta(name=\"Pillar\")\nparam height = 2 meta(min=0.5, max=5, step=0.1)\nbox(0, height*0.5, 0, 1, height, 1)\n";
+    let form = "project meta(name=\"Pillar\")\nparam height = 2 meta(min=0.5, max=5, step=0.1)\noutput(\"Pillar\", translate(box(1, height, 1), vector(0, height*0.5, 0)))\n";
     let mut access =
         MemoryAccess::default().with("assets/pillar.form", form).with("assets/spark.joyfx", &spark_effect());
     let mut level = editor();

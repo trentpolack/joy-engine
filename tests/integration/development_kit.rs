@@ -44,7 +44,7 @@ use joy_engine::{
 const WIDTH: u32 = 1100;
 const HEIGHT: u32 = 520;
 
-/// Kit widgets in the three-pane lab layout.
+/// Kit widgets in the three-pane tool editor layout.
 struct KitTool {
     layout: PanelLayout,
     editor: ScriptEditor,
@@ -96,7 +96,7 @@ impl App for KitTool {
     }
 
     fn ui(&mut self, context: &egui::Context, _frame: &mut Frame<'_>) {
-        theme::apply_authoring(context);
+        theme::apply_editor(context);
         egui::Area::new(egui::Id::new("kit-root")).fixed_pos(egui::Pos2::ZERO).show(context, |ui| {
             let area = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(WIDTH as f32, HEIGHT as f32));
             let panes = self.layout.panes(area);
@@ -104,7 +104,7 @@ impl App for KitTool {
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                     components::panel_frame().show(ui, |ui| {
                         ui.set_min_size(rect.size() - egui::vec2(20.0, 20.0));
-                        components::panel_heading(ui, "01", "Compose");
+                        components::panel_heading(ui, "Compose");
                         let response = self.editor.show(ui, &mut self.script);
                         components::guidance(ui, response.status_text());
                     });
@@ -114,7 +114,7 @@ impl App for KitTool {
                 ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                     components::panel_frame().show(ui, |ui| {
                         ui.set_min_size(rect.size() - egui::vec2(20.0, 20.0));
-                        components::panel_heading(ui, "03", "Effect Parameters");
+                        components::panel_heading(ui, "Effect Parameters");
                         let mut committed = false;
                         components::field_title(ui, "power");
                         let response = ScalarControl::new("power", &mut self.power)
@@ -229,7 +229,7 @@ fn kit_widgets_paint_and_respond_to_synthetic_input() {
     };
     // The right panel paints the panel fill over the scene.
     let panel = pixel(WIDTH - 20, HEIGHT - 20);
-    let expected = theme::tokens::PANEL;
+    let expected = theme::colors::PANEL;
     assert!(
         panel
             .iter()

@@ -6,12 +6,13 @@
 //! The editor embeds tools in process through `joy_engine::development::AuthoringTool`: a [`ToolTab`]
 //! owns one tool instance, starts it with the shared renderer the first time a frame can provide one, then hands it the
 //! document; captures call `save_document`, saves call `mark_saved`, and the workspace drives phases only for the
-//! active tab, so inactive previews suspend. [`ToolRegistry`] maps extensions to tool factories (FORM LAB for `.form`
-//! and `.formlab`, PARTICLE LAB for `.joyfx`); tests register their own tools.
+//! active tab, so inactive previews suspend. [`ToolRegistry`] maps extensions to tool factories (FORM EDITOR for `.form`
+//! and `.forminst`, JOYFX EDITOR for `.joyfx`); tests register their own tools.
 
 use joy_engine::development::{
     AuthoringTool,
     ToolDocument,
+    ToolFileReader,
     ToolHosting,
 };
 use joy_engine::egui;
@@ -174,6 +175,16 @@ impl ToolTab {
             Some(document) if !self.started => Ok(document.contents.clone()),
             _ => self.tool.save_document(name),
         }
+    }
+
+    /// Other project files the tool asks to write with its document.
+    pub fn dependencies(&self) -> Vec<ToolDocument> {
+        if self.started { self.tool.save_dependencies() } else { Vec::new() }
+    }
+
+    /// Give the tool read access to project files (see [`AuthoringTool::set_file_reader`]).
+    pub fn set_file_reader(&mut self, reader: Option<ToolFileReader>) {
+        self.tool.set_file_reader(reader);
     }
 
     /// Whether the tool reports edits since its document was opened or saved.

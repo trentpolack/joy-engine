@@ -75,6 +75,9 @@ pub struct OpenedFile {
     pub name: String,
     /// The file's contents.
     pub contents: FileContents,
+    /// Where the file lives natively, so tools can read files beside it (such as a FORM instance's script); `None`
+    /// in browsers, which do not reveal locations.
+    pub path: Option<std::path::PathBuf>,
 }
 
 /// What a dialog request produced.
@@ -372,6 +375,7 @@ fn read_file(path: &std::path::Path, binary: bool, maximum_bytes: usize) -> File
         Ok(contents) => FileDialogEvent::Opened(OpenedFile {
             name,
             contents,
+            path: Some(path.to_path_buf()),
         }),
         Err(message) => FileDialogEvent::Failed(message),
     }
@@ -467,7 +471,8 @@ mod tests {
             opened,
             FileDialogEvent::Opened(OpenedFile {
                 name: "effect.joyfx".to_owned(),
-                contents: FileContents::Text("{\"version\": 1}\n".to_owned())
+                contents: FileContents::Text("{\"version\": 1}\n".to_owned()),
+                path: Some(path.clone()),
             })
         );
         assert!(

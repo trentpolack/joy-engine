@@ -49,6 +49,7 @@ pub use config_values::{
 pub use fixed_step::FixedStepLoop;
 pub use format::{
     format_number,
+    integral_numbers_as_integers,
     json_number,
 };
 pub use math::{

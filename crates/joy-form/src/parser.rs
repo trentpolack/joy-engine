@@ -1,30 +1,107 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Tokenizer and recursive-descent parser for FORM source.
+//! Recursive-descent parser for FORM source.
+//!
+//! The parser builds syntax only; it never executes authored code. `use` declarations are recorded with a placeholder
+//! module index that the module graph ([`crate::modules`]) fills in once it has loaded each dependency.
 
 use crate::Diagnostic;
 use crate::ast::{
+    AssignmentOperator,
+    ConditionalBranch,
     ExprKind,
     Expression,
+    FunctionDefinition,
+    FunctionParameter,
+    MatchCase,
+    ParameterPresentation,
     Statement,
     StmtKind,
     Token,
 };
+use crate::tokenizer::{
+    END_TOKEN,
+    is_name,
+    starts_number,
+    tokenize,
+};
 use std::collections::HashSet;
+use std::rc::Rc;
 
-const SOURCE_LIMIT: usize = 200_000;
-const TOKEN_LIMIT: usize = 40_000;
 const BLOCK_DEPTH_LIMIT: usize = 48;
 const EXPRESSION_DEPTH_LIMIT: usize = 64;
-const INVALID_DATA_KEY: &str = "Invalid user data field name (1–64 characters; prototype keys are reserved).";
 
-/// User data field names FORM rejects. Exported user data lands in glTF `extras`, and these names would alter object
+// Parameter `meta(...)` keys: numeric bounds the evaluator reads, then presentation text editors show.
+pub(crate) const PARAMETER_MINIMUM: &str = "min";
+pub(crate) const PARAMETER_MAXIMUM: &str = "max";
+pub(crate) const PARAMETER_STEP: &str = "step";
+const PARAMETER_LABEL: &str = "label";
+const PARAMETER_GROUP: &str = "group";
+const PARAMETER_INFO: &str = "info";
+const PARAMETER_KIND: &str = "kind";
+const PARAMETER_OPTIONS: &str = "options";
+const PARAMETER_METADATA_KEYS: [&str; 8] = [
+    PARAMETER_MINIMUM,
+    PARAMETER_MAXIMUM,
+    PARAMETER_STEP,
+    PARAMETER_LABEL,
+    PARAMETER_GROUP,
+    PARAMETER_INFO,
+    PARAMETER_KIND,
+    PARAMETER_OPTIONS,
+];
+
+// Presentation text limits, in characters, so inspectors can lay parameters out predictably.
+const PARAMETER_LABEL_LIMIT: usize = 48;
+const PARAMETER_GROUP_LIMIT: usize = 32;
+const PARAMETER_INFO_LIMIT: usize = 160;
+const PARAMETER_KIND_LIMIT: usize = 16;
+const PARAMETER_OPTION_LIMIT: usize = 32;
+const PARAMETER_OPTION_COUNT_LIMIT: usize = 32;
+const INVALID_DATA_KEY: &str = "Invalid record field name (1–64 characters; prototype keys are reserved).";
+
+/// Most members one `enum` may declare, matching the option limit editors lay out for enum parameters.
+pub(crate) const ENUM_MEMBER_LIMIT: usize = PARAMETER_OPTION_COUNT_LIMIT;
+
+/// Record field names FORM rejects. Exported records land in glTF `extras`, and these names would alter object
 /// prototypes in the JavaScript viewers and pipelines that read those files.
 pub(crate) const RESERVED_DATA_KEYS: [&str; 3] = ["__proto__", "prototype", "constructor"];
 
-/// The byte-order mark some editors write at the start of a text file.
-const BYTE_ORDER_MARK: char = '\u{feff}';
+// Logical operators are written in capitals so they read as keywords beside lowercase names.
+pub(crate) const OPERATOR_AND: &str = "AND";
+pub(crate) const OPERATOR_OR: &str = "OR";
+pub(crate) const OPERATOR_NOT: &str = "NOT";
+
+/// Words the grammar owns. They cannot name variables, parameters, functions, enums, members, or modules.
+pub(crate) const RESERVED_WORDS: [&str; 26] = [
+    "project",
+    "param",
+    "meta",
+    "let",
+    "const",
+    "if",
+    "else",
+    "match",
+    "case",
+    "repeat",
+    "for",
+    "foreach",
+    "as",
+    "wrangle",
+    "in",
+    "fn",
+    "return",
+    "ref",
+    "enum",
+    "use",
+    OPERATOR_AND,
+    OPERATOR_OR,
+    OPERATOR_NOT,
+    "true",
+    "false",
+    "null",
+];
 
 /// Parse FORM without executing authored code. Locations are one-based lines and
 /// character columns, so editors place diagnostics directly.
@@ -33,6 +110,7 @@ pub(crate) fn parse(source: &str) -> Result<Vec<Statement>, Diagnostic> {
         tokens: tokenize(source)?,
         cursor: 0,
         depth: 0,
+        in_function: false,
     }
     .block(false)
 }
@@ -42,11 +120,17 @@ struct Parser {
     cursor: usize,
     // Blocks and expressions deliberately share the original parser's budget.
     depth: usize,
+    // `return` is only meaningful inside a function body.
+    in_function: bool,
 }
 
 impl Parser {
     fn current(&self) -> &Token {
         &self.tokens[self.cursor]
+    }
+
+    fn peek(&self, offset: usize) -> Option<&str> {
+        self.tokens.get(self.cursor + offset).map(|token| token.text.as_str())
     }
 
     fn take(&mut self, text: &str) -> bool {
@@ -64,6 +148,7 @@ impl Parser {
         Err(Diagnostic::at(format!("Expected '{text}', found '{}'.", self.current().text), self.current()))
     }
 
+    /// Any identifier, including grammar words: metadata keys, record keys, and member names after `.`.
     fn name(&mut self) -> Result<String, Diagnostic> {
         if !is_name(&self.current().text) {
             return Err(Diagnostic::at("Expected a variable name.", self.current()));
@@ -73,17 +158,27 @@ impl Parser {
         Ok(name)
     }
 
+    /// A name the script declares (a variable, parameter, function, enum, member, or module alias).
+    fn declared_name(&mut self) -> Result<String, Diagnostic> {
+        let token = self.current().clone();
+        let name = self.name()?;
+        if RESERVED_WORDS.contains(&name.as_str()) {
+            return Err(Diagnostic::at(format!("'{name}' is a reserved word and cannot be used as a name."), &token));
+        }
+        Ok(name)
+    }
+
     fn block(&mut self, nested: bool) -> Result<Vec<Statement>, Diagnostic> {
         self.depth += 1;
         if self.depth > BLOCK_DEPTH_LIMIT {
             return Err(Diagnostic::at("Nesting limit exceeded.", self.current()));
         }
         let mut statements = Vec::new();
-        while self.current().text != "<end>" && self.current().text != "}" {
+        while self.current().text != END_TOKEN && self.current().text != "}" {
             if self.take(";") {
                 continue;
             }
-            statements.push(self.statement()?);
+            statements.push(self.statement(nested)?);
         }
         if nested {
             self.expect("}")?;
@@ -94,64 +189,147 @@ impl Parser {
         Ok(statements)
     }
 
-    fn statement(&mut self) -> Result<Statement, Diagnostic> {
+    /// A `{ … }` block; the opening brace has not been consumed yet.
+    fn braced_block(&mut self) -> Result<Vec<Statement>, Diagnostic> {
+        self.expect("{")?;
+        self.block(true)
+    }
+
+    fn statement(&mut self, nested: bool) -> Result<Statement, Diagnostic> {
         let token = self.current().clone();
-        let kind = if self.take("project") {
-            return self.project(token);
-        } else if self.take("with") {
-            self.expect("userData")?;
-            self.expect("(")?;
-            let expression = self.expression(0)?;
-            self.expect(")")?;
-            self.expect("{")?;
-            StmtKind::WithUserData(expression, self.block(true)?)
-        } else if self.take("wrangle") {
-            let domain = self.name()?;
-            self.expect("in")?;
-            let expression = self.expression(0)?;
-            self.expect("as")?;
-            let binding = self.name()?;
-            self.expect("{")?;
-            StmtKind::Wrangle {
-                domain,
-                expression,
-                binding: Some(binding),
-                body: self.block(true)?,
+        let kind = match token.text.as_str() {
+            "project" => {
+                self.cursor += 1;
+                return self.project(token);
             }
-        } else if self.take("if") {
-            let expression = self.expression(0)?;
-            self.expect("{")?;
-            StmtKind::If(expression, self.block(true)?)
-        } else if self.take("let") {
-            let name = self.name()?;
-            self.expect("=")?;
-            StmtKind::Let(name, self.expression(0)?)
-        } else if self.take("param") {
-            return self.parameter(token);
-        } else if self.take("repeat") {
-            let expression = self.expression(0)?;
-            self.expect("as")?;
-            let name = self.name()?;
-            self.expect("{")?;
-            StmtKind::Repeat {
-                name,
-                expression,
-                body: self.block(true)?,
+            "param" => {
+                self.cursor += 1;
+                return self.parameter(token);
             }
-        } else if self.tokens.get(self.cursor + 1).map(|next| next.text.as_str()) == Some(".")
-            && self.tokens.get(self.cursor + 3).map(|next| next.text.as_str()) == Some("=")
-        {
-            let binding = self.name()?;
-            self.expect(".")?;
-            let name = self.name()?;
-            self.expect("=")?;
-            StmtKind::BindingAttribute {
-                binding,
-                name,
-                expression: self.expression(0)?,
+            "with" if self.peek(1) == Some("userData") => {
+                return Err(Diagnostic::at(
+                    "'with userData' blocks were removed. Store per-point values as attributes with addAttribute() and setAttribute().",
+                    &token,
+                ));
             }
-        } else {
-            StmtKind::Command(self.expression(0)?)
+            "wrangle" => {
+                self.cursor += 1;
+                let domain = self.name()?;
+                self.expect("in")?;
+                let expression = self.expression(0)?;
+                self.expect("as")?;
+                let binding = self.declared_name()?;
+                StmtKind::Wrangle {
+                    domain,
+                    expression,
+                    binding,
+                    body: self.braced_block()?,
+                }
+            }
+            "if" => {
+                self.cursor += 1;
+                self.conditional()?
+            }
+            "else" => return Err(Diagnostic::at("'else' must follow an if block or a match case.", &token)),
+            "match" => {
+                self.cursor += 1;
+                self.match_statement()?
+            }
+            "let" | "const" => {
+                self.cursor += 1;
+                let name = self.declared_name()?;
+                self.expect("=")?;
+                let expression = self.expression(0)?;
+                if token.text == "const" { StmtKind::Const(name, expression) } else { StmtKind::Let(name, expression) }
+            }
+            "repeat" => {
+                return Err(Diagnostic::at(
+                    "'repeat count as index' was removed; use 'for index in 0..count' instead.",
+                    &token,
+                ));
+            }
+            "for" => {
+                self.cursor += 1;
+                let name = self.declared_name()?;
+                self.expect("in")?;
+                let start = self.expression(0)?;
+                if !self.take("..") {
+                    return Err(Diagnostic::at(
+                        "for requires a range, 'for index in start..end'; use 'foreach item in collection' for values.",
+                        self.current(),
+                    ));
+                }
+                if self.current().text == "=" {
+                    return Err(Diagnostic::at(
+                        "for ranges use an exclusive end: write start..end, not start..=end.",
+                        self.current(),
+                    ));
+                }
+                let end = self.expression(0)?;
+                StmtKind::For {
+                    name,
+                    start,
+                    end,
+                    body: self.braced_block()?,
+                }
+            }
+            "foreach" => {
+                self.cursor += 1;
+                let name = self.declared_name()?;
+                self.expect("in")?;
+                let collection = self.expression(0)?;
+                if self.current().text == ".." {
+                    return Err(Diagnostic::at(
+                        "foreach visits collection values; use 'for index in start..end' for a range.",
+                        self.current(),
+                    ));
+                }
+                StmtKind::ForEach {
+                    name,
+                    collection,
+                    body: self.braced_block()?,
+                }
+            }
+            "fn" => {
+                if nested || self.in_function {
+                    return Err(Diagnostic::at("Declare functions at the top level of a script.", &token));
+                }
+                self.cursor += 1;
+                self.function()?
+            }
+            "return" => {
+                if !self.in_function {
+                    return Err(Diagnostic::at("'return' is only allowed inside a function.", &token));
+                }
+                self.cursor += 1;
+                let value =
+                    if matches!(self.current().text.as_str(), "}" | ";") { None } else { Some(self.expression(0)?) };
+                StmtKind::Return(value)
+            }
+            "enum" => {
+                if nested || self.in_function {
+                    return Err(Diagnostic::at("Declare enums at the top level of a script.", &token));
+                }
+                self.cursor += 1;
+                self.enumeration()?
+            }
+            "use" => {
+                if nested || self.in_function {
+                    return Err(Diagnostic::at("Declare modules with 'use' at the top level of a script.", &token));
+                }
+                self.cursor += 1;
+                let path_token = self.current().clone();
+                let path: String = serde_json::from_str(&path_token.text)
+                    .map_err(|_| Diagnostic::at("'use' requires a double-quoted module path.", &path_token))?;
+                self.cursor += 1;
+                self.expect("as")?;
+                StmtKind::Use {
+                    path,
+                    alias: self.declared_name()?,
+                    module: usize::MAX,
+                }
+            }
+            _ => self.simple_statement()?,
         };
         Ok(Statement {
             kind,
@@ -159,11 +337,176 @@ impl Parser {
         })
     }
 
+    /// Assignment to a variable or a wrangle element's attribute, or a call made for its effect.
+    fn simple_statement(&mut self) -> Result<StmtKind, Diagnostic> {
+        let token = self.current().clone();
+        if is_name(&token.text) && !RESERVED_WORDS.contains(&token.text.as_str()) {
+            if let Some(operator) = self.peek(1).and_then(assignment_operator) {
+                let name = self.declared_name()?;
+                self.cursor += 1;
+                return Ok(StmtKind::Assign {
+                    name,
+                    operator,
+                    expression: self.expression(0)?,
+                });
+            }
+            if self.peek(1) == Some(".")
+                && let Some(operator) = self.peek(3).and_then(assignment_operator)
+            {
+                let binding = self.name()?;
+                self.expect(".")?;
+                let name = self.name()?;
+                self.cursor += 1;
+                return Ok(StmtKind::BindingAttribute {
+                    binding,
+                    name,
+                    operator,
+                    expression: self.expression(0)?,
+                });
+            }
+        }
+        let expression = self.expression(0)?;
+        if !matches!(expression.kind, ExprKind::Call(..) | ExprKind::ModuleCall(..)) {
+            return Err(Diagnostic::at("Expected a statement; a value on its own must be a function call.", &token));
+        }
+        Ok(StmtKind::Command(expression))
+    }
+
+    /// `if condition { … } else if condition { … } else { … }`; the `if` keyword has been consumed.
+    fn conditional(&mut self) -> Result<StmtKind, Diagnostic> {
+        let mut branches = vec![ConditionalBranch {
+            condition: self.expression(0)?,
+            body: self.braced_block()?,
+        }];
+        let mut otherwise = None;
+        while self.take("else") {
+            if self.take("if") {
+                branches.push(ConditionalBranch {
+                    condition: self.expression(0)?,
+                    body: self.braced_block()?,
+                });
+                continue;
+            }
+            otherwise = Some(self.braced_block()?);
+            break;
+        }
+        Ok(StmtKind::If {
+            branches,
+            otherwise,
+        })
+    }
+
+    /// `match subject { case a, b { … } else { … } }`; the `match` keyword has been consumed.
+    fn match_statement(&mut self) -> Result<StmtKind, Diagnostic> {
+        let subject = self.expression(0)?;
+        self.expect("{")?;
+        let mut cases = Vec::new();
+        let mut otherwise = None;
+        loop {
+            if self.take("}") {
+                break;
+            }
+            if otherwise.is_some() {
+                return Err(Diagnostic::at("A match's else block must come last.", self.current()));
+            }
+            if self.take("else") {
+                otherwise = Some(self.braced_block()?);
+                continue;
+            }
+            if !self.take("case") {
+                return Err(Diagnostic::at(
+                    format!("Expected 'case', 'else', or '}}' in match, found '{}'.", self.current().text),
+                    self.current(),
+                ));
+            }
+            let mut values = vec![self.expression(0)?];
+            while self.take(",") {
+                values.push(self.expression(0)?);
+            }
+            cases.push(MatchCase {
+                values,
+                body: self.braced_block()?,
+            });
+        }
+        if cases.is_empty() {
+            return Err(Diagnostic::at("A match requires at least one case.", &subject.token));
+        }
+        Ok(StmtKind::Match {
+            subject,
+            cases,
+            otherwise,
+        })
+    }
+
+    /// `fn name(a, ref b) { … }`; the `fn` keyword has been consumed.
+    fn function(&mut self) -> Result<StmtKind, Diagnostic> {
+        let name = self.declared_name()?;
+        self.expect("(")?;
+        let mut parameters: Vec<FunctionParameter> = Vec::new();
+        if !self.take(")") {
+            loop {
+                let by_reference = self.take("ref");
+                let parameter_token = self.current().clone();
+                let parameter = self.declared_name()?;
+                if parameters.iter().any(|existing| existing.name == parameter) {
+                    return Err(Diagnostic::at(
+                        format!("Duplicate function parameter '{parameter}'."),
+                        &parameter_token,
+                    ));
+                }
+                parameters.push(FunctionParameter {
+                    name: parameter,
+                    by_reference,
+                });
+                if !self.take(",") {
+                    break;
+                }
+            }
+            self.expect(")")?;
+        }
+        self.in_function = true;
+        let body = self.braced_block();
+        self.in_function = false;
+        Ok(StmtKind::Function(Rc::new(FunctionDefinition {
+            name,
+            parameters,
+            body: body?,
+        })))
+    }
+
+    /// `enum Name { a, b, c }`; the `enum` keyword has been consumed.
+    fn enumeration(&mut self) -> Result<StmtKind, Diagnostic> {
+        let name = self.declared_name()?;
+        let open = self.current().clone();
+        self.expect("{")?;
+        let mut members: Vec<String> = Vec::new();
+        while !self.take("}") {
+            let member_token = self.current().clone();
+            let member = self.declared_name()?;
+            if members.contains(&member) {
+                return Err(Diagnostic::at(format!("Duplicate enum member '{member}'."), &member_token));
+            }
+            members.push(member);
+            if !self.take(",") {
+                self.expect("}")?;
+                break;
+            }
+        }
+        if members.is_empty() || members.len() > ENUM_MEMBER_LIMIT {
+            return Err(Diagnostic::at(format!("An enum requires 1 to {ENUM_MEMBER_LIMIT} members."), &open));
+        }
+        Ok(StmtKind::Enum {
+            name,
+            members,
+        })
+    }
+
     fn parameter(&mut self, token: Token) -> Result<Statement, Diagnostic> {
-        let name = self.name()?;
+        let name = self.declared_name()?;
         self.expect("=")?;
         let mut values = vec![self.expression(0)?];
         let mut metadata: Vec<(String, Expression)> = Vec::new();
+        let mut presentation = ParameterPresentation::default();
         if self.take(",") {
             // The legacy form always has exactly four positional expressions.
             values.push(self.expression(0)?);
@@ -174,16 +517,27 @@ impl Parser {
         } else if self.take("meta") {
             self.expect("(")?;
             if !self.take(")") {
+                let mut seen: Vec<String> = Vec::new();
                 loop {
                     let key = self.name()?;
-                    if !matches!(key.as_str(), "min" | "max" | "step") {
+                    if !PARAMETER_METADATA_KEYS.contains(&key.as_str()) {
                         return Err(Diagnostic::at(format!("Unknown parameter metadata '{key}'."), self.current()));
                     }
-                    if metadata.iter().any(|(existing, _)| existing == &key) {
+                    if seen.contains(&key) {
                         return Err(Diagnostic::at(format!("Duplicate metadata '{key}'."), self.current()));
                     }
+                    seen.push(key.clone());
                     self.expect("=")?;
-                    metadata.push((key, self.expression(0)?));
+                    match key.as_str() {
+                        PARAMETER_MINIMUM | PARAMETER_MAXIMUM | PARAMETER_STEP => {
+                            metadata.push((key.clone(), self.expression(0)?));
+                        }
+                        PARAMETER_LABEL => presentation.label = Some(self.metadata_text(PARAMETER_LABEL_LIMIT)?),
+                        PARAMETER_GROUP => presentation.group = Some(self.metadata_text(PARAMETER_GROUP_LIMIT)?),
+                        PARAMETER_INFO => presentation.info = Some(self.metadata_text(PARAMETER_INFO_LIMIT)?),
+                        PARAMETER_KIND => presentation.kind = Some(self.metadata_text(PARAMETER_KIND_LIMIT)?),
+                        _ => presentation.options = self.metadata_options()?,
+                    }
                     if !self.take(",") {
                         break;
                     }
@@ -196,9 +550,48 @@ impl Parser {
                 name,
                 values,
                 metadata,
+                presentation,
             },
             token,
         })
+    }
+
+    /// One double-quoted, single-line metadata text of at most `limit` characters.
+    fn metadata_text(&mut self, limit: usize) -> Result<String, Diagnostic> {
+        let token = self.current().clone();
+        let text: String = serde_json::from_str(&token.text)
+            .map_err(|_| Diagnostic::at("Parameter metadata text requires double quotes.", &token))?;
+        if text.chars().count() > limit || text.contains(['\r', '\n']) {
+            return Err(Diagnostic::at(
+                format!("Parameter metadata text must be one line of at most {limit} characters."),
+                &token,
+            ));
+        }
+        self.cursor += 1;
+        Ok(text)
+    }
+
+    /// A bracketed list of option labels, such as `["Low", "Medium", "High"]`: at least two, at most the option limit.
+    fn metadata_options(&mut self) -> Result<Vec<String>, Diagnostic> {
+        let token = self.current().clone();
+        self.expect("[")?;
+        let mut options = Vec::new();
+        if !self.take("]") {
+            loop {
+                options.push(self.metadata_text(PARAMETER_OPTION_LIMIT)?);
+                if !self.take(",") {
+                    break;
+                }
+            }
+            self.expect("]")?;
+        }
+        if options.len() < 2 || options.len() > PARAMETER_OPTION_COUNT_LIMIT {
+            return Err(Diagnostic::at(
+                format!("Parameter options require 2 to {PARAMETER_OPTION_COUNT_LIMIT} labels."),
+                &token,
+            ));
+        }
+        Ok(options)
     }
 
     fn project(&mut self, token: Token) -> Result<Statement, Diagnostic> {
@@ -261,19 +654,24 @@ impl Parser {
                 token: token.clone(),
             },
             "[" => Expression {
-                kind: ExprKind::Array(self.arguments("]")?),
+                kind: ExprKind::Array(self.arguments("]", false)?),
                 token: token.clone(),
             },
-            "true" | "false" | "null" => Expression {
-                kind: ExprKind::Literal(match token.text.as_str() {
-                    "true" => serde_json::Value::Bool(true),
-                    "false" => serde_json::Value::Bool(false),
-                    _ => serde_json::Value::Null,
-                }),
+            "true" | "false" => Expression {
+                kind: ExprKind::Bool(token.text == "true"),
+                token: token.clone(),
+            },
+            "null" => Expression {
+                kind: ExprKind::Null,
                 token: token.clone(),
             },
             "-" | "+" => Expression {
                 kind: ExprKind::Unary(token.text.clone(), Box::new(self.expression(30)?)),
+                token: token.clone(),
+            },
+            // NOT binds tighter than AND and OR but looser than comparisons: `NOT a < b` negates `a < b`.
+            OPERATOR_NOT => Expression {
+                kind: ExprKind::Unary(token.text.clone(), Box::new(self.expression(3)?)),
                 token: token.clone(),
             },
             "(" => {
@@ -293,9 +691,9 @@ impl Parser {
                 kind: ExprKind::Number(text.parse().unwrap_or(f64::NAN)),
                 token: token.clone(),
             },
-            text if is_name(text) => {
+            text if is_name(text) && !RESERVED_WORDS.contains(&text) => {
                 let kind = if self.take("(") {
-                    ExprKind::Call(text.to_owned(), self.arguments(")")?)
+                    ExprKind::Call(text.to_owned(), self.arguments(")", true)?)
                 } else {
                     ExprKind::Variable(text.to_owned())
                 };
@@ -308,13 +706,37 @@ impl Parser {
                 return Err(Diagnostic::at(format!("Expected an expression, found '{}'.", token.text), &token));
             }
         };
-        while self.take(".") {
-            left = Expression {
-                kind: ExprKind::Component(Box::new(left), self.name()?),
-                // A component uses the start token, including an opening parenthesis.
-                token: token.clone(),
-            };
+
+        // Postfix chains: `.member`, `.function(arguments)` on modules, and `[index]`.
+        loop {
+            if self.take(".") {
+                let member = self.name()?;
+                let kind = if self.take("(") {
+                    ExprKind::ModuleCall(Box::new(left), member, self.arguments(")", true)?)
+                } else {
+                    ExprKind::Component(Box::new(left), member)
+                };
+                left = Expression {
+                    kind,
+                    // A component uses the start token, including an opening parenthesis.
+                    token: token.clone(),
+                };
+                continue;
+            }
+            if self.current().text == "[" {
+                let bracket = self.current().clone();
+                self.cursor += 1;
+                let index = self.expression(0)?;
+                self.expect("]")?;
+                left = Expression {
+                    kind: ExprKind::Index(Box::new(left), Box::new(index)),
+                    token: bracket,
+                };
+                continue;
+            }
+            break;
         }
+
         while precedence(&self.current().text) >= minimum {
             let operator = self.current().clone();
             self.cursor += 1;
@@ -329,11 +751,21 @@ impl Parser {
         Ok(left)
     }
 
-    fn arguments(&mut self, closing: &str) -> Result<Vec<Expression>, Diagnostic> {
+    /// Comma-separated expressions up to `closing`. Call arguments may pass `ref name`.
+    fn arguments(&mut self, closing: &str, allow_references: bool) -> Result<Vec<Expression>, Diagnostic> {
         let mut arguments = Vec::new();
         if !self.take(closing) {
             loop {
-                arguments.push(self.expression(0)?);
+                if allow_references && self.current().text == "ref" {
+                    let token = self.current().clone();
+                    self.cursor += 1;
+                    arguments.push(Expression {
+                        kind: ExprKind::Reference(self.declared_name()?),
+                        token,
+                    });
+                } else {
+                    arguments.push(self.expression(0)?);
+                }
                 if !self.take(",") {
                     break;
                 }
@@ -363,7 +795,7 @@ impl Parser {
                 return Err(Diagnostic::at(INVALID_DATA_KEY, &key_token));
             }
             if !names.insert(key.clone()) {
-                return Err(Diagnostic::at(format!("Duplicate user data field '{key}'."), &key_token));
+                return Err(Diagnostic::at(format!("Duplicate record field '{key}'."), &key_token));
             }
             self.expect(":")?;
             fields.push((key, self.expression(0)?));
@@ -415,8 +847,11 @@ fn quoted_key_error(text: &str, error: serde_json::Error) -> String {
     format!("Invalid quoted key: {error}.")
 }
 
+/// Binary operator precedence; higher binds tighter. Logical operators bind loosest so comparisons group first.
 fn precedence(operator: &str) -> i32 {
     match operator {
+        OPERATOR_OR => 1,
+        OPERATOR_AND => 2,
         "==" | "!=" | "<" | ">" | "<=" | ">=" => 5,
         "+" | "-" => 10,
         "*" | "/" | "%" => 20,
@@ -425,144 +860,14 @@ fn precedence(operator: &str) -> i32 {
     }
 }
 
-fn is_name(text: &str) -> bool {
-    let bytes = text.as_bytes();
-    bytes.first().is_some_and(|byte| is_name_start(*byte)) && bytes.iter().all(|byte| is_name_continue(*byte))
-}
-
-fn is_name_start(byte: u8) -> bool {
-    byte.is_ascii_alphabetic() || byte == b'_'
-}
-
-fn is_name_continue(byte: u8) -> bool {
-    is_name_start(byte) || byte.is_ascii_digit()
-}
-
-fn starts_number(bytes: &[u8]) -> bool {
-    bytes.first().is_some_and(u8::is_ascii_digit)
-        || (bytes.first() == Some(&b'.') && bytes.get(1).is_some_and(u8::is_ascii_digit))
-}
-
-fn tokenize(source: &str) -> Result<Vec<Token>, Diagnostic> {
-    if source.chars().count() > SOURCE_LIMIT {
-        return Err(Diagnostic {
-            message: "Script size limit is 200,000 characters.".into(),
-            line: 1,
-            column: 1,
-        });
+/// The assignment a statement token spells, if any.
+fn assignment_operator(text: &str) -> Option<AssignmentOperator> {
+    match text {
+        "=" => Some(AssignmentOperator::Set),
+        "+=" => Some(AssignmentOperator::Add),
+        "-=" => Some(AssignmentOperator::Subtract),
+        "*=" => Some(AssignmentOperator::Multiply),
+        "/=" => Some(AssignmentOperator::Divide),
+        _ => None,
     }
-    // A leading byte-order mark is an encoding artifact, not source; it takes no column.
-    let source = source.strip_prefix(BYTE_ORDER_MARK).unwrap_or(source);
-    let mut tokens = Vec::new();
-    let mut offset = 0;
-    let mut line = 1;
-    let mut column = 1;
-    while offset < source.len() {
-        let remaining = &source[offset..];
-        let character = remaining.chars().next().unwrap();
-        if character == '#' || remaining.starts_with("//") {
-            let length = remaining.find('\n').unwrap_or(remaining.len());
-            column += remaining[..length].chars().count();
-            offset += length;
-            continue;
-        }
-        if character.is_whitespace() {
-            if character == '\n' {
-                line += 1;
-                column = 1;
-            } else {
-                column += 1;
-            }
-            offset += character.len_utf8();
-            continue;
-        }
-        if character == '@' {
-            return Err(Diagnostic {
-                message: "@attribute syntax is no longer supported. Use 'wrangle points in geometry as point' and 'point.name'; declare fields first with addAttribute().".into(),
-                line,
-                column,
-            });
-        }
-        let Some(length) = token_length(remaining) else {
-            return Err(Diagnostic {
-                message: format!("Unexpected character '{character}'."),
-                line,
-                column,
-            });
-        };
-        let text = &remaining[..length];
-        tokens.push(Token {
-            text: text.to_owned(),
-            line,
-            column,
-        });
-        if tokens.len() > TOKEN_LIMIT {
-            return Err(Diagnostic::at("Token limit exceeded.", tokens.last().unwrap()));
-        }
-        offset += length;
-        column += text.chars().count();
-    }
-    tokens.push(Token {
-        text: "<end>".into(),
-        line,
-        column,
-    });
-    Ok(tokens)
-}
-
-/// Measure the token at the start of `source` without a regex engine. An incomplete
-/// exponent is left for the following tokens (`1e+` starts with the number token `1`).
-fn token_length(source: &str) -> Option<usize> {
-    let bytes = source.as_bytes();
-    if bytes[0] == b'"' {
-        let mut characters = source.char_indices().skip(1);
-        while let Some((offset, character)) = characters.next() {
-            match character {
-                '"' => return Some(offset + 1),
-                '\r' | '\n' => return None,
-                '\\' => match characters.next() {
-                    None | Some((_, '\r' | '\n' | '\u{2028}' | '\u{2029}')) => return None,
-                    _ => {}
-                },
-                _ => {}
-            }
-        }
-        return None;
-    }
-    if starts_number(bytes) {
-        let mut length = 0;
-        while bytes.get(length).is_some_and(u8::is_ascii_digit) {
-            length += 1;
-        }
-        if bytes.get(length) == Some(&b'.') {
-            length += 1;
-            while bytes.get(length).is_some_and(u8::is_ascii_digit) {
-                length += 1;
-            }
-        }
-        if matches!(bytes.get(length), Some(b'e' | b'E')) {
-            let mut exponent = length + 1;
-            if matches!(bytes.get(exponent), Some(b'+' | b'-')) {
-                exponent += 1;
-            }
-            let digits_start = exponent;
-            while bytes.get(exponent).is_some_and(u8::is_ascii_digit) {
-                exponent += 1;
-            }
-            if exponent > digits_start {
-                length = exponent;
-            }
-        }
-        return Some(length);
-    }
-    if is_name_start(bytes[0]) {
-        return Some(bytes.iter().take_while(|byte| is_name_continue(**byte)).count());
-    }
-    if ["==", "!=", "<=", ">="].iter().any(|operator| source.starts_with(operator)) {
-        return Some(2);
-    }
-    if b"<>+-*/%^=(),{};.[]:".contains(&bytes[0]) {
-        return Some(1);
-    }
-    None
 }

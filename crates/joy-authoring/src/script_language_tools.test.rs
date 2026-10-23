@@ -15,6 +15,24 @@ fn kinds(syntax: &ScriptSyntax, source: &str) -> Vec<(String, TokenKind)> {
 }
 
 #[test]
+fn form_iteration_highlighting_keeps_ranges_separate_from_decimals_and_properties() {
+    let tokens = kinds(
+        &ScriptSyntax::form(),
+        "const count = 3 for i in 0..count { foreach item in items { item.x } } 1. .5 1e-3",
+    );
+    for word in ["const", "for", "foreach"] {
+        assert!(tokens.contains(&(word.to_owned(), TokenKind::Keyword)), "{word}");
+    }
+    assert!(tokens.contains(&("0".to_owned(), TokenKind::Number)));
+    assert!(tokens.contains(&("..".to_owned(), TokenKind::Operator)));
+    assert!(tokens.contains(&("x".to_owned(), TokenKind::Property)));
+    assert!(!tokens.contains(&("count".to_owned(), TokenKind::Property)));
+    for number in ["1.", ".5", "1e-3"] {
+        assert!(tokens.contains(&(number.to_owned(), TokenKind::Number)));
+    }
+}
+
+#[test]
 fn form_highlighting_follows_the_lab_stream_language() {
     let source = "param width = 2 meta(min=1)\n# note\nlet p = box(width, 1e-3, .5).x\n@bad \"text\" true";
     let tokens = kinds(&ScriptSyntax::form(), source);
@@ -89,4 +107,32 @@ fn hover_words_and_diagnostic_positions() {
     assert_eq!(line_and_column(text, 20), (2, 3));
     assert_eq!(line_count(text), 2);
     assert_eq!(character_at(text, 9, 1), text.chars().count(), "lines past the end clamp");
+}
+
+#[test]
+fn line_edits_shift_comment_and_indent_like_vs_code() {
+    // Tab and Shift+Tab shift every touched line and carry the selection with its text; a selection ending at the
+    // start of a line leaves that line alone.
+    let text = "a\n  b\n\nc";
+    let indented = shift_lines(text, 0, 5, "  ", false);
+    assert_eq!(indented.text, "  a\n    b\n\nc");
+    assert_eq!((indented.anchor, indented.cursor), (2, 9));
+    let outdented = shift_lines(&indented.text, 2, 9, "  ", true);
+    assert_eq!(outdented.text, text);
+    assert_eq!((outdented.anchor, outdented.cursor), (0, 5));
+    assert_eq!(shift_lines("a\nb", 0, 2, "  ", false).text, "  a\nb");
+
+    // Ctrl/Cmd+/ comments at the shallowest indentation and uncomments when every line is commented.
+    let block = "if x {\n  box(1)\n}";
+    let commented = toggle_line_comment(block, 0, block.chars().count(), "#");
+    assert_eq!(commented.text, "# if x {\n#   box(1)\n# }");
+    assert_eq!(toggle_line_comment(&commented.text, 0, commented.text.chars().count(), "#").text, block);
+    let nested = toggle_line_comment("  a\n  b", 3, 3, "#");
+    assert_eq!((nested.text.as_str(), nested.cursor), ("  # a\n  b", 5));
+
+    // Enter keeps indentation and opens a block; `}` on a blank indented line lines up with its block.
+    assert_eq!(newline_with_indent("  let a = 1", 11, "  "), "\n  ");
+    assert_eq!(newline_with_indent("if x {", 6, "  "), "\n  ");
+    assert_eq!(closing_brace_outdent("if x {\n    ", 11, "  "), 2);
+    assert_eq!(closing_brace_outdent("if x {\n  a", 10, "  "), 0);
 }

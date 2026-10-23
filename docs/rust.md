@@ -2,7 +2,7 @@
 Joy Engine runs games and tools from one Rust codebase on Windows, macOS, Linux, and browser WebAssembly. Graphics use wgpu, windows and canvases use winit, physics uses rapier, and HUDs and authoring UI use egui. The published web builds use the same simulation and content code as native applications.
 
 ## Layout
-`Cargo.toml` defines the engine workspace: the system crates in `crates/`, the `joy-engine` facade package, and the editor and labs. Shared package fields, dependency versions, and lints live in its `[workspace.*]` tables. `src/lib.rs` re-exports the system crates under their module names and exports the game-facing API, `prelude`, and `web_main!`. Games and tools depend only on `joy-engine`, never on the system crates or backend crates.
+`Cargo.toml` defines the engine workspace: the system crates in `crates/`, the `joy-engine` facade package, and the editor and tool editors. Shared package fields, dependency versions, and lints live in its `[workspace.*]` tables. `src/lib.rs` re-exports the system crates under their module names and exports the game-facing API, `prelude`, and `web_main!`. Games and tools depend only on `joy-engine`, never on the system crates or backend crates.
 
 | Layer | Crates and modules | Responsibility |
 | --- | --- | --- |
@@ -42,8 +42,10 @@ A game's library is a `cdylib` and exposes its startup with `joy_engine::web_mai
 rustup target add wasm32-unknown-unknown
 cargo install wasm-bindgen-cli --version <lockfile-version> --locked
 npm run build:web -- --example form-viewer --release
-node scripts/rust/build-web.mjs --package form-lab --out <folder> --release
+node scripts/rust/build-web.mjs --package form-editor --out <folder> --release
 ```
+
+Each page opens on a loading screen that shows download progress, compilation, and renderer warm-up, then fades out over the first presented frame. A startup failure stays on that screen with its message and a reload button. Its styles live in `scripts/rust/web-status.css`, which the build inlines into the page and ships with two Archivo fonts in `fonts/`; a page title such as `"LUNA · The Hollow Observatory"` becomes the screen's heading and subtitle. Hosting development servers can serve the same stylesheet so their building and update screens match.
 
 Workspace `build` scripts create release browser output in `dist/`; `--dev` selects a faster development build. JoyGames' root `npm run dev` builds and serves projects with live rebuilds, and root `npm run build` assembles their WebAssembly pages at the canonical game/tool/example routes.
 

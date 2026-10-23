@@ -19,7 +19,7 @@ use serde_json::{
 const REQUEST_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 
 /// A small request whose successful response is easy to check.
-const POINT_REQUEST: &[u8] = br#"{"source":"point(1,2,3)"}"#;
+const POINT_REQUEST: &[u8] = br#"{"source":"let g=geometry() addPoint(g,vector(1,2,3)) output(\"P\",g)"}"#;
 
 #[test]
 fn oversized_unicode_request_is_rejected_once_and_next_request_survives() {
@@ -29,13 +29,13 @@ fn oversized_unicode_request_is_rejected_once_and_next_request_survives() {
     input.extend_from_slice("é\n".as_bytes());
     input.extend_from_slice(POINT_REQUEST);
     input.push(b'\n');
-    input.extend_from_slice(b"{\"source\":\"\\npoint(missing,0,0)\"}\n");
+    input.extend_from_slice(b"{\"source\":\"\\nlet a = missing\"}\n");
 
     let lines = evaluate(&input);
     assert_eq!(lines.len(), 3);
     assert_eq!((&lines[0]["ok"], &lines[0]["message"]), (&json!(false), &json!("Request exceeds 32 MiB")));
     assert_point_response(&lines[1]);
-    assert_eq!((&lines[2]["ok"], &lines[2]["line"], &lines[2]["column"]), (&json!(false), &json!(2), &json!(7)));
+    assert_eq!((&lines[2]["ok"], &lines[2]["line"], &lines[2]["column"]), (&json!(false), &json!(2), &json!(9)));
 }
 
 #[test]
@@ -56,6 +56,17 @@ fn final_request_without_a_trailing_newline_is_answered() {
     let lines = evaluate(POINT_REQUEST);
     assert_eq!(lines.len(), 1);
     assert_point_response(&lines[0]);
+}
+
+#[test]
+fn requests_load_modules_from_their_own_map() {
+    let request = json!({
+        "source": "use \"parts/kit.form\" as kit\noutput(\"Slab\", kit.slab(2))",
+        "path": "city/block.form",
+        "modules": {"city/parts/kit.form": "fn slab(width) { return box(width, 1, width) }"},
+    });
+    let lines = evaluate(format!("{request}\n").as_bytes());
+    assert_eq!((&lines[0]["ok"], lines[0]["data"]["positions"].as_array().map(Vec::len)), (&json!(true), Some(24)));
 }
 
 /// Run the evaluator over `input`, closing its input afterward, and return its response lines.

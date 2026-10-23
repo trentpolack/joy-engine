@@ -208,6 +208,38 @@ pub fn scrubbed_value(start: f64, points: f32, step: f64, scale: StepScale, rule
     stepped_value(start, step * steps.abs(), scale, steps.signum(), rules)
 }
 
+/// Snap a slider edit to steps anchored at its minimum, keeping both endpoints reachable. Generated values use the
+/// decimal precision of the minimum and step, so binary arithmetic noise does not become authored digits.
+pub(crate) fn snapped_slider_value(value: f64, minimum: f64, maximum: f64, step: Option<f64>) -> f64 {
+    if value <= minimum {
+        return minimum;
+    }
+    if value >= maximum {
+        return maximum;
+    }
+    let Some(step) = step.filter(|step| step.is_finite() && *step > 0.0) else {
+        return value;
+    };
+    let snapped = minimum + (((value - minimum) / step).round() * step);
+    if !snapped.is_finite() || !minimum.is_finite() {
+        return snapped.clamp(minimum, maximum);
+    }
+
+    // Keep explicitly fine steps and offset bounds intact; a fixed significant-digit limit could erase either.
+    let precision = decimal_places(minimum).max(decimal_places(step));
+    let rounded = format!("{snapped:.precision$}").parse::<f64>().unwrap_or(snapped);
+    rounded.clamp(minimum, maximum)
+}
+
+/// Fractional digits needed by a finite value's shortest decimal representation, including small exponents.
+fn decimal_places(value: f64) -> usize {
+    let scientific = format!("{value:e}");
+    let (mantissa, exponent) = scientific.split_once('e').expect("Rust always prints an exponent with {:e}");
+    let exponent: i32 = exponent.parse().expect("Rust prints a decimal exponent");
+    let fraction = mantissa.split_once('.').map_or(0, |(_, fraction)| fraction.len()) as i32;
+    (fraction - exponent).max(0) as usize
+}
+
 /// Round to `digits` significant decimal digits, as JavaScript's `Number(value.toPrecision(digits))`.
 pub fn round_significant(value: f64, digits: usize) -> f64 {
     if !value.is_finite() || value == 0.0 || digits == 0 {

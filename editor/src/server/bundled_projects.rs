@@ -29,18 +29,19 @@ pub const BUNDLED_PROJECT_ID: &str = "examples";
 const MANIFEST: &str = include_str!("../../assets/examples/project.joyproject");
 
 /// The bundled assets: project-relative paths and their contents.
-const ASSETS: [(&str, &str); 6] = [
+const ASSETS: [(&str, &str); 7] = [
     ("assets/levels/showcase.joylevel", include_str!("../../assets/examples/assets/levels/showcase.joylevel")),
     (
         "assets/objects/lantern-post.joyobject",
         include_str!("../../assets/examples/assets/objects/lantern-post.joyobject"),
     ),
-    ("assets/form/cottage.formlab", include_str!("../../../assets/form/structures/cottage.formlab")),
+    ("assets/form/cottage.forminst", include_str!("../../../assets/form/structures/cottage.forminst")),
+    ("assets/form/building.form", include_str!("../../../assets/form/structures/building.form")),
     ("assets/form/satellite-garden.form", include_str!("../../../assets/examples/satellite-garden.form")),
     ("assets/effects/lantern.joyfx", include_str!("../../../crates/joy-renderer/tests/fixtures/joyfx/lantern.joyfx")),
     (
         "assets/effects/orbiting-lights.joyfx",
-        include_str!("../../../tools/particle-lab/assets/joyfx/orbiting-lights.joyfx"),
+        include_str!("../../../tools/joyfx-editor/assets/joyfx/orbiting-lights.joyfx"),
     ),
 ];
 

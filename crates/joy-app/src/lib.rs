@@ -40,8 +40,10 @@ pub use clock::{
 };
 #[cfg(not(target_arch = "wasm32"))]
 pub use headless::{
+    CAPTURE_DIRECTORY_VARIABLE,
     HeadlessOptions,
     HeadlessShell,
+    region_mean_color,
 };
 pub use launch::launch_parameter;
 pub use shell::{

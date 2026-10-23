@@ -6,6 +6,12 @@
 //! insertion, hover documentation for keywords, functions, fields, and inputs, diagnostics underlined and marked in
 //! the gutter with go-to-line, Ctrl/Cmd+Enter to run, and a read-only mode with language tools off for JSON.
 //!
+//! Editing follows VS Code where egui's text edit does not already: Tab and Shift+Tab (or Ctrl/Cmd+] and Ctrl/Cmd+[)
+//! indent and outdent the selected lines, Ctrl/Cmd+/ toggles line comments, Enter keeps the line's indentation, `}`
+//! lines up with its block, trackpad scrolling follows the predominant axis, and hover popups wait for scrolling to
+//! stop. Copy, cut, paste, select all, undo (Ctrl/Cmd+Z), and redo (Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y) are the text
+//! edit's own; browsers depend on `joy-ui`'s input translation for them.
+//!
 //! The editor borrows the script text (`&mut String`) each frame and owns only presentation state (completion,
 //! diagnostics, pending navigation). Script undo is the text edit's own history, separate from property history;
 //! [`ScriptEditor::reset_history`] starts a new history when the owner switches documents, so programmatic refreshes
@@ -46,9 +52,13 @@ use egui::{
 
 use joy_core::scripting::{
     ScriptLanguageCatalog,
+    ScriptLanguageSymbol,
     ScriptSymbolKind,
 };
-use joy_ui::theme::tokens;
+use joy_ui::theme::{
+    colors,
+    layout,
+};
 
 use crate::script_language_tools::{
     self,
@@ -59,10 +69,13 @@ use crate::script_language_tools::{
     TokenKind,
 };
 
-/// Script font size in points.
-const SCRIPT_FONT_SIZE: f32 = 13.0;
+/// Script font size in points. Keep code denser than body copy so the editor reads as a workstation, not a form.
+const SCRIPT_FONT_SIZE: f32 = layout::TYPE_CODE;
 
-/// Text inserted for Tab (CodeMirror's `indentWithTab` with a two-space unit).
+/// Browser workbench leading, shared by highlighted text, cursor positioning, and gutter rows.
+const SCRIPT_LINE_HEIGHT: f32 = SCRIPT_FONT_SIZE * 1.65;
+
+/// Text inserted for Tab (mirrors Javascript standard).
 const INDENT: &str = "  ";
 
 /// Most completion rows shown before scrolling.
@@ -101,6 +114,17 @@ impl ScriptEditorResponse {
     }
 }
 
+/// A shortcut that edits whole lines.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LineCommand {
+    /// Tab with a multi-line selection, or Ctrl/Cmd+].
+    Indent,
+    /// Shift+Tab or Ctrl/Cmd+[.
+    Outdent,
+    /// Ctrl/Cmd+/.
+    ToggleComment,
+}
+
 /// An open completion list.
 #[derive(Clone, Debug)]
 struct CompletionState {
@@ -112,12 +136,20 @@ struct CompletionState {
     selected: usize,
 }
 
+/// Names a script declares that are visible at a cursor (a character offset): variables, parameters, functions, and
+/// other document symbols completion offers before the language's built-ins. `joy_form::form_document_symbols` is the
+/// FORM provider.
+pub type DocumentSymbolProvider = fn(&str, usize) -> Vec<ScriptLanguageSymbol>;
+
 /// A code editor for one script.
 #[derive(Clone, Debug)]
 pub struct ScriptEditor {
     id: Id,
     syntax: ScriptSyntax,
     catalog: Option<ScriptLanguageCatalog>,
+    // Built-in entries from the catalog; `items` is the document's visible names followed by these.
+    catalog_items: Vec<CompletionItem>,
+    document_symbols: Option<DocumentSymbolProvider>,
     items: Vec<CompletionItem>,
     read_only: bool,
     background: Color32,
@@ -135,9 +167,11 @@ impl ScriptEditor {
             id: Id::new(id_salt),
             syntax,
             catalog: None,
+            catalog_items: Vec::new(),
+            document_symbols: None,
             items: Vec::new(),
             read_only: false,
-            background: tokens::SCRIPT,
+            background: colors::SCRIPT,
             diagnostics: Vec::new(),
             completion: None,
             pending_line: None,
@@ -155,13 +189,20 @@ impl ScriptEditor {
     /// Read-only presentation: selectable text with highlighting, no language tools, on the surface fill (JSON views).
     pub fn read_only(mut self) -> Self {
         self.read_only = true;
-        self.background = tokens::SURFACE;
+        self.background = colors::SURFACE;
+        self
+    }
+
+    /// Also complete and describe the names the script itself declares, ranked before built-ins. Requires a catalog.
+    pub fn with_document_symbols(mut self, provider: DocumentSymbolProvider) -> Self {
+        self.document_symbols = Some(provider);
         self
     }
 
     /// Replace the language catalog (`None` turns completion and hover off).
     pub fn set_catalog(&mut self, catalog: Option<ScriptLanguageCatalog>) {
-        self.items = catalog.as_ref().map(script_language_tools::completion_items).unwrap_or_default();
+        self.catalog_items = catalog.as_ref().map(script_language_tools::completion_items).unwrap_or_default();
+        self.items = self.catalog_items.clone();
         self.catalog = catalog;
         self.completion = None;
     }
@@ -234,6 +275,8 @@ impl ScriptEditor {
         let mut state = egui::text_edit::TextEditState::load(&context, text_id).unwrap_or_default();
         let mut state_changed = false;
         let mut scroll_to_cursor = false;
+        // Whether the editor itself changed the text this frame (line commands), beyond the text edit's own changes.
+        let mut edited = false;
 
         if std::mem::take(&mut self.reset_requested) {
             state.clear_undoer();
@@ -250,15 +293,29 @@ impl ScriptEditor {
         if std::mem::take(&mut self.focus_requested) {
             context.memory_mut(|memory| memory.request_focus(text_id));
         }
-        let focused = context.memory(|memory| memory.has_focus(text_id));
+        // Keys belong to a modal dialog above the editor (Escape closes it), not to the editor under it.
+        let focused = context.memory(|memory| memory.has_focus(text_id) && memory.allows_interaction(ui.layer_id()));
         let cursor_before = state.cursor.char_range().map_or(0, |range| range.primary.index.0);
 
         // Keys the editor handles before the text edit sees them.
+        let selection = state
+            .cursor
+            .char_range()
+            .map_or((cursor_before, cursor_before), |range| (range.secondary.index.0, range.primary.index.0));
+        let spans_lines = text
+            .as_str()
+            .chars()
+            .skip(selection.0.min(selection.1))
+            .take(selection.0.abs_diff(selection.1))
+            .any(|character| character == '\n');
         let mut run_requested = false;
         let mut explicit_completion = false;
         let mut accept: Option<usize> = None;
+        let mut line_command = None;
+        let mut closing_brace = false;
         if focused {
             let completion_open = self.completion_open();
+            let line_comment = self.syntax.line_comment();
             ui.input_mut(|input| {
                 if !read_only && input.consume_key(Modifiers::COMMAND, Key::Enter) {
                     run_requested = true;
@@ -282,10 +339,70 @@ impl ScriptEditor {
                         self.completion = None;
                     }
                 }
-                if !read_only && input.consume_key(Modifiers::NONE, Key::Tab) {
-                    input.events.push(egui::Event::Text(INDENT.to_owned()));
+                if read_only {
+                    return;
                 }
+
+                // VS Code line shortcuts. Shift+Tab is checked before Tab, because a shortcut without Shift also
+                // matches a press with it.
+                if input.consume_key(Modifiers::SHIFT, Key::Tab)
+                    || input.consume_key(Modifiers::COMMAND, Key::OpenBracket)
+                {
+                    line_command = Some(LineCommand::Outdent);
+                } else if input.consume_key(Modifiers::COMMAND, Key::CloseBracket) {
+                    line_command = Some(LineCommand::Indent);
+                } else if line_comment.is_some() && input.consume_key(Modifiers::COMMAND, Key::Slash) {
+                    line_command = Some(LineCommand::ToggleComment);
+                } else if input.consume_key(Modifiers::NONE, Key::Tab) {
+                    if spans_lines {
+                        line_command = Some(LineCommand::Indent);
+                    } else {
+                        input.events.push(egui::Event::Text(INDENT.to_owned()));
+                    }
+                }
+
+                // Enter keeps the line's indentation (one level deeper after an opening bracket). A plain newline stays
+                // the text edit's own Enter, because it ignores a bare "\n" text event.
+                let start = selection.0.min(selection.1);
+                let newline = script_language_tools::newline_with_indent(text.as_str(), start, INDENT);
+                if (newline.len() > 1) && input.consume_key(Modifiers::NONE, Key::Enter) {
+                    input.events.push(egui::Event::Text(newline));
+                }
+                closing_brace = (selection.0 == selection.1)
+                    && input.events.iter().any(|event| matches!(event, egui::Event::Text(text) if text == "}"));
             });
+        }
+
+        // Line commands and the closing-brace outdent edit the text directly, as one undo step.
+        if let Some(command) = line_command
+            && text.is_mutable()
+        {
+            let (anchor, cursor) = selection;
+            let edit = match command {
+                LineCommand::Indent => script_language_tools::shift_lines(text.as_str(), anchor, cursor, INDENT, false),
+                LineCommand::Outdent => script_language_tools::shift_lines(text.as_str(), anchor, cursor, INDENT, true),
+                LineCommand::ToggleComment => script_language_tools::toggle_line_comment(
+                    text.as_str(),
+                    anchor,
+                    cursor,
+                    self.syntax.line_comment().unwrap_or_default(),
+                ),
+            };
+            if edit.text != text.as_str() {
+                text.replace_with(&edit.text);
+                edited = true;
+            }
+            state.cursor.set_char_range(Some(CCursorRange::two(CCursor::new(edit.anchor), CCursor::new(edit.cursor))));
+            state_changed = true;
+        }
+        if closing_brace && text.is_mutable() {
+            let outdent = script_language_tools::closing_brace_outdent(text.as_str(), selection.1, INDENT);
+            if outdent > 0 {
+                text.delete_char_range(CharIndex(selection.1 - outdent)..CharIndex(selection.1));
+                state.cursor.set_char_range(Some(CCursorRange::one(CCursor::new(selection.1 - outdent))));
+                state_changed = true;
+                edited = true;
+            }
         }
 
         // Accept a completion before drawing so the text edit shows the result.
@@ -305,7 +422,7 @@ impl ScriptEditor {
         // Layout.
         let line_count = script_language_tools::line_count(text.as_str());
         let font = FontId::monospace(SCRIPT_FONT_SIZE);
-        let row_height = ui.fonts_mut(|fonts| fonts.row_height(&font));
+        let row_height = SCRIPT_LINE_HEIGHT;
         let digit_width = ui.fonts_mut(|fonts| fonts.glyph_width(&font, '0'));
         let digits = line_count.to_string().len().max(2) as f32;
         let gutter_width = ((digits * digit_width) + 18.0).max(MINIMUM_GUTTER_WIDTH);
@@ -314,11 +431,18 @@ impl ScriptEditor {
             ui.painter().layout_job(highlight_job(syntax, buffer.as_str(), &font))
         };
 
-        let frame = egui::Frame::new().fill(self.background).stroke(Stroke::new(tokens::BORDER_THIN, tokens::BORDER));
+        // Scroll along the predominant axis only, as VS Code does, so a vertical trackpad swipe never drifts sideways
+        // through long lines (and a horizontal one never nudges the view up or down).
+        if ui.rect_contains_pointer(ui.available_rect_before_wrap()) {
+            ui.input_mut(|input| lock_predominant_scroll_axis(&mut input.smooth_scroll_delta));
+        }
+        let scrolling = ui.input(|input| input.is_scrolling());
+
+        let frame = egui::Frame::new().fill(self.background).stroke(Stroke::new(layout::BORDER_THIN, colors::LINE));
         let scroll_id = self.id.with("scroll");
         let mut drawn = None;
         frame.show(ui, |ui| {
-            let visible_rows = ((ui.available_height() / row_height).floor() as usize).max(4);
+            let visible_height = ui.available_height();
             egui::ScrollArea::both().id_salt(scroll_id).auto_shrink([false, false]).show(ui, |ui| {
                 ui.horizontal_top(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0;
@@ -328,10 +452,11 @@ impl ScriptEditor {
                         .id(text_id)
                         .font(FontId::monospace(SCRIPT_FONT_SIZE))
                         .code_editor()
-                        .frame(egui::Frame::NONE)
-                        .margin(vec2(tokens::SPACE_SM, tokens::SPACE_XS))
+                        .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(8, 12)))
                         .desired_width(f32::INFINITY)
-                        .desired_rows(visible_rows)
+                        // Custom syntax leading differs from egui's row estimate; keep the entire blank body clickable.
+                        .desired_rows(4)
+                        .min_size(vec2(0.0, visible_height))
                         .layouter(&mut layouter)
                         .show(ui);
                     if scroll_to_cursor && let Some(range) = output.cursor_range {
@@ -362,9 +487,9 @@ impl ScriptEditor {
                 pos2(response.rect.left(), galley_pos.y + row_rect.top()),
                 pos2(response.rect.right().max(galley_pos.x + galley.size().x), galley_pos.y + row_rect.bottom()),
             );
-            painter.set(active_line, Shape::rect_filled(rect, CornerRadius::ZERO, tokens::SURFACE.gamma_multiply(0.4)));
+            painter.set(active_line, Shape::rect_filled(rect, CornerRadius::ZERO, colors::SURFACE.gamma_multiply(0.4)));
         }
-        let gutter_right = galley_pos.x - tokens::SPACE_SM - 4.0;
+        let gutter_right = galley_pos.x - layout::SPACE_SM - 4.0;
         for (index, (_, row_rect)) in rows.iter().enumerate() {
             let number = index + 1;
             let top = galley_pos.y + row_rect.top();
@@ -373,9 +498,9 @@ impl ScriptEditor {
                 pos2(gutter_right + 4.0, top + row_rect.height()),
             );
             if number == line {
-                painter.rect_filled(row, CornerRadius::ZERO, tokens::SURFACE);
+                painter.rect_filled(row, CornerRadius::ZERO, colors::SURFACE);
             }
-            let color = if number == line { tokens::ACCENT } else { tokens::SCRIPT_GUTTER };
+            let color = if number == line { colors::ACCENT } else { colors::SCRIPT_GUTTER };
             painter.text(
                 pos2(gutter_right, top + (row_rect.height() * 0.5)),
                 Align2::RIGHT_CENTER,
@@ -395,9 +520,15 @@ impl ScriptEditor {
         );
 
         // Completion: open while typing a word or on request, follow the word, close when it ends.
-        let changed = response.changed() || accepted;
+        let changed = response.changed() || accepted || edited;
         if tools {
-            self.update_completion(text.as_str(), cursor, changed && !accepted, explicit_completion, has_focus);
+            self.update_completion(
+                text.as_str(),
+                cursor,
+                response.changed() && !accepted,
+                explicit_completion,
+                has_focus,
+            );
         } else {
             self.completion = None;
         }
@@ -421,7 +552,9 @@ impl ScriptEditor {
 
         // Hover documentation (diagnostics take precedence).
         let mut response = response;
-        if let Some(message) = hovered_diagnostic {
+        if scrolling {
+            // Hover popups wait until scrolling settles, so they never flicker over lines sliding past the pointer.
+        } else if let Some(message) = hovered_diagnostic {
             response = response.on_hover_text_at_pointer(message);
         } else if let (Some(catalog), false) = (&self.catalog, read_only)
             && let Some(pointer) = response.hover_pos()
@@ -433,16 +566,21 @@ impl ScriptEditor {
                     let end = galley.pos_from_cursor(CCursor::new(range.end)).translate(galley_pos.to_vec2());
                     pointer.x <= end.right() + 1.0
                 })
-                .and_then(|(_, word)| catalog.symbol(&word).cloned());
+                .and_then(|(_, word)| {
+                    let declared = self.document_symbols.and_then(|provider| {
+                        provider(text.as_str(), index).into_iter().find(|symbol| symbol.name == word)
+                    });
+                    declared.or_else(|| catalog.symbol(&word).cloned())
+                });
             if let Some(symbol) = symbol {
                 response = response.on_hover_ui_at_pointer(|ui| {
                     ui.set_max_width(420.0);
                     ui.label(
                         egui::RichText::new(script_language_tools::symbol_heading(&symbol))
                             .monospace()
-                            .color(tokens::SCRIPT_FUNCTION),
+                            .color(colors::SCRIPT_FUNCTION),
                     );
-                    ui.label(egui::RichText::new(kind_label(symbol.kind)).color(tokens::MUTED).size(tokens::TYPE_XS));
+                    ui.label(egui::RichText::new(kind_label(symbol.kind)).color(colors::MUTED).size(layout::TYPE_XS));
                     ui.label(&symbol.documentation);
                 });
             }
@@ -479,6 +617,14 @@ impl ScriptEditor {
             self.completion = None;
             return;
         }
+        if let Some(provider) = self.document_symbols {
+            let declared = ScriptLanguageCatalog {
+                id: String::new(),
+                symbols: provider(text, start),
+            };
+            self.items = script_language_tools::completion_items(&declared);
+            self.items.extend(self.catalog_items.iter().cloned());
+        }
         let matches = script_language_tools::filter_completions(&self.items, &word);
         if matches.is_empty() {
             self.completion = None;
@@ -501,8 +647,8 @@ impl ScriptEditor {
         let mut clicked = None;
         egui::Area::new(self.id.with("completion")).order(Order::Foreground).fixed_pos(position).show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style())
-                .fill(tokens::PANEL)
-                .stroke(Stroke::new(tokens::BORDER_THIN, tokens::BORDER))
+                .fill(colors::PANEL)
+                .stroke(Stroke::new(layout::BORDER_THIN, colors::BORDER))
                 .show(ui, |ui| {
                     ui.set_min_width(260.0);
                     let row_height = 20.0;
@@ -513,7 +659,7 @@ impl ScriptEditor {
                             let (rect, response) = ui
                                 .allocate_exact_size(vec2(ui.available_width().max(260.0), row_height), Sense::click());
                             if selected {
-                                ui.painter().rect_filled(rect, CornerRadius::ZERO, tokens::SELECTION);
+                                ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::SELECTION);
                                 response.scroll_to_me(None);
                             }
                             let painter = ui.painter_at(rect);
@@ -529,14 +675,14 @@ impl ScriptEditor {
                                 Align2::LEFT_CENTER,
                                 &item.label,
                                 FontId::monospace(12.0),
-                                tokens::TEXT,
+                                colors::TEXT,
                             );
                             painter.text(
                                 rect.right_center() - vec2(6.0, 0.0),
                                 Align2::RIGHT_CENTER,
                                 &item.detail,
-                                FontId::proportional(tokens::TYPE_XS),
-                                tokens::MUTED,
+                                FontId::proportional(layout::TYPE_XS),
+                                colors::MUTED,
                             );
                             if response.clicked() {
                                 clicked = Some(*index);
@@ -546,7 +692,7 @@ impl ScriptEditor {
                     if let Some(item) = completion.matches.get(completion.selected).map(|index| &self.items[*index]) {
                         ui.separator();
                         ui.set_max_width(320.0);
-                        ui.label(egui::RichText::new(&item.documentation).color(tokens::MUTED).size(tokens::TYPE_SM));
+                        ui.label(egui::RichText::new(&item.documentation).color(colors::MUTED).size(layout::TYPE_SM));
                     }
                 });
         });
@@ -569,8 +715,8 @@ impl ScriptEditor {
         let mut hovered = None;
         for diagnostic in &self.diagnostics {
             let color = match diagnostic.severity {
-                DiagnosticSeverity::Error => tokens::DANGER,
-                DiagnosticSeverity::Warning => tokens::ACCENT_HOVER,
+                DiagnosticSeverity::Error => colors::DANGER,
+                DiagnosticSeverity::Warning => colors::ACCENT_HOVER,
             };
             let range = diagnostic.character_range(text);
             let start = galley.pos_from_cursor(CCursor::new(range.start)).translate(galley_pos.to_vec2());
@@ -598,6 +744,15 @@ impl ScriptEditor {
             }
         }
         hovered
+    }
+}
+
+/// Keep only the larger component of a scroll delta.
+fn lock_predominant_scroll_axis(delta: &mut egui::Vec2) {
+    if delta.x.abs() > delta.y.abs() {
+        delta.y = 0.0;
+    } else {
+        delta.x = 0.0;
     }
 }
 
@@ -657,6 +812,7 @@ fn highlight_job(syntax: &ScriptSyntax, source: &str, font: &FontId) -> LayoutJo
             byte_range: ByteIndex(token.range.start)..ByteIndex(token.range.end),
             format: TextFormat {
                 font_id: font.clone(),
+                line_height: Some(SCRIPT_LINE_HEIGHT),
                 color: token_color(token.kind),
                 ..Default::default()
             },
@@ -668,7 +824,8 @@ fn highlight_job(syntax: &ScriptSyntax, source: &str, font: &FontId) -> LayoutJo
             byte_range: ByteIndex(0)..ByteIndex(0),
             format: TextFormat {
                 font_id: font.clone(),
-                color: tokens::TEXT,
+                line_height: Some(SCRIPT_LINE_HEIGHT),
+                color: colors::TEXT,
                 ..Default::default()
             },
         });
@@ -679,14 +836,14 @@ fn highlight_job(syntax: &ScriptSyntax, source: &str, font: &FontId) -> LayoutJo
 /// The script editor's highlight color for a token kind.
 pub fn token_color(kind: TokenKind) -> Color32 {
     match kind {
-        TokenKind::Comment => tokens::SCRIPT_COMMENT,
-        TokenKind::String | TokenKind::Function => tokens::SCRIPT_FUNCTION,
-        TokenKind::Number => tokens::SCRIPT_NUMBER,
-        TokenKind::Keyword | TokenKind::Boolean => tokens::SCRIPT_KEYWORD,
-        TokenKind::Parameter => tokens::SCRIPT_PARAMETER,
-        TokenKind::Operator => tokens::SCRIPT_OPERATOR,
-        TokenKind::Invalid => tokens::DANGER,
-        TokenKind::Whitespace | TokenKind::Property | TokenKind::Variable => tokens::TEXT,
+        TokenKind::Comment => colors::SCRIPT_COMMENT,
+        TokenKind::String | TokenKind::Function => colors::SCRIPT_FUNCTION,
+        TokenKind::Number => colors::SCRIPT_NUMBER,
+        TokenKind::Keyword | TokenKind::Boolean => colors::SCRIPT_KEYWORD,
+        TokenKind::Parameter => colors::SCRIPT_PARAMETER,
+        TokenKind::Operator => colors::SCRIPT_OPERATOR,
+        TokenKind::Invalid => colors::DANGER,
+        TokenKind::Whitespace | TokenKind::Property | TokenKind::Variable => colors::TEXT,
     }
 }
 
@@ -710,10 +867,10 @@ fn kind_label(kind: ScriptSymbolKind) -> &'static str {
 
 fn kind_color(kind: ScriptSymbolKind) -> Color32 {
     match kind {
-        ScriptSymbolKind::Keyword => tokens::SCRIPT_KEYWORD,
-        ScriptSymbolKind::Function => tokens::SCRIPT_FUNCTION,
-        ScriptSymbolKind::Variable => tokens::SCRIPT_PARAMETER,
-        ScriptSymbolKind::Property => tokens::SCRIPT_NUMBER,
+        ScriptSymbolKind::Keyword => colors::SCRIPT_KEYWORD,
+        ScriptSymbolKind::Function => colors::SCRIPT_FUNCTION,
+        ScriptSymbolKind::Variable => colors::SCRIPT_PARAMETER,
+        ScriptSymbolKind::Property => colors::SCRIPT_NUMBER,
     }
 }
 

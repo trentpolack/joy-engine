@@ -8,7 +8,8 @@
 //! the saved preference, persist as JSON through [`Storage`] under the tool's key, and a storage failure only means
 //! the layout is not remembered. Dividers resize by dragging,
 //! by arrow keys once focused (20 points per press), and reset to their default width on double-click. Panels can be
-//! collapsed (never all at once) and the layout maximized.
+//! collapsed (never all at once), and layouts that allow it can maximize their center pane. Maximizing never hides a
+//! tool's header or the host's chrome.
 //!
 //! Draw in two steps so dividers sit above pane content for hit testing:
 //!
@@ -36,7 +37,10 @@ use serde::{
 };
 
 use joy_storage::Storage;
-use joy_ui::theme::tokens;
+use joy_ui::theme::{
+    colors,
+    layout,
+};
 
 /// Divider hit width in points.
 pub const DIVIDER_WIDTH: f32 = 10.0;
@@ -61,8 +65,8 @@ pub enum MaximizeMode {
     /// Show only the center pane.
     #[default]
     Viewport,
-    /// Keep the panes; the tool hides its surrounding chrome (header, footer) and the host hides its own.
-    Workspace,
+    /// The layout does not maximize: the visibility controls offer no Maximize, and panels are hidden one at a time.
+    None,
 }
 
 /// One of the three panes.
@@ -254,9 +258,10 @@ impl PanelLayout {
         self.options.maximize_mode
     }
 
-    /// Maximize or restore (presentation only; widths and collapsed panes are kept).
+    /// Maximize or restore (presentation only; widths and collapsed panes are kept). Layouts with
+    /// [`MaximizeMode::None`] stay restored.
     pub fn set_maximized(&mut self, maximized: bool) {
-        self.maximized = maximized;
+        self.maximized = maximized && (self.options.maximize_mode != MaximizeMode::None);
     }
 
     /// The pane rectangles inside `area` for this frame. Widths clamp to the space available without changing the
@@ -325,8 +330,9 @@ impl PanelLayout {
         }
     }
 
-    /// The visibility toggles (one per pane, the center only when collapsible) and the maximize button, reading left to
-    /// right in either layout direction (in a right-to-left layout they are added in reverse).
+    /// The visibility toggles (one per pane, the center only when collapsible) and, unless the layout's mode is
+    /// [`MaximizeMode::None`], the maximize button, reading left to right in either layout direction (in a right-to-left
+    /// layout they are added in reverse).
     pub fn visibility_controls(&mut self, ui: &mut Ui) {
         let visible = self.collapsed.iter().filter(|collapsed| !**collapsed).count();
         let mut items: Vec<Option<PaneSide>> = [PaneSide::Left, PaneSide::Center, PaneSide::Right]
@@ -334,7 +340,9 @@ impl PanelLayout {
             .filter(|side| *side != PaneSide::Center || self.options.center_collapsible)
             .map(Some)
             .collect();
-        items.push(None);
+        if self.options.maximize_mode != MaximizeMode::None {
+            items.push(None);
+        }
         if ui.layout().main_dir() == egui::Direction::RightToLeft {
             items.reverse();
         }
@@ -427,15 +435,15 @@ impl PanelLayout {
 
         let active = response.dragged() || response.has_focus();
         let color = if active {
-            tokens::ACCENT
+            colors::ACCENT
         } else if response.hovered() {
-            tokens::ACCENT_HOVER
+            colors::ACCENT_HOVER
         } else {
             Color32::TRANSPARENT
         };
         if color != Color32::TRANSPARENT {
             ui.painter()
-                .line_segment([pos2(x, rect.top()), pos2(x, rect.bottom())], Stroke::new(tokens::BORDER_FOCUS, color));
+                .line_segment([pos2(x, rect.top()), pos2(x, rect.bottom())], Stroke::new(layout::BORDER_FOCUS, color));
         }
         let label = if side == PaneSide::Left { "Resize editing panel" } else { "Resize inspector" };
         response

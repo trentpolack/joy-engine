@@ -17,6 +17,16 @@ use joy_engine::core::{
     RandomSource,
     SeededRandom,
 };
+use joy_engine::form::{
+    CompiledScript,
+    FORM_INSTANCE_EXTENSION,
+    FormInstance,
+    ParameterControl,
+    parameter_control,
+    parameter_group,
+    parameter_info,
+    parameter_label,
+};
 use joy_engine::gameplay::{
     ComponentFieldKind,
     ComponentIssue,
@@ -1114,12 +1124,15 @@ impl LevelEditor {
         };
         let mut found: Vec<FoundParameter> = Vec::new();
         if let Some(path) = asset(component_type::RENDER)
-            && (path.ends_with(".form") || path.ends_with(".formlab"))
+            && (path.ends_with(".form") || path.ends_with(FORM_INSTANCE_EXTENSION))
         {
             if !self.form_parameters.contains_key(&path)
                 && let Ok(text) = access.read(&path)
             {
-                self.form_parameters.insert(path.clone(), form_parameters(&path, &text));
+                // Referenced scripts and modules come from the same project; the loader only reads.
+                let reader = std::cell::RefCell::new(&mut *access);
+                let read = |dependency: &str| reader.borrow_mut().read(dependency);
+                self.form_parameters.insert(path.clone(), form_parameters(&path, &text, &read));
             }
             for parameter in self.form_parameters.get(&path).into_iter().flatten() {
                 let (Some(name), Some(value)) = (parameter.get("name").and_then(Value::as_str), parameter.get("value"))
@@ -1131,7 +1144,12 @@ impl LevelEditor {
                 };
                 // FORM numbers are `f64`; JSON writes integral defaults as integers, as JavaScript does.
                 let value = value.as_f64().map_or_else(|| value.clone(), json_number);
-                found.push((component_type::RENDER.to_owned(), name.to_owned(), value, min.as_f64(), max.as_f64()));
+                found.push((
+                    component_type::RENDER.to_owned(),
+                    name.to_owned(),
+                    value,
+                    form_parameter_metadata(parameter, min.as_f64(), max.as_f64()),
+                ));
             }
         }
         if let Some(path) = asset(component_type::EFFECT)
@@ -1154,18 +1172,16 @@ impl LevelEditor {
                         ..
                     } => (Value::from(value.map(json_number).to_vec()), None, None),
                 };
-                found.push((component_type::EFFECT.to_owned(), name.clone(), entry.0, entry.1, entry.2));
+                let metadata = FieldMetadata {
+                    min: entry.1,
+                    max: entry.2,
+                    ..Default::default()
+                };
+                found.push((component_type::EFFECT.to_owned(), name.clone(), entry.0, metadata));
             }
         }
-        for (component, name, value, min, max) in found {
-            self.metadata.insert(
-                format!("{component}.parameters.{name}"),
-                FieldMetadata {
-                    min,
-                    max,
-                    ..Default::default()
-                },
-            );
+        for (component, name, value, metadata) in found {
+            self.metadata.insert(format!("{component}.parameters.{name}"), metadata);
             self.parameter_defaults.push((component, name, value));
         }
     }
@@ -1190,8 +1206,33 @@ impl LevelEditor {
     }
 }
 
-/// An asset-declared parameter: component, name, default value, and numeric bounds.
-type FoundParameter = (String, String, Value, Option<f64>, Option<f64>);
+/// An asset-declared parameter: component, name, default value, and how the inspector presents it.
+type FoundParameter = (String, String, Value, FieldMetadata);
+
+/// How the inspector presents a FORM parameter: its script label (prefixed by its group), help, step, and whole-number
+/// control (`int`, `bool`, and `seed` as bounded integers, `enum` as named options).
+fn form_parameter_metadata(descriptor: &Value, min: Option<f64>, max: Option<f64>) -> FieldMetadata {
+    let label = match parameter_group(descriptor) {
+        Some(group) => format!("{group} · {}", parameter_label(descriptor)),
+        None => parameter_label(descriptor),
+    };
+    let control = parameter_control(descriptor);
+    let options = match &control {
+        ParameterControl::Choice(options) => options.clone(),
+        _ => Vec::new(),
+    };
+    FieldMetadata {
+        label: Some(label),
+        min,
+        max,
+        step: descriptor.get("step").and_then(Value::as_f64),
+        description: parameter_info(descriptor).map(str::to_owned),
+        integer: !matches!(control, ParameterControl::Continuous | ParameterControl::Text),
+        options,
+        seed: control == ParameterControl::Seed,
+        ..Default::default()
+    }
+}
 
 /// Parse a level, or a `.joyobject` as a one-entity level with that entity selected.
 fn parse_document(path: &str, text: &str) -> Result<(LevelDocument, bool), String> {
@@ -1208,23 +1249,24 @@ fn parse_document(path: &str, text: &str) -> Result<(LevelDocument, bool), Strin
     Ok((LevelDocument::new(&level).map_err(|error| error.to_string())?, false))
 }
 
-/// FORM parameter records (`name`, `type`, `value`, `min`, `max`, …) from a `.form` or `.formlab` text, or none when it
-/// does not compile.
-pub fn form_parameters(path: &str, text: &str) -> Vec<Value> {
-    let (source, overrides, materials) = if path.ends_with(".formlab") {
-        let Ok(document) = serde_json::from_str::<Value>(text) else {
+/// FORM parameter records (`name`, `type`, `value`, `min`, `max`, …) from a `.form` or `.forminst` text, or none when it
+/// does not compile. `read` supplies an instance's referenced script and the modules scripts use.
+pub fn form_parameters(path: &str, text: &str, read: &dyn Fn(&str) -> Result<String, String>) -> Vec<Value> {
+    let (script, overrides, materials) = if path.ends_with(FORM_INSTANCE_EXTENSION) {
+        let Ok(instance) = FormInstance::read(text) else {
             return Vec::new();
         };
-        let source = document.get("source").and_then(Value::as_str).unwrap_or_default().to_owned();
-        let overrides =
-            document.get("overrides").cloned().filter(Value::is_object).unwrap_or(Value::Object(Map::new()));
-        (source, overrides, document.get("materials").cloned())
+        let Ok(script) = instance.parse_script(path, &|file: &str| read(file)) else {
+            return Vec::new();
+        };
+        (script, Value::Object(instance.overrides.clone()), instance.materials.clone().map(Value::Array))
     } else {
-        (text.to_owned(), Value::Object(Map::new()), None)
+        let Ok(script) = CompiledScript::parse_with_modules(text, path, &|file: &str| read(file)) else {
+            return Vec::new();
+        };
+        (script, Value::Object(Map::new()), None)
     };
-    joy_engine::form::compile(&source, &overrides, materials.as_ref())
-        .map(|geometry| geometry.parameters)
-        .unwrap_or_default()
+    script.evaluate(&overrides, materials.as_ref()).map(|geometry| geometry.parameters).unwrap_or_default()
 }
 
 /// Set (or with `None`, remove) a nested own property, creating intermediate records.

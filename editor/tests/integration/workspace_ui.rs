@@ -27,7 +27,10 @@ fn sample_workspace() -> TempFolder {
     workspace.write("projects/demo/assets/levels/track.joylevel", &level_text("Track"));
     workspace.write("projects/demo/assets/levels/yard.joylevel", &level_text("Yard"));
     workspace.write("projects/demo/assets/effects/spark.joyfx", &crate::level_editor::spark_effect());
-    workspace.write("projects/demo/assets/form/pillar.form", "box(0, 0.5, 0, 1, 1, 1)\n");
+    workspace.write(
+        "projects/demo/assets/form/pillar.form",
+        "output(\"Pillar\", translate(box(1, 1, 1), vector(0, 0.5, 0)))\n",
+    );
     workspace
 }
 
@@ -78,12 +81,9 @@ fn the_content_browser_opens_searches_filters_and_creates_assets() {
     assert!(driver.has("new-asset-type"));
     driver.type_into("new-asset-name", "levels/created");
     driver.click("new-asset-create");
-    assert!(
-        workspace.exists("projects/demo/assets/levels/created.formlab"),
-        "the default New type is a FORM LAB document"
-    );
-    assert_eq!(driver.editor.workspace().active_path(), Some("assets/levels/created.formlab"));
-    assert_eq!(driver.status(), "Created assets/levels/created.formlab");
+    assert!(workspace.exists("projects/demo/assets/levels/created.form"), "the default New type is a FORM script");
+    assert_eq!(driver.editor.workspace().active_path(), Some("assets/levels/created.form"));
+    assert_eq!(driver.status(), "Created assets/levels/created.form");
     driver.click("new-asset");
     driver.type_into("new-asset-name", "levels/created");
     driver.click("new-asset-create");
@@ -300,8 +300,12 @@ fn documentation_and_project_details_panels_open_beside_the_content_browser() {
     driver.press("Escape", egui::Modifiers::NONE);
     assert!(!driver.has("workspace-help-close"), "Escape closes the documentation");
     driver.click("project-details");
-    driver.frames(3);
+    driver.frames(20);
     assert!(driver.editor.workspace().project_summary().unwrap().manifest.capabilities.len() == 1);
+    // Expanded project metadata must not push Documentation under the workspace status strip.
+    driver.capture("workspace-project-details");
+    driver.click("workspace-help-open");
+    assert!(driver.has("workspace-help-close"), "Documentation remains reachable with Project Details expanded");
 }
 
 fn level_name(driver: &Driver) -> String {

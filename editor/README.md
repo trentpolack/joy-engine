@@ -12,14 +12,18 @@ npm run build --workspace @joy-games/joy-editor
 
 In JoyGames, `npm run dev:editor` or `npm run dev:joy-editor` runs the native editor. Project discovery uses `--workspace`, `JOY_EDITOR_WORKSPACE`, or the nearest `joy.joyconfig`; projects contain `project.joyproject` manifests. Open Folder accepts another compatible folder for the session.
 
-The static browser build opens bundled examples and supports document downloads. It cannot discover or save project filesystem assets. Game previews and Play destinations are not implemented here; run a game through its own development command.
+The static browser build opens bundled examples and supports document downloads. It cannot discover or save project filesystem assets or start games.
+
+**Play** (native builds) runs the selected project's game with its `npm run dev` command in a separate window; **Stop**, choosing Play again, or closing the editor ends it. Games that read their assets through `GameAssets` hot reload what the editor saves, so FORM, effect, and level edits update the running game without a restart.
+
+Shortcuts: Ctrl/Cmd+S saves, Ctrl/Cmd+P searches the Content Browser, Ctrl/Cmd+O opens a project folder (native), and Alt+1 through Alt+9 switch document tabs. Standalone FORM EDITOR and JOYFX EDITOR also save with Ctrl/Cmd+S and open with Ctrl/Cmd+O.
 
 ## Documents and Ownership
-The workspace owns open files, saved revisions, dirty state, conflicts, and recovery. FORM LAB and PARTICLE LAB implement `joy_engine::development::AuthoringTool` and draw inside tabs using the same engine renderer and authoring kit as their standalone applications. Inactive tabs receive no frames. UI and document/model modules remain separate.
+The workspace owns open files, saved revisions, dirty state, conflicts, and recovery. FORM EDITOR and JOYFX EDITOR implement `joy_engine::development::AuthoringTool` and draw inside tabs using the same engine renderer and authoring kit as their standalone applications. Inactive tabs receive no frames. UI and document/model modules remain separate.
 
 Native file operations in `server/project_files.rs` accept manifest-supported assets under `assets/`, reject symlinks and traversal, compare revisions before saving, and preserve replaced files in `.joy-editor-recovery/`. External edits refresh clean documents and require an explicit choice for dirty ones. Closing with unsaved work asks first. Session storage remembers project, open paths, active tab, and panel widths; it does not silently save source buffers.
 
-Raw `.form` saves preserve source exactly; inspector parameter overrides remain temporary. `.formlab` retains overrides, materials, imported meshes, and variants. `.joyfx`, `.joylevel`, and `.joyobject` retain their document formats. Unsupported or malformed structured assets can be repaired in source view. Save and baked export are distinct operations.
+Raw `.form` saves preserve source exactly; inspector parameter overrides remain temporary. `.forminst` FORM instances retain overrides, materials, imported meshes, and variants, and either refer to a `.form` script by relative path or pack their script; **New** creates packed instances. Projects list `.form` and `.forminst` assets; standalone FORM EDITOR opens version 1 `.formlab` documents as packed instances, so resave them as `.forminst` to use them in a project. Hosted tools read other project files through the workspace (`AuthoringTool::set_file_reader`, with each document's project-relative `ToolDocument::path`), so FORM EDITOR resolves an instance's referenced script and a script's `use` modules, and saving an instance whose referenced script was edited in its tab also writes that script (`AuthoringTool::save_dependencies`). `.joyfx`, `.joylevel`, and `.joyobject` retain their document formats. Unsupported or malformed structured assets can be repaired in source view. Save and baked export are distinct operations.
 
 ## Level Authoring
 The level tool has an outliner, schema-driven property inspector, Advanced Source, orbit/pan/zoom, selection, a move gizmo with axis/plane handles, grid snapping, and undo/redo. Entity transforms use world units and display degrees while storing radians. Component schemas supply defaults, bounds, units, conditions, and asset choices; custom data keeps generic controls.
@@ -29,9 +33,9 @@ Reusable objects let an instance follow source components while retaining local 
 The shared grid is an editor aid, independent of authored ground, export, and simulation. Preview lighting, camera, panel visibility, and maximization remain editing state. Numeric drafts stay separate from accepted values and must be repaired before operations that replace authored state.
 
 ## Modules and Validation
-`src/workspace/` owns workspace models/UI and tool hosting; `src/level/` owns level authoring; `src/server/` owns project file access; `src/desktop/` is the native host. The labs it hosts are separate packages in the engine's [`tools/`](../tools/). Shared controls and script language presentation live in the engine's [authoring kit](../docs/rust-authoring.md).
+`src/workspace/` owns workspace models/UI and tool hosting; `src/level/` owns level authoring; `src/server/` owns project file access; `src/desktop/` is the native host. The tool editors it hosts are separate packages in the engine's [`tools/`](../tools/). Shared controls and script language presentation live in the engine's [authoring kit](../docs/rust-authoring.md).
 
 Rust tests under `tests/integration/` cover documents, file boundaries, conflicts/recovery, level operations, and headless UI interactions. The canonical capture script checks browser canvas startup and screenshots. Use interactive native checks for file dialogs and project editing; browser captures cannot verify native filesystem workflows.
 
 ## Production Availability
-The hosting workspace's `joy.joyconfig` controls `editors.joyEditor`, `editors.formLab`, and `editors.particleLab`. Joy Editor defaults off; both labs default on. Enabling the editor also enables its hosted labs. Production browser publication remains static and does not add a filesystem service. Development commands remain available regardless of these flags.
+The hosting workspace's `joy.joyconfig` controls `editors.joyEditor`, `editors.formEditor`, and `editors.joyfxEditor`. Joy Editor defaults off; both tool editors default on. The legacy `editors.formLab` and `editors.particleLab` keys are still read, and the current key wins when both are present. Enabling the editor also enables its hosted tool editors. Production browser publication remains static and does not add a filesystem service. Development commands remain available regardless of these flags.

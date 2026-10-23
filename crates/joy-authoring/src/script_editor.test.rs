@@ -60,6 +60,25 @@ fn text(value: &str) -> egui::Event {
 fn typing_opens_completion_and_functions_insert_calls_with_the_cursor_inside() {
     let editor = ScriptEditor::new("spawn", ScriptSyntax::particle()).with_catalog(joy_fx::particle_language_catalog());
     let mut harness = Harness::new(editor, "size = ");
+    harness.frame(vec![]);
+    // The blank body below a short script must still focus the input when clicked.
+    let point = egui::pos2(200.0, 340.0);
+    harness.frame(vec![
+        egui::Event::PointerMoved(point),
+        egui::Event::PointerButton {
+            pos: point,
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: Modifiers::NONE,
+        },
+        egui::Event::PointerButton {
+            pos: point,
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::NONE,
+        },
+    ]);
+    assert!(harness.context.memory(|memory| memory.has_focus(harness.editor.id().with("text"))));
     harness.editor.go_to_line(1);
     harness.frame(vec![]);
     harness.frame(vec![key(Key::End, Modifiers::NONE)]);
@@ -120,4 +139,39 @@ fn read_only_views_never_edit() {
         output.textures_delta.clear();
     }
     assert!(!editor.completion_open());
+}
+
+#[test]
+fn vs_code_line_shortcuts_edit_lines_as_one_change() {
+    let editor = ScriptEditor::new("lines", ScriptSyntax::form()).with_catalog(joy_form::form_language_catalog());
+    let mut harness = Harness::new(editor, "if true {\nbox(1, 1, 1)\n}");
+    harness.editor.go_to_line(2);
+    harness.frame(vec![]);
+    harness.frame(vec![]);
+
+    // Tab on a line inserts an indent; Shift+Tab removes it again.
+    harness.frame(vec![key(Key::Tab, Modifiers::NONE)]);
+    assert_eq!(harness.text, "if true {\n  box(1, 1, 1)\n}");
+    let outdent = harness.frame(vec![key(Key::Tab, Modifiers::SHIFT)]);
+    assert!(outdent.changed);
+    assert_eq!(harness.text, "if true {\nbox(1, 1, 1)\n}", "Shift+Tab outdents instead of inserting spaces");
+
+    // Ctrl/Cmd+/ toggles a line comment.
+    harness.frame(vec![key(Key::Slash, Modifiers::COMMAND)]);
+    assert_eq!(harness.text, "if true {\n# box(1, 1, 1)\n}");
+    harness.frame(vec![key(Key::Slash, Modifiers::COMMAND)]);
+    assert_eq!(harness.text, "if true {\nbox(1, 1, 1)\n}");
+
+    // Enter after an opening brace indents the new line, and `}` there lines up with the block.
+    harness.editor.go_to_line(1);
+    harness.frame(vec![]);
+    harness.frame(vec![key(Key::End, Modifiers::NONE)]);
+    harness.frame(vec![key(Key::Enter, Modifiers::NONE)]);
+    assert_eq!(harness.text, "if true {\n  \nbox(1, 1, 1)\n}");
+    harness.frame(vec![text("}")]);
+    assert_eq!(harness.text, "if true {\n}\nbox(1, 1, 1)\n}");
+
+    // Enter on an unindented line still inserts a plain line break.
+    harness.frame(vec![key(Key::Enter, Modifiers::NONE)]);
+    assert_eq!(harness.text, "if true {\n}\n\nbox(1, 1, 1)\n}");
 }

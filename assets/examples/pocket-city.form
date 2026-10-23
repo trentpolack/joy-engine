@@ -6,16 +6,25 @@ param height = 8 meta(min=1, max=16, step=0.5)
 param spacing = 1.8 meta(min=1.2, max=3, step=0.1)
 param random_seed = 21 meta(min=1, max=99, step=1)
 
+# ---- City.
+# A square grid of towers. Squaring the random height keeps most towers low with a few tall landmarks; taller
+# towers turn redder, and each gets a little random green.
 seed(random_seed)
-repeat blocks as x {
-  repeat blocks as z {
-    let h = ((rand()^2)*height) + 0.5
-    let px = (x - ((blocks - 1)/2))*spacing
-    let pz = (z - ((blocks - 1)/2))*spacing
-    let building = meshBox(1, h, 1)
-    color(0.5 + h/height*0.45, 0.35 + rand()*0.2, 0.25)
-    with userData({kind: "building", grid: {x: x, z: z}, height: h}) {
-      instance(building, vector(px, h/2, pz))
-    }
+let city = geometry()
+for x in 0..blocks {
+  for z in 0..blocks {
+    const h = ((rand()^2)*height) + 0.5
+    const px = (x - ((blocks - 1)/2))*spacing
+    const pz = (z - ((blocks - 1)/2))*spacing
+    const facade = rgba(0.5 + h/height*0.45, 0.35 + rand()*0.2, 0.25, 1)
+    let tower = color(place(meshBox(1, h, 1), vector(px, h/2, pz)), facade)
+
+    # Every face records its tower: the grid cell (x and z; y is unused) and its height.
+    addAttribute(tower, "faces", "kind", "building")
+    addAttribute(tower, "faces", "grid", vector(x, 0, z))
+    addAttribute(tower, "faces", "height", h)
+    append(city, tower)
   }
 }
+
+output("Pocket city", city)

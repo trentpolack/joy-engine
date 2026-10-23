@@ -13,10 +13,25 @@ Games own tuning and palettes in Rust configuration modules. External documents 
 
 Preserve time units, update order, random-number consumption, collision behavior, and rendering order during structural refactors. Keep intentional behavior changes separate. Gameplay randomness stays independent from cosmetic randomness; deterministic scenarios use seeded streams and portable numerical helpers.
 
+## FORM Authoring
+Use `const` for immutable values, lookup tables, fixed calculations, and finished geometry. Keep `let` for reassignment, `ref` arguments, and geometry or instance builders that will be edited. A constant holds a frozen snapshot of geometry or instances read from a variable, leaving that variable editable; use `copy()` when a separate editable value of a constant is needed.
+
+Use `for index in start..end` for ascending, exclusive integer ranges, and `foreach item in collection` when only list values are needed. Use `wrangle` for geometry and instance attribute domains. Author enums on multiple lines with PascalCase entries, preserving member order and keeping FORM spellings separate from persistent game IDs when they differ:
+
+```text
+enum Kind {
+  Tower,
+  Block,
+  Hall,
+  Stack,
+  Relay
+}
+```
+
 ## Node and Extension Tooling
 JavaScript remains appropriate for build orchestration, captures, deployment, patch delivery, and browser infrastructure. The VS Code extension may use TypeScript for its host API. These tools must not become a second game or engine implementation.
 
-Use readable native modules, descriptive names, explicit state, small functions, and documented JSDoc contracts where useful. Keep two-space formatting and the existing tooling conventions: braces for branches, `if(`/`for(`/`while(` spacing, no unnecessary trailing commas, and readable grouped arithmetic. Classes suit resource-owning state; ordinary data should remain plain records. Declare cleanup and callback ownership explicitly, including subprocesses, servers, file handles, and listeners.
+Use readable native modules, descriptive names, explicit state, small functions, and documented JSDoc contracts where useful. Keep two-space formatting and the existing tooling conventions: braces around every branch (never a single-line `if`), `if(`/`for(`/`while(` spacing, no unnecessary trailing commas, compound assignment without a space before the operator (`x+= 1`), no spaces around `*`, `/`, or exponents while `+` and `-` keep them, readable grouped arithmetic, and JSDoc function descriptions starting on the line after the opening `/**`. Classes suit resource-owning state; ordinary data should remain plain records. Declare cleanup and callback ownership explicitly, including subprocesses, servers, file handles, and listeners.
 
 Keep configuration and mutable state distinct. Validate filesystem/network boundaries, preserve existing paths and serialized values, and avoid dense callback chains with hidden side effects. Maintain the npm workspace metadata and root lockfile when dependencies change.
 

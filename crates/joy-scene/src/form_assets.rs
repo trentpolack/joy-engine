@@ -3,16 +3,23 @@
 
 //! FORM geometry as renderable mesh assets.
 //!
-//! FORM itself is renderer-free; this adapter is the only path from FORM output to the screen, so FORM LAB, games, and
+//! FORM itself is renderer-free; this adapter is the only path from FORM output to the screen, so FORM EDITOR, games, and
 //! examples all see the same result. Evaluated geometry becomes an engine [`Mesh`](joy_render_types::Mesh) whose
 //! material slots follow FORM's palette, and each palette entry becomes a material drawn with the shading model the
 //! caller picks: [`ShadingModel::Layered`] keeps every factor and embedded map (PNG, JPEG, or WebP data URLs), while
 //! [`ShadingModel::Lit`] and [`ShadingModel::Unlit`] draw FORM's vertex colors alone in one slot, as FORM's flat look
 //! always has.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::Arc;
 
-use joy_form::GeometryData;
+use joy_form::{
+    CompiledScript,
+    FORM_INSTANCE_EXTENSION,
+    FormInstance,
+    GeometryData,
+};
 use joy_render_types::ShadingModel;
 
 use joy_renderer::{
@@ -22,13 +29,18 @@ use joy_renderer::{
     TextureAsset,
 };
 
+use crate::form_placements::{
+    FormPlacement,
+    form_placements,
+};
+
 /// Failure compiling FORM source into a mesh asset: the script's own diagnostic, or a rejected document or mesh.
 #[derive(Debug, thiserror::Error)]
 pub enum FormMeshError {
     /// FORM source failed to parse or evaluate; the diagnostic carries the source location.
     #[error("FORM evaluation failed: {0}")]
     Form(joy_form::Diagnostic),
-    /// A FORM LAB document was malformed, or the evaluated geometry could not become a mesh asset.
+    /// A FORM instance document was malformed, or the evaluated geometry could not become a mesh asset.
     #[error(transparent)]
     Render(#[from] RenderError),
 }
@@ -50,17 +62,31 @@ pub fn compile_form_mesh(
     Ok(form_mesh_asset(&geometry, model)?)
 }
 
-/// Compiled FORM assets for levels and tools, cached by path, source text, parameters, and shading model; the mesh half of
-/// [`AssetScene`](crate::AssetScene).
+/// A compiled FORM asset: the mesh it draws and the placements its tagged points ask the host to fill.
+#[derive(Clone, Debug)]
+pub struct FormAsset {
+    /// The mesh drawn for the asset's visible geometry.
+    pub mesh: MeshAsset,
+    /// Tagged points in the asset's local space; see [`form_placements`].
+    pub placements: Arc<[FormPlacement]>,
+}
+
+/// Compiled FORM assets for levels and tools, cached by path, source text (including referenced scripts and modules),
+/// variant, parameters, and shading model; the mesh half of [`AssetScene`](crate::AssetScene).
 ///
-/// `.form` files are FORM source; `.formlab` files are FORM LAB documents (`{"version": 1, "source", "overrides",
-/// "materials"}`) whose overrides the component's parameters extend. Callers read files themselves (from disk, a
-/// bundle, or `include_str!`), so the library never touches the file system and works the same in browsers.
+/// `.form` files are FORM scripts; `.forminst` files are FORM instances (see [`joy_form::FormInstance`]): a script
+/// reference or packed script with overrides, materials, and variants. Overrides layer in order: the instance's
+/// overrides, then the named variant's, then the component's parameters. Callers read files themselves (from disk, a
+/// bundle, or `include_str!`) through the reader they pass, which also supplies referenced scripts and `use` modules,
+/// so the library never touches the file system and works the same in browsers.
 #[derive(Default)]
 pub struct FormAssetLibrary {
-    cache: HashMap<String, MeshAsset>,
+    cache: HashMap<String, FormAsset>,
     textures: FormTextureCache,
 }
+
+/// Reads an asset path's text for the library: referenced scripts and modules, relative to the reader's root.
+pub type FormAssetReader<'a> = dyn FnMut(&str) -> Result<String, String> + 'a;
 
 impl FormAssetLibrary {
     /// An empty library.
@@ -73,36 +99,61 @@ impl FormAssetLibrary {
         &mut self,
         path: &str,
         text: &str,
+        read: &mut FormAssetReader<'_>,
         parameters: &serde_json::Map<String, serde_json::Value>,
         model: ShadingModel<'_>,
     ) -> Result<MeshAsset, FormMeshError> {
-        let key = serde_json::json!([path, text, parameters, model.name()]).to_string();
+        Ok(self.resolve_asset(path, text, read, None, parameters, model)?.mesh)
+    }
+
+    /// Compile `text` (the contents of `path`) as its mesh and placements, layering a `.forminst` instance's overrides,
+    /// then `variant`'s overrides (fails when the instance has no variant by that name), then `parameters`. `read`
+    /// supplies the instance's referenced script and every module the script uses. Reuses a cached asset when nothing
+    /// changed, including those files.
+    pub fn resolve_asset(
+        &mut self,
+        path: &str,
+        text: &str,
+        read: &mut FormAssetReader<'_>,
+        variant: Option<&str>,
+        parameters: &serde_json::Map<String, serde_json::Value>,
+        model: ShadingModel<'_>,
+    ) -> Result<FormAsset, FormMeshError> {
+        // Record every file the script reads, so an edit to a referenced script or module misses the cache.
+        let dependencies: RefCell<Vec<(String, String)>> = RefCell::new(Vec::new());
+        let reader = RefCell::new(read);
+        let loader = |dependency: &str| -> Result<String, String> {
+            let text = (reader.borrow_mut())(dependency)?;
+            dependencies.borrow_mut().push((dependency.to_owned(), text.clone()));
+            Ok(text)
+        };
+        let invalid = |message: String| FormMeshError::Render(RenderError::InvalidMesh(format!("{path}: {message}")));
+
+        let (script, mut overrides, materials) = if path.ends_with(FORM_INSTANCE_EXTENSION) {
+            let instance = FormInstance::read(text).map_err(|error| invalid(error.to_string()))?;
+            let script = instance.parse_script(path, &loader).map_err(FormMeshError::Form)?;
+            let overrides = instance.overrides_for(variant).map_err(|error| invalid(error.to_string()))?;
+            (script, overrides, instance.materials.map(serde_json::Value::Array))
+        } else {
+            if let Some(name) = variant {
+                return Err(invalid(format!("variant \"{name}\" requires a FORM instance (.forminst)")));
+            }
+            let script = CompiledScript::parse_with_modules(text, path, &loader).map_err(FormMeshError::Form)?;
+            (script, serde_json::Map::new(), None)
+        };
+
+        let key =
+            serde_json::json!([path, text, variant, parameters, model.name(), dependencies.into_inner()]).to_string();
         if let Some(asset) = self.cache.get(&key) {
             return Ok(asset.clone());
         }
-        let (source, mut overrides, materials) = if path.ends_with(".formlab") {
-            let document: serde_json::Value = serde_json::from_str(text)
-                .map_err(|error| RenderError::InvalidMesh(format!("{path}: FORM LAB document is not JSON: {error}")))?;
-            if document.get("version").and_then(serde_json::Value::as_u64) != Some(1) {
-                return Err(RenderError::InvalidMesh(format!("{path}: unsupported FORM LAB document version")).into());
-            }
-            let Some(source) = document.get("source").and_then(serde_json::Value::as_str) else {
-                return Err(
-                    RenderError::InvalidMesh(format!("{path}: FORM LAB document requires script source")).into()
-                );
-            };
-            let overrides = match document.get("overrides") {
-                Some(serde_json::Value::Object(overrides)) => overrides.clone(),
-                _ => serde_json::Map::new(),
-            };
-            (source.to_owned(), overrides, document.get("materials").cloned())
-        } else {
-            (text.to_owned(), serde_json::Map::new(), None)
-        };
         overrides.extend(parameters.iter().map(|(name, value)| (name.clone(), value.clone())));
-        let geometry = joy_form::compile(&source, &serde_json::Value::Object(overrides), materials.as_ref())
-            .map_err(FormMeshError::Form)?;
-        let asset = form_mesh_asset_with_textures(&geometry, model, &mut self.textures)?;
+        let geometry =
+            script.evaluate(&serde_json::Value::Object(overrides), materials.as_ref()).map_err(FormMeshError::Form)?;
+        let asset = FormAsset {
+            mesh: form_mesh_asset_with_textures(&geometry, model, &mut self.textures)?,
+            placements: form_placements(&geometry).into(),
+        };
         self.cache.insert(key, asset.clone());
         Ok(asset)
     }
@@ -115,7 +166,7 @@ impl FormAssetLibrary {
 
     /// Keep only cached assets for which `keep` returns true, so a presentation can prune entries it no longer uses.
     pub fn retain(&mut self, mut keep: impl FnMut(&MeshAsset) -> bool) {
-        self.cache.retain(|_, asset| keep(asset));
+        self.cache.retain(|_, asset| keep(&asset.mesh));
     }
 }
 

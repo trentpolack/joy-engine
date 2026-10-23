@@ -31,7 +31,7 @@ pub struct EditorOptions {
     pub store: Box<dyn ProjectStore>,
     /// Where the session is remembered; `None` keeps it in memory only.
     pub storage: Option<Storage>,
-    /// Tools hosted for `.form`, `.formlab`, `.joyfx`, and any other registered extensions.
+    /// Tools hosted for `.form`, `.forminst`, `.joyfx`, and any other registered extensions.
     pub tools: ToolRegistry,
     /// The project to open first, overriding the restored session.
     pub project: Option<String>,
@@ -170,7 +170,7 @@ impl App for JoyEditor {
 
     fn ui(&mut self, context: &egui::Context, frame: &mut Frame<'_>) {
         if !self.themed {
-            joy_engine::runtime::theme::apply_authoring(context);
+            joy_engine::runtime::theme::apply_editor(context);
             self.themed = true;
         }
         self.view.show(context, &mut self.workspace);

@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FORM instance",
+  "description": "A configured use of a FORM script (version 2): the script by relative path (form) or packed source, parameter overrides, an optional material palette, and named variants. joy_engine::form::FormInstance is the authoritative validator.",
+  "type": "object",
+  "required": ["version", "name"],
+  "oneOf": [
+    {"required": ["form"], "not": {"required": ["source"]}},
+    {"required": ["source"], "not": {"required": ["form"]}}
+  ],
+  "properties": {
+    "version": {"const": 2},
+    "name": {"type": "string", "maxLength": 120},
+    "form": {
+      "type": "string",
+      "pattern": "^[^/\\\\:][^\\\\:]*\\.form$",
+      "description": "The script's path relative to this instance's folder, with forward slashes; it may not leave the project root."
+    },
+    "source": {"type": "string", "maxLength": 200000, "description": "The packed script source."},
+    "overrides": {"$ref": "#/definitions/overrides"},
+    "materials": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "description": "Material palette records, Default first.",
+      "items": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 64}}}
+    },
+    "variants": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1, "maxLength": 64, "description": "Unique, ignoring case and surrounding spaces."},
+          "overrides": {"$ref": "#/definitions/overrides"}
+        }
+      }
+    }
+  },
+  "definitions": {
+    "overrides": {
+      "type": "object",
+      "description": "Parameter overrides keyed by parameter name.",
+      "additionalProperties": {"$ref": "#/definitions/parameterValue"}
+    },
+    "parameterValue": {
+      "anyOf": [
+        {"type": "number", "description": "A number, a true/false parameter as 0 or 1, or a choice index."},
+        {"type": "boolean"},
+        {"type": "string", "maxLength": 128, "description": "Text, or a choice's option or enum member name."},
+        {"type": "array", "minItems": 3, "maxItems": 4, "items": {"type": "number"}, "description": "An XYZ vector or an RGBA color."},
+        {"type": "object", "required": ["kind"], "properties": {"kind": {"enum": ["mesh", "material"]}}, "description": "A serialized mesh or material resource."}
+      ]
+    }
+  }
+}
