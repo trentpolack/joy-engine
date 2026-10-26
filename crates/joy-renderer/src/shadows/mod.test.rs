@@ -19,7 +19,7 @@ fn camera() -> CameraFrame {
 
 #[test]
 fn cascade_splits_blend_uniform_and_logarithmic_spacing() {
-    let splits = cascade_splits(0.1, 100.0, 3);
+    let splits = cascade_splits(0.1, 100.0, 3, DEFAULT_CASCADE_SPLIT_LAMBDA);
     // Halfway between the uniform splits (33.4, 66.7, 100) and the logarithmic ones (1, 10, 100).
     let expected = [17.2, 38.35, 100.0];
     for (split, expected) in splits.iter().zip(expected) {
@@ -32,7 +32,7 @@ fn cascade_splits_blend_uniform_and_logarithmic_spacing() {
 #[test]
 fn cascades_contain_their_slices_and_reach_only_the_casters_above_them() {
     let camera = camera();
-    let splits = cascade_splits(camera.near, 100.0, 4);
+    let splits = cascade_splits(camera.near, 100.0, 4, DEFAULT_CASCADE_SPLIT_LAMBDA);
     let direction = Vec3::new(0.3, 0.8, 0.2);
     let ground = Bounds {
         min: Vec3::new(-50.0, -0.5, -50.0),

@@ -159,8 +159,11 @@ use crate::shadows::{
     point_face_views,
     point_near_plane,
 };
-use crate::terrain::TerrainStats;
 use crate::terrain::terrain_scene_pass::SceneTerrain;
+use crate::terrain::{
+    TerrainShadowView,
+    TerrainStats,
+};
 use crate::texture_mips::MipmapGenerator;
 use crate::transparency::{
     TransparentQueue,
@@ -397,6 +400,8 @@ enum ShadowTarget {
 struct ShadowView {
     matrix: Mat4,
     target: ShadowTarget,
+    /// World size of one map texel for a directional cascade; zero for point-light faces, whose texels vary.
+    texel: f32,
     batches: Vec<Batch>,
     /// Whether the transient opaque triangles reach this view.
     transient: bool,
@@ -971,7 +976,7 @@ impl Renderer {
         self.debug_view
     }
 
-    /// Draw mesh surfaces as `view` from the next frame ([`DebugView::Lit`] restores the lit scene).
+    /// Draw mesh and terrain surfaces as `view` from the next frame ([`DebugView::Lit`] restores the lit scene).
     pub fn set_debug_view(&mut self, view: DebugView) {
         self.debug_view = view;
     }
@@ -1097,8 +1102,7 @@ impl Renderer {
             },
         };
         let logical_height = output_size.1 as f32 / self.scale_factor;
-        let terrain =
-            self.terrain.prepare(&self.gpu, &self.pipelines, encoder, scene, &camera_frame, logical_height)?;
+        let terrain = self.terrain.prepare(&self.gpu, &self.pipelines, scene, &camera_frame, logical_height)?;
 
         // Lights: the strongest point lights that can reach the view, and the key directional light when usable.
         let selected = select_point_lights(inputs.lights, &camera_frame);
@@ -1148,6 +1152,17 @@ impl Renderer {
             terrain: &terrain.caster_bounds,
         };
         let shadows = self.plan_shadows(&lighting, &camera_frame, &casters, &mut raws, render_size);
+
+        // Terrain selects its tiles once, then keeps the ones each view (the camera and every shadow view) reaches.
+        let terrain_shadows: Vec<TerrainShadowView> = shadows
+            .views
+            .iter()
+            .map(|view| TerrainShadowView {
+                view_projection: view.matrix,
+                texel: view.texel,
+            })
+            .collect();
+        self.terrain.prepare_draws(&self.gpu, camera_frame.view_projection(), &terrain_shadows)?;
         let masked_casters = shadows.views.iter().flat_map(|view| &view.batches).filter(|batch| batch.masked);
         let caster_models: Vec<ModelId> = masked_casters.map(|batch| batch.model).collect();
         self.write_instances(&raws);
@@ -1338,7 +1353,7 @@ impl Renderer {
             pass.draw(0..transient_opaque, 0..1);
             draw_calls += 1;
         }
-        draw_calls + self.terrain.draw_shadow(pass, view.matrix)
+        draw_calls + self.terrain.draw_shadow(pass, index, view.matrix)
     }
 
     /// Fill scene depth: terrain first, then opaque batches front to back, then transient opaque triangles. Clears the
@@ -2028,7 +2043,7 @@ impl Renderer {
             let distance = options.shadow_distance.min(camera.far).max(camera.near);
             if light.casts_shadow && light.is_lit() && distance > camera.near {
                 let count = quality.cascade_count();
-                let splits = cascade_splits(camera.near, distance, count);
+                let splits = cascade_splits(camera.near, distance, count, options.cascade_split_lambda);
                 let map_size = options.directional_map_size(max_texture_dimension);
                 let fits = fit_cascades(camera, light.direction, &splits, count, map_size, distance, &casters.bounds());
                 for (index, fit) in fits.iter().enumerate() {
@@ -2041,7 +2056,7 @@ impl Renderer {
                             options.normal_bias.max(fit.texel * CASCADE_TEXEL_BIAS),
                         ],
                     };
-                    plan.add_view(fit.matrix, ShadowTarget::Cascade(index), casters, raws);
+                    plan.add_view(fit.matrix, ShadowTarget::Cascade(index), fit.texel, casters, raws);
                 }
                 uniforms.counts[0] = fits.len() as f32;
                 uniforms.directional = [distance, 1.0, light.angular_radius.tan(), CASCADE_BLEND_FRACTION];
@@ -2088,7 +2103,7 @@ impl Renderer {
             };
             plan.light_slots[*light_index] = Some(slot);
             for (face, matrix) in point_face_views(light.position, light.range).into_iter().enumerate() {
-                plan.add_view(matrix, ShadowTarget::PointFace(faces[face]), casters, raws);
+                plan.add_view(matrix, ShadowTarget::PointFace(faces[face]), 0.0, casters, raws);
             }
         }
         plan.point_lights = shadowed.len();
@@ -2182,6 +2197,7 @@ impl ShadowPlan {
         &mut self,
         matrix: Mat4,
         target: ShadowTarget,
+        texel: f32,
         casters: &ShadowCasters<'_>,
         raws: &mut Vec<InstanceRaw>,
     ) {
@@ -2192,6 +2208,7 @@ impl ShadowPlan {
         self.views.push(ShadowView {
             matrix,
             target,
+            texel,
             batches,
             transient,
         });

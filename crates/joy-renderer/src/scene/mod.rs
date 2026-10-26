@@ -24,7 +24,6 @@ use joy_core::{
 
 use crate::material::MaterialAsset;
 use crate::mesh::MeshAsset;
-use crate::terrain::TerrainAsset;
 
 pub use terrain_instance::{
     DEFAULT_TERRAIN_TOLERANCE,
@@ -319,7 +318,7 @@ impl RenderScene {
         })
     }
 
-    /// Add a resident terrain instance and return its handle. The renderer creates its GPU resources on first draw.
+    /// Add a terrain instance and return its handle. The renderer creates its GPU resources on first draw.
     pub fn insert_terrain(&mut self, instance: TerrainInstance) -> TerrainInstanceId {
         if let Some(index) = self.terrain_free.pop() {
             let slot = &mut self.terrain_slots[index as usize];
@@ -339,9 +338,9 @@ impl RenderScene {
         }
     }
 
-    /// Convenience: add an untransformed terrain instance of `asset` with default LOD policy.
-    pub fn create_terrain(&mut self, asset: TerrainAsset) -> TerrainInstanceId {
-        self.insert_terrain(TerrainInstance::new(asset))
+    /// Convenience: add an untransformed terrain instance of `surface` with default LOD policy.
+    pub fn create_terrain(&mut self, surface: joy_terrain::TerrainSurface) -> TerrainInstanceId {
+        self.insert_terrain(TerrainInstance::new(surface))
     }
 
     /// Borrow a live terrain instance.

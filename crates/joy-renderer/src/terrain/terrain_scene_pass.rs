@@ -3,20 +3,25 @@
 
 //! Scene terrain: the renderer's adapters for `RenderScene` terrain instances.
 //!
-//! Each live instance keeps one adapter with resident GPU resources; the asset stays shared. A frame prepares every
-//! adapter before any pass opens (selection runs once per frame in the terrain's local space, for the camera), then
-//! records the same indexed, continuously morphed surface into the shadow views whose volume it reaches, the depth
-//! pre-pass, and the lit scene pass (or, with deferred lighting, the G-buffer pass, in the lit model's encoding), which
-//! also writes the scene-effect attachments when effects need them. Adapters for instances that leave the scene are
-//! released.
+//! Each live terrain lineage keeps one adapter with its GPU tile pool; surface snapshots stay shared. A frame prepares
+//! every adapter before any pass opens, in two steps: [`SceneTerrain::prepare`] finds which instances the camera sees and
+//! where they cast (shadow planning needs their bounds), then [`SceneTerrain::prepare_draws`] selects tiles once in each
+//! terrain's local space for the camera and keeps, per view, the tiles that reach the camera or each shadow view. Passes
+//! then record the same indexed, continuously morphed surface into the shadow views, the depth pre-pass, and the lit
+//! scene pass (or, with deferred lighting, the G-buffer pass, in the lit model's encoding), which also writes the
+//! scene-effect attachments when effects need them. Adapters for instances that leave the scene are released.
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
 use joy_core::math::{
     DMat4,
-    DVec3,
     Mat4,
+};
+use joy_terrain::{
+    TerrainError,
+    TerrainSurface,
+    TerrainView,
 };
 
 use crate::GpuContext;
@@ -30,7 +35,6 @@ use crate::mesh::Bounds;
 use crate::pipelines::{
     CasterBias,
     DEPTH_FORMAT,
-    GBUFFER_ENCODING,
     SHADOW_FORMAT,
     ScenePipelines,
     SceneTargets,
@@ -42,28 +46,29 @@ use crate::scene::{
     TerrainInstance,
     TerrainInstanceId,
 };
-use crate::terrain::terrain_asset::TerrainError;
+use crate::terrain::TerrainDiagnostic;
 use crate::terrain::terrain_geometry::{
     ModelUniforms,
     TerrainGeometry,
+    TerrainShadowView,
     TerrainStats,
-    grid_buffer_layout,
+    TerrainViews,
     terrain_bind_group_layout,
+    terrain_buffer_layouts,
 };
-use crate::terrain::terrain_selection::TerrainView;
 use crate::terrain::{
     TERRAIN_CASTER_SOURCE,
     TERRAIN_DEPTH_SOURCE,
-    TERRAIN_SCENE_SOURCE,
+    TERRAIN_LIT_GROUP,
+    TERRAIN_LIT_VERTEX_ENTRY,
     terrain_geometry_source,
+    terrain_lit_source,
 };
 
-/// Terrain surfaces are fully rough for screen-space reflections.
-const TERRAIN_ROUGHNESS: f32 = 1.0;
-/// The terrain group in the lit pipelines, after the scene pass's frame, shadow, and image-lighting groups.
-const LIT_GROUP: u32 = 3;
 /// The terrain group in the caster and depth pipelines, after their one pass group.
 const GROUP: u32 = 1;
+/// The camera's view index in each adapter's per-view draws; shadow view `index` is `index + 1`.
+const CAMERA_VIEW: usize = 0;
 
 /// What the renderer needs from terrain preparation for culling statistics and shadow planning.
 #[derive(Clone, Debug, Default)]
@@ -91,7 +96,7 @@ struct TerrainPipelines {
     scene_format: wgpu::TextureFormat,
 }
 
-/// One scene terrain instance's resident resources and transform history.
+/// One scene terrain instance's resident resources, transform history, and this frame's inputs.
 struct TerrainScenePass {
     geometry: TerrainGeometry,
     current_model: Mat4,
@@ -99,6 +104,10 @@ struct TerrainScenePass {
     world_bounds: Bounds,
     visible: bool,
     casts_shadow: bool,
+    /// The snapshot, local-space selection view, and shading mode `prepare` found for this frame.
+    surface: TerrainSurface,
+    local_view: Option<TerrainView>,
+    diagnostic: TerrainDiagnostic,
 }
 
 /// The renderer's terrain adapters, keyed by scene instance.
@@ -121,7 +130,9 @@ impl SceneTerrain {
         }
     }
 
-    /// Prepare every terrain instance in `scene` before any pass opens; records compute into `encoder`.
+    /// Find which terrain instances in `scene` the camera sees and which cast shadows, write their transforms, and keep
+    /// what [`prepare_draws`](Self::prepare_draws) needs. Call before shadow planning, which reads the returned caster
+    /// bounds.
     ///
     /// `camera` is the stable (unjittered) frame camera and `logical_height` the viewport height in CSS pixels, so LOD
     /// quality does not depend on display density. Releases adapters for instances no longer in the scene. Fails before
@@ -130,7 +141,6 @@ impl SceneTerrain {
         &mut self,
         gpu: &GpuContext,
         scene_pipelines: &ScenePipelines,
-        encoder: &mut wgpu::CommandEncoder,
         scene: &RenderScene,
         camera: &CameraFrame,
         logical_height: f32,
@@ -145,8 +155,10 @@ impl SceneTerrain {
                 visible.then_some((id, instance, model))
             })
             .collect();
+        // Snapshots of one terrain share a lineage, so a streamed surface keeps its adapter and tile pool.
         self.passes.retain(|id, pass| {
-            live.iter().any(|(live_id, instance, _)| live_id == id && instance.asset.ptr_eq(pass.geometry.asset()))
+            live.iter()
+                .any(|(live_id, instance, _)| live_id == id && instance.surface.lineage() == pass.geometry.lineage())
         });
         if live.is_empty() {
             return Ok(prepared);
@@ -163,7 +175,7 @@ impl SceneTerrain {
             if !model.is_finite() {
                 return Err(TerrainError::InvalidTransform);
             }
-            let bounds = instance.asset.bounds();
+            let bounds = instance.local_bounds();
             let visible = !outside_frustum(bounds, model, view_projection);
             if visible {
                 prepared.visible += 1;
@@ -189,13 +201,41 @@ impl SceneTerrain {
                 target: camera.focus.as_dvec3(),
                 target_radius: f64::from(instance.target_radius),
             };
-            pass.prepare(gpu.queue(), encoder, view_projection, model, &view, instance)?;
+            pass.prepare(gpu, model, &view, instance);
             pass.world_bounds = world;
             pass.visible = visible;
             pass.casts_shadow = instance.casts_shadow;
             self.frame.push(id);
         }
         Ok(prepared)
+    }
+
+    /// Select each prepared terrain's tiles, keep the ones that reach the camera (`camera`, the stable view-projection)
+    /// and each of `shadow_views` (every shadow view of the frame, in plan order, where casters the camera cannot see
+    /// coarsen to the view's texels), upload new or edited tiles, and write their records. Call after shadow planning
+    /// and before any pass opens.
+    ///
+    /// Fails before recording a pass when a device cannot hold the drawn tiles.
+    pub(crate) fn prepare_draws(
+        &mut self,
+        gpu: &GpuContext,
+        camera: Mat4,
+        shadow_views: &[TerrainShadowView],
+    ) -> Result<(), TerrainError> {
+        let Some(pipelines) = &self.pipelines else {
+            return Ok(());
+        };
+        for id in &self.frame {
+            let pass = self.passes.get_mut(id).expect("prepared passes stay resident through the frame");
+            let local_view = pass.local_view.expect("prepare found the frame's view");
+            let views = TerrainViews {
+                model: pass.current_model,
+                camera: pass.visible.then_some(camera),
+                shadows: if pass.casts_shadow { shadow_views } else { &[] },
+            };
+            pass.geometry.prepare(gpu, &pipelines.layout, &pass.surface, &local_view, views, pass.diagnostic)?;
+        }
+        Ok(())
     }
 
     /// Compile the pipeline the frame draws terrain with before a pass that uses it opens: the G-buffer pipeline writing
@@ -258,7 +298,7 @@ impl SceneTerrain {
     fn draw_visible(&self, pass: &mut wgpu::RenderPass<'_>, pipeline: &wgpu::RenderPipeline) -> (usize, usize) {
         let (mut draws, mut triangles) = (0, 0);
         for terrain in self.frame_passes().filter(|terrain| terrain.visible) {
-            draws += terrain.geometry.draw(pass, pipeline, LIT_GROUP);
+            draws += terrain.geometry.draw(pass, pipeline, TERRAIN_LIT_GROUP, CAMERA_VIEW);
             triangles += terrain.geometry.stats().triangles;
         }
         (draws, triangles)
@@ -271,21 +311,21 @@ impl SceneTerrain {
         };
         self.frame_passes()
             .filter(|terrain| terrain.visible)
-            .map(|terrain| terrain.geometry.draw(pass, &pipelines.depth, GROUP))
+            .map(|terrain| terrain.geometry.draw(pass, &pipelines.depth, GROUP, CAMERA_VIEW))
             .sum()
     }
 
-    /// Draw the shadow-casting terrain whose bounds reach `view_projection` (a directional cascade or point-light face)
-    /// into that view; returns draw calls.
+    /// Draw the shadow-casting terrain tiles that reach shadow view `index` (in the plan order
+    /// [`prepare_draws`](Self::prepare_draws) received, with matrix `view_projection`); returns draw calls.
     ///
     /// Expects the renderer's caster uniforms in group 0 at this view's dynamic offset.
-    pub(crate) fn draw_shadow(&self, pass: &mut wgpu::RenderPass<'_>, view_projection: Mat4) -> usize {
+    pub(crate) fn draw_shadow(&self, pass: &mut wgpu::RenderPass<'_>, index: usize, view_projection: Mat4) -> usize {
         let Some(pipelines) = &self.pipelines else {
             return 0;
         };
         self.frame_passes()
             .filter(|terrain| terrain.casts_shadow && !bounds_outside_view(terrain.world_bounds, view_projection))
-            .map(|terrain| terrain.geometry.draw(pass, &pipelines.caster, GROUP))
+            .map(|terrain| terrain.geometry.draw(pass, &pipelines.caster, GROUP, index + 1))
             .sum()
     }
 
@@ -303,30 +343,28 @@ impl SceneTerrain {
 impl TerrainScenePass {
     fn new(gpu: &GpuContext, layout: &wgpu::BindGroupLayout, instance: &TerrainInstance) -> Result<Self, TerrainError> {
         Ok(Self {
-            geometry: TerrainGeometry::new(gpu, &instance.asset, layout)?,
+            geometry: TerrainGeometry::new(gpu, &instance.surface, layout)?,
             current_model: Mat4::IDENTITY,
             previous_model: None,
             world_bounds: crate::culling::EMPTY_BOUNDS,
             visible: false,
             casts_shadow: false,
+            surface: instance.surface.clone(),
+            local_view: None,
+            diagnostic: TerrainDiagnostic::Material,
         })
     }
 
-    /// Select LODs once for the camera, in the terrain's local space, and upload the transform and its history.
-    fn prepare(
-        &mut self,
-        queue: &wgpu::Queue,
-        encoder: &mut wgpu::CommandEncoder,
-        view_projection: Mat4,
-        model: Mat4,
-        view: &TerrainView,
-        instance: &TerrainInstance,
-    ) -> Result<(), TerrainError> {
-        let local = local_view(model, view, instance);
-        self.geometry.prepare(queue, encoder, view_projection, &local, instance.diagnostic)?;
+    /// Keep this frame's snapshot and the camera's view in the terrain's local space for selection, and upload the
+    /// transform and its history.
+    fn prepare(&mut self, gpu: &GpuContext, model: Mat4, view: &TerrainView, instance: &TerrainInstance) {
+        let queue = gpu.queue();
+        self.surface = instance.surface.clone();
+        self.local_view = Some(local_view(model, view, instance));
+        self.diagnostic = instance.diagnostic;
         self.previous_model = Some(if self.previous_model.is_some() { self.current_model } else { model });
         self.current_model = model;
-        let flags = [if instance.receives_shadow { 1.0 } else { 0.0 }, TERRAIN_ROUGHNESS, 0.0, 0.0];
+        let flags = [if instance.receives_shadow { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0];
         let previous = self.previous_model.unwrap_or(model);
         self.geometry.write_model(
             queue,
@@ -336,7 +374,6 @@ impl TerrainScenePass {
                 flags,
             },
         );
-        Ok(())
     }
 }
 
@@ -350,14 +387,15 @@ impl TerrainPipelines {
                 immediate_size: 0,
             })
         };
-        // The lit pass shares the scene pass's groups 0-2; the others add the terrain group after their own.
+        // The lit pass shares the scene pass's groups 0-2 and binds terrain as its material group; the others add the
+        // terrain group after their own.
         let lit_layout = pipeline_layout(
             "terrain lit",
             &[Some(&scene.frame_layout), Some(&scene.shadow_layout), Some(&scene.image_lighting_layout), Some(&layout)],
         );
         let caster_layout = pipeline_layout("terrain caster", &[Some(&scene.caster_layout), Some(&layout)]);
         let depth_layout = pipeline_layout("terrain depth", &[Some(&scene.frame_layout), Some(&layout)]);
-        let (lit_geometry, geometry) = (terrain_geometry_source(LIT_GROUP), terrain_geometry_source(GROUP));
+        let geometry = terrain_geometry_source(GROUP);
         let common = scene_common(device);
 
         let caster = terrain_pipeline(
@@ -365,6 +403,7 @@ impl TerrainPipelines {
             "terrain caster",
             &format!("{geometry}\n{TERRAIN_CASTER_SOURCE}"),
             &caster_layout,
+            "vertexMain",
             None,
             &[],
             depth_state(
@@ -381,11 +420,12 @@ impl TerrainPipelines {
             "terrain depth",
             &format!("{common}\n{geometry}\n{TERRAIN_DEPTH_SOURCE}"),
             &depth_layout,
+            "vertexMain",
             None,
             &[],
             depth_state(DEPTH_FORMAT, Default::default()),
         );
-        let lit_source = format!("{common}\n{GBUFFER_ENCODING}\n{lit_geometry}\n{TERRAIN_SCENE_SOURCE}");
+        let lit_source = terrain_lit_source(&common);
         let lit = lit_pipeline(device, &lit_source, &lit_layout, scene_format, SceneTargets::Color);
         Self {
             layout,
@@ -415,6 +455,7 @@ fn lit_pipeline(
         "terrain lit",
         source,
         layout,
+        TERRAIN_LIT_VERTEX_ENTRY,
         Some(targets.fragment_entry()),
         &targets.states(scene_format),
         depth_state(DEPTH_FORMAT, Default::default()),
@@ -434,6 +475,7 @@ fn gbuffer_pipeline(
         "terrain g-buffer",
         source,
         layout,
+        TERRAIN_LIT_VERTEX_ENTRY,
         Some(targets.gbuffer_entry()),
         &targets.gbuffer_states(scene_format),
         gbuffer_depth_state(),
@@ -452,11 +494,13 @@ fn depth_state(format: wgpu::TextureFormat, bias: wgpu::DepthBiasState) -> wgpu:
 }
 
 /// Compile one terrain pipeline; without a fragment entry it is depth-only.
+#[allow(clippy::too_many_arguments)]
 fn terrain_pipeline(
     device: &wgpu::Device,
     label: &str,
     source: &str,
     layout: &wgpu::PipelineLayout,
+    vertex_entry: &str,
     fragment_entry: Option<&str>,
     targets: &[Option<wgpu::ColorTargetState>],
     depth: wgpu::DepthStencilState,
@@ -465,13 +509,13 @@ fn terrain_pipeline(
         label: Some(label),
         source: wgpu::ShaderSource::Wgsl(source.into()),
     });
-    let buffers = [Some(grid_buffer_layout())];
+    let buffers = terrain_buffer_layouts();
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(label),
         layout: Some(layout),
         vertex: wgpu::VertexState {
             module: &module,
-            entry_point: Some("vertexMain"),
+            entry_point: Some(vertex_entry),
             compilation_options: Default::default(),
             buffers: &buffers,
         },
@@ -507,11 +551,13 @@ fn local_view(model: Mat4, view: &TerrainView, instance: &TerrainInstance) -> Te
             ..*view
         },
         None => {
-            let extent = &instance.asset.manifest().extent;
+            let bounds = instance.surface.bounds();
+            let extent = (bounds.max.x - bounds.min.x).max(bounds.max.z - bounds.min.z);
+            let center = (bounds.min + bounds.max) * 0.5;
             TerrainView {
-                eye: DVec3::ZERO,
-                target: DVec3::ZERO,
-                target_radius: extent[0].max(extent[1]) * 2.0,
+                eye: center,
+                target: center,
+                target_radius: extent * 2.0,
                 ..*view
             }
         }

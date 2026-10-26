@@ -25,7 +25,7 @@ use crate::console_variables::{
 
 /// Scene resolution as a percentage of the drawing buffer along each axis.
 pub const SCREEN_PERCENTAGE: &str = "r.ScreenPercentage";
-/// What mesh surfaces draw as ([`DebugView::name`]).
+/// What surfaces (meshes and terrain) draw as ([`DebugView::name`]).
 pub const DEBUG_VIEW: &str = "r.DebugView";
 /// Frame profiling ([`Renderer::set_profiling`]).
 pub const PROFILE: &str = "r.Profile";
@@ -63,7 +63,7 @@ pub(crate) fn register(variables: &mut ConsoleVariables) {
         ),
         VariableDefinition::choice(
             DEBUG_VIEW,
-            "What mesh surfaces draw as: the lit scene or one surface attribute.",
+            "What surfaces draw as: the lit scene or one surface attribute.",
             &views,
             DebugView::Lit.name(),
         ),

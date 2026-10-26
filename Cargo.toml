@@ -71,6 +71,7 @@ joy-render-types.workspace = true
 joy-renderer.workspace = true
 joy-scene.workspace = true
 joy-storage.workspace = true
+joy-terrain.workspace = true
 joy-ui.workspace = true
 
 # Data and logging, re-exported for games and tools.
@@ -124,6 +125,7 @@ default-members = [
   "crates/joy-renderer",
   "crates/joy-scene",
   "crates/joy-storage",
+  "crates/joy-terrain",
   "crates/joy-test-support",
   "crates/joy-ui",
 ]
@@ -159,6 +161,7 @@ joy-render-types = { path = "crates/joy-render-types" }
 joy-renderer = { path = "crates/joy-renderer" }
 joy-scene = { path = "crates/joy-scene" }
 joy-storage = { path = "crates/joy-storage" }
+joy-terrain = { path = "crates/joy-terrain" }
 joy-test-support = { path = "crates/joy-test-support" }
 joy-ui = { path = "crates/joy-ui" }
 
@@ -272,6 +275,7 @@ web-sys = { version = "0.3.83", features = [
   "KeyboardEvent",
   "Location",
   "Navigator",
+  "Response",
   "Storage",
   "Url",
   "UrlSearchParams",

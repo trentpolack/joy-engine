@@ -3,6 +3,8 @@
 
 //! Unit tests for `src/terrain/terrain_scene_pass.rs`.
 
+use joy_core::math::DVec3;
+
 use super::*;
 
 #[test]
@@ -26,17 +28,9 @@ fn lit_terrain_validates_and_its_forward_passes_translate_for_webgl() {
     use wgpu::naga::back::glsl;
 
     use crate::pipelines::scene_common_for;
-    use crate::terrain::{
-        TERRAIN_SCENE_SOURCE,
-        terrain_geometry_source,
-    };
 
     for gl in [true, false] {
-        let source = format!(
-            "{}\n{GBUFFER_ENCODING}\n{}\n{TERRAIN_SCENE_SOURCE}",
-            scene_common_for(gl),
-            terrain_geometry_source(LIT_GROUP)
-        );
+        let source = terrain_lit_source(&scene_common_for(gl));
         let module = wgpu::naga::front::wgsl::parse_str(&source)
             .unwrap_or_else(|error| panic!("terrain: {}", error.emit_to_string(&source)));
         let info = wgpu::naga::valid::Validator::new(Default::default(), wgpu::naga::valid::Capabilities::all())
@@ -55,7 +49,7 @@ fn lit_terrain_validates_and_its_forward_passes_translate_for_webgl() {
             ..Default::default()
         };
         let stages = [
-            (wgpu::naga::ShaderStage::Vertex, "vertexMain"),
+            (wgpu::naga::ShaderStage::Vertex, TERRAIN_LIT_VERTEX_ENTRY),
             (wgpu::naga::ShaderStage::Fragment, "fragmentMain"),
             (wgpu::naga::ShaderStage::Fragment, "fragmentTargets"),
         ];

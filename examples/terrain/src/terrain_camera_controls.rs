@@ -17,7 +17,7 @@ use joy_engine::math::{
 use joy_engine::rendering::OrbitCamera;
 use joy_engine::runtime::InputManager;
 
-use crate::terrain_config::CameraControlsConfig;
+use super::terrain_config::CameraControlsConfig;
 
 /// Input action names bound by the example.
 pub mod actions {

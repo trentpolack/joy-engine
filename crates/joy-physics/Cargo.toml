@@ -8,7 +8,7 @@
 
 [package]
 name = "joy-physics"
-description = "Joy Engine physics: deterministic rigid bodies, vehicles, SDF contacts, and destruction on rapier."
+description = "Joy Engine physics: deterministic rigid bodies, vehicles, SDF contacts, terrain colliders, and destruction on rapier."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -20,6 +20,7 @@ publish = false
 [dependencies]
 joy-core.workspace = true
 joy-render-types.workspace = true
+joy-terrain.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 indexmap.workspace = true

@@ -22,6 +22,7 @@ joy-core.workspace = true
 joy-devtools.workspace = true
 joy-input.workspace = true
 joy-renderer.workspace = true
+joy-terrain.workspace = true
 joy-ui.workspace = true
 thiserror.workspace = true
 log.workspace = true

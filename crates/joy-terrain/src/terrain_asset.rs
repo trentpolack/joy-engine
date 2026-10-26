@@ -14,13 +14,13 @@ use std::sync::atomic::{
     Ordering,
 };
 
-use joy_core::math::Vec3;
+use joy_core::math::DVec3;
 use serde::{
     Deserialize,
     Serialize,
 };
 
-use crate::mesh::Bounds;
+use crate::terrain_error::TerrainError;
 
 /// Supported manifest version.
 const TERRAIN_FORMAT_VERSION: u32 = 1;
@@ -38,39 +38,13 @@ pub(crate) const MAXIMUM_QUANTIZED_HEIGHT: f64 = 65535.0;
 /// Process-unique asset identities for GPU adapter caches.
 static NEXT_TERRAIN_ID: AtomicU64 = AtomicU64::new(1);
 
-/// Failure decoding terrain data or preparing a terrain frame.
-#[derive(Debug, thiserror::Error)]
-pub enum TerrainError {
-    /// The manifest or height file could not be read.
-    #[error("Terrain file could not be read: {0}")]
-    Io(String),
-    /// The manifest is not valid JSON for the version 1 schema.
-    #[error("Invalid terrain manifest: {0}")]
-    InvalidManifest(String),
-    /// Dimensions, version, orientation, scales, or the binary length are invalid.
-    #[error("Invalid terrain dimensions, orientation, scales or height payload.")]
-    InvalidDimensions,
-    /// The patch list is not a complete row-major leaf grid.
-    #[error("Invalid terrain patch count.")]
-    InvalidPatchCount,
-    /// A patch is out of place, has invalid bounds, or a non-monotone error hierarchy.
-    #[error("Invalid terrain patch bounds or monotone error hierarchy.")]
-    InvalidPatch,
-    /// A view vector or scalar is non-finite or out of range.
-    #[error("Invalid terrain view.")]
-    InvalidView,
-    /// The view-projection matrix is not finite.
-    #[error("Invalid terrain matrix.")]
-    InvalidMatrix,
-    /// The world transform is not a finite affine transform.
-    #[error("Terrain requires a finite affine world transform.")]
-    InvalidTransform,
-    /// A scene terrain instance has an invalid tolerance or target radius.
-    #[error("{0}")]
-    InvalidInstance(&'static str),
-    /// The device cannot hold this heightfield (for example, WebGL 2 texture limits).
-    #[error("Terrain is unsupported on this device: {0}")]
-    Unsupported(String),
+/// An axis-aligned box in the terrain's local space (world units): X/Z footprint and height range.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TerrainBounds {
+    /// Smallest X, height, and Z.
+    pub min: DVec3,
+    /// Largest X, height, and Z.
+    pub max: DVec3,
 }
 
 /// One fixed quadtree leaf: sample-space origin, world-space height bounds, and per-level geometric errors.
@@ -125,7 +99,7 @@ struct TerrainAssetInner {
     heights: Vec<u16>,
     tiles_per_axis: u32,
     max_lod: u32,
-    bounds: Bounds,
+    bounds: TerrainBounds,
 }
 
 impl TerrainAsset {
@@ -160,7 +134,7 @@ impl TerrainAsset {
     }
 
     /// Local-space bounds: centered X/Z extents and the patch height range.
-    pub fn bounds(&self) -> Bounds {
+    pub fn bounds(&self) -> TerrainBounds {
         self.inner.bounds
     }
 
@@ -169,8 +143,9 @@ impl TerrainAsset {
         Arc::ptr_eq(&self.inner, &other.inner)
     }
 
-    /// World-space height of one sample, decoded with the global offset and scale.
-    pub(crate) fn decoded_height(&self, index: usize) -> f64 {
+    /// World-space height of one row-major sample, decoded with the global offset and scale. Panics when `index` is
+    /// outside the `size * size` samples.
+    pub fn decoded_height(&self, index: usize) -> f64 {
         let manifest = &self.inner.manifest;
         manifest.height_offset
             + ((f64::from(self.inner.heights[index]) / MAXIMUM_QUANTIZED_HEIGHT) * manifest.height_scale)
@@ -228,11 +203,11 @@ pub fn decode_terrain(manifest: TerrainManifest, binary: &[u8]) -> Result<Terrai
 
     let minimum = manifest.patches.iter().map(|patch| patch.min).fold(f64::INFINITY, f64::min);
     let maximum = manifest.patches.iter().map(|patch| patch.max).fold(f64::NEG_INFINITY, f64::max);
-    let half_x = (manifest.extent[0] * 0.5) as f32;
-    let half_z = (manifest.extent[1] * 0.5) as f32;
-    let bounds = Bounds {
-        min: Vec3::new(-half_x, minimum as f32, -half_z),
-        max: Vec3::new(half_x, maximum as f32, half_z),
+    let half_x = manifest.extent[0] * 0.5;
+    let half_z = manifest.extent[1] * 0.5;
+    let bounds = TerrainBounds {
+        min: DVec3::new(-half_x, minimum, -half_z),
+        max: DVec3::new(half_x, maximum, half_z),
     };
 
     let inner = TerrainAssetInner {

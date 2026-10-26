@@ -6,7 +6,7 @@ Joy Engine runs games and tools from one Rust codebase on Windows, macOS, Linux,
 
 | Layer | Crates and modules | Responsibility |
 | --- | --- | --- |
-| Foundation | `joy-core` (`core`, `scripting`), `joy-render-types` (`render_types`) | Math, transforms, colors, shapes, seeded randomness, and script language catalogs; GPU-free meshes, materials, and lights shared by content producers and the renderer. |
+| Foundation | `joy-core` (`core`, `scripting`), `joy-render-types` (`render_types`), `joy-terrain` (`terrain`) | Math, transforms, colors, shapes, seeded randomness, and script language catalogs; GPU-free meshes, materials, and lights shared by content producers and the renderer; terrain heightfields, tile pyramids, streaming, LOD selection, synthesized detail, and craters shared by the renderer, physics, and gameplay. |
 | Simulation | `joy-environment` (`environment`), `joy-physics` (`physics`), `joy-gameplay` (`gameplay`) | Environment clocks, rigid bodies, vehicles, destruction, entities, controllers, and authored documents. |
 | Content | `joy-form` (`form`), `joy-fx` (`particles`), `joy-dcc-gltf` (`dcc`), `joy-project` (`project`) | Procedural geometry, particle documents and simulation, glTF and GLB imports, and project manifests. |
 | Rendering | `joy-renderer` (`rendering`, `particles` drawing), `joy-scene` (`rendering`) | Meshes, terrain, materials, lighting, sky and post-processing settings, shadows, effects, particle drawing, and captures; presentation components, post-process volumes, and level, asset, FORM, and environment presentation. |

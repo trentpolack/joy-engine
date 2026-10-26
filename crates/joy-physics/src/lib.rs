@@ -20,14 +20,20 @@
 //!
 //! [`SdfShape`] colliders describe solids by signed distance (analytical primitives or meshes baked into voxel grids)
 //! and collide through optimization-based contact search; see [`PhysicsWorld::create_sdf_body`].
+//!
+//! Static heightfields ([`PhysicsWorld::create_heightfield_body`]) collide with every body kind, SDF bodies included.
+//! [`TerrainColliders`] keeps heightfields for a `joy_terrain` surface's collision level around moving anchors and
+//! rebuilds them when tiles change (for example after a crater), so gameplay collides with the surface it samples.
 
 mod backend_contract;
 mod convert;
 pub mod destruction;
 mod physics_body;
+mod physics_heightfield;
 mod physics_vehicle;
 mod physics_world;
 mod sdf;
+mod terrain_colliders;
 
 pub use backend_contract::{
     PhysicsBackend,
@@ -53,6 +59,7 @@ pub use physics_body::{
     BODY_DEFAULTS,
     BodyOptions,
 };
+pub use physics_heightfield::HeightfieldOptions;
 pub use physics_vehicle::{
     VEHICLE_DEFAULTS,
     VehicleInput,
@@ -71,6 +78,11 @@ pub use sdf::{
     SdfCollisionStatistics,
     SdfPrimitive,
     SdfShape,
+};
+pub use terrain_colliders::{
+    TerrainColliderOptions,
+    TerrainColliderReport,
+    TerrainColliders,
 };
 
 use joy_core::math::Vec3;
@@ -163,4 +175,7 @@ pub enum PhysicsError {
     /// An SDF primitive or mesh was rejected; the message names the problem.
     #[error("Invalid SDF shape: {0}.")]
     InvalidSdfShape(&'static str),
+    /// A heightfield grid was smaller than 2 x 2, its height count did not match, or a height was not finite.
+    #[error("Heightfields need at least 2 x 2 finite heights, one per sample.")]
+    InvalidHeightfield,
 }

@@ -52,8 +52,8 @@ pub(crate) const POINT_FACES: usize = 6;
 pub const MAX_SHADOWED_POINT_LIGHTS: usize = 32;
 /// Smallest point-light face, in texels; lights that cannot fit at this size lose their shadows.
 pub(crate) const MIN_POINT_FACE_SIZE: u32 = 32;
-/// Cascade split blend between uniform (0) and logarithmic (1) spacing.
-const CASCADE_SPLIT_LAMBDA: f32 = 0.5;
+/// Default cascade split blend between uniform (0) and logarithmic (1) spacing.
+pub(crate) const DEFAULT_CASCADE_SPLIT_LAMBDA: f32 = 0.5;
 /// Fraction of each cascade blended into the next.
 pub(crate) const CASCADE_BLEND_FRACTION: f32 = 0.1;
 /// Fraction of the shadow distance over which shadows fade out.
@@ -153,6 +153,10 @@ pub struct ShadowOptions {
     pub depth_bias_slope_scale: f32,
     /// Maximum camera view depth that receives directional shadows.
     pub shadow_distance: f32,
+    /// How cascade splits blend uniform (0) and logarithmic (1) spacing, in `[0, 1]`. Long shadow distances want more
+    /// logarithmic splits, so the first cascade stays small (sharp, with a small texel-scaled receiver offset) near the
+    /// camera instead of stretching over a fraction of the whole distance.
+    pub cascade_split_lambda: f32,
 }
 
 impl Default for ShadowOptions {
@@ -168,6 +172,7 @@ impl Default for ShadowOptions {
             depth_bias: 2,
             depth_bias_slope_scale: 2.0,
             shadow_distance: 100.0,
+            cascade_split_lambda: DEFAULT_CASCADE_SPLIT_LAMBDA,
         }
     }
 }
@@ -200,14 +205,15 @@ impl ShadowOptions {
 }
 
 /// Far view depth of each cascade, blending uniform and logarithmic spacing; unused entries hold `far`.
-pub(crate) fn cascade_splits(near: f32, far: f32, count: usize) -> [f32; MAX_CASCADES] {
+pub(crate) fn cascade_splits(near: f32, far: f32, count: usize, lambda: f32) -> [f32; MAX_CASCADES] {
     let mut splits = [far; MAX_CASCADES];
     let count = count.clamp(1, MAX_CASCADES);
+    let lambda = if lambda.is_finite() { lambda.clamp(0.0, 1.0) } else { DEFAULT_CASCADE_SPLIT_LAMBDA };
     for (index, split) in splits.iter_mut().enumerate().take(count) {
         let fraction = (index + 1) as f32 / count as f32;
         let logarithmic = near * (far / near).powf(fraction);
         let uniform = near + ((far - near) * fraction);
-        *split = (uniform * (1.0 - CASCADE_SPLIT_LAMBDA)) + (logarithmic * CASCADE_SPLIT_LAMBDA);
+        *split = (uniform * (1.0 - lambda)) + (logarithmic * lambda);
     }
     splits
 }

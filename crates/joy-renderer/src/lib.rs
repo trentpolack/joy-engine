@@ -22,8 +22,8 @@
 //! authored levels, FORM meshes, and per-entity particle effects into scene contents and lights frames from the
 //! simulation's `EnvironmentFrame` and the renderer's [`SkyOptions`], so games, tools, and previews present the same
 //! content the same way. Textured transparent draws ([`TransparentDraw`], [`TextureAsset`]) carry particle sprites from
-//! [`particles`] into the scene pass. Resident continuous-LOD terrain ([`terrain`]) draws through [`TerrainInstance`]s
-//! in the same scene.
+//! [`particles`] into the scene pass. Paged continuous-LOD terrain ([`terrain`]) draws `joy_terrain` surfaces through
+//! [`TerrainInstance`]s in the same scene.
 
 mod camera;
 mod capture;
@@ -214,11 +214,8 @@ pub use sky::{
     SkyOptionsError,
 };
 pub use terrain::{
-    TerrainAsset,
     TerrainDiagnostic,
-    TerrainError,
     TerrainStats,
-    TerrainView,
 };
 pub use texture::{
     ImageFormat,

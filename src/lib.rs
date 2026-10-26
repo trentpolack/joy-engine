@@ -6,14 +6,14 @@
 //!
 //! This crate is the facade games and tools depend on. Every engine system has its own crate (in `crates/`), re-exported
 //! here under its module name, so `joy_engine::physics` is the `joy-physics` crate; [`rendering`], [`particles`],
-//! [`runtime`], and [`development`] gather several crates into one module. [`math`] is the engine's vector, matrix,
+//! [`terrain`], [`runtime`], and [`development`] gather several crates into one module. [`math`] is the engine's vector, matrix,
 //! and quaternion vocabulary (`Vec3` for rendering, `DVec3` for seeded simulation) with its deterministic functions.
 //! The crates follow the dependency layers named in their `Cargo.toml`s: a crate may use only its own layer and the
 //! layers below it, which `npm run check` enforces.
 //!
 //! | Layer | Modules (crates) | Owns |
 //! | --- | --- | --- |
-//! | foundation | [`core`] (`joy-core`), [`scripting`] (`joy-core`), [`render_types`] (`joy-render-types`) | Math, transforms, colors, seeded random, primitive shapes, script language information; GPU-free meshes, materials, and lights |
+//! | foundation | [`core`] (`joy-core`), [`scripting`] (`joy-core`), [`render_types`] (`joy-render-types`), [`terrain`] (`joy-terrain`) | Math, transforms, colors, seeded random, primitive shapes, script language information; GPU-free meshes, materials, and lights; terrain heightfields, tile pyramids, streaming, detail, and craters |
 //! | simulation | [`environment`] (`joy-environment`), [`physics`] (`joy-physics`), [`gameplay`] (`joy-gameplay`) | Solar time and wind, rigid bodies and vehicles, entities, controllers, levels |
 //! | content | [`dcc`] (`joy-dcc-gltf`), [`form`] (`joy-form`), [`particles`] (`joy-fx`), [`project`] (`joy-project`) | GLB and glTF mesh import, the FORM procedural modeling language (renderer-free geometry), `.joyfx` particle documents, scripts, and simulation, project manifests |
 //! | rendering | [`rendering`] (`joy-renderer`, `joy-scene`) | The wgpu renderer every game, tool, and preview draws with, including particle drawing, and the scene presentation of levels, FORM meshes, and effects |
@@ -97,6 +97,17 @@ pub mod rendering {
     pub use joy_renderer::*;
     #[doc(inline)]
     pub use joy_scene::*;
+}
+
+/// Terrain (`joy-terrain`): authored heightfields, paged tile pyramids and packages, streaming, quadtree LOD
+/// selection, synthesized detail, craters, and gameplay sampling, plus the renderer's terrain diagnostics and
+/// statistics, in one place for games and tools. Draw a surface with a `rendering::TerrainInstance`; collide with it
+/// through `physics::TerrainColliders`.
+pub mod terrain {
+    #[doc(inline)]
+    pub use joy_renderer::terrain::*;
+    #[doc(inline)]
+    pub use joy_terrain::*;
 }
 
 /// Particle effects (`.joyfx`): documents, scripts, and deterministic simulation from `joy-fx`, plus the renderer's
