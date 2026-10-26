@@ -1429,6 +1429,7 @@ dependencies = [
  "joy-devtools",
  "joy-input",
  "joy-renderer",
+ "joy-terrain",
  "joy-ui",
  "js-sys",
  "log",
@@ -1551,6 +1552,7 @@ dependencies = [
  "joy-renderer",
  "joy-scene",
  "joy-storage",
+ "joy-terrain",
  "joy-test-support",
  "joy-ui",
  "log",
@@ -1629,6 +1631,7 @@ dependencies = [
  "indexmap",
  "joy-core",
  "joy-render-types",
+ "joy-terrain",
  "joy-test-support",
  "rapier3d",
  "serde",
@@ -1669,6 +1672,7 @@ dependencies = [
  "joy-core",
  "joy-fx",
  "joy-render-types",
+ "joy-terrain",
  "joy-test-support",
  "log",
  "naga",
@@ -1708,6 +1712,17 @@ dependencies = [
  "thiserror 2.0.21",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "joy-terrain"
+version = "1.0.0"
+dependencies = [
+ "joy-core",
+ "joy-test-support",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

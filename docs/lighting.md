@@ -17,7 +17,7 @@ The built-in lit model and terrain store their color; the layered model stores i
 Deferred lighting needs a backend other than WebGL 2, an HDR scene format, and room for the scene color, motion, and G-buffer in one pass (`GpuCapabilities::deferred`). WebGL 2 and debug views shade every surface forward with the same clusters and shadows.
 
 ## Shadows
-`ShadowOptions` (on by default; `r.Shadows` switches them) sets the quality preset, map sizes, receiver offset, caster depth bias, shadow distance, and how many point lights may cast at once (`max_point_lights`, up to `MAX_SHADOWED_POINT_LIGHTS`, 32).
+`ShadowOptions` (on by default; `r.Shadows` switches them) sets the quality preset, map sizes, receiver offset, caster depth bias, shadow distance, how cascade splits blend uniform and logarithmic spacing (`cascade_split_lambda`, 0.5 by default; long shadow distances want values near 1 so the first cascade stays sharp near the camera, since receivers move by a multiple of each cascade's texel), and how many point lights may cast at once (`max_point_lights`, up to `MAX_SHADOWED_POINT_LIGHTS`, 32). Terrain draws only the tiles each shadow view reaches, and tiles the camera cannot see draw no finer than the cascade's texels resolve.
 
 | Quality | Cascades | Cascade size | Largest point face | Largest point atlas | Blocker / filter taps |
 | --- | --- | --- | --- | --- | --- |

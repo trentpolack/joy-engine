@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Resident terrain on a real device, always drawn as scene content: every diagnostic mode, the lit pass with
-//! directional and point-light shadows cast and received, scene-effect attachments, the WebGL-style CPU selection path
-//! on native OpenGL when available, and refusal of invalid instance settings.
+//! Paged terrain on a real device, always drawn as scene content: every diagnostic mode, the lit pass with
+//! directional and point-light shadows cast and received, scene-effect attachments, native OpenGL (the WebGL 2 path)
+//! when available, streamed surfaces with synthesized detail and craters, and refusal of invalid instance settings.
 //!
 //! Needs a GPU adapter (llvmpipe or lavapipe is enough); without one each test prints a note and returns. Set
 //! `JOY_RENDER_CAPTURE_DIR` to keep PNG captures. Native only.
@@ -16,16 +16,11 @@ use joy_core::{
     Transform,
 };
 use joy_renderer::scene_effects::SceneEffectsOptions;
-use joy_renderer::terrain::{
-    TerrainAsset,
-    TerrainDiagnostic,
-    TerrainTriangleCount,
-    parse_terrain,
-    sample_terrain,
-};
+use joy_renderer::terrain::TerrainDiagnostic;
 use joy_renderer::{
     BackendPreference,
     CAPTURE_FORMAT,
+    DebugView,
     DirectionalLight,
     EnvironmentLighting,
     FrameInputs,
@@ -44,6 +39,20 @@ use joy_renderer::{
     Skylight,
     TerrainInstance,
     TerrainInstanceId,
+};
+use joy_terrain::{
+    MemoryTileLoader,
+    TerrainAsset,
+    TerrainCrater,
+    TerrainDetail,
+    TerrainInterest,
+    TerrainStreamer,
+    TerrainStreamerOptions,
+    TerrainSurface,
+    TerrainView,
+    build_pyramid_from_asset,
+    parse_terrain,
+    sample_terrain,
 };
 
 const WIDTH: u32 = 320;
@@ -128,7 +137,7 @@ fn scene_terrain_renders_every_diagnostic_mode() {
     };
     let asset = dragon_pit();
     let mut scene = RenderScene::new();
-    let terrain = scene.create_terrain(asset.clone());
+    let terrain = scene.create_terrain(TerrainSurface::from_asset(&asset));
     let mut renderer = scene_renderer(&gpu, None);
     let camera = overview(&asset);
     let ground = OrbitCamera {
@@ -160,14 +169,17 @@ fn scene_terrain_renders_every_diagnostic_mode() {
     assert!(difference(&material, &lod) > 5.0, "LOD colors replace the material");
     assert!(difference(&lod, &grid) > 0.5, "the grid overlays the LOD colors");
 
+    // Every leaf of the one-level surface is selected, but the near-ground camera draws only the leaves in its frustum,
+    // and the pool holds only drawn tiles: 67 x 72 heights each (the lattice with its apron, then its rings).
     assert_eq!(stats.patches, 256);
-    assert_eq!(stats.max_triangles, 256 * 64 * 64 * 2);
-    assert!(stats.resident_gpu_bytes > (1025 * 1025 * 4) as u64);
-    assert_eq!(stats.resident_cpu_bytes, (1025 * 1025 * 2 + 65 * 65 * 8 + renderer_indices_bytes()) as u64);
-    match stats.triangle_count_kind {
-        TerrainTriangleCount::UpperBound => assert_eq!(stats.triangles, stats.max_triangles),
-        TerrainTriangleCount::Selected => assert!(stats.triangles < stats.max_triangles),
-    }
+    assert!(stats.visible_patches > 0 && stats.visible_patches < 256, "{stats:?}");
+    assert_eq!(stats.drawn_patches, stats.visible_patches, "without shadow views only the camera draws");
+    assert_eq!(stats.max_triangles, stats.visible_patches * 64 * 64 * 2);
+    assert!(stats.triangles < stats.max_triangles, "distant leaves draw coarse ranges");
+    assert!(stats.pool_layers as usize >= stats.drawn_patches);
+    assert!(stats.resident_gpu_bytes >= u64::from(stats.pool_layers) * 67 * 72 * 4);
+    let tile_bytes = 256 * ((67 * 67 * 4) + (7 * 8));
+    assert_eq!(stats.resident_cpu_bytes, (tile_bytes + 65 * 65 * 8 + renderer_indices_bytes()) as u64);
 }
 
 /// Index bytes of the shared 64-cell lattice: six indices per cell at every stride.
@@ -228,11 +240,12 @@ fn crate_box() -> MeshAsset {
 /// Dragon Pit scaled into a 102-unit landscape with a crate hovering over the focus.
 fn scene(asset: &TerrainAsset) -> (RenderScene, TerrainInstanceId, Vec3) {
     let mut scene = RenderScene::new();
-    let terrain = scene.insert_terrain(TerrainInstance::new(asset.clone()).with_transform(Transform::new(
-        Vec3::ZERO,
-        Vec3::ZERO,
-        Vec3::splat(SCENE_SCALE),
-    )));
+    let terrain =
+        scene.insert_terrain(TerrainInstance::new(TerrainSurface::from_asset(asset)).with_transform(Transform::new(
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::splat(SCENE_SCALE),
+        )));
     let ground = sample_terrain(asset, 0.0, 0.0) as f32 * SCENE_SCALE;
     let focus = Vec3::new(0.0, ground, 0.0);
     scene.insert(MeshInstance::new(crate_box()).with_transform(Transform::new(
@@ -302,7 +315,9 @@ fn scene_terrain_is_lit_and_casts_and_receives_shadows() {
     let diagnostics = renderer.diagnostics().clone();
     assert_eq!(diagnostics.visible, 2, "terrain and crate are visible");
     assert!(diagnostics.shadows_active);
-    assert!(diagnostics.draw_calls >= 256 * 2, "terrain draws every patch into the shadow map and scene");
+    let stats = renderer.terrain_stats(terrain).expect("drawn").clone();
+    assert!(stats.visible_patches > 0 && stats.shadow_patches > 0, "terrain draws into the shadow map and scene");
+    assert!(stats.visible_patches < stats.patches, "tiles outside the camera's frustum are culled");
     save("terrain-scene-lit", &lit);
 
     scene.terrain_mut(terrain).unwrap().casts_shadow = false;
@@ -316,6 +331,15 @@ fn scene_terrain_is_lit_and_casts_and_receives_shadows() {
     scene.terrain_mut(terrain).unwrap().diagnostic = TerrainDiagnostic::GridOverlay;
     let grid = render_scene(&gpu, &mut renderer, &scene, focus, 1).expect("frame renders");
     save("terrain-scene-grid", &grid);
+    scene.terrain_mut(terrain).unwrap().diagnostic = TerrainDiagnostic::Material;
+
+    // Terrain shades through the surface passes, so renderer debug views replace its lit color too.
+    renderer.set_debug_view(DebugView::Normals);
+    let normals = render_scene(&gpu, &mut renderer, &scene, focus, 1).expect("frame renders");
+    save("terrain-scene-normals", &normals);
+    renderer.set_debug_view(DebugView::Lit);
+    let upward = normals.as_chunks::<4>().0.iter().filter(|pixel| pixel[1] > 200 && pixel[1] > pixel[0]).count();
+    assert!(upward > (WIDTH * HEIGHT / 4) as usize, "the normals view shows terrain normals facing up ({upward})");
     scene.remove_terrain(terrain);
     let removed = render_scene(&gpu, &mut renderer, &scene, focus, 1).expect("frame renders");
     save("terrain-scene-removed", &removed);
@@ -349,15 +373,18 @@ fn scene_terrain_casts_into_point_light_faces() {
     };
     let mut render = |scene: &RenderScene| {
         renderer.render(scene, &scene_camera(focus, 0.9), &inputs, target.view()).expect("frame renders");
-        (target.read_rgba(&gpu).expect("readback"), renderer.diagnostics().clone())
+        let stats = renderer.terrain_stats(terrain).cloned();
+        (target.read_rgba(&gpu).expect("readback"), renderer.diagnostics().clone(), stats)
     };
-    let (casting, diagnostics) = render(&scene);
+    let (casting, diagnostics, stats) = render(&scene);
     assert_eq!(diagnostics.shadow_point_lights, 1);
     assert_eq!(diagnostics.shadow_views, 6, "no environment, so only the point light's faces");
-    assert!(diagnostics.draw_calls >= 256 * 7, "terrain draws into six faces and the scene pass");
+    let stats = stats.expect("drawn");
+    assert!(stats.shadow_patches > 0, "terrain draws into the point light's faces");
+    assert!(stats.shadow_patches < 6 * stats.patches, "each face draws only the tiles it reaches: {stats:?}");
     save("terrain-scene-point-light", &casting);
     scene.terrain_mut(terrain).unwrap().casts_shadow = false;
-    let (open, _) = render(&scene);
+    let (open, _, _) = render(&scene);
     save("terrain-scene-point-light-no-cast", &open);
     assert!(difference(&casting, &open) > 0.2, "terrain occludes the point light");
 }
@@ -448,7 +475,85 @@ fn opengl_selects_on_the_cpu_in_the_scene() {
     save("terrain-gl-scene-lod", &lod);
     assert!(difference(&lit, &lod) > 2.0);
     let stats = renderer.terrain_stats(terrain).expect("the terrain was drawn");
-    assert_eq!(stats.triangle_count_kind, TerrainTriangleCount::Selected);
     assert!(stats.triangles < stats.max_triangles);
-    assert_eq!(stats.frame_upload_bytes, 128 + 256 * 256);
+    assert_eq!(stats.uploaded_tiles, 0, "resident tiles upload once");
+    // Steady frames upload only the material block and one 48-byte record per tile draw.
+    let draws = stats.visible_patches + stats.shadow_patches;
+    assert_eq!(stats.frame_upload_bytes, (48 + draws * 48) as u64);
+}
+
+/// A streamed Dragon Pit with synthesized detail: the view refines into detail levels, steady frames upload nothing,
+/// and a crater re-uploads only the tiles it reaches.
+#[test]
+fn streamed_surfaces_refine_and_upload_only_changed_tiles() {
+    let Some(gpu) = gpu(BackendPreference::Auto) else {
+        return;
+    };
+    let asset = dragon_pit();
+    let (layout, tiles) = build_pyramid_from_asset(&asset, 3).expect("three levels");
+    let options = TerrainStreamerOptions {
+        detail: Some(TerrainDetail::default()),
+        ..Default::default()
+    };
+    let mut streamer =
+        TerrainStreamer::new(layout, Box::new(MemoryTileLoader::new(tiles, 0)), options).expect("valid options");
+
+    // The camera grazes the ground near the focus, so selection wants the finest synthesized levels there.
+    let ground = sample_terrain(&asset, 0.0, 0.0);
+    let camera = OrbitCamera {
+        target: Vec3::new(0.0, ground as f32 + 2.0, 0.0),
+        distance: 14.0,
+        pitch: 0.25,
+        yaw: 0.8,
+        ..OrbitCamera::default()
+    };
+    let half_fov = f64::from(camera.vertical_fov_radians) / 2.0;
+    let view = TerrainView {
+        eye: camera.basis().eye.as_dvec3(),
+        projection_scale: f64::from(HEIGHT) / (2.0 * joy_core::math::deterministic::tan(half_fov)),
+        tolerance: 2.0,
+        target: camera.target.as_dvec3(),
+        target_radius: 0.0,
+    };
+    let interest = TerrainInterest::View(view);
+    for _ in 0..40 {
+        streamer.update(&[interest]).expect("valid interests");
+    }
+    let mut scene = RenderScene::new();
+    let terrain = scene.create_terrain(streamer.surface().expect("roots arrived").clone());
+    let mut renderer = scene_renderer(&gpu, None);
+    let environment = low_sun();
+    let target = OffscreenTarget::new(&gpu, WIDTH, HEIGHT).expect("capture target");
+    let render = |renderer: &mut Renderer, scene: &RenderScene| {
+        let inputs = FrameInputs {
+            environment: Some(&environment),
+            ..FrameInputs::default()
+        };
+        renderer.render(scene, &camera, &inputs, target.view()).expect("terrain frame");
+        target.read_rgba(&gpu).expect("readback")
+    };
+    let first = render(&mut renderer, &scene);
+    let refined = renderer.terrain_stats(terrain).expect("drawn").clone();
+    assert!(refined.finest_level < 0, "the grazing view draws synthesized detail");
+    assert_eq!(refined.uploaded_tiles, refined.drawn_patches, "the first frame uploads every drawn tile");
+    render(&mut renderer, &scene);
+    assert_eq!(renderer.terrain_stats(terrain).unwrap().uploaded_tiles, 0, "steady frames upload nothing");
+
+    // A crater at the focus changes only the tiles it reaches.
+    streamer
+        .add_crater(TerrainCrater {
+            center: [0.0, 0.0],
+            radius: 3.0,
+            depth: 1.5,
+            rim_height: 0.4,
+        })
+        .expect("valid crater");
+    streamer.update(&[interest]).expect("valid interests");
+    scene.terrain_mut(terrain).unwrap().surface = streamer.surface().unwrap().clone();
+    let cratered = render(&mut renderer, &scene);
+    let edited = renderer.terrain_stats(terrain).unwrap().clone();
+    save("terrain-streamed-detail", &first);
+    save("terrain-streamed-crater", &cratered);
+    assert!(edited.uploaded_tiles > 0 && edited.uploaded_tiles < edited.drawn_patches, "{edited:?}");
+    assert!(difference(&first, &cratered) > 0.05, "the crater shows in the frame");
 }

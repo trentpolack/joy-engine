@@ -1,0 +1,36 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Terrain data shared by rendering, collision, and gameplay: authored heightfields, paged tile pyramids, streaming,
+# quadtree LOD selection, synthesized detail, and crater edits. It never names GPU resources or physics solvers, so it
+# sits in the foundation layer below the renderer and physics, which both read the same surface.
+#
+#   cargo test -p joy-terrain
+#   cargo run -p joy-terrain --bin joy-terrain-package -- <terrain.json> <output folder> --levels 4
+
+[package]
+name = "joy-terrain"
+description = "Joy Engine terrain data: heightfields, tile pyramids, streaming, LOD selection, detail synthesis, and craters."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+joy-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+joy-test-support.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "foundation"
+
+[lints]
+workspace = true

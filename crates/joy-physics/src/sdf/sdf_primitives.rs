@@ -11,6 +11,7 @@ use rapier3d::math::{
     Real,
     Vector,
 };
+use rapier3d::parry::shape::HeightField;
 
 /// Distances below this are treated as zero when normalizing a gradient direction.
 const DIRECTION_EPSILON: Real = 1.0e-9;
@@ -108,6 +109,43 @@ pub(crate) fn torus_field(point: Vector, major_radius: Real, minor_radius: Real)
 pub(crate) fn half_space_field(point: Vector, normal: Vector) -> FieldSample {
     FieldSample {
         distance: point.dot(normal),
+        gradient: normal,
+    }
+}
+
+/// A heightfield measured to the plane of the triangle under the point (or under its clamp onto the grid): exact for
+/// points nearest that triangle, and the triangle's upward normal as the gradient. Cells must use the zigzag split
+/// (diagonal from the cell's -X, -Z corner to its +X, +Z corner), as terrain heightfields do.
+pub(crate) fn heightfield_field(point: Vector, heightfield: &HeightField) -> FieldSample {
+    let (row, column) = heightfield.closest_cell_at_point(point);
+    let (first, second) = heightfield.triangles_at(row, column);
+    let x0 = heightfield.x_at(column);
+    let z0 = heightfield.z_at(row);
+    let fraction_x = (point.x - x0) / heightfield.cell_width();
+    let fraction_z = (point.z - z0) / heightfield.cell_height();
+
+    // The zigzag split's first triangle holds the +Z side of the diagonal and the second the +X side.
+    let triangle = if fraction_x >= fraction_z { second.or(first) } else { first.or(second) };
+    let Some(triangle) = triangle else {
+        return FieldSample {
+            distance: Real::MAX,
+            gradient: Vector::Y,
+        };
+    };
+    let mut normal = (triangle.b - triangle.a).cross(triangle.c - triangle.a);
+    if normal.y < 0.0 {
+        normal = -normal;
+    }
+    let length = normal.length();
+    if length <= DIRECTION_EPSILON {
+        return FieldSample {
+            distance: point.y - triangle.a.y,
+            gradient: Vector::Y,
+        };
+    }
+    let normal = normal / length;
+    FieldSample {
+        distance: (point - triangle.a).dot(normal),
         gradient: normal,
     }
 }

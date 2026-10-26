@@ -44,6 +44,7 @@ use rapier3d::parry::shape::{
     Ball,
     Cuboid,
     HalfSpace,
+    HeightField,
     PackedFeatureId,
     Shape,
 };
@@ -286,6 +287,9 @@ fn pair_shape(shape: &dyn Shape) -> Option<PairShape<'_>> {
         return Some(PairShape::HalfSpace {
             normal: half_space.normal,
         });
+    }
+    if let Some(heightfield) = any.downcast_ref::<HeightField>() {
+        return Some(PairShape::HeightField(heightfield));
     }
     None
 }

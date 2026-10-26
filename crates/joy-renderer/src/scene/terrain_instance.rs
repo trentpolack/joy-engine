@@ -1,17 +1,19 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Scene-owned presentation state for one resident terrain. The heightfield asset is shared; the renderer owns the
-//! device-specific GPU resources and releases them when the instance leaves the scene.
+//! Scene-owned presentation state for one terrain. The surface snapshot is shared (a streamer publishes new snapshots
+//! into the instance as tiles arrive); the renderer owns the device-specific GPU tile pool and releases it when the
+//! instance leaves the scene or its surface changes lineage.
 
 use joy_core::Transform;
+use joy_core::math::Vec3;
+use joy_terrain::{
+    TerrainError,
+    TerrainSurface,
+};
 
 use crate::mesh::Bounds;
-use crate::terrain::{
-    TerrainAsset,
-    TerrainDiagnostic,
-    TerrainError,
-};
+use crate::terrain::TerrainDiagnostic;
 
 /// Default screen-space error tolerance in CSS pixels.
 pub const DEFAULT_TERRAIN_TOLERANCE: f32 = 2.0;
@@ -19,9 +21,10 @@ pub const DEFAULT_TERRAIN_TOLERANCE: f32 = 2.0;
 /// Presentation state for one drawn terrain.
 #[derive(Clone, Debug)]
 pub struct TerrainInstance {
-    /// Shared resident heightfield.
-    pub asset: TerrainAsset,
-    /// World-space transform (scale, rotate X/Y/Z, translate) applied to the centered heightfield.
+    /// The resident tiles to draw. Replace it with each new snapshot of the same terrain; a surface of another
+    /// lineage starts a fresh GPU tile pool.
+    pub surface: TerrainSurface,
+    /// World-space transform (scale, rotate X/Y/Z, translate) applied to the surface's local space.
     pub transform: Transform,
     /// Hidden terrain neither draws nor casts shadows, and the renderer releases its GPU resources.
     pub visible: bool,
@@ -41,9 +44,9 @@ pub struct TerrainInstance {
 
 impl TerrainInstance {
     /// An identity-transformed, visible terrain that casts and receives shadows, with the default tolerance.
-    pub fn new(asset: TerrainAsset) -> Self {
+    pub fn new(surface: TerrainSurface) -> Self {
         Self {
-            asset,
+            surface,
             transform: Transform::IDENTITY,
             visible: true,
             casts_shadow: true,
@@ -61,9 +64,13 @@ impl TerrainInstance {
         self
     }
 
-    /// Local-space bounds: the centered extents and the asset's height range.
+    /// Local-space bounds: the surface footprint and every height its resident levels reach.
     pub fn local_bounds(&self) -> Bounds {
-        self.asset.bounds()
+        let bounds = self.surface.bounds();
+        Bounds {
+            min: Vec3::new(bounds.min.x as f32, bounds.min.y as f32, bounds.min.z as f32),
+            max: Vec3::new(bounds.max.x as f32, bounds.max.y as f32, bounds.max.z as f32),
+        }
     }
 
     /// Check the LOD policy; the renderer calls this before preparing the instance.

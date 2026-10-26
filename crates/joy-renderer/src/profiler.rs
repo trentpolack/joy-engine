@@ -92,8 +92,9 @@ pub struct FrameProfile {
 /// Timestamps one frame can write: a mark per phase and one at the end.
 const MAX_MARKS: u32 = 16;
 
-/// Frames whose timestamps can be in flight at once. A frame that finds every slot busy records CPU timings only.
-const READBACK_SLOTS: usize = 4;
+/// Frames whose timestamps can be in flight at once. A frame that finds every slot busy goes unprofiled, so GPU-bound
+/// hosts with deep frame queues still see GPU timings every few frames.
+const READBACK_SLOTS: usize = 8;
 
 /// Bytes per resolved timestamp.
 const TIMESTAMP_BYTES: u64 = 8;
@@ -212,8 +213,14 @@ impl FrameProfiler {
         };
         let ended = Instant::now();
         let profile = cpu_profile(&recording, ended);
-        let (Some(gpu), Some(slot)) = (&mut self.gpu, recording.slot) else {
+        let Some(gpu) = &mut self.gpu else {
             self.latest = Some(profile);
+            return;
+        };
+        // Every readback slot was busy (the GPU is running frames behind): keep the latest GPU-timed profile rather than
+        // replacing it with one that has no GPU timings, which would read as a device without timestamp queries exactly
+        // when the GPU is the bottleneck.
+        let Some(slot) = recording.slot else {
             return;
         };
         let written = recording.marks.len() as u32 + 1;

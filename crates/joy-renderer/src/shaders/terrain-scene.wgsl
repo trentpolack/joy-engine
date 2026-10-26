@@ -1,112 +1,38 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-// Lit scene terrain: the engine's standard flat lighting with directional and point-light shadows, plus the scene-effect
-// attachments when effects need them. In deferred shading terrain writes the lit model's G-buffer encoding instead
-// (its color), and the lit model's lighting pass adds the direct light. Prepended at load time by scene-common.wgsl,
-// shadow-receiver.wgsl, gbuffer-encoding.wgsl, and terrain-geometry.wgsl.
+// Lit scene terrain: the vertex stage that feeds terrain into the engine's surface passes. Composed after the surface
+// pass sources with terrain-geometry.wgsl and terrain-material.wgsl as the shading model, so terrain shades through
+// the same fragment entry points (forward, scene-effect attachments, G-buffer, and debug views), light loop, and
+// shadows as every mesh.
+
+// Rate at which the LOD tint cycles through hues per level of detail.
+const TERRAIN_TINT_RATE: f32 = 1.2;
 
 /**
- * Morph a grid vertex, apply the terrain's world transform, and project it with the frame camera.
+ * Morph a grid vertex, apply the terrain's world transform, project it with the frame camera, and carry the smooth
+ * surface normal, the LOD tint, and lattice cell coordinates to the surface fragment stage.
  */
-@vertex fn vertexMain(input: TerrainVertexInput) -> TerrainVertexOutput {
-  var output = terrainSurface(input);
-  let local = vec4f(output.worldPosition, 1.0);
-  output.worldPosition = (terrainModel.model*local).xyz;
-  output.position = frame.viewProjection*vec4f(output.worldPosition, 1.0);
-  let clips = motionClips(vec4f(output.worldPosition, 1.0), terrainModel.previousModel*local);
+@vertex fn terrainVertexMain(vertex: TerrainVertex, tile: TerrainPatch) -> SurfaceVarying {
+  let local = vec4f(terrainPosition(vertex.gridPosition, tile), 1.0);
+  let world = terrainModel.model*local;
+  let clips = motionClips(world, terrainModel.previousModel*local);
+
+  var output: SurfaceVarying;
+  output.position = frame.viewProjection*vec4f(world.xyz, 1.0);
+  output.worldPosition = world.xyz;
+  output.worldNormal = worldNormal(terrainModel.model, terrainNormal(vertex.gridPosition, tile));
+
+  // Diagnostics color by global detail (synthesized detail levels have their own hues) and count cells at the drawn
+  // stride.
+  output.color = vec4f(1.0);
+  if(material.geometry.y >= TERRAIN_LOD_COLORS) {
+    let detail = tile.state.y + tile.state.z;
+    output.color = vec4f(0.5 + (0.4*cos(vec3f(0.0, 2.0, 4.0) + (detail*TERRAIN_TINT_RATE))), 1.0);
+  }
+  output.uv = vertex.gridPosition/exp2(floor(tile.state.y));
+  output.receivesShadow = terrainModel.flags.x;
   output.currentClip = clips[0];
   output.previousClip = clips[1];
   return output;
-}
-
-/**
- * The derivative normal oriented toward the eye, and the slope and altitude color under it. `surface` and `lines` are
- * derivative values the entry point takes in uniform control flow.
- */
-fn terrainShading(input: TerrainVertexOutput, surface: vec3f, lines: vec2f) -> TerrainShading {
-  var shading: TerrainShading;
-  shading.normal = faceEye(surface/max(length(surface), 0.000001), input.worldPosition);
-  shading.albedo = terrainAlbedo(input.worldPosition.y, shading.normal.y, input.levelData, lines);
-  return shading;
-}
-
-/**
- * The fully lit terrain color.
- */
-fn terrainColor(input: TerrainVertexOutput, surface: vec3f, lines: vec2f) -> vec4f {
-  let shading = terrainShading(input, surface, lines);
-  return vec4f(standardLighting(input.worldPosition, shading.albedo, shading.normal, terrainModel.flags.x), 1.0);
-}
-
-struct TerrainShading {
-  normal: vec3f,
-  albedo: vec3f,
-};
-
-struct TerrainGBuffer {
-  @location(0) color: vec4f,
-  @location(1) gbuffer: vec4u,
-};
-
-struct TerrainGBufferTargets {
-  @location(0) color: vec4f,
-  @location(1) motion: vec4f,
-  @location(2) gbuffer: vec4u,
-};
-
-/**
- * Ambient and skylight on the albedo, and the lit model's G-buffer texel.
- */
-fn terrainGBuffer(input: TerrainVertexOutput, surface: vec3f, lines: vec2f) -> TerrainGBuffer {
-  let shading = terrainShading(input, surface, lines);
-  var targets: TerrainGBuffer;
-  targets.color = vec4f(shading.albedo*standardAmbient(shading.normal), 1.0);
-  let header = gbufferHeader(shading.normal, terrainModel.flags.x > 0.5);
-  targets.gbuffer = vec4u(header, packRgb9e5(shading.albedo), 0u, 0u);
-  return targets;
-}
-
-/**
- * Color only.
- */
-@fragment fn fragmentMain(input: TerrainVertexOutput) -> @location(0) vec4f {
-  let surface = cross(dpdx(input.worldPosition), dpdy(input.worldPosition));
-  let lines = terrainGridLines(input.levelData);
-  return terrainColor(input, surface, lines);
-}
-
-/**
- * Color plus the scene-effect motion attachment.
- */
-@fragment fn fragmentTargets(input: TerrainVertexOutput) -> SceneTargets {
-  let surface = cross(dpdx(input.worldPosition), dpdy(input.worldPosition));
-  let lines = terrainGridLines(input.levelData);
-  let clips = mat2x4f(input.currentClip, input.previousClip);
-  return sceneTargets(terrainColor(input, surface, lines), input.worldPosition, clips);
-}
-
-/**
- * Scene color and G-buffer.
- */
-@fragment fn fragmentGBuffer(input: TerrainVertexOutput) -> TerrainGBuffer {
-  let surface = cross(dpdx(input.worldPosition), dpdy(input.worldPosition));
-  let lines = terrainGridLines(input.levelData);
-  return terrainGBuffer(input, surface, lines);
-}
-
-/**
- * Scene color, the scene-effect motion attachment, and G-buffer.
- */
-@fragment fn fragmentGBufferTargets(input: TerrainVertexOutput) -> TerrainGBufferTargets {
-  let surface = cross(dpdx(input.worldPosition), dpdy(input.worldPosition));
-  let lines = terrainGridLines(input.levelData);
-  let written = terrainGBuffer(input, surface, lines);
-  let clips = mat2x4f(input.currentClip, input.previousClip);
-  let scene = sceneTargets(written.color, input.worldPosition, clips);
-  var targets: TerrainGBufferTargets;
-  targets.color = scene.color;
-  targets.motion = scene.motion;
-  targets.gbuffer = written.gbuffer;
-  return targets;
 }

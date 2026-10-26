@@ -21,6 +21,25 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR
 - ATTRIBUTES is a full button. The preview's RESULT toolbar is now SHOW (**All outputs** or one `output`/`inspect` snapshot), with a note on how the choice relates to Export instead of "Full build · export source".
 - Added `components::shortcut_button`, which shows a key in an outlined keycap; Frame `F` and Reset `0` in FORM EDITOR and JOYFX EDITOR and Joy Editor's level FRAME `F` use it.
 
+### Streamed Terrain (Breaking)
+- Added `joy-terrain` (`joy_engine::terrain`), a foundation crate that owns terrain data for rendering, physics, and gameplay. Version 1 `TerrainAsset`, `parse_terrain`, `sample_terrain`, `select_terrain`, and the grid helpers moved there from `rendering::terrain`, unchanged against their golden recording.
+- Terrain now streams as a paged quadtree: `TerrainLayout` tile pyramids built by `build_terrain_pyramid` or `build_pyramid_from_asset`, version 2 packages (`terrain.json` plus `.jtile` tiles, written by the new `joy-terrain-package` tool), and a `TerrainStreamer` that keeps what views and collision regions need resident within a budget and publishes immutable `TerrainSurface` snapshots. `runtime::AssetFetcher` reads package tiles on a worker thread natively and fetches them over HTTP in browsers.
+- `TerrainInstance` and `RenderScene::create_terrain` take a `TerrainSurface` (`TerrainSurface::from_asset` for version 1 assets). The renderer selects tiles on the CPU with crack-free, pop-free quadtree continuous LOD, culls them per view (the camera and each shadow cascade or point-light face, where casters the camera cannot see coarsen to the cascade's texels), draws each view with one instanced draw per LOD, and uploads only new or edited drawn tiles into a pooled texture array on every backend; removed GPU compute selection, `terrain-select.wgsl`, and `TerrainTriangleCount`. `TerrainStats` reports selected, camera-drawn, and shadow-drawn tiles, the finest level, pool layers, and uploads. One-level surfaces select exactly like the version 1 leaves.
+- Terrain shades through the same surface passes as meshes with a lit-compatible terrain shading model, so renderer debug views, lighting, shadows, and the G-buffer treat it like any surface. It shades with smooth normals of the morphed surface, built from neighboring and coarser tiles' heights so they agree across tile and level seams, instead of faceted derivative normals.
+- Added `TerrainDetail`: deterministic, material-shaped detail synthesized below the authored resolution (Catmull-Rom reconstruction plus residual noise octaves whose amplitude and ridging follow slope and height, and which vanish on the authored lattice so every level agrees where they meet), drawn, sampled, and collided identically. `TerrainMaterialRules` share those thresholds with terrain shading.
+- Added `TerrainCrater` edits through `TerrainStreamer::add_crater`: additive, order-independent bowls that reach every level, tiles loaded later, and detail resolution, re-uploading and rebuilding only the tiles they touch.
+- Gameplay samples the collision level with `TerrainSurface::height_at`; `resident_height_at` and `raycast` serve cameras and placement.
+
+### Terrain Physics
+- Added static heightfield bodies (`PhysicsWorld::create_heightfield_body`) that split cells like the terrain lattice, and `TerrainColliders`, which keeps heightfields for a surface's collision level around moving anchors and rebuilds them after edits. SDF bodies collide with heightfields through the SDF dispatcher.
+
+### Terrain Example
+- The terrain example streams Dragon Pit as a five-level pyramid with synthesized detail, blasts craters under the pointer (C), drops SDF crates and spheres onto the terrain colliders (P), and streams a package with `--package=` or `?package=`. A headless test drives it through key input.
+
+### Rendering
+- Added `ShadowOptions::cascade_split_lambda` (default 0.5, unchanged) to blend cascade splits toward logarithmic spacing, so long shadow distances keep the first cascade sharp near the camera; the terrain example uses it (with a smaller receiver offset) so small props cast visible shadows while mountains shadow the whole landscape.
+- GPU frame profiles no longer fall back to "no timestamp queries" while the GPU runs behind: a frame that finds every timestamp readback slot busy goes unprofiled instead of replacing the latest GPU-timed profile, and eight frames' timestamps can be in flight.
+
 ## 10-21-2026
 ### FORM v2 (Breaking)
 - Added deeply immutable `const` values, including geometry and instance aliases, with editable explicit copies. Replaced `repeat` with exclusive integer `for index in start..end` loops and added ordered `foreach item in collection` iteration. Migrated engine assets, packed instances, editor recipes, completion, highlighting, and references; authored enums use multiline PascalCase entries.

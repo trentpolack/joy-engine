@@ -8,7 +8,7 @@
 
 use joy_core::math::DVec3;
 use joy_core::math::deterministic;
-use joy_renderer::terrain::{
+use joy_terrain::{
     TerrainAsset,
     TerrainError,
     TerrainManifest,

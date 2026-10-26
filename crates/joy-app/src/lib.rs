@@ -8,12 +8,15 @@
 //! shell hides the differences (asynchronous browser startup, canvas sizing, WebGPU or WebGL 2 selection). Games,
 //! tools, and examples implement [`App`] and hand it to [`run`]; [`HeadlessShell`] runs the same phases offscreen for
 //! tests, captures, and tooling. [`Stopwatch`] times CPU work on every target, and [`launch_parameter`] reads the same
-//! development switches from a URL query or the command line.
+//! development switches from a URL query or the command line. [`AssetFetcher`] reads streamed assets (terrain package
+//! tiles, for example) without blocking a frame: from a folder on a worker thread natively, over HTTP in browsers.
 //!
 //! The shell composes the other platform crates (`joy-input`, `joy-ui`, and `joy-devtools`) with `joy-renderer`; apps
 //! reach all of them through `joy_engine::runtime`.
 
 mod app;
+#[cfg(not(target_arch = "wasm32"))]
+mod asset_fetch;
 mod clock;
 #[cfg(not(target_arch = "wasm32"))]
 mod headless;
@@ -22,6 +25,8 @@ mod shell;
 mod surface;
 #[cfg(target_arch = "wasm32")]
 mod web;
+#[cfg(target_arch = "wasm32")]
+mod web_asset_fetch;
 
 pub use app::{
     App,
@@ -32,6 +37,8 @@ pub use app::{
     RenderTarget,
     StartContext,
 };
+#[cfg(not(target_arch = "wasm32"))]
+pub use asset_fetch::AssetFetcher;
 pub use clock::{
     DEFAULT_MAXIMUM_FRAME_SECONDS,
     FrameClock,
@@ -51,3 +58,5 @@ pub use shell::{
     ShellOptions,
     run,
 };
+#[cfg(target_arch = "wasm32")]
+pub use web_asset_fetch::AssetFetcher;

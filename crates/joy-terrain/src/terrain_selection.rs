@@ -11,12 +11,12 @@
 
 use joy_core::math::DVec3;
 
-use crate::terrain::terrain_asset::{
+use crate::terrain_asset::{
     TerrainAsset,
-    TerrainError,
     TerrainPatch,
     sample_height_triangle,
 };
+use crate::terrain_error::TerrainError;
 use joy_core::math::deterministic;
 
 /// Smallest camera distance used for the error budget, in world units.
@@ -145,39 +145,62 @@ fn calculate_patch_detail(asset: &TerrainAsset, patch: &TerrainPatch, view: &Ter
     );
     let maximum =
         DVec3::new(minimum.x + ((tile / cells) * extent_x), patch.max, minimum.z + ((tile / cells) * extent_z));
+    calculate_bounds_detail(minimum, maximum, &patch.errors, 0, sample_spacing, view)
+}
 
-    // Pin finest detail where the horizontal footprint touches the target disk.
+/// Fractional detail, in global LOD levels, of one footprint from its screen-space error budget.
+///
+/// `errors[index]` is the world-height error of the lattice at level `first_level + index` (stride
+/// `2^level` finest samples); the first entry is the finest supported surface, and the table is monotone. Projected
+/// cells are limited to 32 CSS pixels, a target disk pins the finest authored level (never coarser than screen error
+/// asks for), and the pin fades over one more radius.
+/// The result lies in `[first_level, first_level + errors.len() - 1]`.
+pub(crate) fn calculate_bounds_detail(
+    minimum: DVec3,
+    maximum: DVec3,
+    errors: &[f64],
+    first_level: i32,
+    sample_spacing: f64,
+    view: &TerrainView,
+) -> f64 {
+    let finest = f64::from(first_level);
+
+    // Pin the finest authored detail (level 0, or the table's finest when it starts higher) where the horizontal
+    // footprint touches the target disk. Synthesized levels below zero stay governed by screen error, so a pin never
+    // forces sub-sample detail across a whole disk.
+    let pinned = f64::from(first_level.max(0));
     let target_x = (minimum.x - view.target.x).max(0.0).max(view.target.x - maximum.x);
     let target_z = (minimum.z - view.target.z).max(0.0).max(view.target.z - maximum.z);
     let target_distance = deterministic::hypot(target_x, target_z);
-    if view.target_radius > 0.0 && target_distance < view.target_radius {
-        return 0.0;
+    let pin_holds = view.target_radius > 0.0 && target_distance < view.target_radius;
+    if pin_holds && first_level >= 0 {
+        return finest;
     }
 
     // Pixel tolerance becomes a world-height error budget at the nearest distance to the bounds.
     let offsets = (minimum - view.eye).max(DVec3::ZERO).max(view.eye - maximum);
     let camera_distance = MINIMUM_DISTANCE.max(offsets.length());
     let budget = (camera_distance / view.projection_scale) * view.tolerance;
-    let errors: Vec<f64> = patch
-        .errors
+    let errors: Vec<f64> = errors
         .iter()
         .enumerate()
-        .map(|(level, error)| {
-            let cell_error = if level == 0 {
+        .map(|(index, error)| {
+            let level = first_level + index as i32;
+            let cell_error = if index == 0 {
                 0.0
             } else {
-                ((deterministic::powi(2.0_f64, level as i32) * sample_spacing) * view.tolerance) / MAXIMUM_CELL_PIXELS
+                ((deterministic::powi(2.0_f64, level) * sample_spacing) * view.tolerance) / MAXIMUM_CELL_PIXELS
             };
             error.max(cell_error)
         })
         .collect();
 
-    let max_lod = asset.max_lod() as usize;
-    let mut level = 0;
-    while level < max_lod && errors[level + 1] <= budget {
-        level += 1;
+    let coarsest = errors.len() - 1;
+    let mut index = 0;
+    while index < coarsest && errors[index + 1] <= budget {
+        index += 1;
     }
-    let detail = fractional_detail(level, max_lod, budget, &errors);
+    let detail = finest + fractional_detail(index, coarsest, budget, &errors);
 
     // Fade the pin over one more radius with smoothstep, avoiding a hard transition at its boundary.
     let fade = if view.target_radius > 0.0 {
@@ -185,7 +208,8 @@ fn calculate_patch_detail(asset: &TerrainAsset, patch: &TerrainPatch, view: &Ter
     } else {
         1.0
     };
-    detail * (fade * fade * (3.0 - (2.0 * fade)))
+    let faded = pinned + ((detail - pinned) * (fade * fade * (3.0 - (2.0 * fade))));
+    faded.min(detail)
 }
 
 /// Continuous detail between a selected lattice and its parent.

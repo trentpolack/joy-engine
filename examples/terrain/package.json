@@ -19,7 +19,7 @@
   "gameSite": {
     "category": "example",
     "title": "TERRAIN",
-    "description": "Explore continuous terrain detail, fly controls, and GPU selection.",
+    "description": "Stream quadtree terrain with synthesized detail, craters, and physics props.",
     "status": "Engine example",
     "accent": "#91ba80",
     "startedAt": "2026-10-02",

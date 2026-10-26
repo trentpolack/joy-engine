@@ -4,17 +4,17 @@
 //! Runtime debug views: draw one surface attribute (or one stage of the frame) instead of the lit scene.
 //!
 //! Surface views come from the attributes every shading model reports ([`SurfaceAttributes`] in
-//! `surface-contract.wgsl`), so they work for every model, built in or registered. They replace mesh colors in the scene
-//! pass, which shades forward while a debug view is on; terrain, the sky, and particles keep drawing normally around
-//! them. Display processing (exposure and tone
-//! mapping) still applies, so compare views under a neutral look when exact values matter.
+//! `surface-contract.wgsl`), so they work for every model, built in or registered, and for terrain, which shades through
+//! the same surface passes. They replace surface colors in the scene pass, which shades forward while a debug view is
+//! on; the sky and particles keep drawing normally around them. Display processing (exposure and tone mapping) still
+//! applies, so compare views under a neutral look when exact values matter.
 
 use serde::{
     Deserialize,
     Serialize,
 };
 
-/// What the scene pass draws for mesh surfaces. Serialized in camelCase for console variables and saved settings.
+/// What the scene pass draws for surfaces (meshes and terrain). Serialized in camelCase for console variables and saved settings.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum DebugView {

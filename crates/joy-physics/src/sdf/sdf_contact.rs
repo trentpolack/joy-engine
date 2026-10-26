@@ -22,10 +22,13 @@ use rapier3d::parry::bounding_volume::{
     BoundingVolume,
 };
 
+use rapier3d::parry::shape::HeightField;
+
 use super::sdf_primitives::{
     FieldSample,
     box_field,
     half_space_field,
+    heightfield_field,
     sphere_field,
 };
 use super::sdf_shape::SdfShapeData;
@@ -96,6 +99,8 @@ const MIN_NORMAL_LENGTH_SQUARED: Real = 0.25;
 const FLAT_SIMPLEX_FRACTION: Real = 0.05;
 /// Only half-spaces this close to an axis clip the search domain.
 const AXIS_ALIGNED_COSINE: Real = 0.999;
+/// Rate-of-change bound used for heightfields, whose triangle-plane distance can step across triangle edges.
+const HEIGHTFIELD_LIPSCHITZ_BOUND: Real = 2.0;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Records
@@ -111,6 +116,8 @@ pub(crate) enum PairShape<'a> {
     Ball { radius: Real },
     /// A solver half-space through the origin with an outward unit normal; unbounded.
     HalfSpace { normal: Vector },
+    /// A solver heightfield (terrain), measured to the plane of the triangle under each point.
+    HeightField(&'a HeightField),
 }
 
 /// A manifold point carried to the next step, stored in both shapes' frames so it moves with both bodies.
@@ -479,6 +486,7 @@ impl PairShape<'_> {
             Self::HalfSpace {
                 normal,
             } => half_space_field(point, *normal),
+            Self::HeightField(heightfield) => heightfield_field(point, heightfield),
         }
     }
 
@@ -503,6 +511,9 @@ impl PairShape<'_> {
             | Self::HalfSpace {
                 ..
             } => 1.0,
+            // The plane under a point changes across triangle edges, so the distance can step there; a looser bound
+            // keeps the overlap test conservative, as for baked grids.
+            Self::HeightField(_) => HEIGHTFIELD_LIPSCHITZ_BOUND,
         }
     }
 
@@ -532,6 +543,7 @@ impl PairShape<'_> {
             Self::HalfSpace {
                 ..
             } => None,
+            Self::HeightField(heightfield) => Some(*heightfield.root_aabb()),
         }
     }
 
@@ -552,6 +564,7 @@ impl PairShape<'_> {
             | Self::HalfSpace {
                 ..
             } => true,
+            Self::HeightField(_) => false,
         }
     }
 
@@ -576,7 +589,8 @@ impl PairShape<'_> {
             }
             | Self::HalfSpace {
                 ..
-            } => {}
+            }
+            | Self::HeightField(_) => {}
         }
     }
 }

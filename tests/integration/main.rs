@@ -10,4 +10,5 @@ mod example_form_building;
 mod example_form_destruction;
 mod example_scene_effects;
 mod example_sdf_collisions;
+mod example_terrain;
 mod rendering_scene_effects;

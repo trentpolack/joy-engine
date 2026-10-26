@@ -9,7 +9,8 @@
 //! shell hides the differences (asynchronous browser startup, canvas sizing, WebGPU or WebGL 2 selection). Immediate-
 //! mode UI (egui) draws HUDs and development tools on every target, with [`theme`] colors and [`hud_text`] typography.
 //! [`save_text_file`] and [`save_binary_file`] hand generated exports to the player (a browser download or a file in
-//! the working directory), and [`Stopwatch`] times CPU work on every target.
+//! the working directory), [`Stopwatch`] times CPU work on every target, and [`AssetFetcher`] streams asset files
+//! without blocking a frame (a worker thread natively, HTTP fetches in browsers).
 //!
 //! This module gathers the platform crates apps use: the shell, frame phases, and clocks from `joy-app`; input and
 //! gamepads from `joy-input`; sound from `joy-audio`; storage, save slots, and exports from `joy-storage`; and the
@@ -19,6 +20,7 @@ pub use joy_app::{
     App,
     AppError,
     AppResult,
+    AssetFetcher,
     DEFAULT_MAXIMUM_FRAME_SECONDS,
     Frame,
     FrameClock,

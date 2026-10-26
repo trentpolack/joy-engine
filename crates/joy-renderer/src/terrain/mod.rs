@@ -1,67 +1,49 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Resident continuous-LOD (CLOD) terrain with shared native and browser rendering contracts.
+//! Scene terrain drawing: paged quadtree continuous LOD (CLOD) over a `joy_terrain::TerrainSurface`.
 //!
-//! A [`TerrainAsset`] is a validated version 1 heightfield: a square power-of-two-plus-one grid of `u16` samples with
-//! explicit world scales and a row-major list of fixed quadtree leaves, each with height bounds and monotone geometric
-//! errors for every power-of-two stride. Rendering keeps the samples, one shared indexed patch lattice, patch records,
-//! and indirect commands resident on the GPU; a frame updates only selection data and transforms.
+//! The renderer draws whatever tiles the instance's surface snapshot holds. Each frame it selects tiles on the CPU
+//! (`joy_terrain::select_terrain_nodes`, in the terrain's local space), keeps for each view (the camera and every shadow
+//! view) the tiles whose bounds reach it, uploads any drawn tile it has not seen at its current revision into a pooled
+//! height texture array, and writes one record per drawn tile per view. Every tile reuses one shared indexed lattice
+//! and each view draws one instanced range per LOD; a record names the tile's texture layer, its placement, its
+//! fractional detail, and its reconciled edge details, so the vertex shader morphs heights continuously toward the
+//! parent lattice and shared edges agree across tiles of different levels. The same path runs on WebGPU, native
+//! backends, and WebGL 2.
 //!
-//! Selection ([`select_terrain`]) picks each leaf's fractional LOD from its errors and the conservative distance to its
-//! bounds, limits projected cells to 32 CSS pixels, and lets shared edges adopt the coarser neighbor's fractional level.
-//! Heights morph continuously toward the parent triangles before the index range changes, so neighbors of any
-//! resolution meet without cracks or skirts. A target radius pins the finest detail around a protected point.
-//! WebGPU-class backends select on the GPU with compute and indirect draws; WebGL 2 selects on the CPU.
-//!
-//! Terrain always draws as part of a scene: add a [`TerrainAsset`] to a `RenderScene` as a terrain instance, and the
-//! renderer selects its LODs, draws it into the depth pre-pass and the lit scene pass (first among opaque geometry, as
-//! the largest occluder), into every shadow view it touches, and into the scene-effect attachments. There is no separate
-//! terrain draw path. Gameplay and collision use [`sample_terrain`], which always samples the finest authored surface,
-//! never camera-selected topology.
+//! Terrain always draws as part of a scene, through the same surface passes as meshes: its lit pipelines compose the
+//! engine's surface entry points with a terrain shading model (lit-compatible, shaded by the smooth normal of the
+//! morphed surface), so lighting, shadows, the G-buffer, scene-effect attachments, and debug views treat it like any
+//! surface. The renderer draws it into the depth pre-pass and the lit or G-buffer pass (first among opaque geometry, as
+//! the largest occluder) and into every shadow view it reaches. Gameplay and collision read the surface itself
+//! (`TerrainSurface::height_at`), never camera-selected topology.
 
-mod terrain_asset;
 mod terrain_geometry;
-mod terrain_grid;
 pub(crate) mod terrain_scene_pass;
-mod terrain_selection;
+mod terrain_tile_layers;
 
-pub use terrain_asset::{
-    TerrainAsset,
-    TerrainError,
-    TerrainManifest,
-    TerrainPatch,
-    decode_terrain,
-    load_terrain,
-    parse_terrain,
-    sample_height_triangle,
-    sample_terrain,
-};
+pub(crate) use terrain_geometry::TerrainShadowView;
 pub use terrain_geometry::{
     TerrainDiagnostic,
     TerrainStats,
-    TerrainTriangleCount,
 };
-pub use terrain_grid::{
-    TerrainGrid,
-    TerrainIndexRange,
-    create_terrain_grid,
-};
-pub use terrain_selection::{
-    TerrainSelection,
-    TerrainView,
-    reconcile_terrain_edges,
-    sample_morphed_height,
-    select_terrain,
-    validate_terrain_view,
-};
+
+use crate::pipelines::gbuffer_module_source;
 
 // WGSL sources. Terrain shaders are the shared geometry file followed by their own entry points.
 const TERRAIN_GEOMETRY_SOURCE: &str = include_str!("../shaders/terrain-geometry.wgsl");
-const TERRAIN_SELECT_SOURCE: &str = include_str!("../shaders/terrain-select.wgsl");
+const TERRAIN_MATERIAL_SOURCE: &str = include_str!("../shaders/terrain-material.wgsl");
 const TERRAIN_SCENE_SOURCE: &str = include_str!("../shaders/terrain-scene.wgsl");
 const TERRAIN_CASTER_SOURCE: &str = include_str!("../shaders/terrain-caster.wgsl");
 const TERRAIN_DEPTH_SOURCE: &str = include_str!("../shaders/terrain-depth.wgsl");
+
+/// The terrain group in the lit pipelines: the material group, after the scene pass's frame, shadow, and
+/// image-lighting groups.
+pub(crate) const TERRAIN_LIT_GROUP: u32 = 3;
+
+/// The vertex entry point of the lit terrain module.
+pub(crate) const TERRAIN_LIT_VERTEX_ENTRY: &str = "terrainVertexMain";
 
 /// The shared geometry source with its bindings moved to `group`.
 ///
@@ -69,4 +51,11 @@ const TERRAIN_DEPTH_SOURCE: &str = include_str!("../shaders/terrain-depth.wgsl")
 /// browser's WebGPU accepts).
 fn terrain_geometry_source(group: u32) -> String {
     TERRAIN_GEOMETRY_SOURCE.replace("@group(3)", &format!("@group({group})"))
+}
+
+/// The lit terrain module for the scene sources `common`: every surface pass entry point (forward, attachments, and
+/// G-buffer) with the terrain geometry and shading model as the material, and the terrain vertex stage.
+fn terrain_lit_source(common: &str) -> String {
+    let model = format!("{}\n{TERRAIN_MATERIAL_SOURCE}", terrain_geometry_source(TERRAIN_LIT_GROUP));
+    format!("{}\n{TERRAIN_SCENE_SOURCE}", gbuffer_module_source(common, &model))
 }

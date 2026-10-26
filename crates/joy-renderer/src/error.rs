@@ -30,7 +30,7 @@ pub enum RenderError {
     /// A material was malformed (out-of-range values or an unresolved texture), or a shading model failed to compile.
     #[error("Invalid material: {0}")]
     InvalidMaterial(String),
-    /// Terrain data or a terrain frame was invalid, or the device cannot hold the heightfield.
+    /// Terrain data or a terrain frame was invalid, or the device cannot hold the drawn tiles.
     #[error(transparent)]
-    Terrain(#[from] crate::terrain::TerrainError),
+    Terrain(#[from] joy_terrain::TerrainError),
 }

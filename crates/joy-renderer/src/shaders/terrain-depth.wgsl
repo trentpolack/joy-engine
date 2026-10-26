@@ -7,8 +7,8 @@
 /**
  * Morph a grid vertex and project it exactly as the lit terrain pass does.
  */
-@vertex fn vertexMain(input: TerrainVertexInput) -> @builtin(position) @invariant vec4f {
-  let surface = terrainSurface(input);
-  let world = (terrainModel.model*vec4f(surface.worldPosition, 1.0)).xyz;
-  return frame.viewProjection*vec4f(world, 1.0);
+@vertex fn vertexMain(vertex: TerrainVertex, tile: TerrainPatch) -> @builtin(position) @invariant vec4f {
+  let local = vec4f(terrainPosition(vertex.gridPosition, tile), 1.0);
+  let world = terrainModel.model*local;
+  return frame.viewProjection*vec4f(world.xyz, 1.0);
 }
