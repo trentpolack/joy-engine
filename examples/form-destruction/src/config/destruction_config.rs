@@ -2,11 +2,22 @@
 // Licensed under the MIT License.
 
 //! FORM destruction tuning. Dimensions are meters, gravity meters per second squared, launch velocities meters per
-//! second, impulses newton-seconds, angles radians, times seconds, and drag distances logical pixels. Colors are linear
-//! RGB.
+//! second, impulses newton-seconds, masses kilograms, densities kilograms per cubic meter, strengths kilograms per
+//! square meter of contact, angles radians, times seconds, and drag distances logical pixels. Colors are linear RGB.
 
-use joy_engine::physics::ChunkSupportOptions;
+pub use joy_engine::physics::destruction::{
+    FRAME_MATERIAL,
+    INTERIOR_MATERIAL,
+};
+use joy_engine::physics::{
+    ChunkMaterialStrength,
+    ChunkStressOptions,
+    ChunkSupportOptions,
+};
 use joy_engine::prelude::*;
+
+/// Material name of ordinary wall chunks; interior chunks are weaker and the return-shell frame is stronger.
+pub const MASONRY_MATERIAL: &str = "masonry";
 
 /// Structure generation, damage, and debris physics.
 pub struct DestructionConfig {
@@ -34,6 +45,8 @@ pub struct DestructionConfig {
     pub debris_mass: f32,
     /// Size fraction a directly fractured chunk keeps, in mesh and collider alike.
     pub fractured_chunk_scale: f64,
+    /// Size fraction a support-released or overloaded chunk keeps: just enough clearance to slide past its neighbors.
+    pub released_chunk_scale: f64,
     /// Debris friction.
     pub debris_friction: f32,
     /// Debris restitution.
@@ -48,6 +61,10 @@ pub struct DestructionConfig {
     pub debris_launch_variation: [f32; 2],
     /// Spin impulse applied at the top of a fractured chunk.
     pub debris_spin_impulse: [f32; 3],
+    /// Speed out of the wall face (+Z) of a chunk that fails under load.
+    pub crumble_lean_speed: f32,
+    /// Tipping impulse applied at the top of a chunk that fails under load.
+    pub crumble_tip_impulse: [f32; 3],
     /// Fixed physics step.
     pub physics_step_seconds: f32,
     /// Most physics steps per frame.
@@ -68,6 +85,7 @@ pub const DESTRUCTION: DestructionConfig = DestructionConfig {
     debris_gravity: 24.0,
     debris_mass: 1.0,
     fractured_chunk_scale: 0.9,
+    released_chunk_scale: 0.97,
     debris_friction: 0.7,
     debris_restitution: 0.08,
     debris_linear_damping: 0.12,
@@ -75,17 +93,26 @@ pub const DESTRUCTION: DestructionConfig = DestructionConfig {
     debris_launch_speed: [0.8, 0.25, 1.8],
     debris_launch_variation: [0.35, 0.08],
     debris_spin_impulse: [0.2, 0.0, 0.25],
+    crumble_lean_speed: 0.9,
+    crumble_tip_impulse: [0.0, 0.0, 0.35],
     physics_step_seconds: 1.0 / 120.0,
     maximum_physics_substeps: 6,
 };
 
-/// The ground slab; the rendered slab and its static collider share these values.
+/// The ground: a craterable heightfield patch around the structure inside a flat outer apron. The rendered ground and
+/// its colliders share these values; the ground's undisturbed top is at world Y = 0.
 pub struct GroundConfig {
-    /// Slab center.
-    pub center: DVec3,
-    /// Full slab dimensions; its top is at world Y = 0.
-    pub size: DVec3,
-    /// Neutral slab tint, independent of the chunk material palette.
+    /// Undisturbed ground height.
+    pub height: f64,
+    /// Half extents of the craterable patch along X and Z, centered on the origin.
+    pub patch_half_extents: [f64; 2],
+    /// Distance between heightfield samples in the patch.
+    pub sample_spacing: f64,
+    /// Half extent of the flat apron along X and Z.
+    pub apron_half_extent: f64,
+    /// Thickness of the apron's collision slabs below the ground.
+    pub apron_thickness: f64,
+    /// Neutral ground tint, independent of the chunk material palette.
     pub tint: LinearColor,
     /// Ground friction.
     pub friction: f32,
@@ -95,11 +122,34 @@ pub struct GroundConfig {
 
 /// The example's ground.
 pub const GROUND: GroundConfig = GroundConfig {
-    center: DVec3::new(0.0, -1.0, 0.0),
-    size: DVec3::new(200.0, 2.0, 200.0),
+    height: 0.0,
+    patch_half_extents: [14.0, 10.0],
+    sample_spacing: 0.25,
+    apron_half_extent: 100.0,
+    apron_thickness: 2.0,
     tint: LinearColor::rgb(0.3, 0.36, 0.42),
     friction: 0.8,
     restitution: 0.08,
+};
+
+/// The CHARGE tool: a ground blast that craters the terrain under the aimed point, undermining whatever stood on it.
+pub struct ChargeConfig {
+    /// Crater bowl radius.
+    pub radius: f64,
+    /// How far the bowl's center sinks.
+    pub depth: f64,
+    /// How far the lip rises at the bowl's edge.
+    pub rim_height: f64,
+    /// How far below a chunk's bottom the ground may sit while still bearing it; covers sampling error.
+    pub bearing_tolerance: f64,
+}
+
+/// The example's charge.
+pub const CHARGE: ChargeConfig = ChargeConfig {
+    radius: 1.6,
+    depth: 1.2,
+    rim_height: 0.12,
+    bearing_tolerance: 0.05,
 };
 
 /// Ground support: grounded masonry can bridge one neighboring chunk; longer unsupported spans detach.
@@ -131,12 +181,80 @@ impl SupportConfig {
 
 /// The example's support rule.
 pub const SUPPORT: SupportConfig = SupportConfig {
-    ground_height: GROUND.center.y + (GROUND.size.y / 2.0),
+    ground_height: GROUND.height,
     maximum_cantilever_distance: 1.05,
     contact_tolerance: 0.0001,
     anchored_color: [0.08, 0.6, 0.85],
     vertical_color: [0.15, 0.8, 0.35],
     braced_color: [1.0, 0.65, 0.08],
+};
+
+/// Load paths: each chunk carries its own mass plus everything resting on it; weakened or undermined chunks overload
+/// and fail after a telegraphed delay. Intact masonry bases sit near a third of their capacity.
+pub struct StressConfig {
+    /// Masonry density and bearing strength.
+    pub masonry: (f64, f64),
+    /// Interior density and bearing strength: lighter and weaker than masonry.
+    pub interior: (f64, f64),
+    /// Frame density and bearing strength: heavier and much stronger.
+    pub frame: (f64, f64),
+    /// Fraction of a material's strength that side faces carry when a chunk hangs from its neighbors.
+    pub lateral_strength_fraction: f64,
+    /// Load ratio at which a chunk reads as strained.
+    pub warning_ratio: f64,
+    /// Seconds an overloaded chunk holds before failing.
+    pub failure_delay_seconds: f64,
+    /// STRESS view color of lightly loaded chunks.
+    pub stable_color: [f64; 3],
+    /// STRESS view color at the warning ratio.
+    pub strained_color: [f64; 3],
+    /// Color of overloaded chunks in every view but SUPPORT, pulsing toward white.
+    pub failing_color: [f64; 3],
+    /// How strongly material and integrity views tint strained chunks toward the strained color, 0 to 1.
+    pub strained_tint: f64,
+    /// Failing chunks' pulse rate in cycles per second.
+    pub pulse_hertz: f64,
+    /// Largest sideways shake of a failing chunk just before it fails.
+    pub shake_amplitude: f64,
+}
+
+impl StressConfig {
+    /// The engine stress rule these values configure.
+    pub fn options(&self) -> ChunkStressOptions {
+        let material = |name: &str, (density, strength): (f64, f64)| ChunkMaterialStrength {
+            material: name.to_owned(),
+            density,
+            strength,
+        };
+        ChunkStressOptions {
+            materials: vec![
+                material(MASONRY_MATERIAL, self.masonry),
+                material(INTERIOR_MATERIAL, self.interior),
+                material(FRAME_MATERIAL, self.frame),
+            ],
+            default_density: self.masonry.0,
+            default_strength: self.masonry.1,
+            lateral_strength_fraction: self.lateral_strength_fraction,
+            warning_ratio: self.warning_ratio,
+            failure_delay_seconds: self.failure_delay_seconds,
+        }
+    }
+}
+
+/// The example's stress rule.
+pub const STRESS: StressConfig = StressConfig {
+    masonry: (2000.0, 34000.0),
+    interior: (1600.0, 24000.0),
+    frame: (2400.0, 60000.0),
+    lateral_strength_fraction: 0.25,
+    warning_ratio: 0.7,
+    failure_delay_seconds: 1.5,
+    stable_color: [0.12, 0.62, 0.42],
+    strained_color: [1.0, 0.72, 0.1],
+    failing_color: [1.0, 0.08, 0.03],
+    strained_tint: 0.35,
+    pulse_hertz: 3.0,
+    shake_amplitude: 0.035,
 };
 
 /// How the structure is colored.
@@ -148,6 +266,18 @@ pub enum StructureView {
     Integrity,
     /// Ground connection: anchored, vertically supported, or braced sideways.
     Support,
+    /// Load over capacity: stable green, strained amber, failing red.
+    Stress,
+}
+
+/// What a click does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Tool {
+    /// Radial damage at the aimed chunk.
+    #[default]
+    Strike,
+    /// A crater in the ground under the aimed point.
+    Charge,
 }
 
 /// The integrity view: remaining resistance in damage units, independent of surface materials.

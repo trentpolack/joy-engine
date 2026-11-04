@@ -11,7 +11,12 @@ use joy_engine::core::{
 use joy_engine::math::DVec3;
 use joy_engine::physics::DestructibleChunkDefinition;
 
-use super::config::destruction_config::DESTRUCTION;
+use super::config::destruction_config::{
+    DESTRUCTION,
+    FRAME_MATERIAL,
+    INTERIOR_MATERIAL,
+    MASONRY_MATERIAL,
+};
 
 /// Fraction of front-wall chunks drawn as interior material.
 const INTERIOR_CHANCE: f64 = 0.22;
@@ -29,7 +34,7 @@ pub fn generate_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
 
     for row in 0..DESTRUCTION.wall_rows {
         for column in 0..DESTRUCTION.wall_columns {
-            let material = if random.next_unit() > INTERIOR_CHANCE { "masonry" } else { "interior" };
+            let material = if random.next_unit() > INTERIOR_CHANCE { MASONRY_MATERIAL } else { INTERIOR_MATERIAL };
             chunks.push(DestructibleChunkDefinition {
                 id: format!("front:{column}:{row}"),
                 center: DVec3::new(
@@ -56,7 +61,7 @@ pub fn generate_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
                         -f64::from(depth_index) * depth,
                     ),
                     size: DVec3::new(depth, height, depth),
-                    material: "frame".to_owned(),
+                    material: FRAME_MATERIAL.to_owned(),
                     hit_points: DESTRUCTION.frame_hit_points,
                 });
             }

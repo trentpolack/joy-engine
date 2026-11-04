@@ -24,7 +24,7 @@ Rapier provides rigid bodies and configurable raycast vehicles through engine-ow
 
 Bodies are boxes, spheres, or planes by default. `SdfShape` colliders give non-convex procedural geometry (FORM meshes baked to distance grids, or analytical shapes) its true silhouette in collision; see [SDF colliders](rust-simulation.md#sdf-colliders).
 
-`ChunkStructure` batches damage and support evaluation into a single committed revision; the renderer and physics backend synchronize from that revision. Project-specific collapse, damage, and debris rules stay in the game.
+`ChunkStructure` batches damage and support evaluation into a single committed revision; the renderer and physics backend synchronize from that revision. Optional stress gives chunks load paths: weakened or undermined chunks overload, telegraph through a failure delay, and then fail, so collapse can be planned, baited, and fled. A sampled ground surface lets craters undermine what stands on them. Project-specific collapse, damage, and debris rules stay in the game; see [destruction](rust-simulation.md#destruction).
 
 ## Authoring
 Run Joy Editor natively, open a project, and edit its assets. Saves use revision checks and recovery copies. A static browser editor offers bundled examples and downloads; it cannot write project files. Run games through their project commands and restart/rebuild to consume saved assets where the game does not expose live loading. See [Joy Editor](../editor/README.md).

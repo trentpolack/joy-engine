@@ -77,6 +77,21 @@ fn claimed_keys_id() -> Id {
     Id::new("joy-dev-dock-claimed-keys")
 }
 
+/// Keep the dock above a bottom HUD bar. Call before drawing launchers on every UI pass.
+/// `height` is the bar's height in logical pixels, measured from the viewport's bottom edge.
+/// The inset belongs to this context and expires at the next pass unless renewed.
+pub fn set_bottom_inset(context: &Context, height: f32) {
+    let pass = context.cumulative_pass_nr();
+    context.data_mut(|data| data.insert_temp(Id::new("joy-dev-dock-bottom-inset"), (pass, height.max(0.0))));
+}
+
+fn bottom_inset(context: &Context) -> f32 {
+    context
+        .data(|data| data.get_temp::<(u64, f32)>(Id::new("joy-dev-dock-bottom-inset")))
+        .filter(|(pass, _)| *pass == context.cumulative_pass_nr())
+        .map_or(0.0, |(_, height)| height)
+}
+
 /// Whether a tool registered a launcher this pass or the previous one.
 fn present(context: &Context, tool: DockTool) -> bool {
     let pass = context.cumulative_pass_nr();
@@ -92,7 +107,11 @@ fn launcher_width(context: &Context, count: usize) -> f32 {
 
 /// Height the dock occupies above the bottom edge, so HUD elements in the bottom-right corner can sit above it.
 pub fn reserved_height(context: &Context) -> f32 {
-    if DockTool::ALL.iter().any(|tool| present(context, *tool)) { EDGE + LAUNCHER_HEIGHT + GAP } else { 0.0 }
+    if DockTool::ALL.iter().any(|tool| present(context, *tool)) {
+        bottom_inset(context) + EDGE + LAUNCHER_HEIGHT + GAP
+    } else {
+        0.0
+    }
 }
 
 /// The tool whose panel is open, if any.
@@ -145,7 +164,7 @@ pub fn launcher(context: &Context, tool: DockTool, label: RichText) -> bool {
     let present: Vec<DockTool> = DockTool::ALL.into_iter().filter(|candidate| present(context, *candidate)).collect();
     let slot = present.iter().position(|candidate| *candidate == tool).unwrap_or(0) as f32;
     let width = launcher_width(context, present.len());
-    let offset = Vec2::new(-EDGE - (slot * (width + GAP)), -EDGE);
+    let offset = Vec2::new(-EDGE - (slot * (width + GAP)), -EDGE - bottom_inset(context));
     let open = open_tool(context) == Some(tool);
 
     egui::Area::new(Id::new(("joy-dev-dock-launcher", tool)))
@@ -173,7 +192,7 @@ pub fn panel(context: &Context, tool: DockTool, title: &str, add_contents: impl 
     }
     let screen = context.content_rect();
     let width = PANEL_WIDTH.min(screen.width() - (EDGE * 2.0));
-    let bottom = EDGE + LAUNCHER_HEIGHT + GAP;
+    let bottom = bottom_inset(context) + EDGE + LAUNCHER_HEIGHT + GAP;
     let height = PANEL_HEIGHT.min(screen.height() - bottom - EDGE);
     egui::Area::new(Id::new(("joy-dev-dock-panel", tool)))
         .anchor(Align2::RIGHT_BOTTOM, Vec2::new(-EDGE, -bottom))

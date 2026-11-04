@@ -4,8 +4,9 @@
 //! Optional Y-up masonry support approximation for chunk structures.
 //!
 //! Face contacts carry support upward and sideways; horizontal offsets spend the cantilever allowance. This is a
-//! geometric support rule, not a stress, torque, or material-load solver. Contact topology is built once for the fixed
-//! chunk collection; damage only changes which chunks are active.
+//! geometric support rule, not a stress, torque, or material-load solver; the optional load layer in `chunk_stress`
+//! reads the same contacts. Contact topology is built once for the fixed chunk collection; damage only changes which
+//! chunks are active, and a ground surface ([`ChunkSupportGraph::update_anchors`]) only changes which chunks anchor.
 
 use serde::{
     Deserialize,
@@ -55,11 +56,35 @@ pub struct ChunkSupportState {
     pub lateral_distance: Option<f64>,
 }
 
+/// Footprint points sampled against a ground surface, as fractions of the half footprint: the center, then the four
+/// corners. A chunk bears on the ground when a majority of them do.
+const FOOTPRINT_SAMPLES: [[f64; 2]; 5] = [[0.0, 0.0], [-1.0, -1.0], [1.0, -1.0], [-1.0, 1.0], [1.0, 1.0]];
+
+/// Footprint samples that must bear on the ground for a chunk to anchor (a strict majority).
+const BEARING_SAMPLES_REQUIRED: usize = 3;
+
 /// One directed support contact: support flows from the source chunk to `target`, spending `distance`.
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct SupportEdge {
-    target: usize,
-    distance: f64,
+pub(crate) struct SupportEdge {
+    /// Index of the supported chunk, in generation order.
+    pub(crate) target: usize,
+    /// Horizontal distance between the two chunk centers, in world units.
+    pub(crate) distance: f64,
+    /// Shared face area in square world units: the horizontal overlap for a stacked contact, the vertical face
+    /// overlap for a side contact.
+    pub(crate) contact_area: f64,
+    /// Whether the contact is a side face (bracing) rather than a stacked bearing face.
+    pub(crate) lateral: bool,
+}
+
+/// One support evaluation: copied diagnostics plus the order in which chunks were reached from the ground.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SupportEvaluation {
+    /// Per-chunk diagnostics in generation order.
+    pub(crate) states: Vec<ChunkSupportState>,
+    /// Per-chunk visit rank (0 for the first chunk reached), or `None` when unsupported. This orders discovery, not
+    /// all bearing contacts; the stress model derives its own grounded load order from the supported contacts.
+    pub(crate) ranks: Vec<Option<usize>>,
 }
 
 /// Immutable contact topology for a fixed collection of axis-aligned chunks, indexed in generation order.
@@ -116,10 +141,21 @@ impl ChunkSupportGraph {
                 // Only aligned stacks are free; staggering upward cannot bypass the sideways limit.
                 let stacked = vertical_gap.abs() <= tolerance
                     && HORIZONTAL_AXES.iter().all(|axis| overlaps(source, target, *axis, tolerance));
-                if stacked || shares_side_face(source, target, tolerance) {
+                if stacked {
                     edges[source_index].push(SupportEdge {
                         target: target_index,
                         distance: horizontal_distance,
+                        contact_area: overlap_length(source, target, 0) * overlap_length(source, target, 2),
+                        lateral: false,
+                    });
+                } else if let Some(axis) = shared_side_face_axis(source, target, tolerance) {
+                    let other_axis = 2 - axis;
+                    edges[source_index].push(SupportEdge {
+                        target: target_index,
+                        distance: horizontal_distance,
+                        contact_area: overlap_length(source, target, VERTICAL_AXIS)
+                            * overlap_length(source, target, other_axis),
+                        lateral: true,
                     });
                 }
             }
@@ -133,23 +169,69 @@ impl ChunkSupportGraph {
         })
     }
 
+    /// Outgoing contacts per chunk, in generation order: support flows from each source to its edges' targets.
+    pub(crate) fn edges(&self) -> &[Vec<SupportEdge>] {
+        &self.edges
+    }
+
+    /// Whether each chunk anchors to the ground, in generation order (regardless of activity).
+    pub(crate) fn anchors(&self) -> &[bool] {
+        &self.anchors
+    }
+
+    /// Re-anchor every chunk against a ground surface and report whether any anchor changed.
+    ///
+    /// `ground_height_at(x, z)` returns the ground height in world units under a world-space point. A chunk anchors
+    /// when at least three of five footprint samples (its center and four corners) reach its bottom face within
+    /// `bearing_tolerance`; buried chunks count as embedded and anchor too. Non-finite samples never bear. `chunks`
+    /// must be the collection the graph was built from, in the same order.
+    pub(crate) fn update_anchors(
+        &mut self,
+        chunks: &[&DestructibleChunkDefinition],
+        bearing_tolerance: f64,
+        ground_height_at: impl Fn(f64, f64) -> f64,
+    ) -> bool {
+        let mut changed = false;
+        for (index, chunk) in chunks.iter().enumerate() {
+            let bottom = chunk.center[VERTICAL_AXIS] - (chunk.size[VERTICAL_AXIS] / 2.0);
+            let half_width = chunk.size[0] / 2.0;
+            let half_depth = chunk.size[2] / 2.0;
+            let bearing = FOOTPRINT_SAMPLES
+                .iter()
+                .filter(|[x_fraction, z_fraction]| {
+                    let ground = ground_height_at(
+                        chunk.center[0] + (x_fraction * half_width),
+                        chunk.center[2] + (z_fraction * half_depth),
+                    );
+                    ground.is_finite() && ground >= bottom - bearing_tolerance
+                })
+                .count();
+            let anchored = bearing >= BEARING_SAMPLES_REQUIRED;
+            if self.anchors[index] != anchored {
+                self.anchors[index] = anchored;
+                changed = true;
+            }
+        }
+        changed
+    }
+
     /// Resolve the shortest permitted sideways travel from active ground anchors.
     ///
     /// `active` is indexed in generation order. Nonnegative edge costs and a visited set bound the search to one visit
     /// per active chunk. Ties resolve to the earliest chunk in generation order, so results are deterministic.
-    pub(crate) fn evaluate(&self, active: &[bool]) -> Vec<ChunkSupportState> {
+    pub(crate) fn evaluate(&self, active: &[bool]) -> SupportEvaluation {
         let active_count = active.iter().filter(|flag| **flag).count();
         let mut distances: Vec<f64> = (0..self.ids.len())
             .map(|index| if active[index] && self.anchors[index] { 0.0 } else { f64::INFINITY })
             .collect();
-        let mut visited = vec![false; self.ids.len()];
+        let mut ranks: Vec<Option<usize>> = vec![None; self.ids.len()];
         let mut visited_count = 0;
 
         while visited_count < active_count {
             let mut nearest: Option<usize> = None;
             let mut nearest_distance = f64::INFINITY;
             for index in 0..self.ids.len() {
-                if active[index] && !visited[index] && distances[index] < nearest_distance {
+                if active[index] && ranks[index].is_none() && distances[index] < nearest_distance {
                     nearest = Some(index);
                     nearest_distance = distances[index];
                 }
@@ -158,7 +240,7 @@ impl ChunkSupportGraph {
                 break;
             };
 
-            visited[nearest] = true;
+            ranks[nearest] = Some(visited_count);
             visited_count += 1;
             for edge in &self.edges[nearest] {
                 let candidate = nearest_distance + edge.distance;
@@ -168,26 +250,35 @@ impl ChunkSupportGraph {
             }
         }
 
-        self.ids
+        let states = self
+            .ids
             .iter()
             .enumerate()
-            .map(|(index, chunk_id)| ChunkSupportState {
-                chunk_id: chunk_id.clone(),
-                anchored: active[index] && self.anchors[index],
-                supported: visited[index],
-                lateral_distance: visited[index].then_some(distances[index]),
+            .map(|(index, chunk_id)| {
+                let supported = ranks[index].is_some();
+                ChunkSupportState {
+                    chunk_id: chunk_id.clone(),
+                    anchored: active[index] && self.anchors[index],
+                    supported,
+                    lateral_distance: supported.then_some(distances[index]),
+                }
             })
-            .collect()
+            .collect();
+        SupportEvaluation {
+            states,
+            ranks,
+        }
     }
 }
 
-/// Whether two chunks touch along an X or Z face while overlapping in the other two axes (corners never count).
-fn shares_side_face(
+/// The horizontal axis (X or Z) along which two chunks touch faces while overlapping in the other two axes, or `None`
+/// (corners never count).
+fn shared_side_face_axis(
     source: &DestructibleChunkDefinition,
     target: &DestructibleChunkDefinition,
     tolerance: f64,
-) -> bool {
-    HORIZONTAL_AXES.iter().any(|&axis| {
+) -> Option<usize> {
+    HORIZONTAL_AXES.iter().copied().find(|&axis| {
         let other_axis = 2 - axis;
         let face_gap =
             (target.center[axis] - source.center[axis]).abs() - ((source.size[axis] + target.size[axis]) / 2.0);
@@ -195,6 +286,13 @@ fn shares_side_face(
             && overlaps(source, target, VERTICAL_AXIS, tolerance)
             && overlaps(source, target, other_axis, tolerance)
     })
+}
+
+/// Length of the shared span of two chunks along one axis, in world units; zero when they do not overlap.
+fn overlap_length(first: &DestructibleChunkDefinition, second: &DestructibleChunkDefinition, axis: usize) -> f64 {
+    let lower = (first.center[axis] - (first.size[axis] / 2.0)).max(second.center[axis] - (second.size[axis] / 2.0));
+    let upper = (first.center[axis] + (first.size[axis] / 2.0)).min(second.center[axis] + (second.size[axis] / 2.0));
+    (upper - lower).max(0.0)
 }
 
 /// Whether two chunks overlap along one axis by more than the tolerance.

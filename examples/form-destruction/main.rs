@@ -1,13 +1,15 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! FORM DESTRUCTION: inspect wall integrity, apply cumulative damage, and keep the resulting rubble. A seeded chunk
-//! structure takes radial damage, loses unsupported overhangs, and releases rigid debris that settles and stays.
+//! FORM DESTRUCTION: inspect wall integrity and load, apply cumulative damage, undermine the wall with ground charges,
+//! and keep the resulting rubble. A seeded chunk structure takes radial damage, loses unsupported overhangs, overloads
+//! where it is weakened or undermined, telegraphs, and fails in stages, releasing rigid debris that settles and stays.
 //!
 //!     cargo run --example form-destruction
 //!     node scripts/rust/build-web.mjs --example form-destruction
 //!
-//! Click a surface to strike it, drag to orbit, scroll to zoom, and press R to reset.
+//! Click a surface to strike it (or, after C, to blast a crater under it), drag to orbit, scroll to zoom, and press R
+//! to reset.
 
 #[path = "src/mod.rs"]
 mod example;

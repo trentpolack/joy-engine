@@ -2,9 +2,10 @@
 // Licensed under the MIT License.
 
 //! The FORM DESTRUCTION example (`examples/form-destruction`): seeded structures and reset, persistent debris that
-//! lands and settles, bounded impact markers, support-released chunks caught by surviving colliders, and the demo
-//! driven by real pointer and key input through cumulative damage, a breach, the debug views, a miss, a reset, a broad
-//! undercut, and an orbit that applies no damage.
+//! lands and settles, bounded impact markers, support-released chunks caught by surviving colliders, staged collapse
+//! after a charge undermines the wall, and the demo driven by real pointer and key input through cumulative damage, a
+//! breach, the debug views, a miss, a reset, a broad undercut, a charge whose overloaded edges fail after their delay,
+//! and an orbit that applies no damage.
 //!
 //! The demo test needs a GPU adapter (llvmpipe or SwiftShader is enough); without one it prints a note and returns.
 //! Set `JOY_RENDER_CAPTURE_DIR` to keep PNG captures. Native only.
@@ -14,10 +15,13 @@
 mod example;
 
 use example::config::destruction_config::{
+    CHARGE,
     DESTRUCTION,
     IMPACT_DEBUG,
+    STRESS,
     SUPPORT,
     StructureView,
+    Tool,
     VIEW,
 };
 use example::destruction_debris::DestructionDebris;
@@ -25,6 +29,7 @@ use example::destruction_demo::{
     FormDestructionDemo,
     input_map,
 };
+use example::ground::CraterGround;
 use example::impact_debug::ImpactDebugDraw;
 use example::structure::generate_structure;
 use joy_engine::math::{
@@ -33,6 +38,7 @@ use joy_engine::math::{
     Vec3,
 };
 use joy_engine::physics::{
+    ChunkStressStage,
     ChunkStructure,
     DestructibleChunkDefinition,
     RadialDamage,
@@ -188,6 +194,40 @@ fn support_released_chunks_rest_on_surviving_structure_and_fractures_escape() {
     );
 }
 
+#[test]
+fn a_charge_drops_the_undermined_column_and_its_overloaded_edges_fail_in_stages() {
+    let mut structure = ChunkStructure::new(&generate_structure(DESTRUCTION.seed), Some(SUPPORT.options()))
+        .unwrap()
+        .with_stress(STRESS.options())
+        .unwrap();
+    assert!(
+        structure.stress_state().iter().all(|state| state.stage == ChunkStressStage::Stable),
+        "the intact wall carries its own weight comfortably"
+    );
+
+    // A charge at the middle of the wall's base removes the anchors under the middle column and its neighbors.
+    let mut ground = CraterGround::new();
+    ground.add_charge(0.0, DESTRUCTION.chunk_size[2] / 2.0);
+    assert!(ground.height_at(0.0, 0.0) < -0.5, "the crater opens under the wall");
+    assert!(structure.set_ground_surface(CHARGE.bearing_tolerance, |x, z| ground.height_at(x, z)).unwrap());
+    let ids = |chunks: &[DestructibleChunkDefinition]| chunks.iter().map(|chunk| chunk.id.clone()).collect::<Vec<_>>();
+
+    // Beyond the cantilever reach, the middle column falls at once; its neighbors hang from one side and overload.
+    let undermined = structure.commit();
+    assert_eq!(ids(&undermined.detached), (0..6).map(|row| format!("front:6:{row}")).collect::<Vec<_>>());
+    assert_eq!(structure.failing_chunk_count(), 2);
+
+    // Each failure hands the column above to the next row, which overloads in turn until the load is small enough.
+    let mut stages = Vec::new();
+    while structure.failing_chunk_count() > 0 && stages.len() < 6 {
+        assert!(!structure.advance_stress(STRESS.failure_delay_seconds / 2.0).unwrap(), "the telegraph lasts");
+        assert!(structure.advance_stress(STRESS.failure_delay_seconds / 2.0).unwrap());
+        stages.push(ids(&structure.commit().overloaded));
+    }
+    assert_eq!(stages, [["front:5:0", "front:7:0"], ["front:5:1", "front:7:1"]]);
+    assert_eq!(structure.active_chunk_count(), 116);
+}
+
 /// Drives the demo through the headless shell with real pointer and key input.
 struct Driver {
     shell: HeadlessShell,
@@ -336,6 +376,32 @@ fn the_demo_breaks_supports_and_keeps_debris_through_real_input() {
     assert!(undercut.damage.iter().any(|state| state.chunk_id == *detached && state.remaining_hit_points > 0.0));
     driver.frames(90);
     driver.capture("example-form-destruction-undercut");
+
+    // C switches to CHARGE: a blast at the base of the rebuilt wall undermines it, and the overloaded edges shake
+    // through their delay before failing.
+    driver.key("KeyR");
+    driver.key("KeyC");
+    assert_eq!(driver.demo.snapshot().tool, Tool::Charge);
+    driver.click(base);
+    let charged = driver.demo.snapshot();
+    assert_eq!(charged.craters, 1);
+    assert!(!charged.detached_chunks.is_empty(), "the undermined middle falls at once");
+    assert!(charged.stress.iter().any(|state| state.stage == ChunkStressStage::Failing));
+    assert!(charged.overloaded_chunks.is_empty(), "overloaded chunks hold through their delay");
+    driver.demo.set_view(StructureView::Stress).unwrap();
+    driver.frames(1);
+    driver.capture("example-form-destruction-stress");
+    driver.frames((STRESS.failure_delay_seconds / f64::from(STEP)).ceil() as u32 + 2);
+    assert!(!driver.demo.snapshot().overloaded_chunks.is_empty(), "overloaded chunks fail once the delay runs out");
+    driver.frames(120);
+    driver.demo.set_view(StructureView::Material).unwrap();
+    driver.frames(1);
+    driver.capture("example-form-destruction-charge");
+    driver.key("KeyR");
+    let restored = driver.demo.snapshot();
+    assert_eq!((restored.active_chunks, restored.craters), (126, 0), "reset restores the wall and the ground");
+    assert!(restored.stress.iter().all(|state| state.stage == ChunkStressStage::Stable));
+    driver.key("KeyC");
 
     // Orbiting rotates the view without striking.
     let damage = driver.demo.snapshot().damage;
