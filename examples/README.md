@@ -6,7 +6,7 @@ Small feature demonstrations live beside the engine and consume its public `joy-
 | [Terrain](terrain/README.md) | Resident indexed CLOD terrain and fly/orbit/pan controls | `/examples/terrain/` |
 | [Scene Effects](scene-effects/README.md) | Lighting, shadows, and post-processing inspection | `/examples/scene-effects/` |
 | [FORM Building](form-building/README.md) | Editable procedural recipes and baked building assets | `/examples/form-building/` |
-| [FORM Destruction](form-destruction/README.md) | Surface-projected impacts and synchronized chunk removal | `/examples/form-destruction/` |
+| [FORM Destruction](form-destruction/README.md) | Surface-projected impacts, load-path stress with staged collapse, ground charges that undermine, and synchronized chunk removal | `/examples/form-destruction/` |
 | [SDF Collisions](sdf-collisions/README.md) | Signed distance colliders for FORM props beside bounding boxes, with a native and browser benchmark | Local only (no `gameSite` metadata yet) |
 
 ## Run

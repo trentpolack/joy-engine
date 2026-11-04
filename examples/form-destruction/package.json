@@ -8,7 +8,7 @@
   "gameSite": {
     "category": "example",
     "title": "FORM DESTRUCTION",
-    "description": "Inspect wall integrity, apply cumulative damage, and keep the resulting rubble.",
+    "description": "Inspect wall integrity and load, undermine it with charges, and watch overloaded chunks fail in stages.",
     "status": "Engine example",
     "accent": "#ff641a",
     "startedAt": "2026-10-12",

@@ -2,14 +2,17 @@
 // Licensed under the MIT License.
 
 //! Destructible chunk structures: queued radial damage committed at simulation boundaries, optional ground-support
-//! collapse, static ray and occupancy queries, and renderer-free box geometry.
+//! collapse (against a flat ground or a sampled surface such as cratered terrain), optional load-path stress with
+//! staged, delayed overload failure, static ray and occupancy queries, and renderer-free box geometry.
 //!
-//! A typical frame queues hits with [`ChunkStructure::queue_damage`], calls [`ChunkStructure::commit`] once at the
-//! simulation boundary, turns the [`ChunkChangeSet`] into collision changes
-//! ([`create_removal_mutation_batch`](crate::create_removal_mutation_batch)) and debris, and rebuilds the
-//! visible mesh from [`ChunkStructure::active_chunks`] with [`create_chunk_mesh_data`].
+//! A typical frame queues hits with [`ChunkStructure::queue_damage`], counts down overloaded chunks with
+//! [`ChunkStructure::advance_stress`], calls [`ChunkStructure::commit`] once at the simulation boundary, turns the
+//! [`ChunkChangeSet`] into collision changes ([`create_removal_mutation_batch`](crate::create_removal_mutation_batch))
+//! and debris, and rebuilds the visible mesh from [`ChunkStructure::active_chunks`] with [`create_chunk_mesh_data`].
+//! [`ChunkStructure::stress_state`] telegraphs strained and failing chunks before they fall.
 
 mod chunk_geometry;
+mod chunk_stress;
 mod chunk_structure;
 mod chunk_support;
 
@@ -17,6 +20,14 @@ pub use chunk_geometry::{
     FRAME_MATERIAL,
     INTERIOR_MATERIAL,
     create_chunk_mesh_data,
+};
+pub use chunk_stress::{
+    ChunkMaterialStrength,
+    ChunkStressOptions,
+    ChunkStressStage,
+    ChunkStressState,
+    DEFAULT_WARNING_RATIO,
+    OVERLOAD_RATIO,
 };
 pub use chunk_structure::{
     ChunkChangeSet,
@@ -59,4 +70,14 @@ pub enum DestructionError {
     /// Support options had a non-finite ground height or a negative or non-finite span or tolerance.
     #[error("Chunk support requires a finite ground height and nonnegative span and contact tolerance.")]
     InvalidSupportOptions,
+    /// Stress or a ground surface was requested for a structure built without support options.
+    #[error("Chunk stress and ground surfaces require support options.")]
+    SupportDisabled,
+    /// Stress options had a non-positive density or strength, an empty or duplicate material, a lateral fraction
+    /// outside `(0, 1]`, a warning ratio outside `(0, 1)`, or a negative failure delay.
+    #[error("Chunk stress requires positive densities and strengths, unique materials, and valid ratios and delays.")]
+    InvalidStressOptions,
+    /// An elapsed time was negative or non-finite.
+    #[error("Elapsed seconds must be finite and nonnegative.")]
+    InvalidElapsedTime,
 }

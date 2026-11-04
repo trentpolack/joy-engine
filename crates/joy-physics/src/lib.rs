@@ -46,7 +46,11 @@ pub use backend_contract::{
 pub use destruction::{
     ChunkChangeSet,
     ChunkDamageState,
+    ChunkMaterialStrength,
     ChunkRaycastHit,
+    ChunkStressOptions,
+    ChunkStressStage,
+    ChunkStressState,
     ChunkStructure,
     ChunkSupportOptions,
     ChunkSupportState,

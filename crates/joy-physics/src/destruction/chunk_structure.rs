@@ -1,12 +1,13 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Damage, support, and static queries for a structure of stable axis-aligned chunks.
+//! Damage, support, stress, and static queries for a structure of stable axis-aligned chunks.
 //!
 //! Radial damage is queued and committed only at an explicit simulation boundary, so geometry, collision, and queries
-//! change together. Coordinates and dimensions use caller-defined world units (Y up); hit points use the same units as
-//! queued damage. Arithmetic uses `f64` in a fixed evaluation order so seeded runs and golden recordings reproduce
-//! exactly.
+//! change together. With stress enabled, overloaded chunks count down their failure delay through
+//! [`ChunkStructure::advance_stress`] and fail at the next commit, so collapse can progress over time. Coordinates and
+//! dimensions use caller-defined world units (Y up); hit points use the same units as queued damage. Arithmetic uses
+//! `f64` in a fixed evaluation order so seeded runs and golden recordings reproduce exactly.
 
 use indexmap::IndexMap;
 use serde::{
@@ -15,6 +16,13 @@ use serde::{
 };
 
 use super::DestructionError;
+use super::chunk_stress::{
+    ChunkStressModel,
+    ChunkStressOptions,
+    ChunkStressStage,
+    ChunkStressState,
+    load_ratio,
+};
 use super::chunk_support::{
     ChunkSupportGraph,
     ChunkSupportOptions,
@@ -58,11 +66,15 @@ pub struct RadialDamage {
 pub struct ChunkChangeSet {
     /// Structure revision after this boundary; increments when chunks leave, and on every reset.
     pub revision: u64,
-    /// All chunks leaving static geometry and queries at this boundary, including support detachments: impact
-    /// removals first, then detachments, each in generation order.
+    /// All chunks leaving static geometry and queries at this boundary, including overload failures and support
+    /// detachments: impact removals first, then overload failures, then detachments, each in generation order.
     pub removed: Vec<DestructibleChunkDefinition>,
     /// Subset of `removed` released by support loss, retaining their remaining health.
     pub detached: Vec<DestructibleChunkDefinition>,
+    /// Subset of `removed` that failed under load once their failure delay ran out (stress only), retaining their
+    /// remaining health.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub overloaded: Vec<DestructibleChunkDefinition>,
     /// Active chunks after this boundary.
     pub active_chunk_count: usize,
 }
@@ -73,7 +85,7 @@ pub struct ChunkChangeSet {
 pub struct ChunkDamageState {
     /// Stable chunk id.
     pub chunk_id: String,
-    /// Remaining hit points, never below zero. Support-detached chunks keep their health.
+    /// Remaining hit points, never below zero. Support-detached and overloaded chunks keep their health.
     pub remaining_hit_points: f64,
     /// Starting hit points.
     pub maximum_hit_points: f64,
@@ -98,13 +110,17 @@ struct ChunkState {
     definition: DestructibleChunkDefinition,
     hit_points: f64,
     active: bool,
+
+    // Seconds left before an overloaded chunk fails; `None` unless it is overloaded (stress only).
+    failure_timer: Option<f64>,
 }
 
 /// Owns damage for stable, axis-aligned chunks and commits queued changes only at an explicit simulation boundary.
 ///
 /// Definitions are copied at construction, so generation data can be released or reused. Chunks keep generation order
 /// for every query and report. Without support options, chunks leave only when their hit points reach zero; with
-/// support, [`ChunkStructure::commit`] also detaches chunks that lose their route to a ground anchor.
+/// support, [`ChunkStructure::commit`] also detaches chunks that lose their route to a ground anchor. Stress
+/// ([`ChunkStructure::with_stress`]) adds load paths on top of support: overloaded chunks fail after a delay.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChunkStructure {
     // Chunks by id, in generation order.
@@ -117,6 +133,10 @@ pub struct ChunkStructure {
     // Optional support topology and the diagnostics of the latest evaluation.
     support: Option<ChunkSupportGraph>,
     support_snapshot: Vec<ChunkSupportState>,
+
+    // Optional load model (requires support) and the diagnostics of the latest evaluation.
+    stress: Option<ChunkStressModel>,
+    stress_snapshot: Vec<ChunkStressState>,
 }
 
 impl ChunkStructure {
@@ -138,6 +158,7 @@ impl ChunkStructure {
                 definition: definition.clone(),
                 hit_points: definition.hit_points,
                 active: true,
+                failure_timer: None,
             };
             chunks.insert(definition.id.clone(), state);
         }
@@ -155,9 +176,25 @@ impl ChunkStructure {
             revision: 0,
             support,
             support_snapshot: Vec::new(),
+            stress: None,
+            stress_snapshot: Vec::new(),
         };
         structure.refresh_support();
         Ok(structure)
+    }
+
+    /// Enable load-path stress (see `chunk_stress`) and evaluate it for the current state.
+    ///
+    /// Fails with [`DestructionError::SupportDisabled`] when the structure was built without support options, or with
+    /// [`DestructionError::InvalidStressOptions`] when the options do not validate.
+    pub fn with_stress(mut self, options: ChunkStressOptions) -> Result<Self, DestructionError> {
+        let Some(graph) = &self.support else {
+            return Err(DestructionError::SupportDisabled);
+        };
+        let all: Vec<&DestructibleChunkDefinition> = self.chunks.values().map(|chunk| &chunk.definition).collect();
+        self.stress = Some(ChunkStressModel::new(&all, graph, options)?);
+        self.refresh_support();
+        Ok(self)
     }
 
     /// Queue radial damage. Geometry, collision, and diagnostics stay unchanged until [`ChunkStructure::commit`].
@@ -173,11 +210,57 @@ impl ChunkStructure {
         Ok(())
     }
 
+    /// Count down overloaded chunks' failure delays by `elapsed_seconds` and report whether any delay ran out, so the
+    /// next [`ChunkStructure::commit`] removes them.
+    ///
+    /// Without stress this does nothing and returns `false`. Stress diagnostics report the remaining time immediately;
+    /// loads change only at commits. Fails for a negative or non-finite elapsed time, leaving timers unchanged.
+    pub fn advance_stress(&mut self, elapsed_seconds: f64) -> Result<bool, DestructionError> {
+        if !elapsed_seconds.is_finite() || elapsed_seconds < 0.0 {
+            return Err(DestructionError::InvalidElapsedTime);
+        }
+        let mut due = false;
+        for (chunk, state) in self.chunks.values_mut().zip(self.stress_snapshot.iter_mut()) {
+            let Some(remaining) = chunk.failure_timer.as_mut() else {
+                continue;
+            };
+            *remaining = (*remaining - elapsed_seconds).max(0.0);
+            state.seconds_until_failure = Some(*remaining);
+            due |= *remaining <= 0.0;
+        }
+        Ok(due)
+    }
+
+    /// Re-anchor the structure against a ground surface (for example terrain after a crater), so undermined chunks
+    /// lose their anchors and anything they held detaches or overloads at the next [`ChunkStructure::commit`].
+    ///
+    /// `ground_height_at(x, z)` returns the ground height in world units under a world-space point. A chunk anchors
+    /// when at least three of five footprint samples (its center and four corners) reach its bottom face within
+    /// `bearing_tolerance` world units; buried chunks count as embedded and anchor. Non-finite samples never bear. The
+    /// surface replaces the construction-time ground plane until it is set again, including across
+    /// [`ChunkStructure::reset`]. Diagnostics change at the next commit. Returns whether any anchor changed. Fails
+    /// without support or for a negative or non-finite tolerance.
+    pub fn set_ground_surface(
+        &mut self,
+        bearing_tolerance: f64,
+        ground_height_at: impl Fn(f64, f64) -> f64,
+    ) -> Result<bool, DestructionError> {
+        if !bearing_tolerance.is_finite() || bearing_tolerance < 0.0 {
+            return Err(DestructionError::InvalidSupportOptions);
+        }
+        let Some(graph) = self.support.as_mut() else {
+            return Err(DestructionError::SupportDisabled);
+        };
+        let all: Vec<&DestructibleChunkDefinition> = self.chunks.values().map(|chunk| &chunk.definition).collect();
+        Ok(graph.update_anchors(&all, bearing_tolerance, ground_height_at))
+    }
+
     /// Apply every queued hit atomically and return the chunks removed at this boundary.
     ///
-    /// Overlapping hits accumulate before removal, and already removed chunks are ignored. With support enabled, the
-    /// surviving contacts are evaluated once and unsupported chunks detach in the same revision; the support
-    /// diagnostics then describe that evaluation (detached chunks read as unsupported).
+    /// Overlapping hits accumulate before removal, and already removed chunks are ignored. With stress enabled,
+    /// overloaded chunks whose failure delay ran out fail next. With support enabled, the surviving contacts are then
+    /// evaluated once and unsupported chunks detach in the same revision; the support and stress diagnostics describe
+    /// that evaluation (detached chunks read as unsupported and stable).
     pub fn commit(&mut self) -> ChunkChangeSet {
         let queued = std::mem::take(&mut self.queued_damage);
         for damage in &queued {
@@ -192,6 +275,17 @@ impl ChunkStructure {
         for chunk in self.chunks.values_mut() {
             if chunk.active && chunk.hit_points <= 0.0 {
                 chunk.active = false;
+                chunk.failure_timer = None;
+                removed.push(chunk.definition.clone());
+            }
+        }
+
+        let mut overloaded = Vec::new();
+        for chunk in self.chunks.values_mut() {
+            if chunk.active && chunk.failure_timer.is_some_and(|remaining| remaining <= 0.0) {
+                chunk.active = false;
+                chunk.failure_timer = None;
+                overloaded.push(chunk.definition.clone());
                 removed.push(chunk.definition.clone());
             }
         }
@@ -204,6 +298,7 @@ impl ChunkStructure {
             };
             if chunk.active && !state.supported {
                 chunk.active = false;
+                chunk.failure_timer = None;
                 detached.push(chunk.definition.clone());
                 removed.push(chunk.definition.clone());
             }
@@ -216,6 +311,7 @@ impl ChunkStructure {
             revision: self.revision,
             removed,
             detached,
+            overloaded,
             active_chunk_count: self.active_chunk_count(),
         }
     }
@@ -228,6 +324,7 @@ impl ChunkStructure {
         for chunk in self.chunks.values_mut() {
             chunk.active = true;
             chunk.hit_points = chunk.definition.hit_points;
+            chunk.failure_timer = None;
         }
         self.revision += 1;
         self.refresh_support();
@@ -235,6 +332,7 @@ impl ChunkStructure {
             revision: self.revision,
             removed: Vec::new(),
             detached: Vec::new(),
+            overloaded: Vec::new(),
             active_chunk_count: self.chunks.len(),
         }
     }
@@ -282,6 +380,28 @@ impl ChunkStructure {
     /// Copy the committed static support diagnostics, or an empty list when support is disabled.
     pub fn support_state(&self) -> Vec<ChunkSupportState> {
         self.support_snapshot.clone()
+    }
+
+    /// Copy the committed stress diagnostics in generation order, or an empty list when stress is disabled. Failure
+    /// countdowns reflect the latest [`ChunkStructure::advance_stress`].
+    pub fn stress_state(&self) -> Vec<ChunkStressState> {
+        self.stress_snapshot.clone()
+    }
+
+    /// Borrow the committed stress diagnostics without copying, in generation order; empty when stress is disabled.
+    pub fn stress_states(&self) -> &[ChunkStressState] {
+        &self.stress_snapshot
+    }
+
+    /// The stress options in use, or `None` when stress is disabled. Use [`ChunkStressOptions::chunk_mass`] to weigh
+    /// released chunks.
+    pub fn stress_options(&self) -> Option<&ChunkStressOptions> {
+        self.stress.as_ref().map(ChunkStressModel::options)
+    }
+
+    /// Number of active chunks currently overloaded and counting down to failure.
+    pub fn failing_chunk_count(&self) -> usize {
+        self.chunks.values().filter(|chunk| chunk.active && chunk.failure_timer.is_some()).count()
     }
 
     /// Nearest active chunk hit by a world-space ray within `maximum_distance`, or `None`.
@@ -333,15 +453,43 @@ impl ChunkStructure {
         Ok(!blocked)
     }
 
-    /// Re-evaluate support for the current active set (no-op diagnostics when support is disabled).
+    /// Re-evaluate support, then stress, for the current active set (empty diagnostics when either is disabled).
     fn refresh_support(&mut self) {
-        self.support_snapshot = match &self.support {
-            None => Vec::new(),
-            Some(graph) => {
-                let active: Vec<bool> = self.chunks.values().map(|chunk| chunk.active).collect();
-                graph.evaluate(&active)
-            }
+        let Some(graph) = &self.support else {
+            self.support_snapshot = Vec::new();
+            return;
         };
+        let active: Vec<bool> = self.chunks.values().map(|chunk| chunk.active).collect();
+        let evaluation = graph.evaluate(&active);
+
+        if let Some(model) = &self.stress {
+            let health: Vec<f64> =
+                self.chunks.values().map(|chunk| chunk.hit_points / chunk.definition.hit_points).collect();
+            let loads = model.evaluate(graph.anchors(), &health, &evaluation);
+            let delay = model.options().failure_delay_seconds;
+            let mut snapshot = Vec::with_capacity(loads.len());
+            for ((chunk, load), support) in self.chunks.values_mut().zip(&loads).zip(&evaluation.states) {
+                let bearing = chunk.active && support.supported;
+                let ratio = if bearing { load_ratio(load) } else { 0.0 };
+                let stage = model.stage(ratio);
+
+                // An overloaded chunk keeps counting down across commits; relieving it cancels the countdown.
+                chunk.failure_timer = match stage {
+                    ChunkStressStage::Failing => Some(chunk.failure_timer.unwrap_or(delay)),
+                    _ => None,
+                };
+                snapshot.push(ChunkStressState {
+                    chunk_id: chunk.definition.id.clone(),
+                    load: if bearing { load.load } else { 0.0 },
+                    capacity: if bearing { load.capacity } else { 0.0 },
+                    ratio,
+                    stage,
+                    seconds_until_failure: chunk.failure_timer,
+                });
+            }
+            self.stress_snapshot = snapshot;
+        }
+        self.support_snapshot = evaluation.states;
     }
 }
 

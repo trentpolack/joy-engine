@@ -2,6 +2,19 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 11-04-2026
+### FORM Destruction Example
+- Kept the action toolbar at the bottom edge and moved STATS and its panel above it, removing the unused strip below the toolbar. The shared development dock accepts a per-pass bottom inset for HUD bars.
+
+## 10-29-2026
+### Destruction
+- Added optional load-path stress to `ChunkStructure` (`with_stress`, `ChunkStressOptions`, `ChunkMaterialStrength`): every supported chunk carries its own mass plus what rests on it, capacity scales with material strength, contact area, and remaining health, and side-hanging chunks bear only a fraction of their strength. `stress_state` reports load, capacity, ratio, and a `Stable`, `Strained`, or `Failing` stage; overloaded chunks count down a failure delay through `advance_stress(elapsed_seconds)` and fail at the next commit (`ChunkChangeSet::overloaded`), so collapse telegraphs and progresses in stages. `ChunkStressOptions::chunk_mass` weighs released chunks.
+- Added `ChunkStructure::set_ground_surface`, which re-anchors a structure against a sampled ground height (terrain after craters, for example), so undermining releases or overloads what the ground held at the next commit.
+- New `DestructionError` variants: `SupportDisabled`, `InvalidStressOptions`, and `InvalidElapsedTime`.
+
+### FORM Destruction Example
+- Added a STRESS view, a stress telegraph (strained chunks lean amber; overloaded chunks pulse and shake through their delay, then crumble out of the wall), and a CHARGE tool (C) that craters a heightfield ground patch with the terrain crater profile and undermines the wall. Released chunks keep a sliver of clearance so whole columns topple out instead of wedging.
+
 ## 10-23-2026
 ### FORM Language
 - A `const` read from a geometry or instance variable now holds a frozen snapshot instead of freezing the variable it came from, so `let shape = box(1, 1, 1)` stays editable after `const finished = shape`. Fresh values (`const shape = box(1, 1, 1)`) still freeze in place, and aliases of a constant still cannot edit it.

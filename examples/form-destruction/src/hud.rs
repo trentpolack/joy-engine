@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The demo's HUD: title and view buttons, the brief with seed, backend, chunk, and debris readouts, the integrity or
-//! support legend with the last chunk's resistance, the CONFIG panel, the notice line, and the footer with RESET.
+//! The demo's HUD: title and view buttons, the brief with tool, seed, backend, chunk, failing, and debris readouts, the
+//! integrity, support, or stress legend with the last chunk's resistance and load, the CONFIG panel, the notice line,
+//! and the footer with the STRIKE and CHARGE tools and RESET.
 //! Information panels ignore the pointer so clicks reach the structure behind them; drawing returns the requested
 //! changes instead of mutating the demo.
 
@@ -23,7 +24,10 @@ use joy_engine::egui::{
 };
 use joy_engine::prelude::*;
 
-use super::config::destruction_config::StructureView;
+use super::config::destruction_config::{
+    StructureView,
+    Tool,
+};
 
 /// Configurable ranges and steps (minimum, maximum, step), starting with the impact radius.
 pub const RADIUS_RANGE: (f64, f64, f64) = (0.6, 2.0, 0.05);
@@ -69,6 +73,11 @@ const SUPPORT_SCALE: [(f32, Color32); 3] = [
     (0.5, Color32::from_rgb(0x43, 0xc2, 0x72)),
     (1.0, Color32::from_rgb(0xfa, 0xca, 0x39)),
 ];
+const STRESS_SCALE: [(f32, Color32); 3] = [
+    (0.0, Color32::from_rgb(0x5f, 0xd0, 0xad)),
+    (0.7, Color32::from_rgb(0xff, 0xde, 0x59)),
+    (1.0, Color32::from_rgb(0xff, 0x4f, 0x30)),
+];
 
 /// Everything the HUD shows, refreshed by the demo after changes and every few frames.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -79,12 +88,18 @@ pub struct HudState {
     pub seed: i64,
     /// Active chunk readout.
     pub chunks: String,
+    /// Overloaded chunk readout.
+    pub failing: String,
+    /// Current tool.
+    pub tool: Tool,
     /// Retained debris readout.
     pub debris: String,
     /// Hits to break intact masonry and frame chunks at the current damage.
     pub baseline: String,
     /// The last chunk's support path.
     pub support: String,
+    /// The last chunk's load over capacity, or the stress rule before any impact.
+    pub stress: String,
     /// The last chunk's remaining and maximum resistance.
     pub meter: (f32, f32),
     /// The last chunk's resistance summary.
@@ -100,6 +115,10 @@ pub enum HudCommand {
     ToggleIntegrity,
     /// Toggle between the support and material views.
     ToggleSupport,
+    /// Toggle between the stress and material views.
+    ToggleStress,
+    /// Switch what a click does.
+    SelectTool(Tool),
     /// Open or close CONFIG.
     ToggleConfig,
     /// Close CONFIG.
@@ -119,6 +138,8 @@ pub enum HudCommand {
 pub struct HudSettings {
     /// Current structure view.
     pub view: StructureView,
+    /// Current tool.
+    pub tool: Tool,
     /// Whether CONFIG is open.
     pub config_open: bool,
     /// Impact radius in meters.
@@ -137,18 +158,17 @@ pub fn draw(context: &egui::Context, state: &HudState, settings: HudSettings) ->
         tiny: screen.width() <= TINY_WIDTH,
         short: screen.height() <= SHORT_HEIGHT,
     };
-    let footer_bottom = dock::reserved_height(context);
     let mut commands = Vec::new();
+    footer(context, layout, settings.tool, &mut commands);
     header(context, layout, settings, &mut commands);
     brief(context, layout, state);
+    let notice_top = notice(context, layout, state);
     if settings.view != StructureView::Material {
-        legend(context, layout, state, settings.view, footer_bottom);
+        legend(context, layout, state, settings.view, notice_top);
     }
     if settings.config_open {
         config(context, layout, settings, &mut commands);
     }
-    notice(context, layout, state, footer_bottom);
-    footer(context, layout, footer_bottom, &mut commands);
     commands
 }
 
@@ -181,9 +201,11 @@ fn header(context: &egui::Context, layout: Layout, settings: HudSettings, comman
         |ui| {
             let integrity = settings.view == StructureView::Integrity;
             let support = settings.view == StructureView::Support;
+            let stress = settings.view == StructureView::Stress;
             let buttons = [
                 (if integrity { "INTEGRITY ON" } else { "INTEGRITY" }, integrity, HudCommand::ToggleIntegrity),
                 (if support { "SUPPORT ON" } else { "SUPPORT" }, support, HudCommand::ToggleSupport),
+                (if stress { "STRESS ON" } else { "STRESS" }, stress, HudCommand::ToggleStress),
                 ("CONFIG", settings.config_open, HudCommand::ToggleConfig),
             ];
             let mut draw = |ui: &mut Ui| {
@@ -214,22 +236,32 @@ fn brief(context: &egui::Context, layout: Layout, state: &HudState) {
         context,
         |ui| {
             accent_panel(ui, ORANGE, width, |ui| {
-                ui.label(RichText::new("CLICK TO APPLY AN IMPACT").size(12.0).strong().color(TEXT));
+                let heading = match state.tool {
+                    Tool::Strike => "CLICK TO APPLY AN IMPACT",
+                    Tool::Charge => "CLICK TO BLAST A CRATER",
+                };
+                ui.label(RichText::new(heading).size(12.0).strong().color(TEXT));
                 if !layout.compact && !layout.short {
                     ui.label(
                         RichText::new(
-                            "Impacts weaken the wall. Removing its supports makes overhangs fall, even with health \
-                             remaining. Debris stays until reset.",
+                            "Impacts weaken the wall, and weakened chunks carry less. Overloaded chunks shake, then \
+                             fail; craters undermine whatever stood on them. Debris stays until reset.",
                         )
                         .size(12.0)
                         .color(MUTED),
                     );
                 }
                 ui.add_space(6.0);
+                let tool = match state.tool {
+                    Tool::Strike => "STRIKE",
+                    Tool::Charge => "CHARGE",
+                };
                 for (label, value) in [
+                    ("TOOL", tool.to_owned()),
                     ("SEED", state.seed.to_string()),
                     ("BACKEND", state.backend.to_uppercase()),
                     ("CHUNKS", state.chunks.clone()),
+                    ("FAILING", state.failing.clone()),
                     ("DEBRIS", state.debris.clone()),
                 ] {
                     rule(ui);
@@ -245,30 +277,28 @@ fn brief(context: &egui::Context, layout: Layout, state: &HudState) {
     );
 }
 
-fn legend(context: &egui::Context, layout: Layout, state: &HudState, view: StructureView, footer_bottom: f32) {
+fn legend(context: &egui::Context, layout: Layout, state: &HudState, view: StructureView, notice_top: f32) {
     let bottom = if layout.compact {
-        105.0
+        // Narrow screens stack the legend above the notice, including notices that wrap.
+        105.0_f32.max(notice_top + 8.0)
     } else if layout.short {
         75.0
     } else {
         84.0
     };
     let (left, width) = if layout.compact { (10.0, 260.0) } else { (24.0, 290.0) };
-    let support = view == StructureView::Support;
+    let (title, stops, labels): (&str, &[(f32, Color32)], &[&str]) = match view {
+        StructureView::Support => ("SUPPORT / GROUND CONNECTION", &SUPPORT_SCALE, &["ANCHORED", "VERTICAL", "BRACED"]),
+        StructureView::Stress => ("STRESS / LOAD OVER CAPACITY", &STRESS_SCALE, &["STABLE", "STRAINED", "FAILING"]),
+        _ => ("INTEGRITY / IMPACT RESISTANCE", &INTEGRITY_SCALE, &["CRITICAL", "WEAK", "SOLID", "FRAME"]),
+    };
     egui::Area::new(Id::new("destruction-legend"))
-        .anchor(Align2::LEFT_BOTTOM, UiVec2::new(left, -bottom - footer_bottom))
+        .anchor(Align2::LEFT_BOTTOM, UiVec2::new(left, -bottom))
         .interactable(false)
         .show(context, |ui| {
             accent_panel(ui, BLUE, width, |ui| {
-                let title = if support { "SUPPORT / GROUND CONNECTION" } else { "INTEGRITY / IMPACT RESISTANCE" };
                 ui.label(RichText::new(title).size(11.0).strong().color(TEXT));
-                if support {
-                    gradient(ui, &SUPPORT_SCALE);
-                } else {
-                    gradient(ui, &INTEGRITY_SCALE);
-                }
-                let labels: &[&str] =
-                    if support { &["ANCHORED", "VERTICAL", "BRACED"] } else { &["CRITICAL", "WEAK", "SOLID", "FRAME"] };
+                gradient(ui, stops);
                 ui.columns(labels.len(), |columns| {
                     let last = labels.len() - 1;
                     for (index, (column, label)) in columns.iter_mut().zip(labels).enumerate() {
@@ -285,6 +315,7 @@ fn legend(context: &egui::Context, layout: Layout, state: &HudState, view: Struc
                 ui.label(RichText::new(&state.baseline).size(11.0).color(LABEL));
                 rule(ui);
                 ui.label(RichText::new(&state.support).size(11.0).color(LABEL));
+                ui.label(RichText::new(&state.stress).size(11.0).color(LABEL));
                 let (value, maximum) = state.meter;
                 let fraction = if maximum > 0.0 { (value / maximum).clamp(0.0, 1.0) } else { 0.0 };
                 ui.add(egui::ProgressBar::new(fraction).fill(METER).desired_height(10.0).corner_radius(5.0));
@@ -338,22 +369,25 @@ fn config(context: &egui::Context, layout: Layout, settings: HudSettings, comman
     );
 }
 
-fn notice(context: &egui::Context, layout: Layout, state: &HudState, footer_bottom: f32) {
-    let bottom = if layout.compact { FOOTER_HEIGHT + 30.0 } else { FOOTER_HEIGHT + 20.0 };
-    egui::Area::new(Id::new("destruction-notice"))
-        .anchor(Align2::CENTER_BOTTOM, UiVec2::new(0.0, -bottom - footer_bottom))
+/// Draw the notice and return its top edge's distance from the viewport bottom in logical pixels.
+fn notice(context: &egui::Context, layout: Layout, state: &HudState) -> f32 {
+    let bottom =
+        if layout.compact { (FOOTER_HEIGHT + 30.0).max(dock::reserved_height(context)) } else { FOOTER_HEIGHT + 20.0 };
+    let response = egui::Area::new(Id::new("destruction-notice"))
+        .anchor(Align2::CENTER_BOTTOM, UiVec2::new(0.0, -bottom))
         .interactable(false)
         .show(context, |ui| {
             egui::Frame::new().fill(NOTICE).inner_margin(Margin::symmetric(11, 7)).show(ui, |ui| {
                 ui.label(RichText::new(&state.notice).size(12.0).color(NOTICE_TEXT));
             });
         });
+    context.content_rect().bottom() - response.response.rect.top()
 }
 
-fn footer(context: &egui::Context, layout: Layout, footer_bottom: f32, commands: &mut Vec<HudCommand>) {
+fn footer(context: &egui::Context, layout: Layout, tool: Tool, commands: &mut Vec<HudCommand>) {
     let width = context.content_rect().width();
-    egui::Area::new(Id::new("destruction-footer"))
-        .anchor(Align2::LEFT_BOTTOM, UiVec2::new(0.0, -footer_bottom))
+    let response = egui::Area::new(Id::new("destruction-footer"))
+        .anchor(Align2::LEFT_BOTTOM, UiVec2::ZERO)
         .constrain(false)
         .show(context, |ui| {
             let padding: i8 = if layout.compact { 12 } else { 24 };
@@ -369,7 +403,7 @@ fn footer(context: &egui::Context, layout: Layout, footer_bottom: f32, commands:
                 ui.horizontal_centered(|ui| {
                     ui.spacing_mut().item_spacing.x = if layout.compact { 12.0 } else { 26.0 };
                     if !layout.tiny {
-                        for hint in ["CLICK IMPACT", "DRAG ORBIT", "SCROLL ZOOM"] {
+                        for hint in ["CLICK USE TOOL", "DRAG ORBIT", "SCROLL ZOOM"] {
                             ui.label(RichText::new(hint).size(10.0).strong().color(FOOTER_TEXT));
                         }
                     }
@@ -381,10 +415,23 @@ fn footer(context: &egui::Context, layout: Layout, footer_bottom: f32, commands:
                         if styled_button(ui, label, false, false) {
                             commands.push(HudCommand::Reset);
                         }
+
+                        // Right to left: CHARGE sits beside RESET, STRIKE before it; C switches between them.
+                        for (label, choice) in [("CHARGE", Tool::Charge), ("STRIKE", Tool::Strike)] {
+                            let label = (
+                                RichText::new(label).size(11.0).strong(),
+                                RichText::new("C").size(11.0).strong().color(ORANGE),
+                            );
+                            if styled_button(ui, label, tool == choice, false) && tool != choice {
+                                commands.push(HudCommand::SelectTool(choice));
+                            }
+                        }
                     });
                 });
             });
         });
+    // Use the rendered bar height so font scaling or wrapped content cannot push it into the dock.
+    dock::set_bottom_inset(context, response.response.rect.height());
 }
 
 /// A square page button; `pressed` buttons take the blue toggled look.
