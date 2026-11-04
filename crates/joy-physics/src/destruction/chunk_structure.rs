@@ -465,7 +465,7 @@ impl ChunkStructure {
         if let Some(model) = &self.stress {
             let health: Vec<f64> =
                 self.chunks.values().map(|chunk| chunk.hit_points / chunk.definition.hit_points).collect();
-            let loads = model.evaluate(graph.anchors(), &health, &evaluation);
+            let loads = model.evaluate(graph, &health, &evaluation);
             let delay = model.options().failure_delay_seconds;
             let mut snapshot = Vec::with_capacity(loads.len());
             for ((chunk, load), support) in self.chunks.values_mut().zip(&loads).zip(&evaluation.states) {

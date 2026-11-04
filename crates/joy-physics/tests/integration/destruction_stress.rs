@@ -92,6 +92,97 @@ fn ids(chunks: &[DestructibleChunkDefinition]) -> Vec<&str> {
     chunks.iter().map(|chunk| chunk.id.as_str()).collect()
 }
 
+fn bearing_chunk(id: &str, center: [f64; 3], size: [f64; 3]) -> DestructibleChunkDefinition {
+    DestructibleChunkDefinition {
+        id: id.to_owned(),
+        center: DVec3::from_array(center),
+        size: DVec3::from_array(size),
+        material: id.to_owned(),
+        hit_points: 1.0,
+    }
+}
+
+fn bearing_structure(chunks: &[DestructibleChunkDefinition]) -> ChunkStructure {
+    let options = ChunkStressOptions {
+        materials: vec![ChunkMaterialStrength {
+            material: "beam".to_owned(),
+            density: 1.0,
+            strength: 2.0,
+        }],
+        default_density: 1.0,
+        default_strength: 100.0,
+        ..stress()
+    };
+    let support = ChunkSupportOptions {
+        maximum_cantilever_distance: 10.0,
+        ..support()
+    };
+    ChunkStructure::new(chunks, Some(support)).unwrap().with_stress(options).unwrap()
+}
+
+#[test]
+fn every_grounded_bearing_carries_a_beam_regardless_of_chunk_order() {
+    let left = bearing_chunk("left", [0.0, 0.5, 0.0], [1.0; 3]);
+    let right = bearing_chunk("right", [1.0, 0.5, 0.0], [1.0; 3]);
+    let beam = bearing_chunk("beam", [0.0, 1.5, 0.0], [3.0, 1.0, 1.0]);
+    for chunks in
+        [[left.clone(), beam.clone(), right.clone()], [left.clone(), right.clone(), beam.clone()], [beam, right, left]]
+    {
+        let mut structure = bearing_structure(&chunks);
+        let beam = chunk_stress(&structure, "beam");
+        assert_eq!((beam.load, beam.capacity, beam.ratio), (3.0, 4.0, 0.75));
+        assert_eq!(chunk_stress(&structure, "left").load, 2.5);
+        assert_eq!(chunk_stress(&structure, "right").load, 2.5);
+        assert!(!structure.advance_stress(FAILURE_DELAY_SECONDS).unwrap());
+        assert!(structure.commit().removed.is_empty(), "reordering must not destroy a safely supported beam");
+    }
+}
+
+#[test]
+fn later_reached_piers_receive_and_propagate_their_share_of_a_beam() {
+    // The aligned left stack reaches the beam before the offset right pier. Both pier faces still bear its mass.
+    let chunks = vec![
+        bearing_chunk("left-anchor", [0.0, 0.5, 0.0], [1.0; 3]),
+        bearing_chunk("left-pier", [0.0, 1.5, 0.0], [1.0; 3]),
+        bearing_chunk("beam", [0.0, 2.5, 0.0], [4.0, 1.0, 1.0]),
+        bearing_chunk("right-anchor", [2.0, 0.5, 0.0], [1.0; 3]),
+        bearing_chunk("right-pier", [1.25, 1.5, 0.0], [1.5, 1.0, 1.0]),
+    ];
+    for chunks in [chunks.clone(), chunks.into_iter().rev().collect()] {
+        let mut structure = bearing_structure(&chunks);
+        let beam = chunk_stress(&structure, "beam");
+        assert_eq!((beam.load, beam.capacity, beam.ratio), (4.0, 5.0, 0.8));
+        assert!((chunk_stress(&structure, "left-pier").load - 2.6).abs() < 1e-12);
+        assert!((chunk_stress(&structure, "right-pier").load - 3.9).abs() < 1e-12);
+        assert!((chunk_stress(&structure, "left-anchor").load - 3.6).abs() < 1e-12);
+        assert!((chunk_stress(&structure, "right-anchor").load - 4.9).abs() < 1e-12);
+        assert!(!structure.advance_stress(FAILURE_DELAY_SECONDS).unwrap());
+        assert!(structure.commit().removed.is_empty());
+    }
+}
+
+#[test]
+fn circular_bearings_route_their_load_through_grounded_side_contacts() {
+    // The slab hangs from a high ground anchor. Its underside touches a suspended pedestal, whose only support
+    // comes sideways through the tall brace and back through the slab. Counting that bearing would make a cycle.
+    let chunks = vec![
+        bearing_chunk("anchor", [-1.5, 3.0, 0.0], [1.0; 3]),
+        bearing_chunk("slab", [0.0, 3.0, 0.0], [2.0, 1.0, 2.0]),
+        bearing_chunk("pedestal", [0.5, 2.0, 0.0], [1.0; 3]),
+        bearing_chunk("brace", [1.5, 2.5, 0.0], [1.0, 2.0, 1.0]),
+    ];
+    for chunks in [chunks.clone(), chunks.into_iter().rev().collect()] {
+        let mut structure = bearing_structure(&chunks);
+        structure.set_ground_surface(0.0, |x, _| if x < -1.0 { 2.5 } else { -10.0 }).unwrap();
+        assert!(structure.commit().detached.is_empty());
+        assert!(structure.stress_states().iter().all(|state| state.capacity > 0.0 && state.ratio.is_finite()));
+        assert_eq!(chunk_stress(&structure, "anchor").load, 8.0, "all mass must reach the sole anchor once");
+        assert_eq!(chunk_stress(&structure, "slab").load, 7.0);
+        assert_eq!(chunk_stress(&structure, "brace").load, 3.0);
+        assert_eq!(chunk_stress(&structure, "pedestal").load, 1.0);
+    }
+}
+
 #[test]
 fn columns_carry_their_load_and_a_weakened_base_fails_only_after_its_delay() {
     let mut structure = stressed_wall();

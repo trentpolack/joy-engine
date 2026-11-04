@@ -3,8 +3,12 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 11-04-2026
+### Destruction
+- Load sharing now includes supported bearings reached later by the support search, so reordering chunks does not drop a beam's supports. A separate grounded load order accumulates their loads before forwarding them and cuts circular bearing paths without stranding mass.
+
 ### FORM Destruction Example
 - Kept the action toolbar at the bottom edge and moved STATS and its panel above it, removing the unused strip below the toolbar. The shared development dock accepts a per-pass bottom inset for HUD bars.
+- Stacked the view controls earlier on narrow windows so STRESS and the other buttons stay clear of the title, and kept header text from retaining narrow wrapping after a resize.
 
 ## 10-29-2026
 ### Destruction

@@ -82,8 +82,8 @@ pub(crate) struct SupportEdge {
 pub(crate) struct SupportEvaluation {
     /// Per-chunk diagnostics in generation order.
     pub(crate) states: Vec<ChunkSupportState>,
-    /// Per-chunk visit rank (0 for the first chunk reached), or `None` when unsupported. Support only flows from a
-    /// lower rank to a higher one, so ranks order load paths toward the ground without cycles.
+    /// Per-chunk visit rank (0 for the first chunk reached), or `None` when unsupported. This orders discovery, not
+    /// all bearing contacts; the stress model derives its own grounded load order from the supported contacts.
     pub(crate) ranks: Vec<Option<usize>>,
 }
 

@@ -7,8 +7,9 @@
 //! along the support graph: a chunk bears on the chunks directly beneath it when it has any (shared by contact area),
 //! and otherwise on its side neighbors, which carry only a fraction of a material's strength. A chunk's capacity is
 //! the contact area it bears on times its material strength, scaled by its remaining health, so damaging a column
-//! raises the stress of the column itself. Stress is a readable gameplay rule, not an elastic, torque, or fracture
-//! solver: it is evaluated once per commit, in a fixed order, with `f64` arithmetic, so seeded runs reproduce exactly.
+//! raises the stress of the column itself. Circular bearing paths are cut at a grounded contact: a suspended chunk
+//! cannot carry the chunk it depends on for support. Stress is a readable gameplay rule, not an elastic, torque, or
+//! fracture solver: it is evaluated once per commit, in a fixed order, with `f64` arithmetic, so seeded runs reproduce exactly.
 //!
 //! Units: chunk geometry uses the structure's world units; density is mass per cubic world unit; strength is the mass
 //! one square world unit of contact bears at full health. Mass units are the caller's (kilograms with meters).
@@ -199,12 +200,12 @@ impl ChunkStressModel {
 
     /// Resolve load and capacity for every chunk, in generation order.
     ///
-    /// `anchors` and `health_fractions` are indexed in generation order; `support` is the evaluation for the same
-    /// active set. Chunks hand load to carriers reached earlier from the ground (lower support rank), so the walk
-    /// from the highest rank down visits every chunk after everything it carries.
+    /// `graph` and `health_fractions` use generation order; `support` is the evaluation for the same active set.
+    /// Load ranks place grounded carriers before the chunks they carry, including bearings that support
+    /// discovery reached later. Walking those ranks backward accumulates every dependent's mass before forwarding it.
     pub(crate) fn evaluate(
         &self,
-        anchors: &[bool],
+        graph: &ChunkSupportGraph,
         health_fractions: &[f64],
         support: &SupportEvaluation,
     ) -> Vec<ChunkLoad> {
@@ -215,8 +216,9 @@ impl ChunkStressModel {
             };
             self.masses.len()
         ];
+        let ranks = self.load_ranks(graph, support);
         let mut order: Vec<(usize, usize)> =
-            support.ranks.iter().enumerate().filter_map(|(index, rank)| rank.map(|rank| (rank, index))).collect();
+            ranks.iter().enumerate().filter_map(|(index, rank)| rank.map(|rank| (rank, index))).collect();
         // Highest rank first: every chunk is visited after everything it carries.
         order.sort_unstable_by_key(|(rank, _)| std::cmp::Reverse(*rank));
 
@@ -226,15 +228,14 @@ impl ChunkStressModel {
             let strength = self.strengths[index] * health;
 
             // Anchored chunks bear on the ground across their whole footprint.
-            if anchors[index] {
+            if graph.anchors()[index] {
                 loads[index].capacity = self.footprints[index] * strength;
                 continue;
             }
 
             // Bear on the chunks beneath when there are any; otherwise hang from side neighbors at reduced strength.
-            let reached_earlier = |contact: &&CarrierContact| {
-                support.ranks[contact.carrier].is_some_and(|carrier_rank| carrier_rank < rank)
-            };
+            let reached_earlier =
+                |contact: &&CarrierContact| ranks[contact.carrier].is_some_and(|carrier_rank| carrier_rank < rank);
             let vertical: Vec<&CarrierContact> =
                 self.carriers[index].iter().filter(reached_earlier).filter(|contact| !contact.lateral).collect();
             let (contacts, strength) = if vertical.is_empty() {
@@ -267,6 +268,45 @@ impl ChunkStressModel {
         } else {
             ChunkStressStage::Stable
         }
+    }
+
+    /// Order load paths from ground outward, waiting for all supported bearings before placing their dependents.
+    fn load_ranks(&self, graph: &ChunkSupportGraph, support: &SupportEvaluation) -> Vec<Option<usize>> {
+        let anchors = graph.anchors();
+        let mut ranks = vec![None; self.masses.len()];
+        let mut grounded = anchors.to_vec();
+        let mut pending_bearings: Vec<usize> = self
+            .carriers
+            .iter()
+            .map(|contacts| {
+                contacts.iter().filter(|contact| !contact.lateral && support.ranks[contact.carrier].is_some()).count()
+            })
+            .collect();
+        let mut candidates: Vec<usize> =
+            support.ranks.iter().enumerate().filter_map(|(index, rank)| rank.map(|_| index)).collect();
+        candidates.sort_unstable_by_key(|&index| (!anchors[index], support.ranks[index]));
+
+        for rank in 0..candidates.len() {
+            // A lateral-only chunk must already touch a grounded carrier. Vertical topological ordering alone can
+            // put a hanging chunk before all its side contacts and strand its load.
+            let ready = candidates.iter().copied().find(|&index| {
+                ranks[index].is_none() && grounded[index] && (anchors[index] || pending_bearings[index] == 0)
+            });
+            // A mixed-height side/stack loop can make all remaining bearings wait on each other. Cut that loop at
+            // its earliest grounded frontier, using only already ordered contacts there. The support search ensures
+            // a frontier exists, and each iteration places one chunk: no iterative stress solver or load cycles.
+            let next = ready
+                .or_else(|| candidates.iter().copied().find(|&index| ranks[index].is_none() && grounded[index]))
+                .expect("every supported chunk has a contact path from an active anchor");
+            ranks[next] = Some(rank);
+            for contact in &graph.edges()[next] {
+                grounded[contact.target] = true;
+                if !contact.lateral {
+                    pending_bearings[contact.target] -= 1;
+                }
+            }
+        }
+        ranks
     }
 }
 

@@ -37,6 +37,8 @@ pub const DAMAGE_RANGE: (f64, f64, f64) = (0.5, 3.0, 0.5);
 /// Viewport widths at most this wide use the compact layout, and at most [`TINY_WIDTH`] the smallest one.
 const COMPACT_WIDTH: f32 = 760.0;
 const TINY_WIDTH: f32 = 480.0;
+/// Stack the four view controls before their row crowds the title.
+const STACKED_NAV_WIDTH: f32 = 600.0;
 /// Viewports at most this tall hide the brief's paragraph.
 const SHORT_HEIGHT: f32 = 700.0;
 /// Footer bar height.
@@ -192,6 +194,7 @@ fn header(context: &egui::Context, layout: Layout, settings: HudSettings, comman
     egui::Area::new(Id::new("destruction-title")).anchor(Align2::LEFT_TOP, padding).interactable(false).show(
         context,
         |ui| {
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
             ui.label(RichText::new("JOY ENGINE / EXAMPLE").size(10.0).strong().color(ORANGE));
             ui.label(RichText::new("FORM DESTRUCTION").font(FontId::proportional(title_size)).strong().color(TEXT));
         },
@@ -199,6 +202,7 @@ fn header(context: &egui::Context, layout: Layout, settings: HudSettings, comman
     egui::Area::new(Id::new("destruction-nav")).anchor(Align2::RIGHT_TOP, padding * UiVec2::new(-1.0, 1.0)).show(
         context,
         |ui| {
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
             let integrity = settings.view == StructureView::Integrity;
             let support = settings.view == StructureView::Support;
             let stress = settings.view == StructureView::Stress;
@@ -215,7 +219,7 @@ fn header(context: &egui::Context, layout: Layout, settings: HudSettings, comman
                     }
                 }
             };
-            if layout.tiny {
+            if context.content_rect().width() <= STACKED_NAV_WIDTH {
                 ui.vertical(|ui| draw(ui));
             } else {
                 ui.horizontal(|ui| draw(ui));
