@@ -17,6 +17,7 @@ pub mod emitter_inspector;
 pub mod examples;
 pub mod interface;
 pub mod parameter_controls;
+mod preview_geometry;
 pub mod session;
 pub mod storage;
 pub mod tool;

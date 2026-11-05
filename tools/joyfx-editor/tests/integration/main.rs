@@ -8,6 +8,7 @@
 mod document;
 mod examples;
 mod interface;
+mod performance;
 mod session;
 mod support;
 mod texture_lifecycle;

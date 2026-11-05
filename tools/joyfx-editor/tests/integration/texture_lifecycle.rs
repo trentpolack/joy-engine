@@ -12,7 +12,11 @@ use joy_engine::particles::{
     compile_particle_effect,
     encode_particle_texture_source,
 };
-use joy_engine::rendering::FrameInputs;
+use joy_engine::rendering::{
+    DisplayOutput,
+    FrameInputs,
+    OutputEncoding,
+};
 use joy_engine::runtime::{
     App,
     AppResult,
@@ -106,10 +110,12 @@ struct TexturedPreview {
     viewport: ParticleViewport,
     effect: ParticleEffect,
     result: Option<Result<(), String>>,
+    display: DisplayOutput,
 }
 
 impl App for TexturedPreview {
     fn render(&mut self, frame: &mut Frame<'_>, target: &mut RenderTarget<'_>) -> AppResult {
+        target.renderer().set_display_output(self.display);
         let region = PreviewRegion::full(frame.viewport.logical_size);
         self.result = Some(self.viewport.render(target, Some(&self.effect), region));
         if self.result.as_ref().is_some_and(Result::is_err) {
@@ -141,6 +147,7 @@ fn renders_before_images_are_ready_stay_safe_and_draw_textures_once_committed() 
         viewport: ParticleViewport::new(),
         effect,
         result: None,
+        display: DisplayOutput::STANDARD,
     };
     preview.viewport.grid_visible = false;
 
@@ -156,6 +163,20 @@ fn renders_before_images_are_ready_stay_safe_and_draw_textures_once_committed() 
     assert_eq!(preview.result.take(), Some(Ok(())));
     assert_eq!(preview.viewport.stats().scene_batches, 1, "the textured sprite draws");
     assert_eq!(preview.viewport.textures().len(), 1);
+    assert!(preview.viewport.stats().range.ends_with("→ SDR Output"));
+
+    // The monitor follows the renderer's actual output, including changes in available HDR headroom.
+    // This exercises reporting on a headless target, not the operating system's HDR surface negotiation.
+    for (encoding, headroom, expected) in [
+        (OutputEncoding::ExtendedLinear, 3.5, "→ HDR 3.5x Output"),
+        (OutputEncoding::ExtendedSrgb, 2.0, "→ HDR 2.0x Output"),
+        (OutputEncoding::ExtendedLinear, 1.0, "→ HDR 1.0x Output"),
+    ] {
+        preview.display = DisplayOutput::extended(encoding, headroom, 1.0);
+        shell.step(&mut preview).unwrap();
+        assert_eq!(preview.result.take(), Some(Ok(())));
+        assert!(preview.viewport.stats().range.ends_with(expected), "{}", preview.viewport.stats().range);
+    }
 }
 
 #[test]
