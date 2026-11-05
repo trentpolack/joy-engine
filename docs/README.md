@@ -6,7 +6,7 @@ Joy Engine is a Rust workspace shared by native games, WebAssembly games, and au
 - [Architecture](overview.md) and [dependency layers](architecture/dependency-layers.md).
 - [Coding standards](coding-standards.md) and [Rust conventions](rust-coding-standards.md).
 - [Scenes](scenes.md), [meshes and materials](materials.md), [lighting and shadows](lighting.md), [scene effects](scene-effects.md), [postprocessing](postprocessing.md), and [shaders](shaders.md).
-- [Gameplay](gameplay.md), [simulation and physics](rust-simulation.md), and [environment](environment.md).
+- [Gameplay](gameplay.md), [game scripts](rust-game-script.md), [simulation and physics](rust-simulation.md), and [environment](environment.md).
 - [FORM](rust-form.md), [particles](particles.md), [terrain](terrain.md), and [content formats](rust-content.md).
 - [Input](input.md), [audio](audio.md), and [storage](rust-storage.md).
 - [Live tuning](tuning.md), [asset hot reload](hot-reload.md), the [console and profiling](console-and-profiling.md), and the [authoring kit](rust-authoring.md).

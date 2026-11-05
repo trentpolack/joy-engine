@@ -30,7 +30,7 @@ The engine owns its Cargo workspace, tests, assets, schemas, and build tooling. 
 - [Coding standards](docs/coding-standards.md)
 - [Repository audit](docs/repository-audit.md): `npm run audit:repo` and `npm run test:audit`.
 - [Engine examples](examples/README.md)
-- [Gameplay and physics](docs/gameplay.md)
+- [Gameplay and physics](docs/gameplay.md) and [game scripts](docs/rust-game-script.md)
 - [FORM](docs/rust-form.md), [particles](docs/particles.md), and [terrain](docs/terrain.md)
 - [Authoring kit](docs/rust-authoring.md)
 - [Changelog](CHANGELOG.md)

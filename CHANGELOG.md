@@ -2,6 +2,10 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 11-05-2026
+### Game Scripts
+- Added `joy-game-script` (`joy_engine::game_script`): sandboxed Rhai scripts for gameplay code that native development builds hot reload. `ScriptEngine` provides the language without file, module, or clock access, per-call `ScriptLimits` (an operation budget stops runaway loops), and a standard library of exact float comparisons, `math::deterministic` functions, `vec3`, and a seeded `Random` handle, so ported behavior matches its Rust original bit for bit natively and in WebAssembly. `Script` compiles source against required `ScriptHook`s, calls them with a per-object `ScriptState` bound as `this`, and hot reloads in place (a broken edit keeps the previous program; objects keep their state). `ScriptLoan` lends host state to registered functions for one call without `unsafe`. See [Game Scripts](docs/rust-game-script.md).
+
 ## 11-04-2026
 ### Destruction
 - Load sharing now includes supported bearings reached later by the support search, so reordering chunks does not drop a beam's supports. A separate grounded load order accumulates their loads before forwarding them and cuts circular bearing paths without stranding mass.

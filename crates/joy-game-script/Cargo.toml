@@ -1,0 +1,31 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Joy Engine game scripts: a sandboxed, deterministic Rhai runtime for gameplay code that hot reloads without a rebuild.
+# Headless; hosts register their own types and lend their state for the length of a call.
+#
+#   cargo test -p joy-game-script
+
+[package]
+name = "joy-game-script"
+description = "Joy Engine game scripts: a sandboxed, deterministic Rhai runtime for hot-reloadable gameplay code."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+joy-core.workspace = true
+rhai.workspace = true
+thiserror.workspace = true
+log.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "simulation"
+
+[lints]
+workspace = true
