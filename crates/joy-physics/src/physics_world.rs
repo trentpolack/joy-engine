@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! The physics world owner: fixed-step advancement with bounded catch-up, body bookkeeping (including the vehicles
-//! some bodies carry), and raycasts.
+//! some bodies carry), contact and sensor events, and raycasts.
 
 use std::fmt;
 use std::sync::Arc;
@@ -16,6 +16,7 @@ use joy_core::math::Vec3;
 use rapier3d::control::DynamicRayCastVehicleController;
 use rapier3d::dynamics::RigidBodyHandle;
 use rapier3d::geometry::{
+    Collider,
     ColliderHandle,
     NarrowPhase,
     Ray,
@@ -33,13 +34,17 @@ use super::convert::{
     from_solver_vector,
     to_solver_vector,
 };
+use super::physics_events::EventCollector;
 use super::sdf::{
     SdfCollisionCounters,
     SdfQueryDispatcher,
 };
 use super::{
     BodyHandle,
+    ContactPhase,
     PhysicsError,
+    PhysicsEvent,
+    QueryOptions,
     RaycastHit,
     SdfCollisionStatistics,
     WheelOptions,
@@ -142,14 +147,24 @@ pub struct PhysicsWorld {
     fixed_step: f32,
     max_sub_steps: u32,
     accumulator: f64,
+    // Presentation fraction supplied by an outer fixed tick (see `present_at`); `None` uses the accumulator's.
+    presentation_fraction: Option<f32>,
 
     // Solver state. Bodies (and the vehicles some of them carry) are kept in insertion order so iteration is
     // deterministic.
     pub(super) solver: rapier3d::pipeline::PhysicsWorld,
     pub(super) bodies: IndexMap<RigidBodyHandle, BodyRecord>,
 
-    // Bodies with user forces pending; forces apply for exactly one fixed step, like cannon-es.
+    // Bodies with user forces pending. Forces apply to every fixed step of the next `step` call that runs one, so a
+    // force set once per frame acts for the whole frame whatever the step count.
     pub(super) forced_bodies: Vec<RigidBodyHandle>,
+
+    // Contact and sensor events from the latest `step` call, the solver callback that buffers them during a fixed step,
+    // and the colliders of bodies removed since the last fixed step (their parent is gone, but the solver still
+    // reports their contacts ending).
+    events: Vec<PhysicsEvent>,
+    event_collector: EventCollector,
+    pub(super) retired_colliders: Vec<(ColliderHandle, RigidBodyHandle)>,
 
     // Static boxes made resident through the `PhysicsBackend` contract, keyed by shape id, and the newest applied
     // mutation batch sequence.
@@ -206,9 +221,13 @@ impl PhysicsWorld {
             fixed_step,
             max_sub_steps: options.max_sub_steps,
             accumulator: 0.0,
+            presentation_fraction: None,
             solver,
             bodies: IndexMap::new(),
             forced_bodies: Vec::new(),
+            events: Vec::new(),
+            event_collector: EventCollector::default(),
+            retired_colliders: Vec::new(),
             resident_shapes: IndexMap::new(),
             last_mutation_sequence: None,
             sdf_counters,
@@ -218,13 +237,16 @@ impl PhysicsWorld {
     /// Advance by real elapsed seconds and return the number of fixed steps executed.
     ///
     /// Elapsed time accumulates and is clamped to `fixed_step * max_sub_steps`, so excess catch-up time is discarded.
-    /// Each fixed step updates every vehicle (in creation order), advances the solver, and then clears user forces.
+    /// Each fixed step updates every vehicle (in creation order) and advances the solver. Pending user forces act on
+    /// every fixed step this call runs and are cleared afterwards; when no fixed step is due they stay pending. The
+    /// contact and sensor events of this call replace the previous call's ([`events`](Self::events)).
     /// `elapsed_seconds` must be finite and nonnegative; on failure no state changes.
     pub fn step(&mut self, elapsed_seconds: f32) -> Result<u32, PhysicsError> {
         finite_number(elapsed_seconds, "elapsedSeconds", 0.0, f64::INFINITY)?;
         let fixed_step = f64::from(self.fixed_step);
         let budget = fixed_step * f64::from(self.max_sub_steps);
         self.accumulator = (self.accumulator + f64::from(elapsed_seconds)).min(budget);
+        self.events.clear();
 
         let mut steps = 0;
         while self.accumulator + ACCUMULATOR_EPSILON >= fixed_step && steps < self.max_sub_steps {
@@ -232,16 +254,31 @@ impl PhysicsWorld {
             self.accumulator = (self.accumulator - fixed_step).max(0.0);
             steps += 1;
         }
+
+        // Forces were held for the whole call; contacts of removed bodies have now been reported as ended.
+        if steps > 0 {
+            self.clear_user_forces();
+            self.retired_colliders.clear();
+        }
         Ok(steps)
+    }
+
+    /// Contact and sensor changes from the latest [`step`](Self::step) call, in solver order.
+    ///
+    /// Only pairs where at least one body reports events appear: sensors always do, solid bodies when created with
+    /// `report_contacts`. Empty before the first step and after a call that ran no fixed step.
+    pub fn events(&self) -> &[PhysicsEvent] {
+        &self.events
     }
 
     /// Closest hit along the world-space segment from `from` to `to`, or `None`.
     ///
-    /// A body whose shape contains the segment start is ignored (cannon-es `skipBackfaces` semantics). Non-finite or
-    /// zero-length segments return `None`. The result is a copy; the body handle is borrowed. Queries read current
-    /// body poses, so bodies created or teleported since the last step are found immediately.
+    /// A body whose shape contains the segment start is ignored (cannon-es `skipBackfaces` semantics), and sensors are
+    /// never hit; [`raycast_with`](Self::raycast_with) filters by collision groups. Non-finite or zero-length segments
+    /// return `None`. The result is a copy; the body handle is borrowed. Queries read current body poses, so bodies
+    /// created or teleported since the last step are found immediately.
     pub fn raycast(&self, from: Vec3, to: Vec3) -> Option<RaycastHit> {
-        self.raycast_bodies(from, to, self.bodies.keys().copied())
+        self.raycast_with(from, to, &QueryOptions::ALL_SOLID)
     }
 
     /// Number of live bodies owned by this world.
@@ -265,9 +302,24 @@ impl PhysicsWorld {
     /// Presentation that blends each body from its pose before the latest step toward its current pose by this
     /// fraction ([`interpolated_body_transform`](Self::interpolated_body_transform)) moves smoothly on displays whose
     /// refresh rate is not a multiple of the simulation rate, at the cost of trailing the simulation by up to one step.
+    ///
+    /// After [`present_at`](Self::present_at) this is the fraction it was given instead.
     pub fn interpolation(&self) -> f32 {
+        if let Some(fraction) = self.presentation_fraction {
+            return fraction;
+        }
         let fixed_step = f64::from(self.fixed_step);
         (self.accumulator / fixed_step).clamp(0.0, 1.0) as f32
+    }
+
+    /// Present bodies `fraction` of the way from their pose before the latest fixed step toward their current pose.
+    ///
+    /// Use it when an outer fixed tick (the shell's `App::fixed_update`) steps physics exactly once per tick: the
+    /// accumulator then never holds leftover time, so pass the shell's `FrameTime::fixed_interpolation` each frame to
+    /// keep motion smooth on displays faster than the tick. `fraction` is clamped to `[0, 1]`; a non-finite value
+    /// returns to the accumulator's own fraction.
+    pub fn present_at(&mut self, fraction: f32) {
+        self.presentation_fraction = fraction.is_finite().then(|| fraction.clamp(0.0, 1.0));
     }
 
     /// Maximum fixed steps executed per [`PhysicsWorld::step`] call.
@@ -357,7 +409,33 @@ impl PhysicsWorld {
         closest
     }
 
-    /// Execute one fixed step: vehicles first (cannon's pre-step), then the solver, then clear one-step forces.
+    /// Wake every dynamic body touching `raw`'s collider, so bodies resting on it react when it moves or disappears.
+    ///
+    /// Sleeping bodies only wake from their own island's changes, and static bodies belong to no island, so removing or
+    /// teleporting a support would otherwise leave sleeping bodies hovering.
+    pub(super) fn wake_touching(&mut self, raw: RigidBodyHandle) {
+        let Some(collider) = self.bodies.get(&raw).map(|record| record.collider) else {
+            return;
+        };
+        let touching: Vec<RigidBodyHandle> = self
+            .solver
+            .narrow_phase
+            .contact_pairs_with(collider)
+            .filter(|pair| pair.has_any_active_contact())
+            .filter_map(|pair| {
+                let other = if pair.collider1 == collider { pair.collider2 } else { pair.collider1 };
+                self.solver.colliders.get(other).and_then(Collider::parent)
+            })
+            .filter(|parent| *parent != raw)
+            .collect();
+        for handle in touching {
+            if let Some(body) = self.solver.bodies.get_mut(handle) {
+                body.wake_up(true);
+            }
+        }
+    }
+
+    /// Execute one fixed step: vehicles first (cannon's pre-step), then the solver, then translate its events.
     fn advance_fixed_step(&mut self) {
         let dt = self.fixed_step;
 
@@ -386,13 +464,49 @@ impl PhysicsWorld {
         }
 
         self.sdf_counters.reset();
-        self.solver.step();
+        self.solver.step_with_events(&(), &self.event_collector);
+        self.record_collision_events();
+    }
 
+    /// Clear every pending user force and torque.
+    fn clear_user_forces(&mut self) {
         for handle in self.forced_bodies.drain(..) {
             if let Some(body) = self.solver.bodies.get_mut(handle) {
                 body.reset_forces(false);
                 body.reset_torques(false);
             }
         }
+    }
+
+    /// Translate the solver's buffered collision events into body-handle events.
+    fn record_collision_events(&mut self) {
+        for event in self.event_collector.take() {
+            let (Some(first), Some(second)) =
+                (self.collider_body(event.collider1()), self.collider_body(event.collider2()))
+            else {
+                continue;
+            };
+            let phase = if event.started() { ContactPhase::Started } else { ContactPhase::Ended };
+            self.events.push(PhysicsEvent {
+                phase,
+                first: BodyHandle {
+                    world: self.world_id,
+                    raw: first,
+                },
+                second: BodyHandle {
+                    world: self.world_id,
+                    raw: second,
+                },
+                sensor: event.sensor(),
+            });
+        }
+    }
+
+    /// The body a collider belongs to, including colliders of bodies removed since the last fixed step.
+    fn collider_body(&self, collider: ColliderHandle) -> Option<RigidBodyHandle> {
+        if let Some(parent) = self.solver.colliders.get(collider).and_then(Collider::parent) {
+            return Some(parent);
+        }
+        self.retired_colliders.iter().find(|(retired, _)| *retired == collider).map(|(_, body)| *body)
     }
 }

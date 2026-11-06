@@ -1058,27 +1058,26 @@ fn performance_panel(ui: &mut Ui, lab: &JoyfxEditor) {
             item(ui, "Range", stats.range.clone());
             item(ui, "Preview FPS", fps);
             item(ui, "Simulation CPU", format!("{:.2} ms", view.simulation_ms));
-            item(ui, "Geometry CPU", format!("{:.2} ms", stats.geometry_ms));
+            item(ui, "Instance CPU", format!("{:.2} ms", stats.instance_ms));
             item(ui, "Submit CPU", format!("{:.2} ms", stats.submission_ms));
             item(ui, "Scene batches", stats.scene_batches.to_string());
-            item(ui, "Triangles", group_thousands(stats.triangles as u64));
+            item(ui, "Particles drawn", group_thousands(stats.particles_drawn as u64));
             item(ui, "Lights", lights);
         });
         if lab.performance_mode() == PerformanceMode::Detailed {
             ui.label(
                 RichText::new(format!(
-                    "Sort + batch CPU {:.2} ms · Vertices {} · Vertex payload {:.1} KiB (excludes uniforms and textures)",
-                    stats.sort_ms,
-                    group_thousands(stats.vertices as u64),
+                    "Instances {} · Instance and vertex payload {:.1} KiB (excludes uniforms and textures)",
+                    group_thousands(stats.particles as u64),
                     stats.upload_bytes as f64 / 1024.0
                 ))
                 .monospace()
                 .size(layout::TYPE_XS),
             );
-            components::guidance(ui, "CPU timings only; GPU time unavailable. Spawn/update: ms per simulation step; geometry: last render. Totals start when detailed profiling is enabled and reset on restart, seek or loop. Detailed profiling adds per-particle timing overhead.");
+            components::guidance(ui, "CPU timings only; GPU time unavailable. Spawn/update: ms per simulation step; instance and submit: last render (submit includes culling and sorting). Totals start when detailed profiling is enabled and reset on restart, seek or loop. Detailed profiling adds per-particle timing overhead.");
             egui::ScrollArea::both().id_salt("emitter-performance").max_height(110.0).show(ui, |ui| {
                 egui::Grid::new("emitter-performance-table").striped(true).show(ui, |ui| {
-                    for heading in ["Emitter", "Live", "Spawn CPU", "Update CPU", "Geometry CPU", "Triangles", "Lights", "Spawned Total", "Dropped Total", "Operations Total"] {
+                    for heading in ["Emitter", "Live", "Spawn CPU", "Update CPU", "Lights", "Spawned Total", "Dropped Total", "Operations Total"] {
                         ui.label(RichText::new(heading).monospace().size(layout::TYPE_XS).color(colors::MUTED));
                     }
                     ui.end_row();
@@ -1088,8 +1087,6 @@ fn performance_panel(ui: &mut Ui, lab: &JoyfxEditor) {
                             row.live.to_string(),
                             format!("{:.3}", row.spawn_ms),
                             format!("{:.3}", row.update_ms),
-                            format!("{:.3}", row.geometry_ms),
-                            row.triangles.to_string(),
                             row.lights.to_string(),
                             row.spawned.to_string(),
                             row.dropped.to_string(),

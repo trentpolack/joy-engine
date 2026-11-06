@@ -223,6 +223,12 @@ pub enum PhysicsComponentError {
     /// A numeric option was present but not a number.
     #[error("{0} must be a finite number.")]
     NotANumber(&'static str),
+    /// A boolean option (`sensor`, `reportContacts`, `canSleep`) was present but not a boolean.
+    #[error("{0} must be boolean.")]
+    NotABoolean(&'static str),
+    /// A collision mask was present but not a whole number in `[0, 4294967295]`.
+    #[error("{0} must be a whole number from 0 to 4294967295.")]
+    InvalidCollisionMask(&'static str),
     /// The solver rejected the resulting configuration.
     #[error(transparent)]
     Physics(#[from] PhysicsError),

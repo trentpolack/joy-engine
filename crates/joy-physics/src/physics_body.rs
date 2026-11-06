@@ -9,14 +9,18 @@
 //!   `v *= 1 / (1 + dt * c)`, so each body uses `c = -ln(1 - d)`, which matches cannon to first order in `dt`. A
 //!   damping of exactly one (cannon: velocity zeroed every step) maps to a large finite coefficient,
 //!   `MAX_DAMPING_COEFFICIENT`.
-//! - Bodies never sleep (cannon worlds default to `allowSleep = false`).
-//! - Forces apply for exactly one fixed step; impulses change velocity immediately.
+//!
+//! Bodies sleep once they come to rest (rapier's thresholds), so settled debris and props cost no solver time;
+//! `can_sleep: false` keeps a body awake. Pushing, teleporting, or driving a body wakes it, and teleporting or removing
+//! a body wakes everything resting against it. Forces act on every fixed step of the next [`PhysicsWorld::step`] call
+//! that runs one; impulses change velocity immediately.
 
 use joy_core::PrimitiveShape;
 use joy_core::math::Vec3;
 use rapier3d::dynamics::{
     CoefficientCombineRule,
     RigidBodyBuilder,
+    RigidBodyType,
 };
 use rapier3d::geometry::{
     ColliderBuilder,
@@ -26,7 +30,10 @@ use rapier3d::math::{
     Pose,
     Vector,
 };
-use rapier3d::pipeline::ActiveHooks;
+use rapier3d::pipeline::{
+    ActiveEvents,
+    ActiveHooks,
+};
 
 use super::convert::{
     deterministic_ln_1p,
@@ -41,6 +48,7 @@ use super::physics_world::BodyRecord;
 use super::sdf::SdfCollider;
 use super::{
     BodyHandle,
+    CollisionGroups,
     PhysicsError,
     PhysicsTransform,
     PhysicsWorld,
@@ -67,6 +75,10 @@ pub const BODY_DEFAULTS: BodyOptions = BodyOptions {
     restitution: 0.0,
     linear_damping: 0.01,
     angular_damping: 0.1,
+    groups: CollisionGroups::ALL,
+    sensor: false,
+    report_contacts: false,
+    can_sleep: true,
 };
 
 /// Rigid body configuration. World coordinates are meters, Y up, +Z forward; rotation is XYZ Euler radians.
@@ -92,6 +104,15 @@ pub struct BodyOptions {
     pub linear_damping: f32,
     /// Per-second angular velocity loss fraction in `[0, 1]` (cannon semantics).
     pub angular_damping: f32,
+    /// Collision layers the body belongs to and interacts with; default every layer.
+    pub groups: CollisionGroups,
+    /// Whether the body is a sensor: it reports overlaps through [`PhysicsWorld::events`] but never collides, and
+    /// unfiltered raycasts ignore it.
+    pub sensor: bool,
+    /// Whether contacts with this body are reported through [`PhysicsWorld::events`]; sensors always report.
+    pub report_contacts: bool,
+    /// Whether the body may sleep once it comes to rest; default true.
+    pub can_sleep: bool,
 }
 
 impl BodyOptions {
@@ -143,13 +164,55 @@ impl PhysicsWorld {
         Ok(self.insert_body(validated, collider, ActiveHooks::FILTER_CONTACT_PAIRS))
     }
 
+    /// Create a world-owned rigid body whose collider is the convex hull of `points` (meters, in the body's frame), and
+    /// return its handle.
+    ///
+    /// The hull replaces the primitive collider: `options.shape`, `half_extents`, and `radius` are ignored, while mass,
+    /// pose, materials, damping, layers, and flags apply as in [`PhysicsWorld::create_body`]; mass properties come from
+    /// the hull. Fails with [`PhysicsError::DegenerateHull`] for fewer than four points, non-finite points, or points
+    /// that span no volume; invalid configuration leaves the world unchanged.
+    pub fn create_convex_body(&mut self, points: &[Vec3], options: BodyOptions) -> Result<BodyHandle, PhysicsError> {
+        let validated = ValidatedBody::new(&options)?;
+        if points.len() < 4 || !points.iter().all(|point| point.is_finite()) {
+            return Err(PhysicsError::DegenerateHull);
+        }
+        let solver_points: Vec<_> = points.iter().map(|point| to_solver_vector(*point)).collect();
+        let shape = SharedShape::convex_hull(&solver_points).ok_or(PhysicsError::DegenerateHull)?;
+        Ok(self.insert_body(validated, shape, ActiveHooks::empty()))
+    }
+
+    /// Turn a dynamic body static where it stands: it stops simulating, keeps colliding, and no longer moves. Debris
+    /// pools freeze settled pieces this way so rubble stays solid at no solver cost. Freezing a static body does
+    /// nothing.
+    pub fn freeze_body(&mut self, handle: BodyHandle) -> Result<(), PhysicsError> {
+        let raw = self.resolve_body(handle).ok_or(PhysicsError::UnknownBody)?;
+        let body = self.solver.bodies.get_mut(raw).ok_or(PhysicsError::UnknownBody)?;
+        body.set_body_type(RigidBodyType::Fixed, true);
+        if let Some(record) = self.bodies.get_mut(&raw) {
+            record.dynamic = false;
+            record.previous_pose = *body.position();
+        }
+        self.forced_bodies.retain(|forced| *forced != raw);
+        Ok(())
+    }
+
+    /// Whether a live body is asleep (static bodies never sleep); `None` for an unknown handle.
+    pub fn is_sleeping(&self, handle: BodyHandle) -> Option<bool> {
+        let body = self.solver.bodies.get(self.resolve_body(handle)?)?;
+        Some(body.is_sleeping())
+    }
+
     /// Remove a body, including the vehicle it carries when it is a vehicle chassis. Returns whether a live body was
     /// removed.
     pub fn remove_body(&mut self, handle: BodyHandle) -> bool {
         let Some(raw) = self.resolve_body(handle) else {
             return false;
         };
-        self.bodies.shift_remove(&raw);
+        self.wake_touching(raw);
+        if let Some(record) = self.bodies.shift_remove(&raw) {
+            // The solver reports this collider's contacts ending at the next fixed step, after its parent is gone.
+            self.retired_colliders.push((record.collider, raw));
+        }
         self.forced_bodies.retain(|forced| *forced != raw);
         self.solver.remove_body(raw);
         true
@@ -206,6 +269,7 @@ impl PhysicsWorld {
         if let Some(record) = self.bodies.get_mut(&raw) {
             record.previous_pose = pose;
         }
+        self.wake_touching(raw);
         Ok(())
     }
 
@@ -224,10 +288,11 @@ impl PhysicsWorld {
         Ok(())
     }
 
-    /// Apply a force in newtons for the next fixed step.
+    /// Apply a force in newtons over the next [`step`](PhysicsWorld::step) call.
     ///
     /// `point` is a world-space application point; `None` applies at the center of mass (no torque). Forces accumulate
-    /// until a fixed step consumes them, then reset, like cannon-es. Static bodies ignore forces.
+    /// until a `step` call that runs at least one fixed step, act on every fixed step of that call, and then reset, so a
+    /// force set once per frame produces the same motion whatever the frame rate. Static bodies ignore forces.
     pub fn apply_force(&mut self, handle: BodyHandle, force: Vec3, point: Option<Vec3>) -> Result<(), PhysicsError> {
         let force = finite_vector(force, "force")?;
         let point = point.map(|value| finite_vector(value, "point")).transpose()?;
@@ -303,14 +368,20 @@ impl PhysicsWorld {
             .pose(pose)
             .linear_damping(damping_coefficient(validated.linear_damping))
             .angular_damping(damping_coefficient(validated.angular_damping))
-            .can_sleep(false)
+            .can_sleep(validated.can_sleep)
             .build();
 
+        let reports = validated.sensor || validated.report_contacts;
+        let events = if reports { ActiveEvents::COLLISION_EVENTS } else { ActiveEvents::empty() };
         let collider = ColliderBuilder::new(shape)
             .friction(validated.friction)
             .friction_combine_rule(CoefficientCombineRule::Multiply)
             .restitution(validated.restitution)
             .restitution_combine_rule(CoefficientCombineRule::Multiply)
+            .collision_groups(validated.groups.to_solver())
+            .solver_groups(validated.groups.to_solver())
+            .sensor(validated.sensor)
+            .active_events(events)
             .active_hooks(hooks);
         let collider = if dynamic { collider.mass(validated.mass) } else { collider.density(0.0) };
 
@@ -345,6 +416,10 @@ pub(super) struct ValidatedBody {
     rotation: Vec3,
     linear_damping: f32,
     angular_damping: f32,
+    groups: CollisionGroups,
+    sensor: bool,
+    report_contacts: bool,
+    can_sleep: bool,
 }
 
 impl ValidatedBody {
@@ -358,6 +433,10 @@ impl ValidatedBody {
             rotation: finite_vector(options.rotation, "rotation")?,
             linear_damping: finite_number(options.linear_damping, "linearDamping", 0.0, 1.0)?,
             angular_damping: finite_number(options.angular_damping, "angularDamping", 0.0, 1.0)?,
+            groups: options.groups,
+            sensor: options.sensor,
+            report_contacts: options.report_contacts,
+            can_sleep: options.can_sleep,
         })
     }
 }

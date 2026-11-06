@@ -11,10 +11,30 @@
 //! and debris, and rebuilds the visible mesh from [`ChunkStructure::active_chunks`] with [`create_chunk_mesh_data`].
 //! [`ChunkStructure::stress_state`] telegraphs strained and failing chunks before they fall.
 
+mod chunk_bodies;
+mod chunk_fracture;
 mod chunk_geometry;
+mod chunk_shape;
 mod chunk_stress;
 mod chunk_structure;
 mod chunk_support;
+
+pub use chunk_bodies::{
+    DebrisOptions,
+    DebrisPiece,
+    DebrisPool,
+    DebrisRelease,
+    DebrisSettlement,
+    StructureColliderOptions,
+    StructureColliders,
+};
+pub use chunk_fracture::{
+    FRACTURE_ID_SEPARATOR,
+    fracture_chunk,
+    fracture_sites,
+    voronoi_fracture,
+};
+pub use chunk_shape::ChunkPolyhedron;
 
 pub use chunk_geometry::{
     FRAME_MATERIAL,
@@ -80,4 +100,8 @@ pub enum DestructionError {
     /// An elapsed time was negative or non-finite.
     #[error("Elapsed seconds must be finite and nonnegative.")]
     InvalidElapsedTime,
+    /// A chunk shape was not a closed convex polyhedron with finite vertices, or its bounds did not match the chunk's
+    /// center and size.
+    #[error("Chunk shapes must be closed convex polyhedra whose bounds match the chunk's center and size.")]
+    InvalidChunkShape,
 }

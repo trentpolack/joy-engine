@@ -2,21 +2,18 @@
 // Licensed under the MIT License.
 
 //! `AssetScene`: FORM meshes and per-entity effects with staged synchronization, textured effects, and world-space
-//! particle lights. A recorded `AssetScene` run is checked against the `assetScene` section of `joy-renderer`'s
-//! particle golden recording (`tests/fixtures/particles-parity.json`); re-record it with `JOY_UPDATE_FIXTURES=1` when
-//! the presentation changes on purpose.
+//! particles and particle lights. A recorded `AssetScene` run (effect ticks, particle counts, and reported errors) is
+//! checked against the `assetScene` section of `joy-renderer`'s particle golden recording
+//! (`tests/fixtures/particles-parity.json`); re-record it with `JOY_UPDATE_FIXTURES=1` when playback changes on purpose.
 
 use std::collections::HashMap;
 
 use joy_fx::DEFAULT_PARTICLE_TEXTURE;
 use joy_gameplay::EntityDefinition;
+use joy_renderer::RenderScene;
 use joy_renderer::particles::{
-    ParticleBatch,
-    ParticleCameraBasis,
-};
-use joy_renderer::{
-    RenderScene,
-    TransparentDraw,
+    ParticleFrame,
+    decode_particle_texture,
 };
 use joy_scene::{
     AssetScene,
@@ -25,7 +22,6 @@ use joy_scene::{
 use joy_test_support::{
     GoldenFile,
     Tolerance,
-    json_f32s,
 };
 use serde_json::{
     Value,
@@ -36,12 +32,6 @@ const BOX_FORM: &str = "project meta(name=\"Box\")\noutput(\"Box\", box(2, 2, 2)
 
 /// The golden recording section this suite owns in the shared particle recording.
 const ASSET_SCENE_SECTION: &str = "/assetScene";
-
-/// Relative tolerance for single-precision particle geometry and its sums.
-const GEOMETRY_TOLERANCE: f64 = 2e-6;
-
-/// Values per flattened colored vertex: position and RGBA.
-const COLORED_STRIDE: usize = 7;
 
 fn entity(value: Value) -> EntityDefinition {
     EntityDefinition::from_json(&value).unwrap_or_else(|error| panic!("{error}"))
@@ -70,21 +60,6 @@ fn effects_record(assets: &AssetScene) -> Value {
     Value::Array(effects.collect())
 }
 
-/// Vertex count, sum, absolute sum, and first vertex of the scene's flattened colored particle geometry.
-fn particles_record(assets: &AssetScene, camera: &ParticleCameraBasis) -> Value {
-    let vertices = assets.particles(camera);
-    let values: Vec<f32> =
-        vertices.iter().flat_map(|vertex| vertex.position.iter().chain(&vertex.color).copied()).collect();
-    let sum: f64 = values.iter().copied().map(f64::from).sum();
-    let absolute: f64 = values.iter().map(|value| f64::from(value.abs())).sum();
-    json!({
-        "vertexCount": vertices.len(),
-        "sum": sum,
-        "abs": absolute,
-        "first": json_f32s(&values[..COLORED_STRIDE.min(values.len())]),
-    })
-}
-
 #[test]
 fn asset_scene_matches_the_recorded_presentation() {
     let golden = particle_recording();
@@ -97,18 +72,7 @@ fn asset_scene_matches_the_recorded_presentation() {
         .collect();
     let entities: Vec<EntityDefinition> =
         recorded["entities"].as_array().unwrap().iter().cloned().map(entity).collect();
-    let axis = |name: &str| -> [f64; 3] {
-        let values: Vec<f64> =
-            recorded["camera"][name].as_array().unwrap().iter().map(|value| value.as_f64().unwrap()).collect();
-        [values[0], values[1], values[2]]
-    };
-    let camera = ParticleCameraBasis {
-        right: axis("right"),
-        up: axis("up"),
-        backward: axis("backward"),
-    };
-
-    // Frames replay their recorded durations; effects, the reported error, and particle geometry are produced.
+    // Frames replay their recorded durations; effects and the reported error are produced.
     let mut scene = RenderScene::new();
     let mut assets = AssetScene::new();
     assert!(assets.sync(&mut scene, &entities, None, reader(&files)).unwrap());
@@ -116,10 +80,8 @@ fn asset_scene_matches_the_recorded_presentation() {
         assets.step(frame["seconds"].as_f64().unwrap());
         frame["effects"] = effects_record(&assets);
         frame["error"] = json!(assets.error());
-        frame["particles"] = particles_record(&assets, &camera);
     }
-    let tolerance = Tolerance::exact().with_key("particles", GEOMETRY_TOLERANCE);
-    golden.assert_section_matches(ASSET_SCENE_SECTION, &recorded, &tolerance);
+    golden.assert_section_matches(ASSET_SCENE_SECTION, &recorded, &Tolerance::exact());
 }
 
 #[test]
@@ -142,7 +104,9 @@ fn meshes_are_shared_effects_are_per_instance_and_failed_loads_keep_the_scene() 
     assert_eq!(scene.len(), 2);
     let ticks = |assets: &AssetScene, id: &str| assets.effect(id).unwrap().effect().ticks();
     assets.step(0.1);
-    assert!(!assets.particles(&joy_renderer::particles::PARTICLE_XY_BASIS).is_empty());
+    let mut particles = ParticleFrame::new();
+    assets.add_particles(&mut particles).unwrap();
+    assert_eq!(particles.batches().len(), 2, "one batch per entity's effect");
     assert_eq!(ticks(&assets, "a"), 7);
 
     // Unchanged settings keep effects running; a changed seed restarts only that effect.
@@ -231,13 +195,14 @@ fn textured_effects_draw_and_particle_lights_follow_entities() {
     for _ in 0..4 {
         assets.step(0.1);
     }
-    let camera = joy_renderer::particles::PARTICLE_XY_BASIS;
-    let batches = assets.particle_batches(&camera).unwrap();
-    assert!(batches.iter().any(|batch| batch.source() == Some(DEFAULT_PARTICLE_TEXTURE)));
-    assert!(batches.iter().any(|batch| matches!(batch, ParticleBatch::Colored(_))));
-    let draws = assets.transparent_draws(&batches).unwrap();
-    assert_eq!(draws.len(), batches.len());
-    assert!(draws.iter().any(|draw| matches!(draw, TransparentDraw::Textured { .. })));
+    let mut particles = ParticleFrame::new();
+    assets.add_particles(&mut particles).unwrap();
+    let batches = particles.batches();
+    assert!(batches.iter().any(|batch| batch.texture().is_some()));
+    assert!(batches.iter().any(|batch| batch.texture().is_none()));
+    assert_eq!(particles.textures().len(), 1);
+    let cross = decode_particle_texture(DEFAULT_PARTICLE_TEXTURE).unwrap();
+    assert_eq!(particles.textures()[0].pixels(), cross.pixels(), "the lantern samples its embedded cross");
 
     let selection = assets.particle_lights(32);
     assert!(!selection.lights.is_empty());
@@ -245,5 +210,5 @@ fn textured_effects_draw_and_particle_lights_follow_entities() {
     let lights = assets.lights();
     assert_eq!(lights[0].range, 4.0, "light components come first");
     assert_eq!(lights.len(), 1 + selection.lights.len().min(31));
-    assert!(assets.particles(&camera).iter().all(|vertex| vertex.position[0] > 5.0));
+    assert!(particles.instances().iter().all(|instance| instance.position().x > 5.0), "particles follow the entity");
 }

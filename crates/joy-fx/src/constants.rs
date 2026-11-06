@@ -64,6 +64,44 @@ impl ParticleRenderer {
     }
 }
 
+/// How an emitter's particles combine with what is behind them (the emitter `blend` field; omitted means
+/// [`ParticleBlend::Alpha`]).
+///
+/// Colors stay linear HDR in every mode; only the compositing changes. Additive particles add light and need no
+/// back-to-front order, so the renderer skips sorting them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum ParticleBlend {
+    /// Straight alpha, source over: RGB is the particle's color and alpha its coverage (the default and the original
+    /// look).
+    #[default]
+    Alpha,
+    /// RGB times alpha is added to what is behind; alpha fades the glow but never darkens.
+    Additive,
+    /// Premultiplied alpha, source over: RGB is already weighted by alpha, so alpha controls how much the particle
+    /// occludes and RGB how much light it adds (alpha zero glows additively, alpha one occludes like
+    /// [`ParticleBlend::Alpha`] with the same color).
+    Premultiplied,
+}
+
+impl ParticleBlend {
+    /// Every blend mode, in its stable declaration order.
+    pub const ALL: [Self; 3] = [Self::Alpha, Self::Additive, Self::Premultiplied];
+
+    /// The serialized spelling (`"alpha"`, `"additive"`, or `"premultiplied"`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Alpha => "alpha",
+            Self::Additive => "additive",
+            Self::Premultiplied => "premultiplied",
+        }
+    }
+
+    /// Parse a serialized spelling; matching is exact and case-sensitive.
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|blend| blend.as_str() == text)
+    }
+}
+
 /// Serialized effect parameter types (the parameter `type` field; omitted means scalar).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ParticleParameterType {

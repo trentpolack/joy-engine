@@ -1,19 +1,19 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Particle simulation, drawing, scripts, and diagnostics checked against a golden recording.
+//! Particle simulation, lights, scripts, and diagnostics checked against a golden recording.
 //!
 //! `tests/fixtures/particles-parity.json` records the engine's `fire.joyfx`, eight effects from the games, and the
 //! engine-authored `lantern.joyfx` (lights, textures, flipbooks, trails, deaths, and vector and color parameters). It
-//! holds normalized assets, sampled particles and geometry summaries at several fixed steps, particle lights,
-//! frame-cadence results, script evaluation results and diagnostics, and asset and runtime error messages. Each test
-//! checks and re-records only its own section (`joy-scene` owns `assetScene`); re-record with `JOY_UPDATE_FIXTURES=1`
-//! when particle behavior changes on purpose.
+//! holds normalized assets, sampled particles at several fixed steps, particle lights, frame-cadence results, script
+//! evaluation results and diagnostics, and asset and runtime error messages: simulation outcomes, not how particles are
+//! drawn (captures review that). Each test checks and re-records only its own section (`joy-scene` owns `assetScene`);
+//! re-record with `JOY_UPDATE_FIXTURES=1` when particle behavior changes on purpose.
 //!
 //! Counts, indices, emitter assignments, times, assets, and messages must match exactly. Simulated values must agree to
 //! a relative 1e-9: the recorded values came from math libraries whose `sin`, `cos`, `log`, and `pow` differ from the
 //! portable FreeBSD implementations in the last bit for a few percent of inputs, and those differences carry forward
-//! through integration. Geometry is compared after the renderer's single-precision conversion.
+//! through integration. Lights are compared after the renderer's single-precision conversion.
 
 use std::path::Path;
 
@@ -32,19 +32,12 @@ use joy_fx::{
     compile_particle_effect,
     particle_seed,
 };
-use joy_renderer::particles::{
-    ParticleBatch,
-    ParticleCameraBasis,
-    append_particle_effect,
-    collect_particle_lights,
-    create_particle_effect_batches,
-};
+use joy_renderer::particles::collect_particle_lights;
 use joy_test_support::{
     GoldenFile,
     Tolerance,
     golden_file,
     json_f32,
-    json_f32s,
 };
 use serde_json::{
     Map,
@@ -55,20 +48,14 @@ use serde_json::{
 /// Relative tolerance for simulated `f64` values.
 const SIMULATION_TOLERANCE: f64 = 1e-9;
 
-/// Relative tolerance for single-precision geometry, its sums, and particle lights.
-const GEOMETRY_TOLERANCE: f64 = 2e-6;
+/// Relative tolerance for particle lights in the renderer's single precision.
+const LIGHT_TOLERANCE: f64 = 2e-6;
 
 /// Relative tolerance for script results.
 const SCRIPT_TOLERANCE: f64 = 1e-12;
 
 /// Most particles sampled from one checkpoint, evenly spaced through the particle list.
 const SAMPLED_PARTICLES: usize = 10;
-
-/// Values per flattened colored vertex: position and RGBA.
-const COLORED_STRIDE: usize = 7;
-
-/// Values per flattened textured vertex: position, RGBA, and UV.
-const TEXTURED_STRIDE: usize = 9;
 
 /// Thirty-hertz frames replayed by the cadence check.
 const CADENCE_FRAMES: usize = 9;
@@ -123,18 +110,6 @@ fn parameter_values(record: &Value) -> Vec<(String, ParticleParameterValue)> {
         .collect()
 }
 
-fn basis(record: &Value) -> ParticleCameraBasis {
-    let axis = |name: &str| {
-        let values = numbers(&record[name]);
-        [values[0], values[1], values[2]]
-    };
-    ParticleCameraBasis {
-        right: axis("right"),
-        up: axis("up"),
-        backward: axis("backward"),
-    }
-}
-
 // ---------------------------------------------------------------------------------------------------------------------
 // Records
 // ---------------------------------------------------------------------------------------------------------------------
@@ -149,54 +124,6 @@ fn sampled_particles_record(effect: &ParticleEffect) -> Value {
         .step_by(stride)
         .map(|(index, particle)| json!({"i": index, "v": particle_values(particle).as_slice()}));
     Value::Array(sampled.collect())
-}
-
-/// Batch vertices flattened in stream order (stride 7 colored, 9 textured) for sums and leading values.
-fn flatten(batch: &ParticleBatch) -> Vec<f32> {
-    match batch {
-        ParticleBatch::Colored(vertices) => {
-            vertices.iter().flat_map(|vertex| vertex.position.iter().chain(&vertex.color).copied()).collect()
-        }
-        ParticleBatch::Textured {
-            vertices,
-            ..
-        } => vertices
-            .iter()
-            .flat_map(|vertex| vertex.position.iter().chain(&vertex.color).chain(&vertex.uv).copied())
-            .collect(),
-    }
-}
-
-/// Vertex count, sum, absolute sum, and first vertex of flattened single-precision geometry.
-fn geometry_summary(values: &[f32], stride: usize) -> Map<String, Value> {
-    let sum: f64 = values.iter().copied().map(f64::from).sum();
-    let absolute: f64 = values.iter().map(|value| f64::from(value.abs())).sum();
-    let first = &values[..stride.min(values.len())];
-    let mut summary = Map::new();
-    summary.insert("vertexCount".to_owned(), json!(values.len() / stride));
-    summary.insert("sum".to_owned(), json!(sum));
-    summary.insert("abs".to_owned(), json!(absolute));
-    summary.insert("first".to_owned(), json_f32s(first));
-    summary
-}
-
-/// One material run: whether it is textured, then its geometry summary.
-fn batch_record(batch: &ParticleBatch) -> Value {
-    let textured = batch.source().is_some();
-    let stride = if textured { TEXTURED_STRIDE } else { COLORED_STRIDE };
-    let mut record = Map::new();
-    record.insert("textured".to_owned(), json!(textured));
-    record.extend(geometry_summary(&flatten(batch), stride));
-    Value::Object(record)
-}
-
-/// The colored triangle list `append_particle_effect` builds, or `None` for effects it rejects (textured emitters).
-fn append_record(effect: &ParticleEffect, camera: &ParticleCameraBasis) -> Option<Value> {
-    let mut vertices = Vec::new();
-    append_particle_effect(&mut vertices, effect, camera).ok()?;
-    let values: Vec<f32> =
-        vertices.iter().flat_map(|vertex| vertex.position.iter().chain(&vertex.color).copied()).collect();
-    Some(Value::Object(geometry_summary(&values, COLORED_STRIDE)))
 }
 
 /// Selected particle lights, each `[x, y, z, r, g, b, range, emitter, particle]` in the renderer's single precision.
@@ -219,21 +146,13 @@ fn lights_record(effect: &ParticleEffect) -> Value {
 }
 
 /// Write one checkpoint's state into its recorded `checkpoint`, which keeps the step it was taken at.
-fn write_checkpoint(checkpoint: &mut Value, effect: &ParticleEffect, camera: &ParticleCameraBasis) {
+fn write_checkpoint(checkpoint: &mut Value, effect: &ParticleEffect) {
     checkpoint["time"] = json!(effect.time());
     checkpoint["count"] = json!(effect.particles().len());
     checkpoint["emitted"] = json!(effect.emitted());
     checkpoint["dropped"] = json!(effect.dropped_particles());
     checkpoint["alive"] = json!(effect.is_alive());
     checkpoint["particles"] = sampled_particles_record(effect);
-    let batches = create_particle_effect_batches(effect, camera, None, &[]).unwrap();
-    checkpoint["batches"] = Value::Array(batches.iter().map(batch_record).collect());
-    match append_record(effect, camera) {
-        Some(append) => checkpoint["append"] = append,
-        None => {
-            checkpoint.as_object_mut().unwrap().shift_remove("append");
-        }
-    }
     checkpoint["lights"] = lights_record(effect);
 }
 
@@ -392,7 +311,7 @@ fn simulations_match_the_recording() {
         let definition = compile_particle_effect(&serde_json::from_str(&fixture_text(&file)).unwrap()).unwrap();
         case["asset"] = definition.asset().to_json();
 
-        // Each effect replays its recorded seed, position, parameters, camera basis, and checkpoint steps.
+        // Each effect replays its recorded seed, position, parameters, and checkpoint steps.
         let position = numbers(&case["position"]);
         let seed = case["seed"].as_i64().unwrap();
         let parameters = parameter_values(&case["parameters"]);
@@ -402,14 +321,13 @@ fn simulations_match_the_recording() {
             parameters: parameters.clone(),
             ..Default::default()
         };
-        let camera = basis(&case["basis"]);
         let mut effect = ParticleEffect::new(&definition, options()).unwrap();
         for checkpoint in case["checkpoints"].as_array_mut().unwrap() {
             let step = checkpoint["step"].as_u64().unwrap();
             while effect.ticks() < step {
                 effect.step().unwrap();
             }
-            write_checkpoint(checkpoint, &effect, &camera);
+            write_checkpoint(checkpoint, &effect);
         }
 
         // Thirty-hertz frames land on exactly the same fixed-step state.
@@ -424,13 +342,11 @@ fn simulations_match_the_recording() {
         });
     }
 
-    // Assets and fixed-step times are exact; geometry and lights reach the renderer in single precision.
+    // Assets and fixed-step times are exact; lights reach the renderer in single precision.
     let tolerance = Tolerance::relative(SIMULATION_TOLERANCE)
         .with_key("asset", 0.0)
         .with_key("time", 0.0)
-        .with_key("batches", GEOMETRY_TOLERANCE)
-        .with_key("append", GEOMETRY_TOLERANCE)
-        .with_key("lights", GEOMETRY_TOLERANCE);
+        .with_key("lights", LIGHT_TOLERANCE);
     golden.assert_section_matches("/effects", &effects, &tolerance);
 }
 

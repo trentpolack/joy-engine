@@ -67,6 +67,8 @@ A golden recording is a JSON fixture holding the inputs a test replays and the o
 - Numbers agree within a `Tolerance` relative to the larger of one and the recorded magnitude; strings, booleans, array lengths, and object keys must match exactly, so a record that stops producing a field, or starts producing a new one, fails until it is re-recorded.
 - When behavior changes on purpose, re-record with `JOY_UPDATE_FIXTURES=1 cargo test -p <package>` and review the fixture diff with the code change. Re-recording keeps every number that still agrees within the tolerance, the file's layout, and its number spelling, so the diff shows only what changed. Never re-record to make an unexplained difference go away.
 
+Record outcomes, not implementations. A recording protects what a player, author, or consumer relies on: simulation results (positions, health, events, spawn order, random-number consumption), document round trips, and authored-data contracts. It must not freeze how presentation is produced, such as the triangles a particle expands into, the arithmetic order of cosmetic geometry, or a vertex layout; those change whenever rendering improves, and browser captures review them instead. Recordings made against the retired TypeScript runtimes follow the same rule: keep those that pin gameplay outcomes, and re-record them deliberately (with the reason in the changelog) when a behavior moves into the engine and its results change.
+
 ## Review Checklist
 - Does each module name only its own and lower layers, and do consumers use only `joy_engine` exports?
 - Can a reader identify owners, borrowed collaborators, and plain records?

@@ -13,8 +13,8 @@
 //!
 //! | Layer | Modules (crates) | Owns |
 //! | --- | --- | --- |
-//! | foundation | [`core`] (`joy-core`), [`scripting`] (`joy-core`), [`render_types`] (`joy-render-types`), [`terrain`] (`joy-terrain`) | Math, transforms, colors, seeded random, primitive shapes, script language information; GPU-free meshes, materials, and lights; terrain heightfields, tile pyramids, streaming, detail, and craters |
-//! | simulation | [`environment`] (`joy-environment`), [`physics`] (`joy-physics`), [`gameplay`] (`joy-gameplay`), [`game_script`] (`joy-game-script`) | Solar time and wind, rigid bodies and vehicles, entities, controllers, levels, sandboxed Rhai game scripts |
+//! | foundation | [`core`] (`joy-core`), [`scripting`] (`joy-core`), [`render_types`] (`joy-render-types`) | Math, transforms, colors, seeded random, primitive shapes, script language information; GPU-free meshes, materials, and lights |
+//! | simulation | [`environment`] (`joy-environment`), [`terrain`] (`joy-terrain`), [`physics`] (`joy-physics`), [`gameplay`] (`joy-gameplay`), [`game_script`] (`joy-game-script`) | Solar time and wind, terrain heightfields, tile pyramids, streaming, detail, and craters, rigid bodies and vehicles, entities, controllers, levels, sandboxed Rhai game scripts |
 //! | content | [`dcc`] (`joy-dcc-gltf`), [`form`] (`joy-form`), [`particles`] (`joy-fx`), [`project`] (`joy-project`) | GLB and glTF mesh import, the FORM procedural modeling language (renderer-free geometry), `.joyfx` particle documents, scripts, and simulation, project manifests |
 //! | rendering | [`rendering`] (`joy-renderer`, `joy-scene`) | The wgpu renderer every game, tool, and preview draws with, including particle drawing, and the scene presentation of levels, FORM meshes, and effects |
 //! | platform | [`runtime`] (`joy-app`, `joy-input`, `joy-audio`, `joy-storage`, `joy-ui`), [`development`] (`joy-devtools`, `joy-authoring`) | The game shell, frame phases, input and gamepads, audio, storage, egui UI and theme, dev tools, the authoring kit, browser glue |
@@ -113,7 +113,8 @@ pub mod terrain {
 }
 
 /// Particle effects (`.joyfx`): documents, scripts, and deterministic simulation from `joy-fx`, plus the renderer's
-/// particle drawing (lights, camera-facing triangles, and textures), in one place for games and tools.
+/// particle drawing (lights, GPU-instanced particles submitted through a `ParticleFrame`, and textures), in one place for
+/// games and tools.
 pub mod particles {
     #[doc(inline)]
     pub use joy_fx::*;
@@ -135,6 +136,7 @@ pub use runtime::{
     AppError,
     AppResult,
     AudioBank,
+    FixedTick,
     Frame,
     FrameTime,
     InputBinding,
@@ -190,17 +192,26 @@ pub mod prelude {
         EnvironmentSystem,
     };
     pub use crate::gameplay::{
+        ComponentRegistry,
+        ContactEvent,
         ControlIntent,
         EntityBehavior,
+        EntityComponent,
         EntityDefinition,
         EntityId,
         EntityRegistry,
+        EntityRemoved,
+        EntitySpawned,
         EntityState,
+        EntitySystem,
         IntentController,
         LevelData,
         LevelRuntime,
         PresentedEntity,
         SimulationContext,
+        TimerFired,
+        TimerRepeat,
+        World,
         parse_level,
     };
     pub use crate::math::{
@@ -214,21 +225,24 @@ pub mod prelude {
     };
     pub use crate::particles::{
         CompiledParticleEffect,
+        EffectPoolOptions,
         PARTICLE_STEP_SECONDS,
-        PARTICLE_XY_BASIS,
-        ParticleCameraBasis,
         ParticleEffect,
         ParticleEffectOptions,
+        ParticleEffectPool,
+        ParticleFrame,
         ParticleTextureSet,
-        append_particle_effect,
         collect_particle_lights,
         compile_particle_effect,
-        create_particle_effect_batches,
         parse_particle_effect,
     };
     pub use crate::physics::{
+        BodyOptions,
+        CollisionGroups,
+        ContactPhase,
         PhysicsWorld,
         PhysicsWorldOptions,
+        QueryOptions,
         VehicleInput,
         VehicleTuning,
     };
@@ -259,7 +273,6 @@ pub mod prelude {
         ShadowQuality,
         SkyOptions,
         TextureAsset,
-        TransparentDraw,
         compile_form_mesh,
         environment_lighting,
         primitive_box,
@@ -271,12 +284,14 @@ pub mod prelude {
         AppResult,
         AudioBank,
         AudioBankOptions,
+        FixedTick,
         Frame,
         FrameTime,
         InputAxis,
         InputBinding,
         InputManager,
         InputMap,
+        KeyRepeat,
         PcmSound,
         RenderTarget,
         ShellError,

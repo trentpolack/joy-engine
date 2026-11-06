@@ -3,7 +3,10 @@
 
 //! Optional Y-up masonry support approximation for chunk structures.
 //!
-//! Face contacts carry support upward and sideways; horizontal offsets spend the cantilever allowance. This is a
+//! Face contacts carry support upward and sideways; horizontal offsets spend the cantilever allowance. Box chunks touch
+//! through aligned faces; a chunk with a shape (a fractured shard) bonds through the face it shares exactly with a
+//! neighbor, classed by that face's normal: mostly upward faces bear (stacked) and mostly sideways faces brace
+//! (lateral), each with the shared area projected along its role. This is a
 //! geometric support rule, not a stress, torque, or material-load solver; the optional load layer in `chunk_stress`
 //! reads the same contacts. Contact topology is built once for the fixed chunk collection; damage only changes which
 //! chunks are active, and a ground surface ([`ChunkSupportGraph::update_anchors`]) only changes which chunks anchor.
@@ -14,6 +17,7 @@ use serde::{
 };
 
 use super::DestructionError;
+use super::chunk_shape::ChunkPolyhedron;
 use super::chunk_structure::DestructibleChunkDefinition;
 use joy_core::math::deterministic;
 
@@ -25,6 +29,10 @@ const HORIZONTAL_AXES: [usize; 2] = [0, 2];
 
 /// The vertical axis in Y-up space.
 const VERTICAL_AXIS: usize = 1;
+
+/// A shared face whose normal's vertical component reaches this bears load (stacked); below it, the face braces
+/// (lateral). Half way between flat and upright: 30 degrees from vertical counts as sideways.
+const BEARING_NORMAL_Y: f64 = 0.5;
 
 /// Ground anchoring and cantilever limits, in the same world units as chunk geometry.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -127,10 +135,23 @@ impl ChunkSupportGraph {
             })
             .collect();
 
+        // Shaped chunks bond through exact shared faces. When any chunk has a shape, every solid (boxes included, for
+        // mixed pairs) is built once here.
+        let any_shaped = chunks.iter().any(|chunk| chunk.shape.is_some());
+        let solids: Vec<ChunkPolyhedron> =
+            if any_shaped { chunks.iter().map(|chunk| chunk.solid()).collect() } else { Vec::new() };
+
         let mut edges = vec![Vec::new(); chunks.len()];
         for (source_index, source) in chunks.iter().enumerate() {
             for (target_index, target) in chunks.iter().enumerate() {
                 if source.id == target.id {
+                    continue;
+                }
+                if source.shape.is_some() || target.shape.is_some() {
+                    let solids = (&solids[source_index], &solids[target_index]);
+                    if let Some(edge) = shaped_edge(source, target, target_index, solids, tolerance) {
+                        edges[source_index].push(edge);
+                    }
                     continue;
                 }
                 let horizontal_distance =
@@ -293,6 +314,47 @@ fn overlap_length(first: &DestructibleChunkDefinition, second: &DestructibleChun
     let lower = (first.center[axis] - (first.size[axis] / 2.0)).max(second.center[axis] - (second.size[axis] / 2.0));
     let upper = (first.center[axis] + (first.size[axis] / 2.0)).min(second.center[axis] + (second.size[axis] / 2.0));
     (upper - lower).max(0.0)
+}
+
+/// The support edge from `source` to `target` when either is shaped: their shared face, if any, classed by its normal.
+///
+/// Support flows upward and sideways, never down, so a face whose normal (out of `source`) points mostly upward makes a
+/// stacked edge weighted by its horizontal projection, a mostly sideways face makes a lateral edge weighted by its full
+/// area, and a downward face makes none (the reverse pair carries it).
+fn shaped_edge(
+    source: &DestructibleChunkDefinition,
+    target: &DestructibleChunkDefinition,
+    target_index: usize,
+    (source_solid, target_solid): (&ChunkPolyhedron, &ChunkPolyhedron),
+    tolerance: f64,
+) -> Option<SupportEdge> {
+    // Cheap rejection by bounding boxes before the exact face test.
+    let separated = (0..3).any(|axis| {
+        let gap = (target.center[axis] - source.center[axis]).abs() - ((target.size[axis] + source.size[axis]) / 2.0);
+        gap > tolerance
+    });
+    if separated {
+        return None;
+    }
+    let shared = source_solid.shared_face(target_solid, tolerance)?;
+    let distance = deterministic::hypot(target.center[0] - source.center[0], target.center[2] - source.center[2]);
+    if shared.normal.y >= BEARING_NORMAL_Y {
+        return Some(SupportEdge {
+            target: target_index,
+            distance,
+            contact_area: shared.area * shared.normal.y,
+            lateral: false,
+        });
+    }
+    if shared.normal.y > -BEARING_NORMAL_Y {
+        return Some(SupportEdge {
+            target: target_index,
+            distance,
+            contact_area: shared.area,
+            lateral: true,
+        });
+    }
+    None
 }
 
 /// Whether two chunks overlap along one axis by more than the tolerance.

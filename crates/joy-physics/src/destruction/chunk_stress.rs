@@ -64,10 +64,10 @@ pub struct ChunkStressOptions {
 }
 
 impl ChunkStressOptions {
-    /// Mass of one chunk: its box volume times its material density, in the options' mass units.
+    /// Mass of one chunk: its volume (its shape's, or its box's) times its material density, in the options' mass
+    /// units.
     pub fn chunk_mass(&self, chunk: &DestructibleChunkDefinition) -> f64 {
-        let volume = chunk.size[0] * chunk.size[1] * chunk.size[2];
-        volume * self.material(&chunk.material).map_or(self.default_density, |material| material.density)
+        chunk.volume() * self.material(&chunk.material).map_or(self.default_density, |material| material.density)
     }
 
     /// Full-health bearing strength of a material, in mass per square world unit.
@@ -187,7 +187,7 @@ impl ChunkStressModel {
         Ok(Self {
             masses: chunks.iter().map(|chunk| options.chunk_mass(chunk)).collect(),
             strengths: chunks.iter().map(|chunk| options.strength(&chunk.material)).collect(),
-            footprints: chunks.iter().map(|chunk| chunk.size[0] * chunk.size[2]).collect(),
+            footprints: chunks.iter().map(|chunk| footprint_area(chunk)).collect(),
             carriers,
             options,
         })
@@ -319,4 +319,12 @@ pub(crate) fn load_ratio(load: &ChunkLoad) -> f64 {
         return f64::INFINITY;
     }
     load.load / load.capacity
+}
+
+/// Area a chunk bears on the ground with: its box's footprint, or its shape's downward-facing area.
+fn footprint_area(chunk: &DestructibleChunkDefinition) -> f64 {
+    match &chunk.shape {
+        Some(shape) => shape.footprint_area(),
+        None => chunk.size[0] * chunk.size[2],
+    }
 }

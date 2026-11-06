@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Per-frame renderer inputs: lights, environment lighting, transient effect triangles, and pre-sorted transparent runs
-//! (colored or textured) such as particle batches, plus the presentation clock the shell supplies.
+//! Per-frame renderer inputs: lights, environment lighting, transient effect triangles, and instanced particles, plus
+//! the presentation clock the shell supplies.
 
 use bytemuck::{
     Pod,
@@ -17,7 +17,7 @@ use joy_render_types::{
 };
 
 use crate::environment::ImageLighting;
-use crate::texture::TextureAsset;
+use crate::particles::ParticleFrame;
 
 /// Point lights the renderer draws per frame: the width of the light texture every lit pass reads (`pointLights` in
 /// `scene-common.wgsl`). Each surface reads only the lights whose range reaches its light cluster, so the cost of many
@@ -96,52 +96,6 @@ pub struct ColorVertex {
     pub color: [f32; 4],
 }
 
-/// A transient world-space vertex with texture coordinates, for textured transparent draws such as particle sprites.
-///
-/// The layout (36 bytes: XYZ, RGBA, UV) matches the vertex attributes of `textured.wgsl`.
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
-pub struct TexturedVertex {
-    /// World position.
-    pub position: [f32; 3],
-    /// Straight-alpha linear RGBA multiplied with the sampled texel.
-    pub color: [f32; 4],
-    /// Texture coordinates with a top-left origin.
-    pub uv: [f32; 2],
-}
-
-/// One transparent run in [`FrameInputs::transparent_draws`].
-///
-/// Each triangle sorts back to front with the frame's other transparency (equal depths keep the supplied order), tests
-/// depth against opaque geometry without writing it, and blends straight alpha source-over. Incomplete trailing
-/// triangles are dropped.
-#[derive(Clone, Copy, Debug)]
-pub enum TransparentDraw<'a> {
-    /// Unlit vertex-color triangles.
-    Colored(&'a [ColorVertex]),
-    /// Unlit triangles whose vertex color multiplies the texture (decoded from sRGB, sampled trilinearly from generated
-    /// mipmaps with anisotropic filtering, clamped edges).
-    Textured {
-        /// The image to sample; uploaded on first use and released after its last handle drops.
-        texture: &'a TextureAsset,
-        /// Three vertices per triangle.
-        vertices: &'a [TexturedVertex],
-    },
-}
-
-impl TransparentDraw<'_> {
-    /// Number of complete triangles in the run.
-    pub fn triangle_count(&self) -> usize {
-        match self {
-            Self::Colored(vertices) => vertices.len() / 3,
-            Self::Textured {
-                vertices,
-                ..
-            } => vertices.len() / 3,
-        }
-    }
-}
-
 /// The presentation clock: real frame time from the shell that drives the renderer, independent of any app's pausable
 /// scene time.
 ///
@@ -188,15 +142,16 @@ pub struct FrameInputs<'a> {
     pub clear_color: LinearColor,
     /// Opaque triangles (three vertices each), lit like `Shading::Lit` meshes.
     pub opaque_triangles: &'a [ColorVertex],
-    /// Transparent triangles (three vertices each), unlit. Every transparent element of a frame (these triangles,
-    /// blended scene meshes, and [`transparent_draws`](Self::transparent_draws)) is sorted back to front together, by
-    /// view depth: a triangle by its centroid and a mesh by the center of its bounds.
+    /// Transparent triangles (three vertices each), unlit, blended with straight alpha. Every transparent element of a
+    /// frame (these triangles, blended scene meshes, and [`particles`](Self::particles)) is sorted back to front
+    /// together, by view depth: a triangle by its centroid, a mesh by the center of its bounds, and a particle batch by
+    /// the center of its bounds. Equal depths keep the order meshes, triangles, then particle batches were supplied.
     pub transparent_triangles: &'a [ColorVertex],
-    /// Transparent runs (see [`TransparentDraw`]), such as the particle batches from
-    /// `crate::particles::create_particle_effect_batches`. Their triangles sort back to front with the frame's other
-    /// transparency, so a particle behind a glass mesh draws before it; triangles at equal depth keep the supplied
-    /// order.
-    pub transparent_draws: &'a [TransparentDraw<'a>],
+    /// Instanced particles; `None` draws none. Batches whose bounds lie outside the view are culled; each remaining
+    /// batch takes one place in the transparency order above (so a particle effect behind a glass mesh draws before
+    /// it), and the particles inside straight and premultiplied batches draw back to front. Particles test depth
+    /// against opaque geometry without writing it and blend as their emitters author (`ParticleBlend`).
+    pub particles: Option<&'a ParticleFrame>,
     /// Image-based lighting for PBR surfaces; `None` leaves them lit by direct, ambient, and skylight only.
     pub image_lighting: Option<ImageLighting<'a>>,
 }
@@ -211,7 +166,7 @@ impl Default for FrameInputs<'_> {
             clear_color: LinearColor::BLACK,
             opaque_triangles: &[],
             transparent_triangles: &[],
-            transparent_draws: &[],
+            particles: None,
             image_lighting: None,
         }
     }

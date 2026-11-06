@@ -5,8 +5,13 @@
 //! timing, and the render target handed to the render phase.
 //!
 //! The runtime shell owns the window or canvas, GPU,
-//! renderer, input, and development tools; the app implements phases that run in input, simulation, presentation,
-//! render, UI, and after-frame order every frame. Time is in seconds.
+//! renderer, input, and development tools; the app implements phases that run in input, fixed update (zero or more
+//! times), simulation, presentation, render, UI, and after-frame order every frame. Time is in seconds.
+//!
+//! Simulations tuned per fixed tick implement [`App::fixed_update`]: the shell accumulates frame time and calls it once
+//! per due tick (`ShellOptions::fixed_updates_per_second`, 60 by default), and presentation blends toward the next tick
+//! by [`FrameTime::fixed_interpolation`]. Sample edge-triggered input (presses) in [`App::input`] into intent that the
+//! next fixed update consumes, because a frame may run zero or several ticks.
 
 use joy_devtools::DevTools;
 use joy_input::InputManager;
@@ -21,6 +26,8 @@ use joy_renderer::{
     TriangleRenderer,
 };
 use joy_ui::Viewport;
+
+use crate::fixed_tick::FixedTick;
 
 /// Error type for app phases; any error converts into it with `?`.
 pub type AppError = Box<dyn std::error::Error>;
@@ -38,6 +45,11 @@ pub struct FrameTime {
     pub time_seconds: f64,
     /// Zero-based frame counter.
     pub frame_index: u64,
+    /// Fixed ticks the shell runs this frame, before [`App::simulation`].
+    pub fixed_ticks: u32,
+    /// How far this frame is from the latest fixed tick toward the next, in `[0, 1)`: the fraction presentation blends
+    /// simulated motion by.
+    pub fixed_interpolation: f32,
 }
 
 /// Requests an app can make of its shell.
@@ -154,7 +166,13 @@ pub trait App: 'static {
         Ok(())
     }
 
-    /// Advance simulation by `frame.time.elapsed_seconds`.
+    /// Advance simulation by one fixed tick of `tick.step_seconds`. Called `frame.time.fixed_ticks` times per frame,
+    /// after [`App::input`] and before [`App::simulation`].
+    fn fixed_update(&mut self, _frame: &mut Frame<'_>, _tick: FixedTick) -> AppResult {
+        Ok(())
+    }
+
+    /// Advance variable-rate simulation by `frame.time.elapsed_seconds`, after this frame's fixed updates.
     fn simulation(&mut self, _frame: &mut Frame<'_>) -> AppResult {
         Ok(())
     }

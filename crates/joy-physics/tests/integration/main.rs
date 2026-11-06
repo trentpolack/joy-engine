@@ -6,6 +6,7 @@
 //! built.
 
 mod destruction;
+mod destruction_fracture;
 mod destruction_stress;
 mod physics;
 mod terrain_colliders;

@@ -30,7 +30,7 @@ use crate::material::{
 use crate::mesh::MeshVertex;
 
 mod fullscreen;
-mod textured;
+mod particles;
 
 pub(crate) use fullscreen::{
     FULLSCREEN_SOURCE,
@@ -38,7 +38,13 @@ pub(crate) use fullscreen::{
     draw_fullscreen,
     fullscreen_pipeline,
 };
-pub(crate) use textured::TexturedPass;
+pub(crate) use particles::{
+    PARTICLE_SCENE_SOURCE,
+    PARTICLE_SHAPES_SOURCE,
+    PARTICLE_TRIANGLES_SOURCE,
+    ParticlePass,
+    ParticleView,
+};
 
 /// Main depth buffer format, available on every backend including WebGL 2. The stencil holds each deferred surface's
 /// lighting slot (zero for everything else).

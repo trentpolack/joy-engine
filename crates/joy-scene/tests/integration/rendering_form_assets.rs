@@ -147,3 +147,29 @@ fn form_object_placements_spawn_entities_that_follow_their_parent_and_variants_a
     let error = assets.prepare(std::slice::from_ref(&grove), read).err().unwrap();
     assert!(error.to_string().contains("No FORM instance variant named"), "{error}");
 }
+
+#[test]
+fn runtime_spawned_entities_are_adopted_with_their_form_mesh_and_released_when_they_leave() {
+    let mut scene = RenderScene::new();
+    let mut assets = AssetScene::new();
+    let ground = EntityDefinition::new("ground");
+    assets.sync(&mut scene, std::slice::from_ref(&ground), None, read_structures).unwrap();
+
+    // A cottage spawned while the level runs: the stage never saw it, so `follow` alone would draw a fallback box.
+    let mut cottage = EntityDefinition::new("cottage-1");
+    cottage
+        .components
+        .insert(component_type::RENDER.to_owned(), json!({"asset": COTTAGE_PATH}).as_object().cloned().unwrap());
+    let running = [ground.clone(), cottage.clone()];
+    let mut read = |path: &str| if path == COTTAGE_PATH { Ok(COTTAGE.to_owned()) } else { read_structures(path) };
+    assert_eq!(assets.adopt(running.iter(), &mut read).unwrap(), 1);
+    assert_eq!(assets.adopt(running.iter(), &mut read).unwrap(), 0, "adopted entities are not prepared again");
+    assets.follow(&mut scene, running.iter(), None).unwrap();
+    let mesh = assets.mesh("cottage-1").expect("the adopted entity draws its FORM mesh").clone();
+    assert!(mesh.triangle_count() > 0);
+
+    // Once the entity leaves the running world, its presentation is released.
+    assets.follow(&mut scene, std::slice::from_ref(&ground).iter(), None).unwrap();
+    assert!(assets.mesh("cottage-1").is_none());
+    assert_eq!(assets.adopt(std::slice::from_ref(&ground).iter(), &mut read).unwrap(), 0);
+}

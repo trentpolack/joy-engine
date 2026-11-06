@@ -1,14 +1,15 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Decoded particle textures keyed by their embedded PNG source.
+//! Decoded particle textures keyed by their compact [`ParticleTextureId`].
 //!
-//! The set owns CPU [`TextureAsset`]s only; the renderer
-//! uploads each on first draw and releases the GPU copy when the asset is dropped, so the set never borrows a device.
-//! Decoding is synchronous, so a prepare cannot be superseded mid-flight; the prepare/activate split remains so a new
-//! definition's images are ready before it replaces the displayed one, and a failed decode leaves the set unchanged.
-//! The textured shader is `shaders/textured.wgsl`, drawn through
-//! [`FrameInputs::transparent_draws`](crate::FrameInputs).
+//! The set owns CPU [`TextureAsset`]s only; the renderer uploads each on first draw and releases the GPU copy when the
+//! asset is dropped, so the set never borrows a device. Decoding is synchronous, so a prepare cannot be superseded
+//! mid-flight; the prepare/activate split remains so a new definition's images are ready before it replaces the
+//! displayed one, and a failed decode leaves the set unchanged. Per-frame lookups ([`ParticleFrame::add_effect`]) use
+//! the 64-bit id each compiled emitter carries; the source text is compared only when an image is first decoded.
+//!
+//! [`ParticleFrame::add_effect`]: crate::particles::ParticleFrame::add_effect
 
 use std::collections::{
     HashMap,
@@ -16,18 +17,14 @@ use std::collections::{
 };
 use std::sync::Arc;
 
-use crate::{
-    TextureAsset,
-    TransparentDraw,
-};
+use crate::TextureAsset;
 
 use joy_fx::{
     CompiledParticleEffect,
     ParticleTextureError,
+    ParticleTextureId,
     decode_particle_texture_source,
 };
-
-use crate::particles::ParticleBatch;
 
 /// Decode one embedded PNG particle texture source into an image, for previews of textures that are not part of a
 /// prepared definition yet (JOYFX EDITOR's sprite thumbnail).
@@ -35,11 +32,18 @@ pub fn decode_particle_texture(source: &str) -> Result<TextureAsset, ParticleTex
     ParticleTextureSet::decode(source)
 }
 
+/// One decoded image and the source text it came from (kept to confirm ids when another definition is prepared).
+#[derive(Clone, Debug)]
+struct DecodedTexture {
+    source: Arc<str>,
+    texture: TextureAsset,
+}
+
 /// Decoded images for the textured emitters of one or more effect definitions.
 #[derive(Clone, Debug, Default)]
 pub struct ParticleTextureSet {
-    textures: HashMap<Arc<str>, TextureAsset>,
-    active: HashSet<Arc<str>>,
+    textures: HashMap<ParticleTextureId, DecodedTexture>,
+    active: HashSet<ParticleTextureId>,
 }
 
 impl ParticleTextureSet {
@@ -57,12 +61,34 @@ impl ParticleTextureSet {
 
     /// Commit `definition` (or none) as the displayed one and release images it no longer draws.
     pub fn activate(&mut self, definition: Option<&CompiledParticleEffect>) {
-        self.activate_sources(definition.map(textured_sources).unwrap_or_default());
+        let sources = definition.map(textured_sources).unwrap_or_default();
+        self.textures.retain(|id, _| sources.contains_key(id));
+        self.active = sources.into_keys().collect();
     }
 
-    /// Borrow the image for `source` after a successful prepare.
-    pub fn get(&self, source: &str) -> Result<&TextureAsset, ParticleTextureError> {
-        self.textures.get(source).ok_or(ParticleTextureError::NotReady)
+    /// Add decoded textures by source text, keeping any image already present; they count as active.
+    pub fn insert_textures(&mut self, textures: impl IntoIterator<Item = (Arc<str>, TextureAsset)>) {
+        for (source, texture) in textures {
+            let id = ParticleTextureId::of(&source);
+            self.active.insert(id);
+            self.textures.entry(id).or_insert(DecodedTexture {
+                source,
+                texture,
+            });
+        }
+    }
+
+    /// Borrow the image for a compiled emitter's texture `id` after a successful prepare.
+    pub fn get(&self, id: ParticleTextureId) -> Option<&TextureAsset> {
+        self.textures.get(&id).map(|decoded| &decoded.texture)
+    }
+
+    /// Borrow the image decoded from `source` text, if held.
+    pub fn get_source(&self, source: &str) -> Option<&TextureAsset> {
+        self.textures
+            .get(&ParticleTextureId::of(source))
+            .filter(|decoded| decoded.source.as_ref() == source)
+            .map(|decoded| &decoded.texture)
     }
 
     /// Number of decoded images held.
@@ -81,36 +107,6 @@ impl ParticleTextureSet {
         self.active.clear();
     }
 
-    /// Borrow renderer draws for `batches`, in order; fails if a textured batch's image was not prepared.
-    pub fn transparent_draws<'a>(
-        &'a self,
-        batches: &'a [ParticleBatch],
-    ) -> Result<Vec<TransparentDraw<'a>>, ParticleTextureError> {
-        batches
-            .iter()
-            .map(|batch| match batch {
-                ParticleBatch::Colored(vertices) => Ok(TransparentDraw::Colored(vertices)),
-                ParticleBatch::Textured {
-                    source,
-                    vertices,
-                } => Ok(TransparentDraw::Textured {
-                    texture: self.get(source)?,
-                    vertices,
-                }),
-            })
-            .collect()
-    }
-
-    /// A set holding exactly `textures`, all marked active.
-    #[doc(hidden)]
-    pub fn from_textures(textures: HashMap<Arc<str>, TextureAsset>) -> Self {
-        let active = textures.keys().cloned().collect();
-        Self {
-            textures,
-            active,
-        }
-    }
-
     /// Decode one embedded PNG source.
     #[doc(hidden)]
     pub fn decode(source: &str) -> Result<TextureAsset, ParticleTextureError> {
@@ -119,40 +115,46 @@ impl ParticleTextureSet {
     }
 
     /// Decode any of `sources` not yet held; keep held images that are requested or active and drop the rest.
-    pub(crate) fn prepare_sources(&mut self, sources: HashSet<Arc<str>>) -> Result<(), ParticleTextureError> {
+    fn prepare_sources(&mut self, sources: HashMap<ParticleTextureId, Arc<str>>) -> Result<(), ParticleTextureError> {
         let mut next = HashMap::with_capacity(sources.len());
-        for source in sources {
-            if let Some(existing) = self.textures.get(&source) {
-                next.insert(source, existing.clone());
-                continue;
+        for (id, source) in sources {
+            match self.textures.get(&id) {
+                Some(existing) if existing.source == source => {
+                    next.insert(id, existing.clone());
+                }
+                // Two different sources hashed to one id: refuse rather than draw the wrong image.
+                Some(_) => return Err(ParticleTextureError::Decode("particle texture ids collided".to_owned())),
+                None => {
+                    let texture = Self::decode(&source)?;
+                    next.insert(
+                        id,
+                        DecodedTexture {
+                            source,
+                            texture,
+                        },
+                    );
+                }
             }
-            let texture = Self::decode(&source)?;
-            next.insert(source, texture);
         }
         // Keep the displayed definition drawable until its owner activates the prepared replacement.
-        for (source, texture) in &self.textures {
-            if self.active.contains(source) {
-                next.entry(source.clone()).or_insert_with(|| texture.clone());
+        for (id, decoded) in &self.textures {
+            if self.active.contains(id) {
+                next.entry(*id).or_insert_with(|| decoded.clone());
             }
         }
         self.textures = next;
         Ok(())
     }
-
-    /// Mark exactly `sources` as displayed and release every other image.
-    pub(crate) fn activate_sources(&mut self, sources: HashSet<Arc<str>>) {
-        self.textures.retain(|source, _| sources.contains(source));
-        self.active = sources;
-    }
 }
 
-/// Sources of a definition's textured and flipbook emitters (textures on other renderers are never drawn).
+/// Texture ids and sources of a definition's textured and flipbook emitters (textures on other renderers are never
+/// drawn).
 #[doc(hidden)]
-pub fn textured_sources(definition: &CompiledParticleEffect) -> HashSet<Arc<str>> {
+pub fn textured_sources(definition: &CompiledParticleEffect) -> HashMap<ParticleTextureId, Arc<str>> {
     definition
         .emitters()
         .iter()
         .filter(|emitter| emitter.asset.renderer.is_textured())
-        .filter_map(|emitter| emitter.asset.texture.as_ref().map(|texture| texture.source.clone()))
+        .filter_map(|emitter| Some((emitter.texture_id?, emitter.asset.texture.as_ref()?.source.clone())))
         .collect()
 }

@@ -4,7 +4,6 @@
 //! Unit tests for `src/transparency.rs`.
 
 use super::*;
-use crate::texture::TextureAsset;
 
 /// A small triangle centered `depth` units in front of a camera at the origin looking down -Z.
 fn colored(depth: f32) -> [ColorVertex; 3] {
@@ -15,119 +14,42 @@ fn colored(depth: f32) -> [ColorVertex; 3] {
     [vertex(-0.1, 0.0), vertex(0.1, 0.0), vertex(0.0, 0.1)]
 }
 
-fn textured(depth: f32) -> [TexturedVertex; 3] {
-    colored(depth).map(|vertex| TexturedVertex {
-        position: vertex.position,
-        color: vertex.color,
-        uv: [0.0; 2],
-    })
-}
-
 #[test]
-fn particles_behind_and_in_front_of_a_glass_mesh_sort_around_it() {
-    let sprite = TextureAsset::from_rgba8(1, 1, vec![255; 4]).unwrap();
-    let far_particle = textured(15.0);
-    let near_particle = textured(5.0);
-    let particles = [far_particle, near_particle].concat();
-    let draws = [TransparentDraw::Textured {
-        texture: &sprite,
-        vertices: &particles,
-    }];
+fn particle_batches_behind_and_in_front_of_a_glass_mesh_sort_around_it() {
     let smoke = colored(12.0);
 
-    // One glass pane ten units away, between the two particles.
+    // One glass pane ten units away, between a far and a near particle batch.
     let mut transient = Vec::new();
-    let queue = build_transparent_queue(&[10.0], &smoke, &draws, Vec3::ZERO, Vec3::NEG_Z, &mut transient);
-
-    let texture = sprite.id();
+    let queue =
+        build_transparent_queue(&[10.0], &smoke, [15.0, 5.0].into_iter(), Vec3::ZERO, Vec3::NEG_Z, &mut transient);
     assert_eq!(
         queue.steps,
         [
-            TransparentStep::Textured {
-                texture,
-                vertices: 0..3
-            },
+            TransparentStep::Particles(0),
             TransparentStep::Colored(0..3),
             TransparentStep::Mesh(0),
-            TransparentStep::Textured {
-                texture,
-                vertices: 3..6
-            },
+            TransparentStep::Particles(1),
         ]
     );
     assert_eq!(queue.mesh_order, [0]);
-    assert_eq!(queue.textured_vertices[0].position[2], -15.0);
     assert_eq!(transient.len(), 3);
 }
 
 #[test]
-fn adjacent_triangles_of_one_kind_merge_and_equal_depths_keep_their_order() {
+fn adjacent_triangles_merge_and_equal_depths_keep_their_order() {
     let mut transient = Vec::new();
     let triangles = [colored(9.0), colored(8.0), colored(8.0)].concat();
-    let queue = build_transparent_queue(&[8.0, 3.0], &triangles, &[], Vec3::ZERO, Vec3::NEG_Z, &mut transient);
+    let queue =
+        build_transparent_queue(&[8.0, 3.0], &triangles, [8.0].into_iter(), Vec3::ZERO, Vec3::NEG_Z, &mut transient);
     assert_eq!(
         queue.steps,
         [
             TransparentStep::Colored(0..3),
             TransparentStep::Mesh(0),
             TransparentStep::Colored(3..9),
+            TransparentStep::Particles(0),
             TransparentStep::Mesh(1)
         ]
     );
     assert_eq!(queue.mesh_order, [0, 1]);
-}
-
-#[test]
-fn single_runs_preserve_stable_depth_order_and_drop_incomplete_triangles() {
-    let texture = TextureAsset::from_rgba8(1, 1, vec![255; 4]).unwrap();
-    for (depths, expected_tags) in [([9.0, 8.0, 8.0], [1.0, 2.0, 3.0]), ([8.0, 9.0, 8.0], [2.0, 1.0, 3.0])] {
-        let mut vertices: Vec<_> = depths
-            .into_iter()
-            .enumerate()
-            .flat_map(|(index, depth)| {
-                colored(depth).map(|mut vertex| {
-                    vertex.color[0] = (index + 1) as f32;
-                    vertex
-                })
-            })
-            .collect();
-        vertices.push(colored(100.0)[0]);
-        let mut transient = Vec::new();
-        let queue = build_transparent_queue(
-            &[],
-            &[],
-            &[TransparentDraw::Colored(&vertices)],
-            Vec3::ZERO,
-            Vec3::NEG_Z,
-            &mut transient,
-        );
-        assert_eq!(queue.steps, [TransparentStep::Colored(0..9)]);
-        assert_eq!(transient.iter().step_by(3).map(|vertex| vertex.color[0]).collect::<Vec<_>>(), expected_tags);
-
-        let vertices: Vec<_> = vertices
-            .iter()
-            .map(|vertex| TexturedVertex {
-                position: vertex.position,
-                color: vertex.color,
-                uv: [0.25, 0.75],
-            })
-            .collect();
-        let draws = [TransparentDraw::Textured {
-            texture: &texture,
-            vertices: &vertices,
-        }];
-        let queue = build_transparent_queue(&[], &[], &draws, Vec3::ZERO, Vec3::NEG_Z, &mut Vec::new());
-        assert_eq!(
-            queue.steps,
-            [TransparentStep::Textured {
-                texture: texture.id(),
-                vertices: 0..9
-            }]
-        );
-        assert_eq!(
-            queue.textured_vertices.iter().step_by(3).map(|vertex| vertex.color[0]).collect::<Vec<_>>(),
-            expected_tags
-        );
-        assert!(queue.textured_vertices.iter().all(|vertex| vertex.uv == [0.25, 0.75]));
-    }
 }

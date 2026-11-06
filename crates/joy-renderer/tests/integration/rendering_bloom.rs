@@ -123,6 +123,7 @@ fn render(gpu: &GpuContext, light: f32, config: &PostProcessSettings) -> Vec<f32
         transparent: &[],
         uniforms: bytemuck::cast_slice(&uniforms),
         clear_color: LinearColor::rgb(0.0, 0.0, 0.0),
+        particles: None,
     };
     renderer.render(target.view(), &frame).expect("frame renders");
     let pixels = target.read_rgba(gpu).expect("readback");

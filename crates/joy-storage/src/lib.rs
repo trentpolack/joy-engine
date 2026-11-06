@@ -9,12 +9,17 @@
 //! browser download, or a file in the working directory natively. Failures never panic; they report typed errors so a
 //! game can keep playing.
 
+mod progress_save;
 mod save_file;
 mod save_slot;
 mod storage;
 #[cfg(target_arch = "wasm32")]
 mod web;
 
+pub use progress_save::{
+    ProgressSave,
+    SaveStatus,
+};
 pub use save_file::{
     SaveFileError,
     save_binary_file,

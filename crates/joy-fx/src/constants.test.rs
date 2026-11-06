@@ -12,4 +12,9 @@ fn renderer_spellings_round_trip() {
     }
     assert_eq!(ParticleRenderer::parse("Soft"), None);
     assert!(ParticleRenderer::Flipbook.is_textured() && !ParticleRenderer::Billow.is_textured());
+    for blend in ParticleBlend::ALL {
+        assert_eq!(ParticleBlend::parse(blend.as_str()), Some(blend));
+    }
+    assert_eq!(ParticleBlend::default(), ParticleBlend::Alpha);
+    assert_eq!(ParticleBlend::parse("Additive"), None);
 }

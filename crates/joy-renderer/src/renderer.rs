@@ -7,8 +7,8 @@
 //! 1. Validate inputs, build the camera, prepare terrain, choose the point lights that matter most to the view, and cull
 //!    instances against the camera.
 //! 2. Lay out every draw before any pass opens: opaque batches grouped by pipeline and asset and ordered front to back,
-//!    one back-to-front transparent queue (blended meshes, transient triangles, and caller runs such as particles sorted
-//!    together), and each shadow view's casters culled against that cascade or point-light face. Then bin the point
+//!    one back-to-front transparent queue (blended meshes, transient triangles, and particle batches, which are culled
+//!    against the view and sorted per particle first), and each shadow view's casters culled against that cascade or point-light face. Then bin the point
 //!    lights into light clusters, so every lit pass reads only the lights that reach each surface.
 //! 3. Render the shadow views (each cascade, then every point-light face into its atlas tile in one pass), then (with
 //!    volumetric fog) inject and integrate the fog volume, then the depth pre-pass (terrain first, as the largest
@@ -109,9 +109,13 @@ use crate::pipelines::{
     FrameUniforms,
     InstanceRaw,
     ModelPass,
+    PARTICLE_SCENE_SOURCE,
+    PARTICLE_SHAPES_SOURCE,
+    ParticlePass,
+    ParticleView,
     ScenePipelines,
     SceneTargets,
-    TexturedPass,
+    scene_common,
 };
 use crate::point_lights::select_point_lights;
 use crate::post_process::PostProcessSettings;
@@ -282,6 +286,10 @@ pub struct RendererDiagnostics {
     pub forward_opaque_batches: usize,
     /// Submeshes left out because their material names a shading model nothing registered.
     pub unavailable_materials: usize,
+    /// Particle instances drawn this frame, after culling.
+    pub particles: usize,
+    /// Particle batches culled because their bounds lay outside the view.
+    pub particle_batches_culled: usize,
 }
 
 /// One camera-visible opaque submesh waiting to be batched.
@@ -290,6 +298,8 @@ struct OpaqueItem {
     /// Index into the asset's submeshes.
     submesh: usize,
     material: MaterialAsset,
+    /// The material's shading model, resolved once its GPU copy is prepared ([`batch_opaque`]).
+    model: ModelId,
     raw: InstanceRaw,
     /// View depth of the nearest point of the instance's bounding sphere.
     depth: f32,
@@ -546,8 +556,8 @@ pub struct Renderer {
     instance_capacity: usize,
     transient_buffer: wgpu::Buffer,
     transient_capacity: usize,
-    // Textured transparent material and its uploaded textures (FrameInputs::transparent_draws).
-    textured: TexturedPass,
+    // Instanced particles, their images, and their instance buffer (FrameInputs::particles).
+    particles: ParticlePass,
     // Scene effects, when enabled and supported.
     effects: Option<EffectsState>,
     // Per-phase frame timings, while profiling is on.
@@ -592,8 +602,16 @@ impl Renderer {
             },
         );
         let pipelines = ScenePipelines::new(device, capabilities.scene_format, bias, capabilities.compute);
-        let textured =
-            TexturedPass::new(device, &pipelines.frame_layout, &pipelines.shadow_layout, capabilities.scene_format);
+        let mut mipmaps = MipmapGenerator::new(device);
+        // Particles keep the scene pass's frame and shadow groups bound, then bind their sprite as group 2.
+        let particle_source = format!("{}\n{PARTICLE_SHAPES_SOURCE}\n{PARTICLE_SCENE_SOURCE}", scene_common(device));
+        let particles = ParticlePass::new(
+            gpu,
+            &mut mipmaps,
+            &[&pipelines.frame_layout, &pipelines.shadow_layout],
+            particle_source,
+            capabilities.scene_format,
+        );
         let post = PostProcessor::new(
             device,
             gpu.queue(),
@@ -644,7 +662,6 @@ impl Renderer {
         );
 
         let models = ShadingModels::new(device);
-        let mipmaps = MipmapGenerator::new(device);
         let materials = MaterialCache::new(device, gpu.queue());
         let image_lighting = ImageLightingResources::new(gpu, &pipelines.image_lighting_layout);
 
@@ -689,7 +706,7 @@ impl Renderer {
             instance_capacity: INITIAL_INSTANCE_CAPACITY,
             transient_buffer,
             transient_capacity: INITIAL_TRANSIENT_CAPACITY,
-            textured,
+            particles,
             effects: None,
             profiler: FrameProfiler::default(),
             terrain: SceneTerrain::new(bias),
@@ -951,6 +968,35 @@ impl Renderer {
         self.options.deferred && self.deferred_supported() && self.debug_view == DebugView::Lit
     }
 
+    /// Compile, ahead of the first frames, the pipelines frames draw with for every registered shading model under the
+    /// current options: its forward (or, when deferred lighting runs, G-buffer and lighting) pass with the scene targets
+    /// the current effects need, its blended pass, and its masked depth and caster passes.
+    ///
+    /// Pipelines otherwise compile when a frame first needs them, which stalls that frame (noticeably in browsers). The
+    /// shells call this once after `App::start`; call it again after registering shading models or changing effects or
+    /// the depth pre-pass. Frames still compile anything this did not anticipate.
+    pub fn warm_up_pipelines(&mut self) {
+        let device = self.gpu.device().clone();
+        let targets = match &self.effects {
+            Some(state) if state.runtime.needs_motion_vectors() => SceneTargets::ColorAndAttachments,
+            _ => SceneTargets::Color,
+        };
+        let deferred = self.deferred_active();
+        for model in 0..self.models.len() {
+            let mut passes = vec![ModelPass::Scene(targets), ModelPass::Blend, ModelPass::MaskedCaster];
+            if self.options.depth_prepass {
+                passes.push(ModelPass::MaskedDepth);
+            }
+            if deferred && self.models.get(model).deferred {
+                passes.extend([ModelPass::GBuffer(targets), ModelPass::Lighting]);
+            }
+            for pass in passes {
+                self.pipelines.ensure_model(&device, &self.models, model, pass);
+            }
+        }
+        self.pipelines.ensure_atmosphere(&device, targets);
+    }
+
     /// Whether frames record a [`FrameProfile`].
     pub fn profiling(&self) -> bool {
         self.profiler.enabled()
@@ -1125,19 +1171,23 @@ impl Renderer {
         let unavailable = self.drop_unavailable(&mut items);
         let mut transient = opaque_transient_vertices(inputs.opaque_triangles);
         let transient_opaque = transient.len() as u32;
+        // Particles cull and sort for the stable camera, and their images upload before any pass opens, like meshes and
+        // materials; each surviving batch then joins the transparent queue at one depth.
+        let particle_view = ParticleView {
+            view_projection: camera_frame.view_projection(),
+            eye: view_depth.eye,
+            forward: view_depth.forward,
+        };
+        let particle_counts = self.particles.prepare(&self.gpu, &mut self.mipmaps, inputs.particles, &particle_view)?;
         let blend_depths: Vec<f32> = items.blends.iter().map(|item| item.depth).collect();
         let transparent = build_transparent_queue(
             &blend_depths,
             inputs.transparent_triangles,
-            inputs.transparent_draws,
+            self.particles.batches().iter().map(|batch| batch.depth),
             view_depth.eye,
             view_depth.forward,
             &mut transient,
         );
-
-        // Sprite textures upload before any pass opens, like meshes and materials.
-        self.textured.upload_textures(&self.gpu, &mut self.mipmaps, inputs.transparent_draws)?;
-        self.textured.write_vertices(&self.gpu, &transparent.textured_vertices);
 
         // Instances: identity (for transient triangles), opaque batches, blended meshes in queue order, then each shadow
         // view's culled casters.
@@ -1282,7 +1332,7 @@ impl Renderer {
         profiler.mark(encoder, FramePhase::Post);
         self.post.encode(encoder, output);
         self.release_dropped_meshes();
-        self.textured.release_dropped();
+        self.particles.release_dropped();
         self.materials.release_dropped();
 
         self.diagnostics.visible = items.visible + terrain.visible;
@@ -1303,6 +1353,8 @@ impl Renderer {
             if deferred { opaque.iter().filter(|batch| !batch.deferred).count() } else { 0 };
         self.diagnostics.render_size = render_size;
         self.diagnostics.unavailable_materials = unavailable;
+        self.diagnostics.particles = particle_counts.instances;
+        self.diagnostics.particle_batches_culled = particle_counts.culled_batches;
         Ok(())
     }
 
@@ -1670,7 +1722,7 @@ impl Renderer {
                     else {
                         continue;
                     };
-                    // Textured runs rebind group 2, so model draws bind image lighting again after one.
+                    // Particle batches rebind group 2, so model draws bind image lighting again after one.
                     if bound.environment_replaced {
                         pass.set_bind_group(2, draws.image_lighting, &[]);
                         bound.environment_replaced = false;
@@ -1695,19 +1747,17 @@ impl Renderer {
                     pass.draw(vertices.clone(), 0..1);
                     triangles += vertices.len() / 3;
                 }
-                TransparentStep::Textured {
-                    texture,
-                    vertices,
-                } => {
-                    // The textured pass sets its own pipeline and groups.
+                TransparentStep::Particles(index) => {
+                    // The particle pass sets its own pipeline, sprite group, and instance buffer.
                     bound = BoundState {
                         environment_replaced: true,
                         ..BoundState::default()
                     };
-                    if !self.textured.draw(pass, *texture, vertices.clone()) {
+                    let instances = self.particles.draw(pass, *index);
+                    if instances == 0 {
                         continue;
                     }
-                    triangles += vertices.len() / 3;
+                    triangles += (instances as usize) * 2;
                 }
             }
             draw_calls += 1;
@@ -2056,7 +2106,7 @@ impl Renderer {
                             options.normal_bias.max(fit.texel * CASCADE_TEXEL_BIAS),
                         ],
                     };
-                    plan.add_view(fit.matrix, ShadowTarget::Cascade(index), fit.texel, casters, raws);
+                    plan.add_view(fit.matrix, ShadowTarget::Cascade(index), fit.texel, casters, None, raws);
                 }
                 uniforms.counts[0] = fits.len() as f32;
                 uniforms.directional = [distance, 1.0, light.angular_radius.tan(), CASCADE_BLEND_FRACTION];
@@ -2102,8 +2152,11 @@ impl Renderer {
                 tile: [face_size * texel, face_size, 0.0, 0.0],
             };
             plan.light_slots[*light_index] = Some(slot);
+
+            // One sphere test per caster finds what the light reaches; each of its six faces then culls only those.
+            let reached = casters.reaching_sphere(light.position, light.range);
             for (face, matrix) in point_face_views(light.position, light.range).into_iter().enumerate() {
-                plan.add_view(matrix, ShadowTarget::PointFace(faces[face]), 0.0, casters, raws);
+                plan.add_view(matrix, ShadowTarget::PointFace(faces[face]), 0.0, casters, Some(&reached), raws);
             }
         }
         plan.point_lights = shadowed.len();
@@ -2192,17 +2245,18 @@ impl ViewDepth {
 }
 
 impl ShadowPlan {
-    /// Add one view, culling the casters to it.
+    /// Add one view, culling the casters (or only the `subset` of them a light reaches, by index) to it.
     fn add_view(
         &mut self,
         matrix: Mat4,
         target: ShadowTarget,
         texel: f32,
         casters: &ShadowCasters<'_>,
+        subset: Option<&[usize]>,
         raws: &mut Vec<InstanceRaw>,
     ) {
         let start = raws.len();
-        let batches = casters.batches_for(matrix, raws);
+        let batches = casters.batches_for(matrix, subset, raws);
         self.caster_instances += raws.len() - start;
         let transient = casters.transient.is_some_and(|bounds| !bounds_outside_view(bounds, matrix));
         self.views.push(ShadowView {
@@ -2234,17 +2288,28 @@ impl ShadowCasters<'_> {
             || self.terrain.iter().any(touches)
     }
 
-    /// Batches of the mesh casters whose bounds reach `view_projection`, appending their instances to `raws`. Casters
-    /// arrive sorted by [`sort_casters`], so each group shares one draw.
-    fn batches_for(&self, view_projection: Mat4, raws: &mut Vec<InstanceRaw>) -> Vec<Batch> {
+    /// Indices, in caster order, of the mesh casters whose bounds touch a light's sphere.
+    fn reaching_sphere(&self, center: Vec3, radius: f32) -> Vec<usize> {
+        let touches = |(_, item): &(usize, &CasterItem)| sphere_touches_bounds(center, radius, item.world);
+        self.meshes.iter().enumerate().filter(touches).map(|(index, _)| index).collect()
+    }
+
+    /// Batches of the mesh casters (every one, or the ascending `subset` of indices) whose bounds reach
+    /// `view_projection`, appending their instances to `raws`. Casters arrive sorted by [`sort_casters`], so each group
+    /// shares one draw.
+    fn batches_for(&self, view_projection: Mat4, subset: Option<&[usize]>, raws: &mut Vec<InstanceRaw>) -> Vec<Batch> {
+        let selected: Vec<&CasterItem> = match subset {
+            Some(indices) => indices.iter().filter_map(|index| self.meshes.get(*index)).collect(),
+            None => self.meshes.iter().collect(),
+        };
         let mut batches = Vec::new();
-        for group in self.meshes.chunk_by(|left, right| caster_key(left) == caster_key(right)) {
+        for group in selected.chunk_by(|left, right| caster_key(left) == caster_key(right)) {
             let start = raws.len() as u32;
             let reaching = group.iter().filter(|item| !bounds_outside_view(item.world, view_projection));
             raws.extend(reaching.map(|item| item.raw));
             let end = raws.len() as u32;
             if end > start {
-                let (masked, model, material, asset_id, submesh) = caster_key(&group[0]);
+                let (masked, model, material, asset_id, submesh) = caster_key(group[0]);
                 batches.push(Batch {
                     model,
                     material,
@@ -2341,6 +2406,7 @@ fn queue_instance(
                 asset,
                 submesh: index,
                 material,
+                model: 0,
                 raw,
                 depth: nearest_depth,
             });
@@ -2354,10 +2420,11 @@ fn queue_instance(
 /// their nearest instance, so depth fills front to back and the surfaces behind fail the depth test before shading.
 /// Every item's material is prepared (see [`Renderer::drop_unavailable`]).
 fn batch_opaque(items: &mut [OpaqueItem], raws: &mut Vec<InstanceRaw>, materials: &MaterialCache) -> Vec<Batch> {
-    let key = |item: &OpaqueItem| {
-        let model = materials.get(item.material.id()).map_or(usize::MAX, |(model, _)| model);
-        (model, item.material.id(), item.asset.id(), item.submesh)
-    };
+    // Resolve each item's model once, so sorting and grouping compare plain keys instead of looking materials up.
+    for item in items.iter_mut() {
+        item.model = materials.get(item.material.id()).map_or(ModelId::MAX, |(model, _)| model);
+    }
+    let key = |item: &OpaqueItem| (item.model, item.material.id(), item.asset.id(), item.submesh);
     items.sort_by(|left, right| key(left).cmp(&key(right)).then(left.depth.total_cmp(&right.depth)));
     let mut groups: Vec<&[OpaqueItem]> = items.chunk_by(|left, right| key(left) == key(right)).collect();
     groups.sort_by(|left, right| left[0].depth.total_cmp(&right[0].depth));
@@ -2425,7 +2492,7 @@ enum BoundPipeline {
 struct BoundState {
     pipeline: Option<BoundPipeline>,
     material: Option<u64>,
-    /// Whether a textured run replaced group 2 since image lighting was bound.
+    /// Whether a particle batch replaced group 2 since image lighting was bound.
     environment_replaced: bool,
 }
 

@@ -23,6 +23,15 @@ fn documents_normalize_defaults_and_sort_bursts() {
     let emitter = &compiled.asset().emitters[0];
     assert_eq!(emitter.bursts.iter().map(|burst| burst.time).collect::<Vec<_>>(), [0.5, 1.0]);
     assert_eq!(compiled.asset().to_json()["emitters"][0]["bursts"][0], json!({"time": 0.5, "count": 3}));
+
+    // The default blend is straight alpha and stays out of saved documents; other modes round trip.
+    assert_eq!(emitter.blend, ParticleBlend::Alpha);
+    assert!(compiled.asset().to_json()["emitters"][0].get(PARTICLE_EMITTER_BLEND).is_none());
+    let additive = compile_particle_effect(&document(json!({"blend": "additive"}))).unwrap();
+    assert_eq!(additive.asset().emitters[0].blend, ParticleBlend::Additive);
+    let saved = additive.asset().to_json();
+    assert_eq!(saved["emitters"][0][PARTICLE_EMITTER_BLEND], json!("additive"));
+    assert_eq!(compile_particle_effect(&saved).unwrap().asset(), additive.asset());
 }
 
 #[test]
@@ -33,6 +42,7 @@ fn invalid_documents_report_reference_messages() {
         "main.lifetime must be a number from 0.0016666666666666668 to 30."
     );
     assert_eq!(message(document(json!({"renderer": "flipbook"}))), "main: flipbook requires a texture.");
+    assert_eq!(message(document(json!({"blend": "screen"}))), "main: unknown particle blend mode.");
     assert_eq!(
         message(document(json!({"death": {"emitter": "missing", "count": 1}}))),
         "Emitter 'main' references missing child 'missing'."

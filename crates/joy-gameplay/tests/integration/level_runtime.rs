@@ -2,13 +2,14 @@
 // Licensed under the MIT License.
 
 //! Level runtime behavior: component-driven bodies and vehicles with entity scale, rollback, transform sync, handle
-//! freshness, and a controller driving a kart through its behavior.
+//! freshness, a controller driving a kart through its behavior, and the world's spawn, contact, and timer contract.
 
 use std::cell::Cell;
 use std::rc::Rc;
 
 use joy_core::math::Vec3;
 use joy_gameplay::{
+    ContactEvent,
     ControlIntent,
     EntityBehavior,
     EntityDefinition,
@@ -21,10 +22,15 @@ use joy_gameplay::{
     LevelRuntime,
     PhysicsComponentError,
     SimulationContext,
+    TimerFired,
+    TimerRepeat,
     parse_level,
     serialize_level,
 };
-use joy_physics::VehicleInput;
+use joy_physics::{
+    ContactPhase,
+    VehicleInput,
+};
 use serde_json::json;
 
 /// Engine-owned fixture: static ground, a scaled dynamic crate, a four-wheel kart, and a lamp.
@@ -290,4 +296,72 @@ fn removing_an_entity_inside_an_update_releases_its_physics() {
     assert!(runtime.body(&EntityId::from("crate")).is_none());
     assert!(!runtime.world().bodies.contains_key("crate"), "stale handles are dropped after the step");
     assert_eq!(runtime.physics().body_count(), 2);
+}
+
+#[test]
+fn requested_spawns_get_bodies_and_the_world_reports_contacts_and_timers() {
+    const DROP_TIMER: &str = "drop";
+
+    /// Starts a timer on spawn and, when it fires, requests a falling crate that reports its contacts.
+    struct Dropper;
+
+    impl EntityBehavior for Dropper {
+        fn on_spawn(
+            &mut self,
+            entity: &mut EntityState,
+            context: &mut SimulationContext<'_>,
+        ) -> Result<(), GameplayError> {
+            context.start_timer(Some(entity.id().clone()), DROP_TIMER, 0.25, TimerRepeat::Once);
+            Ok(())
+        }
+
+        fn update(&mut self, _entity: &mut EntityState, context: &mut SimulationContext<'_>, _elapsed_seconds: f32) {
+            let fired = context.events().read::<TimerFired>().iter().any(|timer| timer.key == DROP_TIMER);
+            if !fired {
+                return;
+            }
+            let mut falling = prop("falling", 3.0, 1.0, Vec3::ONE);
+            if let Some(physics) = falling.components.get_mut("physics") {
+                physics.insert("reportContacts".to_owned(), json!(true));
+            }
+            context.request_spawn(falling);
+        }
+    }
+
+    let mut registry = registry();
+    registry.register("dropper", |_| Box::new(Dropper)).unwrap();
+    let mut level = parse_level(TEST_YARD).unwrap();
+    level.entities.push(EntityDefinition {
+        kind: "dropper".to_owned(),
+        ..EntityDefinition::new("dropper")
+    });
+    let mut runtime = LevelRuntime::new(&level, registry).unwrap();
+    let falling = EntityId::from("falling");
+
+    // The timer fires during the update that reaches it; the dropper reads it one update later and the request
+    // spawns a crate whose physics record creates its body, as authored entities' do.
+    let mut timer_updates = 0;
+    let mut landed = None;
+    for update in 0..120 {
+        runtime.step(1.0 / 60.0).unwrap();
+        timer_updates += runtime.world().events().read::<TimerFired>().len();
+        let contact = runtime
+            .world()
+            .events()
+            .read::<ContactEvent>()
+            .iter()
+            .find(|contact| contact.phase == ContactPhase::Started && contact.involves(&falling))
+            .cloned();
+        if landed.is_none() && contact.is_some() {
+            landed = contact.map(|contact| (update, contact));
+        }
+    }
+    assert_eq!(timer_updates, 1, "a one-shot timer fires once");
+    assert!(runtime.body(&falling).is_some(), "a behavior's spawn request creates the body its record describes");
+    let (_, contact) = landed.expect("the crate reports landing");
+    assert_eq!(contact.other(&falling), Some(Some(&EntityId::from("ground"))));
+
+    // Poses are written back after every physics step, so gameplay reads where the crate came to rest.
+    let resting = runtime.entities().get(&falling).unwrap().state.transform.position.y;
+    assert!(resting < 1.0, "the crate fell and its entity followed: {resting}");
 }

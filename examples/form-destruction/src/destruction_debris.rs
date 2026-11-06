@@ -1,21 +1,34 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Persistent rigid debris for released chunks: the ground (a craterable heightfield patch inside flat apron slabs),
-//! one engine physics body and mesh per released chunk, and static colliders that keep the surviving structure solid.
+//! Persistent rigid debris for released chunks: the ground (a craterable heightfield patch inside flat apron slabs) and
+//! the engine's structure colliders and debris pool in one physics world, plus one mesh per debris piece.
 //!
-//! Physics uses meters, seconds, and Y-up world space. Debris persists until reset: no expiry or eviction, and one body
-//! per chunk id bounds the example to its 126 generated chunks. Scenes are borrowed per call, never held.
+//! Directly fractured chunks shatter into Voronoi shards; support failures and overloads leave whole. Surviving chunks
+//! keep static colliders, so falling pieces land on what stands, and the pool freezes settled pieces into static rubble
+//! once too many are moving. Physics uses meters, seconds, and Y-up world space. Scenes are borrowed per call.
 
-use joy_engine::core::PrimitiveShape;
+use std::collections::HashMap;
+
+use joy_engine::core::{
+    PrimitiveShape,
+    SeededRandom,
+};
 use joy_engine::physics::{
     BodyHandle,
     BodyOptions,
+    DebrisOptions,
+    DebrisPool,
+    DebrisRelease,
     DestructibleChunkDefinition,
     PhysicsError,
     PhysicsWorld,
     PhysicsWorldOptions,
+    StructureColliderOptions,
+    StructureColliders,
     create_chunk_mesh_data,
+    fracture_chunk,
+    fracture_sites,
 };
 use joy_engine::prelude::*;
 
@@ -28,25 +41,19 @@ use super::ground::CraterGround;
 /// How a chunk leaves the structure, which decides its starting size and motion.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Release {
-    /// Broken by an impact: shrunk slightly and launched with spin.
+    /// Broken by an impact: shattered into shards and launched with spin.
     Fractured,
-    /// Lost its support: at rest, with a sliver of clearance so it slides past surviving neighbors.
+    /// Lost its support: whole and at rest, with a sliver of clearance so it slides past surviving neighbors.
     Resting,
-    /// Crushed under load: shrunk like a fracture, leaning out of the wall face as it gives way.
+    /// Crushed under load: whole but shrunk, leaning out of the wall face as it gives way.
     Crumbled,
-}
-
-/// One released chunk: its dynamic body and the mesh that follows it.
-struct DebrisPiece {
-    body: BodyHandle,
-    mesh: MeshInstanceId,
 }
 
 /// Copied motion of one debris body, in meters and meters per second.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(dead_code, reason = "part of the capture and test API that the integration tests drive")]
 pub struct DebrisPieceSnapshot {
-    /// The released chunk's id.
+    /// The released piece's chunk id (`<chunk>/<shard>` for shards).
     pub chunk_id: String,
     /// Body position.
     pub position: Vec3,
@@ -66,15 +73,17 @@ pub struct DebrisSnapshot {
     pub pieces: Vec<DebrisPieceSnapshot>,
 }
 
-/// Owns the physics world, the ground mesh and colliders, debris, and static chunk colliders.
+/// Owns the physics world, the ground mesh and colliders, the structure's colliders, the debris pool, and the debris
+/// meshes.
 pub struct DestructionDebris {
     world: PhysicsWorld,
     ground_mesh: MeshInstanceId,
     // The craterable patch's collider; replaced whenever the ground changes.
     ground_patch: BodyHandle,
-    // Released chunks and surviving-chunk colliders by chunk id, in insertion order (at most one per chunk).
-    pieces: Vec<(String, DebrisPiece)>,
-    static_chunks: Vec<(String, BodyHandle)>,
+    structure: StructureColliders,
+    debris: DebrisPool,
+    // One mesh per debris piece, keyed like the pool (which keeps the release order).
+    meshes: HashMap<String, MeshInstanceId>,
 }
 
 impl DestructionDebris {
@@ -109,17 +118,33 @@ impl DestructionDebris {
         let ground = CraterGround::new();
         let ground_patch = world.create_heightfield_body(&ground.heightfield())?;
         let ground_mesh = scene.insert(ground_mesh_instance(&ground)?);
+        let structure = StructureColliders::new(StructureColliderOptions {
+            friction: DESTRUCTION.debris_friction,
+            restitution: DESTRUCTION.debris_restitution,
+            ..StructureColliderOptions::default()
+        });
+        let debris = DebrisPool::new(DebrisOptions {
+            friction: DESTRUCTION.debris_friction,
+            restitution: DESTRUCTION.debris_restitution,
+            linear_damping: DESTRUCTION.debris_linear_damping,
+            angular_damping: DESTRUCTION.debris_angular_damping,
+            release_scale: DESTRUCTION.released_chunk_scale,
+            maximum_moving: DESTRUCTION.maximum_moving_debris,
+            maximum_pieces: DESTRUCTION.maximum_debris,
+            ..DebrisOptions::default()
+        });
         Ok(Self {
             world,
             ground_mesh,
             ground_patch,
-            pieces: Vec::new(),
-            static_chunks: Vec::new(),
+            structure,
+            debris,
+            meshes: HashMap::new(),
         })
     }
 
     /// Replace the ground's patch collider and mesh with `ground`'s current surface (after a crater or a reset).
-    /// Debris resting in the patch settles onto the new surface on the next steps.
+    /// Removing the old patch wakes debris resting in it, so it settles onto the new surface on the next steps.
     pub fn set_ground(&mut self, scene: &mut RenderScene, ground: &CraterGround) -> AppResult {
         let patch = self.world.create_heightfield_body(&ground.heightfield())?;
         self.world.remove_body(std::mem::replace(&mut self.ground_patch, patch));
@@ -128,11 +153,11 @@ impl DestructionDebris {
         Ok(())
     }
 
-    /// Release chunks as debris: copies of their meshes on world-owned box bodies. Chunks already released are skipped.
+    /// Release chunks as debris. Chunks already released are skipped.
     ///
-    /// Directly fractured chunks (`apply_impact_impulse`) lose a thin outer shell, in mesh and collider alike, so they can
-    /// leave a tightly fitted wall, and receive an impact velocity and spin. Support failures keep all but a sliver of
-    /// clearance and start at rest.
+    /// Directly fractured chunks (`apply_impact_impulse`) shatter into Voronoi shards, each a little smaller than its
+    /// share so it can leave a tightly fitted wall, launched with an impact velocity and spin. Support failures leave
+    /// whole, keeping all but a sliver of clearance, and start at rest.
     pub fn spawn<'a>(
         &mut self,
         scene: &mut RenderScene,
@@ -143,7 +168,7 @@ impl DestructionDebris {
         self.release(scene, chunks, release)
     }
 
-    /// Release chunks that failed under load: crushed to the fractured size, leaning out of the wall face (+Z) with a
+    /// Release chunks that failed under load: shrunk to the fractured size, leaning out of the wall face (+Z) with a
     /// tip at their top, so an overloaded section reads as giving way rather than vanishing. Chunks already released
     /// are skipped.
     pub fn spawn_crumbled<'a>(
@@ -161,62 +186,78 @@ impl DestructionDebris {
         release: Release,
     ) -> AppResult {
         for chunk in chunks {
-            if self.pieces.iter().any(|(id, _)| *id == chunk.id) {
-                continue;
-            }
-            // Full-size boxes wedge between the surviving chunks of a tightly fitted wall; every release shrinks a
-            // little, and fractures most.
-            let scale = match release {
-                Release::Fractured | Release::Crumbled => DESTRUCTION.fractured_chunk_scale,
-                Release::Resting => DESTRUCTION.released_chunk_scale,
+            let pieces = match release {
+                Release::Fractured => shatter(chunk)?,
+                Release::Resting | Release::Crumbled => vec![chunk.clone()],
             };
-            let size = chunk.size.map(|value| value * scale);
-            let center = chunk.center.as_vec3();
-            let body = self.world.create_body(BodyOptions {
-                mass: DESTRUCTION.debris_mass,
-                position: center,
-                half_extents: size.as_vec3() * 0.5,
-                friction: DESTRUCTION.debris_friction,
-                restitution: DESTRUCTION.debris_restitution,
-                linear_damping: DESTRUCTION.debris_linear_damping,
-                angular_damping: DESTRUCTION.debris_angular_damping,
-                ..BodyOptions::new(PrimitiveShape::Box)
-            })?;
-            let top = center + Vec3::new(0.0, (chunk.size[1] / 2.0) as f32, 0.0);
-            if release == Release::Crumbled {
-                self.world.set_body_velocity(body, Vec3::new(0.0, 0.0, DESTRUCTION.crumble_lean_speed))?;
-                self.world.apply_impulse(body, Vec3::from_array(DESTRUCTION.crumble_tip_impulse), Some(top))?;
+            let chunk_volume = chunk.volume();
+            for piece in &pieces {
+                // An impact's spin divides among the shards by their share of the chunk, so small shards do not spin
+                // faster than the whole block would.
+                let share = (piece.volume() / chunk_volume) as f32;
+                self.release_piece(scene, piece, release, share)?;
             }
-            if release == Release::Fractured {
+        }
+        Ok(())
+    }
+
+    /// Release one piece through the pool, give it its motion (impulses scaled by `share` of its chunk), and add its
+    /// mesh.
+    fn release_piece(
+        &mut self,
+        scene: &mut RenderScene,
+        piece: &DestructibleChunkDefinition,
+        release: Release,
+        share: f32,
+    ) -> AppResult {
+        let scale = match release {
+            Release::Fractured | Release::Crumbled => DESTRUCTION.fractured_chunk_scale,
+            Release::Resting => DESTRUCTION.released_chunk_scale,
+        };
+        let velocity = match release {
+            Release::Fractured => {
                 // Pieces fly away from the wall's middle, varied by release order.
-                let direction = if chunk.center[0] < 0.0 { -1.0 } else { 1.0 };
-                let count = self.pieces.len();
+                let direction = if piece.center[0] < 0.0 { -1.0 } else { 1.0 };
+                let count = self.debris.len();
                 let [launch_x, launch_y, launch_z] = DESTRUCTION.debris_launch_speed;
                 let [vary_x, vary_y] = DESTRUCTION.debris_launch_variation;
-                let velocity = Vec3::new(
+                Vec3::new(
                     direction * (launch_x + ((count % 3) as f32 * vary_x)),
                     launch_y + ((count % 4) as f32 * vary_y),
                     launch_z,
-                );
-                self.world.set_body_velocity(body, velocity)?;
-                self.world.apply_impulse(body, Vec3::from_array(DESTRUCTION.debris_spin_impulse), Some(top))?;
+                )
             }
-            let local = DestructibleChunkDefinition {
-                size,
-                center: DVec3::ZERO,
-                ..chunk.clone()
-            };
-            let asset = MeshAsset::new(&create_chunk_mesh_data([&local]))?;
-            let mesh = MeshInstance::new(asset).with_transform(Transform::new(center, Vec3::ZERO, Vec3::ONE));
-            let mesh = scene.insert(mesh);
-            self.pieces.push((
-                chunk.id.clone(),
-                DebrisPiece {
-                    body,
-                    mesh,
-                },
-            ));
+            Release::Crumbled => Vec3::new(0.0, 0.0, DESTRUCTION.crumble_lean_speed),
+            Release::Resting => Vec3::ZERO,
+        };
+        let request = DebrisRelease {
+            velocity,
+            mass: Some(DESTRUCTION.debris_mass * share),
+            scale: Some(scale),
+            rotation: Vec3::ZERO,
+        };
+        let Some(body) = self.debris.release(&mut self.world, piece, request)? else {
+            return Ok(());
+        };
+        let top = piece.center.as_vec3() + Vec3::new(0.0, (piece.size[1] / 2.0) as f32, 0.0);
+        match release {
+            Release::Fractured => {
+                let spin = Vec3::from_array(DESTRUCTION.debris_spin_impulse) * share;
+                self.world.apply_impulse(body, spin, Some(top))?;
+            }
+            Release::Crumbled => {
+                self.world.apply_impulse(body, Vec3::from_array(DESTRUCTION.crumble_tip_impulse), Some(top))?;
+            }
+            Release::Resting => {}
         }
+
+        let Some(released) = self.debris.piece(&piece.id) else {
+            return Ok(());
+        };
+        let asset = MeshAsset::new(&create_chunk_mesh_data([&released.local_chunk()]))?;
+        let start = self.world.body_transform(body).map_or(piece.center.as_vec3(), |pose| pose.position);
+        let mesh = MeshInstance::new(asset).with_transform(Transform::new(start, Vec3::ZERO, Vec3::ONE));
+        self.meshes.insert(piece.id.clone(), scene.insert(mesh));
         Ok(())
     }
 
@@ -226,39 +267,28 @@ impl DestructionDebris {
         &mut self,
         chunks: impl IntoIterator<Item = &'a DestructibleChunkDefinition>,
     ) -> Result<(), PhysicsError> {
-        let chunks: Vec<&DestructibleChunkDefinition> = chunks.into_iter().collect();
-        let world = &mut self.world;
-        self.static_chunks.retain(|(id, body)| {
-            let keep = chunks.iter().any(|chunk| chunk.id == *id);
-            if !keep {
-                world.remove_body(*body);
-            }
-            keep
-        });
-        for chunk in chunks {
-            if self.static_chunks.iter().any(|(id, _)| *id == chunk.id) {
-                continue;
-            }
-            let body = self.world.create_body(BodyOptions {
-                position: chunk.center.as_vec3(),
-                half_extents: chunk.size.as_vec3() * 0.5,
-                friction: DESTRUCTION.debris_friction,
-                restitution: DESTRUCTION.debris_restitution,
-                ..BodyOptions::new(PrimitiveShape::Box)
-            })?;
-            self.static_chunks.push((chunk.id.clone(), body));
-        }
-        Ok(())
+        self.structure.sync(&mut self.world, chunks)
     }
 
-    /// Advance bounded fixed-step physics by `elapsed_seconds` and copy body poses into the scene.
+    /// Advance bounded fixed-step physics by `elapsed_seconds`, keep the pool within its budget, and draw every piece
+    /// at its interpolated pose.
     pub fn update(&mut self, scene: &mut RenderScene, elapsed_seconds: f32) -> Result<(), PhysicsError> {
         self.world.step(elapsed_seconds)?;
-        for (_, piece) in &self.pieces {
-            if let (Some(pose), Some(mesh)) = (self.world.body_transform(piece.body), scene.get_mut(piece.mesh)) {
-                mesh.transform.position = pose.position;
-                mesh.transform.rotation = pose.rotation;
+        let settlement = self.debris.settle(&mut self.world, f64::from(elapsed_seconds));
+        for id in &settlement.removed {
+            if let Some(mesh) = self.meshes.remove(id) {
+                scene.remove(mesh);
             }
+        }
+        for piece in self.debris.pieces() {
+            let (Some(pose), Some(mesh)) = (
+                self.world.interpolated_body_transform(piece.body),
+                self.meshes.get(&piece.chunk_id).and_then(|mesh| scene.get_mut(*mesh)),
+            ) else {
+                continue;
+            };
+            mesh.transform.position = pose.position;
+            mesh.transform.rotation = pose.rotation;
         }
         Ok(())
     }
@@ -268,12 +298,12 @@ impl DestructionDebris {
     pub fn snapshot(&self) -> DebrisSnapshot {
         DebrisSnapshot {
             ground_top: GROUND.height,
-            static_chunks: self.static_chunks.len(),
+            static_chunks: self.structure.len(),
             pieces: self
-                .pieces
-                .iter()
-                .map(|(id, piece)| DebrisPieceSnapshot {
-                    chunk_id: id.clone(),
+                .debris
+                .pieces()
+                .map(|piece| DebrisPieceSnapshot {
+                    chunk_id: piece.chunk_id.clone(),
                     position: self.world.body_transform(piece.body).map_or(Vec3::ZERO, |pose| pose.position),
                     velocity: self.world.body_velocity(piece.body).unwrap_or(Vec3::ZERO),
                 })
@@ -283,14 +313,14 @@ impl DestructionDebris {
 
     /// Debris pieces retained.
     pub fn count(&self) -> usize {
-        self.pieces.len()
+        self.debris.len()
     }
 
     /// Release every debris body and mesh, keeping the ground for the next reset.
     pub fn reset(&mut self, scene: &mut RenderScene) {
-        for (_, piece) in self.pieces.drain(..) {
-            self.world.remove_body(piece.body);
-            scene.remove(piece.mesh);
+        self.debris.clear(&mut self.world);
+        for (_, mesh) in self.meshes.drain() {
+            scene.remove(mesh);
         }
     }
 
@@ -300,6 +330,23 @@ impl DestructionDebris {
         self.reset(scene);
         scene.remove(self.ground_mesh);
     }
+}
+
+/// A chunk broken into its Voronoi shards, seeded by its id so the same chunk always shatters the same way.
+fn shatter(chunk: &DestructibleChunkDefinition) -> AppResult<Vec<DestructibleChunkDefinition>> {
+    let mut random = SeededRandom::new(DESTRUCTION.seed ^ id_seed(&chunk.id));
+    let sites = fracture_sites(chunk.center, chunk.size, DESTRUCTION.shards_per_fracture, &mut random);
+    Ok(fracture_chunk(chunk, &sites)?)
+}
+
+/// A stable seed from a chunk id (FNV-1a), independent of release order and platform.
+fn id_seed(id: &str) -> i64 {
+    let mut hash: u32 = 0x811c_9dc5;
+    for byte in id.bytes() {
+        hash ^= u32::from(byte);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    i64::from(hash)
 }
 
 /// The ground's mesh, in its own neutral tint, independent of the chunk material palette.

@@ -8,16 +8,34 @@
 //! frame draws opaque triangles with depth writes, then caller-sorted transparent triangles blended over them without
 //! depth writes, into the HDR scene target; the shared post-processing chain then presents it.
 //!
+//! Particles draw through the engine's own instanced particle shader rather than the game's ([`TriangleParticles`]):
+//! the frame names the camera, the billboard axes, the game's color convention, and where the particles fall among the
+//! transparent triangles, and the renderer culls, sorts, and draws them with each emitter's blend mode.
+//!
 //! [`add_circle`]: crate::add_circle
 
-use joy_core::math::Vec2;
+use bytemuck::{
+    Pod,
+    Zeroable,
+};
+use joy_core::math::{
+    Mat4,
+    Vec2,
+    Vec3,
+};
 
+use crate::particles::ParticleFrame;
 use crate::pipelines::{
     DEPTH_FORMAT,
+    PARTICLE_SHAPES_SOURCE,
+    PARTICLE_TRIANGLES_SOURCE,
+    ParticlePass,
+    ParticleView,
     uniform_entry,
 };
 use crate::post_process::PostProcessSettings;
 use crate::postprocessor::PostProcessor;
+use crate::texture_mips::MipmapGenerator;
 use crate::{
     ColorVertex,
     DisplayOutput,
@@ -66,6 +84,75 @@ pub struct TriangleFrame<'a> {
     pub uniforms: &'a [u8],
     /// Linear background color.
     pub clear_color: LinearColor,
+    /// Instanced particles drawn among the transparent triangles; `None` draws none.
+    pub particles: Option<TriangleParticles<'a>>,
+}
+
+/// Particles for a [`TriangleFrame`], drawn with the engine's particle shader in the game's camera.
+///
+/// Batches outside `view_projection`'s view are culled; the rest draw in one block after the first
+/// [`after_triangles`](Self::after_triangles) transparent triangles, ordered back to front along `backward` among
+/// themselves, with the particles of straight and premultiplied batches ordered the same way inside each batch.
+#[derive(Clone, Copy, Debug)]
+pub struct TriangleParticles<'a> {
+    /// The particles, in world units.
+    pub frame: &'a ParticleFrame,
+    /// The world-to-clip matrix the game's shader projects with.
+    pub view_projection: Mat4,
+    /// The unit world axis billboards extend along to their right.
+    pub right: Vec3,
+    /// The unit world axis billboards extend along upward.
+    pub up: Vec3,
+    /// The unit world direction toward the viewer: streak trails project onto the plane it faces, and particles order
+    /// back to front along it.
+    pub backward: Vec3,
+    /// How many whole transparent triangles draw before the particles (the caller's layering); the rest draw after.
+    /// Values past the end draw the particles last.
+    pub after_triangles: usize,
+    /// Whether particle RGB holds display (sRGB) values the renderer decodes to linear light, matching a game shader
+    /// that decodes its vertex colors.
+    pub display_colors: bool,
+    /// Multiplier on the particles' linear RGB, such as the game's frame flash.
+    pub color_scale: f32,
+}
+
+impl<'a> TriangleParticles<'a> {
+    /// Particles in the arcade games' XY world plane seen from +Z (billboards span +X and +Y), drawn after every
+    /// transparent triangle with linear colors.
+    pub fn xy_plane(frame: &'a ParticleFrame, view_projection: Mat4) -> Self {
+        Self {
+            frame,
+            view_projection,
+            right: Vec3::X,
+            up: Vec3::Y,
+            backward: Vec3::Z,
+            after_triangles: usize::MAX,
+            display_colors: false,
+            color_scale: 1.0,
+        }
+    }
+}
+
+/// The particle pass's view block (`ParticleView` in particle-triangles.wgsl). 128 bytes.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+struct ParticleViewUniforms {
+    view_projection: [[f32; 4]; 4],
+    right: [f32; 4],
+    up: [f32; 4],
+    backward: [f32; 4],
+    color: [f32; 4],
+}
+
+/// GPU resources for particles, created with the first frame that draws them.
+struct TriangleParticleState {
+    // The pass owns pipelines that reference the view layout; drop it first.
+    pass: ParticlePass,
+    mipmaps: MipmapGenerator,
+    view_buffer: wgpu::Buffer,
+    view_group: wgpu::BindGroup,
+    /// Prepared batch indices in drawing order, reused between frames.
+    order: Vec<usize>,
 }
 
 /// Owns the pipelines, buffers, and post-processing for a game-supplied triangle shader.
@@ -83,6 +170,9 @@ pub struct TriangleRenderer {
 
     // Display processing into the presentation format.
     post: PostProcessor,
+
+    // Instanced particles, once a frame draws them.
+    particles: Option<TriangleParticleState>,
 
     // Drawing-buffer size in physical pixels, the logical size games lay out in, and the shell's presentation clock
     // (film grain).
@@ -157,6 +247,7 @@ impl TriangleRenderer {
             vertex_buffer: None,
             vertex_capacity: 0,
             post,
+            particles: None,
             physical_size: (0, 0),
             logical_size: Vec2::ZERO,
             presentation_time: PresentationTime::default(),
@@ -227,6 +318,13 @@ impl TriangleRenderer {
         self.post.prepare(device, queue, size, size);
         queue.write_buffer(&self.uniform_buffer, 0, frame.uniforms);
 
+        // Particles cull and sort for the game's camera before the pass opens.
+        if let Some(particles) = &frame.particles {
+            self.prepare_particles(particles)?;
+        } else if let Some(state) = &mut self.particles {
+            state.order.clear();
+        }
+
         // One allocation holds opaque then transparent vertices; incomplete trailing triangles are dropped.
         let opaque = &frame.opaque[..frame.opaque.len() - (frame.opaque.len() % 3)];
         let transparent = &frame.transparent[..frame.transparent.len() - (frame.transparent.len() % 3)];
@@ -266,22 +364,47 @@ impl TriangleRenderer {
                 }),
                 ..Default::default()
             });
+            // Transparent triangles split around the particles at the caller's layer.
+            let opaque_count = opaque.len() as u32;
+            let transparent_count = transparent.len() as u32;
+            let particle_layer = frame.particles.as_ref().map_or(transparent_count, |particles| {
+                (particles.after_triangles.min(transparent.len() / 3) * 3) as u32
+            });
+            let before = opaque_count..(opaque_count + particle_layer);
+            let after = (opaque_count + particle_layer)..(opaque_count + transparent_count);
             if let Some(buffer) = &self.vertex_buffer
                 && total > 0
             {
                 pass.set_bind_group(0, &self.bind_group, &[]);
                 pass.set_vertex_buffer(0, buffer.slice(..total));
-                let opaque_count = opaque.len() as u32;
-                let transparent_count = transparent.len() as u32;
                 if opaque_count > 0 {
                     pass.set_pipeline(&self.opaque_pipeline);
                     pass.draw(0..opaque_count, 0..1);
                 }
-                if transparent_count > 0 {
+                if !before.is_empty() {
                     pass.set_pipeline(&self.transparent_pipeline);
-                    pass.draw(opaque_count..(opaque_count + transparent_count), 0..1);
+                    pass.draw(before, 0..1);
                 }
             }
+            if let Some(state) = &self.particles
+                && !state.order.is_empty()
+            {
+                pass.set_bind_group(0, &state.view_group, &[]);
+                for index in &state.order {
+                    state.pass.draw(&mut pass, *index);
+                }
+            }
+            if let Some(buffer) = &self.vertex_buffer
+                && !after.is_empty()
+            {
+                pass.set_bind_group(0, &self.bind_group, &[]);
+                pass.set_vertex_buffer(0, buffer.slice(..total));
+                pass.set_pipeline(&self.transparent_pipeline);
+                pass.draw(after, 0..1);
+            }
+        }
+        if let Some(state) = &mut self.particles {
+            state.pass.release_dropped();
         }
         self.post.encode(encoder, output);
         Ok(())
@@ -294,6 +417,36 @@ impl TriangleRenderer {
         });
         self.encode(&mut encoder, output, frame)?;
         self.gpu.queue().submit([encoder.finish()]);
+        Ok(())
+    }
+
+    /// Cull, order, and upload `particles` for the frame, creating the particle resources on first use.
+    fn prepare_particles(&mut self, particles: &TriangleParticles<'_>) -> Result<(), RenderError> {
+        let gpu = self.gpu.clone();
+        let state = self.particles.get_or_insert_with(|| TriangleParticleState::new(&gpu));
+        let uniforms = ParticleViewUniforms {
+            view_projection: particles.view_projection.to_cols_array_2d(),
+            right: particles.right.extend(0.0).to_array(),
+            up: particles.up.extend(0.0).to_array(),
+            backward: particles.backward.extend(0.0).to_array(),
+            color: [if particles.display_colors { 1.0 } else { 0.0 }, particles.color_scale, 0.0, 0.0],
+        };
+        gpu.queue().write_buffer(&state.view_buffer, 0, bytemuck::bytes_of(&uniforms));
+
+        // An orthographic arcade camera orders by distance along the view direction alone, so the eye can sit at the
+        // origin.
+        let view = ParticleView {
+            view_projection: particles.view_projection,
+            eye: Vec3::ZERO,
+            forward: -particles.backward.normalize_or(Vec3::Z),
+        };
+        state.pass.prepare(&gpu, &mut state.mipmaps, Some(particles.frame), &view)?;
+
+        // Farthest batch first; equal depths keep frame order.
+        let batches = state.pass.batches();
+        state.order.clear();
+        state.order.extend(0..batches.len());
+        state.order.sort_by(|left, right| batches[*right].depth.total_cmp(&batches[*left].depth));
         Ok(())
     }
 
@@ -310,6 +463,41 @@ impl TriangleRenderer {
             mapped_at_creation: false,
         }));
         self.vertex_capacity = capacity;
+    }
+}
+
+impl TriangleParticleState {
+    /// Compile the particle pipelines for the device's scene format with this renderer's view block.
+    fn new(gpu: &GpuContext) -> Self {
+        let device = gpu.device();
+        let view_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("triangle particle view"),
+            entries: &[uniform_entry(0)],
+        });
+        let view_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("triangle particle view"),
+            size: std::mem::size_of::<ParticleViewUniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let view_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("triangle particle view"),
+            layout: &view_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: view_buffer.as_entire_binding(),
+            }],
+        });
+        let mut mipmaps = MipmapGenerator::new(device);
+        let source = format!("{PARTICLE_SHAPES_SOURCE}\n{PARTICLE_TRIANGLES_SOURCE}");
+        let pass = ParticlePass::new(gpu, &mut mipmaps, &[&view_layout], source, gpu.capabilities().scene_format);
+        Self {
+            pass,
+            mipmaps,
+            view_buffer,
+            view_group,
+            order: Vec::new(),
+        }
     }
 }
 

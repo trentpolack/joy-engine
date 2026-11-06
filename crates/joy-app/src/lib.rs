@@ -18,6 +18,7 @@ mod app;
 #[cfg(not(target_arch = "wasm32"))]
 mod asset_fetch;
 mod clock;
+mod fixed_tick;
 #[cfg(not(target_arch = "wasm32"))]
 mod headless;
 mod launch;
@@ -45,6 +46,7 @@ pub use clock::{
     Stopwatch,
     unix_time_milliseconds,
 };
+pub use fixed_tick::FixedTick;
 #[cfg(not(target_arch = "wasm32"))]
 pub use headless::{
     CAPTURE_DIRECTORY_VARIABLE,

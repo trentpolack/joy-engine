@@ -89,6 +89,7 @@ fn wall() -> Vec<DestructibleChunkDefinition> {
                 size: DVec3::new(1.0, 1.0, 0.5),
                 material: "masonry".to_owned(),
                 hit_points: 2.0,
+                shape: None,
             });
         }
     }
@@ -281,6 +282,7 @@ fn support_excludes_corner_contacts_and_climbing_does_not_regain_reach() {
         size: DVec3::new(1.0, 1.0, 1.0),
         material: "masonry".to_owned(),
         hit_points: 2.0,
+        shape: None,
     };
     let support = ChunkSupportOptions {
         ground_height: 0.0,
@@ -329,6 +331,7 @@ fn form_destruction_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
                 size: DVec3::new(width, height, depth),
                 material: material.to_owned(),
                 hit_points: 6.0,
+                shape: None,
             });
         }
     }
@@ -345,6 +348,7 @@ fn form_destruction_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
                     size: DVec3::new(depth, height, depth),
                     material: "frame".to_owned(),
                     hit_points: 10.0,
+                    shape: None,
                 });
             }
         }

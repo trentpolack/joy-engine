@@ -256,6 +256,48 @@ pub fn add_ring(
     }
 }
 
+/// A flat ring on a Y-up ground plane: selection circles, targeting rings, blob shadows, and area markers.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GroundRing {
+    /// Center in world meters; the ring lies in the horizontal plane at `center.y`.
+    pub center: DVec3,
+    /// Outer radius in meters.
+    pub radius: f64,
+    /// Band width inward from the outer radius in meters; a width at least the radius fills a disc.
+    pub width: f64,
+    /// Segments around the ring (more for large rings near the camera).
+    pub segments: u32,
+}
+
+/// Append a [`GroundRing`] in the XZ plane as two triangles per segment, colored with straight-alpha linear `rgba`.
+pub fn append_ground_ring(vertices: &mut Vec<ColorVertex>, ring: &GroundRing, rgba: [f32; 4]) {
+    let inner = (ring.radius - ring.width).max(0.0);
+    let center = ring.center;
+    for index in 0..ring.segments {
+        let first = (f64::from(index) / f64::from(ring.segments)) * PI * 2.0;
+        let second = (f64::from(index + 1) / f64::from(ring.segments)) * PI * 2.0;
+        let corners = [
+            [
+                center.x + (deterministic::cos(first) * ring.radius),
+                center.z + (deterministic::sin(first) * ring.radius),
+            ],
+            [
+                center.x + (deterministic::cos(second) * ring.radius),
+                center.z + (deterministic::sin(second) * ring.radius),
+            ],
+            [center.x + (deterministic::cos(second) * inner), center.z + (deterministic::sin(second) * inner)],
+            [center.x + (deterministic::cos(first) * inner), center.z + (deterministic::sin(first) * inner)],
+        ];
+        for corner in [0, 1, 2, 0, 2, 3] {
+            let [x, z] = corners[corner];
+            vertices.push(ColorVertex {
+                position: [x as f32, center.y as f32, z as f32],
+                color: rgba,
+            });
+        }
+    }
+}
+
 /// Append a butt-ended segment from `a` to `b` as two triangles; `width` is the full thickness.
 #[allow(clippy::too_many_arguments)] // Games call every builder with positional shape values.
 pub fn add_line(

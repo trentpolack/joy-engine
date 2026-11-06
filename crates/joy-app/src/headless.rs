@@ -33,6 +33,7 @@ use crate::app::{
     StartContext,
 };
 use crate::clock::FrameClock;
+use crate::fixed_tick::FixedTicker;
 use crate::shell::ShellError;
 
 /// Headless runner configuration.
@@ -44,6 +45,8 @@ pub struct HeadlessOptions {
     pub height: u32,
     /// Elapsed seconds simulated per frame.
     pub frame_seconds: f32,
+    /// Rate of [`App::fixed_update`](crate::App::fixed_update) calls in ticks per second; default 60.
+    pub fixed_updates_per_second: f64,
     /// Renderer settings.
     pub renderer: RendererOptions,
     /// Player input actions and axes; drive them through [`HeadlessShell::input`].
@@ -58,6 +61,7 @@ impl Default for HeadlessOptions {
             width: 640,
             height: 400,
             frame_seconds: 1.0 / 60.0,
+            fixed_updates_per_second: joy_core::FixedStepLoop::DEFAULT_UPDATES_PER_SECOND,
             renderer: RendererOptions::default(),
             input: InputMap::new(),
             backend: BackendPreference::Auto,
@@ -96,6 +100,7 @@ pub struct HeadlessShell {
     input: InputManager,
     dev_tools: DevTools,
     clock: FrameClock,
+    ticker: FixedTicker,
     requests: ShellRequests,
     frame_seconds: f64,
     time_seconds: f64,
@@ -122,6 +127,7 @@ impl HeadlessShell {
             input: InputManager::new(options.input),
             dev_tools: DevTools::new("headless", false),
             clock: FrameClock::new(f32::MAX),
+            ticker: FixedTicker::new(options.fixed_updates_per_second),
             requests: ShellRequests::default(),
             frame_seconds: f64::from(options.frame_seconds),
             time_seconds: 0.0,
@@ -161,7 +167,9 @@ impl HeadlessShell {
             renderer: &mut self.renderer,
             viewport,
         };
-        app.start(&mut context)
+        app.start(&mut context)?;
+        self.renderer.warm_up_pipelines();
+        Ok(())
     }
 
     /// Player input; set keys or virtual buttons before calling [`step`](Self::step).
@@ -217,7 +225,9 @@ impl HeadlessShell {
         if ui_input.is_some() {
             self.ensure_ui();
         }
-        let time = self.clock.tick(self.time_seconds);
+        let mut time = self.clock.tick(self.time_seconds);
+        time.fixed_ticks = self.ticker.advance(time.elapsed_seconds);
+        time.fixed_interpolation = self.ticker.interpolation();
         self.time_seconds += self.frame_seconds;
         if let Some(ui) = &self.ui {
             self.input.set_typing(ui.context.egui_wants_keyboard_input());
@@ -233,6 +243,9 @@ impl HeadlessShell {
         };
 
         app.input(&mut frame)?;
+        for _ in 0..frame.time.fixed_ticks {
+            app.fixed_update(&mut frame, self.ticker.next_tick())?;
+        }
         app.simulation(&mut frame)?;
         app.presentation(&mut frame)?;
 

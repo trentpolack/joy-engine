@@ -77,6 +77,9 @@ impl FrameClock {
             elapsed_seconds: elapsed,
             time_seconds: now_seconds - start,
             frame_index: self.frame_index,
+            // The shell fills in the fixed tick schedule after the clock reads the frame.
+            fixed_ticks: 0,
+            fixed_interpolation: 0.0,
         };
         self.frame_index += 1;
         time

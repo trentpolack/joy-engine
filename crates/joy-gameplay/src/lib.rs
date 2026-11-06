@@ -35,8 +35,12 @@ pub mod grid_navigation;
 mod level_document;
 mod level_runtime;
 mod object_document;
+mod physics_component;
 mod player_controller;
+mod script_system;
 mod world;
+mod world_events;
+mod world_timers;
 
 pub use asset_path::asset_path;
 pub use built_in_component_schemas::built_in_component_schemas;
@@ -125,6 +129,11 @@ pub use object_document::{
     resolve_object_instance,
     serialize_object,
 };
+pub use physics_component::{
+    PhysicsBodyComponent,
+    VehicleComponent,
+    physics_field,
+};
 pub use player_controller::{
     AiController,
     FallibleIntentSampler,
@@ -132,8 +141,31 @@ pub use player_controller::{
     IntentSampler,
     PlayerController,
 };
+pub use script_system::{
+    ENTITY_SCRIPT_HOOKS,
+    SCRIPT_NAME_FIELD,
+    ScriptComponent,
+    ScriptEvent,
+    ScriptFailure,
+    ScriptSystem,
+    entity_script_engine,
+};
 pub use world::{
     PresentedEntity,
     World,
     WorldStep,
+};
+pub use world_events::{
+    ContactEvent,
+    EntityRemoved,
+    EntitySpawned,
+    EventQueue,
+    TimerFired,
+    WorldEvents,
+};
+pub use world_timers::{
+    MINIMUM_TIMER_SECONDS,
+    TimerId,
+    TimerRepeat,
+    WorldTimers,
 };

@@ -21,12 +21,18 @@ use std::collections::{
 use joy_core::math::Vec2;
 
 mod gamepads;
+mod key_repeat;
 #[cfg(target_arch = "wasm32")]
 mod web_gamepad;
 
 // Polled by the application shell once per frame; an engine contract rather than game-facing API.
 #[doc(hidden)]
 pub use gamepads::GamepadPoller;
+pub use key_repeat::{
+    DEFAULT_REPEAT_DELAY_SECONDS,
+    DEFAULT_REPEAT_INTERVAL_SECONDS,
+    KeyRepeat,
+};
 
 /// The default input context.
 pub const GAMEPLAY_CONTEXT: &str = "gameplay";
