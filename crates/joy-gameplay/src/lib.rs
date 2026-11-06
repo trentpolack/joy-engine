@@ -37,6 +37,7 @@ mod level_runtime;
 mod object_document;
 mod physics_component;
 mod player_controller;
+#[cfg(feature = "game-script")]
 mod script_system;
 mod world;
 mod world_events;
@@ -141,6 +142,7 @@ pub use player_controller::{
     IntentSampler,
     PlayerController,
 };
+#[cfg(feature = "game-script")]
 pub use script_system::{
     ENTITY_SCRIPT_HOOKS,
     SCRIPT_NAME_FIELD,

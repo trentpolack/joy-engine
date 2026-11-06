@@ -8,19 +8,19 @@
 //!
 //! Every entity script defines [`ENTITY_SCRIPT_HOOKS`]:
 //!
-//! ```rhai
-//! fn init(entity) {
-//!     this.speed = entity.component("script").speed;
-//! }
+//! ```lua
+//! function init(this, entity)
+//!     this.speed = entity:component("script").speed
+//! end
 //!
-//! fn update(entity, world, elapsed_seconds) {
-//!     let target = world.nearest(entity.position, 12.0, "player");
-//!     if target != () {
-//!         let heading = world.position(target) - entity.position;
-//!         world.set_velocity(heading / heading.length() * this.speed);
-//!     }
-//!     if world.timer_fired("attack") { world.send("attacked", #{ target: target }); }
-//! }
+//! function update(this, entity, world, elapsed_seconds)
+//!     local target = world:nearest(entity.position, 12.0, "player")
+//!     if target ~= nil then
+//!         local heading = world:position(target) - entity.position
+//!         world:set_velocity(heading / heading:length() * this.speed)
+//!     end
+//!     if world:timer_fired("attack") then world:send("attacked", { target = target }) end
+//! end
 //! ```
 //!
 //! The world view describes the state at the start of the system's update: every entity's id, kind, tags, and
@@ -42,10 +42,13 @@ use std::rc::Rc;
 
 use joy_core::JsonRecord;
 use joy_core::math::DVec3;
-use joy_game_script::rhai::{
-    Array,
-    Dynamic,
-    Map,
+use joy_game_script::mlua::{
+    Error,
+    Table,
+    UserData,
+    UserDataFields,
+    UserDataMethods,
+    Value as LuaValue,
 };
 use joy_game_script::{
     ScriptEngine,
@@ -53,6 +56,8 @@ use joy_game_script::{
     ScriptLibrary,
     ScriptLimits,
     ScriptState,
+    ScriptUserData,
+    ScriptVec3,
     from_script_value,
     to_script_value,
 };
@@ -75,8 +80,8 @@ use super::world_events::{
 };
 use super::world_timers::TimerRepeat;
 
-/// Hooks every entity script defines: `init(entity)` once before its first update, and
-/// `update(entity, world, elapsed_seconds)` every world update.
+/// Hooks every entity script defines: `init(this, entity)` once before its first update, and
+/// `update(this, entity, world, elapsed_seconds)` every world update.
 pub const ENTITY_SCRIPT_HOOKS: [ScriptHook; 2] = [ScriptHook::new(INIT_HOOK, 1), ScriptHook::new(UPDATE_HOOK, 3)];
 
 /// Field of the `script` component naming the library script.
@@ -85,10 +90,6 @@ pub const SCRIPT_NAME_FIELD: &str = "script";
 const INIT_HOOK: &str = "init";
 const UPDATE_HOOK: &str = "update";
 
-/// Script type names of the views.
-const ENTITY_TYPE_NAME: &str = "Entity";
-const WORLD_TYPE_NAME: &str = "World";
-
 /// Most distinct failure messages remembered, so a script failing differently every update cannot grow memory.
 const MAXIMUM_REPORTED_FAILURES: usize = 64;
 
@@ -96,7 +97,7 @@ const MAXIMUM_REPORTED_FAILURES: usize = 64;
 // Public Records
 // ---------------------------------------------------------------------------------------------------------------------
 
-/// An event a script sent with `world.send(name, data)`; scripts read them with `world.events(name)` during the next
+/// An event a script sent with `world:send(name, data)`; scripts read them with `world:events(name)` during the next
 /// update, and Rust reads them as `events.read::<ScriptEvent>()`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScriptEvent {
@@ -157,9 +158,7 @@ impl EntityComponent for ScriptComponent {
 /// A game script engine with the entity and world views registered; create the entity scripts' [`ScriptLibrary`] from
 /// it.
 pub fn entity_script_engine(limits: ScriptLimits) -> ScriptEngine {
-    let mut engine = ScriptEngine::new(limits);
-    register_views(&mut engine);
-    engine
+    ScriptEngine::new(limits)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -203,7 +202,7 @@ impl ScriptSystem {
         // Initialize the state on the first update (and again if an earlier init failed).
         if component.state.is_none() {
             let mut state = ScriptState::new();
-            if let Err(error) = library.call(&script, INIT_HOOK, &mut state, (view.clone(),)) {
+            if let Err(error) = library.call(&script, INIT_HOOK, &mut state, (ScriptUserData(view.clone()),)) {
                 drop(library);
                 self.report(&view.id, error.to_string());
                 return Vec::new();
@@ -220,7 +219,12 @@ impl ScriptSystem {
         let Some(state) = component.state.as_mut() else {
             return Vec::new();
         };
-        let result = library.call(&script, UPDATE_HOOK, state, (view.clone(), world, f64::from(elapsed_seconds)));
+        let result = library.call(
+            &script,
+            UPDATE_HOOK,
+            state,
+            (ScriptUserData(view.clone()), ScriptUserData(world), f64::from(elapsed_seconds)),
+        );
         drop(library);
         if let Err(error) = result {
             self.report(&view.id, error.to_string());
@@ -448,106 +452,121 @@ impl WorldView {
     }
 }
 
-/// Register the `Entity` and `World` types and their methods.
-fn register_views(engine: &mut ScriptEngine) {
-    let rhai = engine.rhai_mut();
-    rhai.register_type_with_name::<EntityView>(ENTITY_TYPE_NAME)
-        .register_get("id", |entity: &mut EntityView| entity.id.as_str().to_owned())
-        .register_get("kind", |entity: &mut EntityView| entity.kind.clone())
-        .register_get("position", |entity: &mut EntityView| entity.position)
-        .register_get("velocity", |entity: &mut EntityView| entity.velocity)
-        .register_fn("has_tag", |entity: &mut EntityView, tag: &str| {
-            entity.tags.iter().any(|candidate| candidate == tag)
-        })
-        .register_fn("component", |entity: &mut EntityView, kind: &str| -> Dynamic {
-            entity.components.get(kind).and_then(|record| to_script_value(kind, record).ok()).unwrap_or(Dynamic::UNIT)
-        });
+impl UserData for EntityView {
+    fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("id", |_, entity| Ok(entity.id.as_str().to_owned()));
+        fields.add_field_method_get("kind", |_, entity| Ok(entity.kind.clone()));
+        fields.add_field_method_get("position", |_, entity| Ok(ScriptVec3(entity.position)));
+        fields.add_field_method_get("velocity", |_, entity| Ok(ScriptVec3(entity.velocity)));
+    }
 
-    rhai.register_type_with_name::<WorldView>(WORLD_TYPE_NAME)
-        .register_fn("position", |world: &mut WorldView, id: &str| -> Dynamic {
-            world
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods
+            .add_method("has_tag", |_, entity, tag: String| Ok(entity.tags.iter().any(|candidate| candidate == &tag)));
+        methods.add_method("component", |lua, entity, kind: String| match entity.components.get(&kind) {
+            Some(record) => to_script_value(lua, &kind, record).map_err(Error::external),
+            None => Ok(LuaValue::Nil),
+        });
+    }
+}
+
+impl UserData for WorldView {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("position", |_, world, id: String| {
+            Ok(world
                 .snapshot
                 .index
-                .get(id)
+                .get(id.as_str())
                 .and_then(|index| world.snapshot.entities.get(*index))
-                .map_or(Dynamic::UNIT, |entity| Dynamic::from(entity.position))
-        })
-        .register_fn("kind", |world: &mut WorldView, id: &str| -> Dynamic {
-            world
+                .map(|entity| ScriptVec3(entity.position)))
+        });
+        methods.add_method("kind", |_, world, id: String| {
+            Ok(world
                 .snapshot
                 .index
-                .get(id)
+                .get(id.as_str())
                 .and_then(|index| world.snapshot.entities.get(*index))
-                .map_or(Dynamic::UNIT, |entity| Dynamic::from(entity.kind.clone()))
-        })
-        .register_fn("within", |world: &mut WorldView, center: DVec3, radius: f64, tag: &str| -> Array {
-            world
+                .map(|entity| entity.kind.clone()))
+        });
+        methods.add_method("within", |_, world, (center, radius, tag): (ScriptVec3, f64, String)| {
+            Ok(world
                 .snapshot
-                .within(center, radius, tag)
+                .within(center.0, radius, &tag)
                 .into_iter()
                 .filter(|entity| entity.id != world.entity)
-                .map(|entity| Dynamic::from(entity.id.as_str().to_owned()))
-                .collect()
-        })
-        .register_fn("nearest", |world: &mut WorldView, center: DVec3, radius: f64, tag: &str| -> Dynamic {
-            world
+                .map(|entity| entity.id.as_str().to_owned())
+                .collect::<Vec<_>>())
+        });
+        methods.add_method("nearest", |_, world, (center, radius, tag): (ScriptVec3, f64, String)| {
+            Ok(world
                 .snapshot
-                .within(center, radius, tag)
+                .within(center.0, radius, &tag)
                 .into_iter()
                 .find(|entity| entity.id != world.entity)
-                .map_or(Dynamic::UNIT, |entity| Dynamic::from(entity.id.as_str().to_owned()))
-        })
-        .register_fn("timer_fired", |world: &mut WorldView, key: &str| {
-            world.snapshot.timers.get(&world.entity).is_some_and(|keys| keys.iter().any(|fired| fired == key))
-        })
-        .register_fn("contacts", |world: &mut WorldView| -> Array {
-            world
+                .map(|entity| entity.id.as_str().to_owned()))
+        });
+        methods.add_method("timer_fired", |_, world, key: String| {
+            Ok(world.snapshot.timers.get(&world.entity).is_some_and(|keys| keys.iter().any(|fired| fired == &key)))
+        });
+        methods.add_method("contacts", |_, world, ()| {
+            Ok(world
                 .snapshot
                 .contacts
                 .get(&world.entity)
-                .map(|others| others.iter().map(|id| Dynamic::from(id.as_str().to_owned())).collect())
-                .unwrap_or_default()
-        })
-        .register_fn("events", |world: &mut WorldView, name: &str| -> Array {
+                .map(|others| others.iter().map(|id| id.as_str().to_owned()).collect::<Vec<_>>())
+                .unwrap_or_default())
+        });
+        methods.add_method("events", |lua, world, name: String| {
             world
                 .snapshot
                 .events
                 .iter()
-                .filter(|(event, _, _)| event == name)
+                .filter(|(event, _, _)| event == &name)
                 .map(|(_, sender, data)| {
-                    let mut record = Map::new();
-                    record.insert("sender".into(), Dynamic::from(sender.as_str().to_owned()));
-                    record.insert("data".into(), to_script_value(name, data).unwrap_or(Dynamic::UNIT));
-                    Dynamic::from_map(record)
+                    let record = lua.create_table()?;
+                    record.set("sender", sender.as_str())?;
+                    record.set("data", to_script_value(lua, &name, data).map_err(Error::external)?)?;
+                    Ok(record)
                 })
-                .collect()
-        })
-        .register_fn("spawn", |world: &mut WorldView, definition: Map| {
-            let value = from_script_value::<Value>("spawn", &Dynamic::from_map(definition)).unwrap_or(Value::Null);
+                .collect::<Result<Vec<_>, Error>>()
+        });
+        methods.add_method("spawn", |lua, world, definition: Table| {
+            let value =
+                from_script_value::<Value>(lua, "spawn", &LuaValue::Table(definition)).map_err(Error::external)?;
             world.push(ScriptCommand::Spawn(value));
-        })
-        .register_fn("remove", |world: &mut WorldView, id: &str| world.push(ScriptCommand::Remove(id.to_owned())))
-        .register_fn("send", |world: &mut WorldView, name: &str, data: Map| {
-            let data = from_script_value::<Value>(name, &Dynamic::from_map(data)).unwrap_or(Value::Null);
+            Ok(())
+        });
+        methods.add_method("remove", |_, world, id: String| {
+            world.push(ScriptCommand::Remove(id));
+            Ok(())
+        });
+        methods.add_method("send", |lua, world, (name, data): (String, Table)| {
+            let data = from_script_value::<Value>(lua, &name, &LuaValue::Table(data)).map_err(Error::external)?;
             world.push(ScriptCommand::Send {
-                name: name.to_owned(),
+                name,
                 data,
             });
-        })
-        .register_fn("start_timer", |world: &mut WorldView, key: &str, seconds: f64, repeat: bool| {
+            Ok(())
+        });
+        methods.add_method("start_timer", |_, world, (key, seconds, repeat): (String, f64, bool)| {
             world.push(ScriptCommand::StartTimer {
-                key: key.to_owned(),
+                key,
                 seconds,
                 repeat,
             });
-        })
-        .register_fn("set_velocity", |world: &mut WorldView, velocity: DVec3| {
-            world.push(ScriptCommand::SetVelocity(velocity));
-        })
-        .register_fn("apply_impulse", |world: &mut WorldView, impulse: DVec3| {
-            world.push(ScriptCommand::ApplyImpulse(impulse));
-        })
-        .register_fn("move_to", |world: &mut WorldView, position: DVec3| {
-            world.push(ScriptCommand::MoveTo(position));
+            Ok(())
         });
+        methods.add_method("set_velocity", |_, world, velocity: ScriptVec3| {
+            world.push(ScriptCommand::SetVelocity(velocity.0));
+            Ok(())
+        });
+        methods.add_method("apply_impulse", |_, world, impulse: ScriptVec3| {
+            world.push(ScriptCommand::ApplyImpulse(impulse.0));
+            Ok(())
+        });
+        methods.add_method("move_to", |_, world, position: ScriptVec3| {
+            world.push(ScriptCommand::MoveTo(position.0));
+            Ok(())
+        });
+    }
 }

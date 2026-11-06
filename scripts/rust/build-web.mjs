@@ -31,6 +31,9 @@ import {basename, dirname, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parseArgs} from 'node:util';
 
+import {prepareLuaBrowserRuntime} from './lua-web-build.mjs';
+import {luaWasmEnvironment} from './lua-wasm-toolchain.mjs';
+
 const scriptRoot = dirname(fileURLToPath(import.meta.url));
 const engineRoot = resolve(scriptRoot, '../..');
 const WASM_TARGET = 'wasm32-unknown-unknown';
@@ -75,9 +78,10 @@ if(!/^[A-Za-z0-9_-]+$/.test(options.canvas)) {
 const manifestPath = resolve(options['manifest-path']);
 const workspaceRoot = dirname(manifestPath);
 const bindgen = findBindgen(requiredBindgenVersion(resolve(workspaceRoot, 'Cargo.lock')));
+const cargoEnvironment = usesGameScripts() ? luaWasmEnvironment() : process.env;
 
 const profile = options.release && !options.dev ? 'web-release' : 'dev';
-const cargoArguments = ['build', '--manifest-path', manifestPath, '--target', WASM_TARGET, '--package', options.package, '--profile', profile];
+const cargoArguments = ['rustc', '--manifest-path', manifestPath, '--target', WASM_TARGET, '--package', options.package, '--profile', profile];
 if(options.example) {
   cargoArguments.push('--example', options.example);
 } else if(options.bin) {
@@ -85,7 +89,15 @@ if(options.example) {
 } else {
   cargoArguments.push('--lib');
 }
-run('cargo', cargoArguments);
+// Exporting the constructor entry keeps wasm-ld from running C constructors before every exported call.
+// The browser adapter invokes it once before the automatic wasm-bindgen start. Non-script builds need no adapter.
+cargoArguments.push('--', '-Clink-arg=--export-if-defined=__wasm_call_ctors');
+if(profile === 'web-release') {
+  // Cargo's strip=symbols removes target_features before wasm-bindgen can discover reference types for standard
+  // Wasm exception wrappers. Keep feature metadata through binding generation; remove final debug names below.
+  cargoArguments.push('-Cstrip=debuginfo');
+}
+run('cargo', cargoArguments, cargoEnvironment);
 
 const targetDirectory = cargoTargetDirectory();
 const profileDirectory = resolve(targetDirectory, WASM_TARGET, profile === 'dev' ? 'debug' : profile);
@@ -100,12 +112,18 @@ if(!existsSync(wasmFile)) {
 const outputDirectory = resolve(options.out ?? resolve(targetDirectory, 'web', artifact));
 mkdirSync(outputDirectory, {recursive: true});
 const moduleName = artifact.replaceAll('-', '_');
-run(bindgen.path, ['--target', 'web', '--no-typescript', '--out-dir', outputDirectory, '--out-name', moduleName, wasmFile]);
+const bindgenArguments = ['--target', 'web', '--no-typescript', '--out-dir', outputDirectory, '--out-name', moduleName, wasmFile];
+if(profile === 'web-release') {
+  bindgenArguments.push('--remove-name-section');
+}
+run(bindgen.path, bindgenArguments);
+
+const luaNotices = prepareLuaBrowserRuntime(outputDirectory, moduleName);
 
 writeFileSync(resolve(outputDirectory, 'index.html'), pageHtml(options.title ?? artifact, moduleName, outputDirectory));
 copyStatusFonts(outputDirectory);
 copyFileSync(resolve(engineRoot, 'LICENSE'), resolve(outputDirectory, 'LICENSE'));
-writeFileSync(resolve(outputDirectory, 'THIRD-PARTY-NOTICES.txt'), thirdPartyNotices());
+writeFileSync(resolve(outputDirectory, 'THIRD-PARTY-NOTICES.txt'), thirdPartyNotices() + luaNotices);
 console.log(`Web build ready: ${relative(process.cwd(), outputDirectory) || '.'} (${basename(wasmFile)}, ${profile}).`);
 
 /**
@@ -191,8 +209,19 @@ function cargoTargetDirectory() {
   return JSON.parse(result.stdout).target_directory;
 }
 
-function run(command, commandArguments) {
-  const result = spawnSync(command, commandArguments, {stdio: 'inherit'});
+/** Resolve only the selected package's dependencies; games without scripting do not need a WASI toolchain. */
+function usesGameScripts() {
+  const dependencyArguments = ['tree', '--manifest-path', manifestPath, '--package', options.package, '--target', WASM_TARGET,
+    '--edges', 'normal', '--prefix', 'none', '--format', '{p}'];
+  const result = spawnSync('cargo', dependencyArguments, {encoding: 'utf8', maxBuffer: 64*1024*1024});
+  if(result.error || result.status !== 0) {
+    fail(result.error?.message ?? result.stderr ?? 'cargo tree failed.');
+  }
+  return /^joy-game-script /m.test(result.stdout);
+}
+
+function run(command, commandArguments, environment = process.env) {
+  const result = spawnSync(command, commandArguments, {stdio: 'inherit', env: environment});
   if(result.error || result.status !== 0) {
     fail(result.error ? `${command}: ${result.error.message}` : `${command} exited with status ${result.status}.`);
   }

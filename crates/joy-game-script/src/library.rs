@@ -2,12 +2,12 @@
 // Licensed under the MIT License.
 
 //! A game's scripts as one library: every source by name, the hook scripts compiled from them, and the shared modules
-//! they `import`. Hosts add every source up front (from `GameAssets`), compile the scripts whose hooks they call, read
+//! they `require`. Hosts add every source up front (from `GameAssets`), compile the scripts whose hooks they call, read
 //! data constants into Rust records, and hand edited sources back for hot reload.
 //!
-//! Imports name other sources in the library (`import "data/parts" as parts;`), never files, so scripts stay sandboxed.
-//! A module's top level runs once when first imported and its `export const` values are shared by every importer;
-//! functions read them as `parts::NAME`, and a module's own functions read its constants as `global::NAME`.
+//! Imports name other sources in the library (`local parts = require("data/parts")`), never files, so scripts stay sandboxed.
+//! A module's top level runs once when first imported and its export values are shared by every importer;
+//! functions read them as `parts.NAME`, and a module's own functions read its constants as lexically captured locals.
 //!
 //! Hot reload follows imports: replacing a module recompiles it, every module that imports it, and every hook script
 //! that depends on any of them, and commits only if all of them compile. A broken edit changes nothing. Hosts' script
@@ -18,16 +18,14 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
-use rhai::Dynamic;
-use rhai::Engine;
-use rhai::EvalAltResult;
-use rhai::FuncArgs;
-use rhai::Module;
-use rhai::ModuleResolver;
-use rhai::Position;
-use rhai::Scope;
+use mlua::FromLua;
+use mlua::Function;
+use mlua::Lua;
+use mlua::Table;
+use mlua::Value;
 use serde::de::DeserializeOwned;
 
+use crate::IntoScriptArguments;
 use crate::convert::from_script_value;
 use crate::engine::ScriptEngine;
 use crate::error::ScriptError;
@@ -36,57 +34,66 @@ use crate::script::ScriptHook;
 use crate::script::ScriptState;
 
 /// Every source in a library and the modules compiled from them; shared with the engine's import resolver.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct ModuleTable {
     sources: BTreeMap<String, String>,
-    modules: BTreeMap<String, Rc<Module>>,
+    modules: BTreeMap<String, Table>,
     // name → the scripts and modules that imported it, for reload invalidation.
     importers: BTreeMap<String, BTreeSet<String>>,
     // Modules being compiled right now, outermost first, for cycle detection.
     loading: Vec<String>,
 }
 
-/// The engine's resolver for `import`: compiles library sources on first use and records who imported them.
-struct LibraryResolver {
-    table: Rc<RefCell<ModuleTable>>,
+/// Resolve an in-memory source. No borrow remains held while dependencies execute recursively.
+fn resolve(lua: &Lua, table: &Rc<RefCell<ModuleTable>>, importer: &str, name: &str) -> mlua::Result<Table> {
+    let source = {
+        let mut modules = table.borrow_mut();
+        modules.importers.entry(name.into()).or_default().insert(importer.into());
+        if let Some(module) = modules.modules.get(name) {
+            return Ok(module.clone());
+        }
+        if modules.loading.iter().any(|loading| loading == name) {
+            return Err(mlua::Error::runtime(format!("require cycle: {} → {name}", modules.loading.join(" → "))));
+        }
+        let source = modules
+            .sources
+            .get(name)
+            .cloned()
+            .ok_or_else(|| mlua::Error::runtime(format!("no script named `{name}`")))?;
+        modules.loading.push(name.into());
+        source
+    };
+    let result: mlua::Result<Table> = (|| {
+        crate::source::validate(&source)?;
+        let environment = crate::engine::environment(lua)?;
+        install_require(lua, &environment, name)?;
+        let module = lua
+            .load(&source)
+            .set_mode(mlua::chunk::ChunkMode::Text)
+            .set_name(name)
+            .set_environment(environment)
+            .eval::<Table>()?;
+        crate::frozen::freeze(lua, &module)?;
+        Ok(module)
+    })();
+    let mut modules = table.borrow_mut();
+    modules.loading.pop();
+    let module = result?;
+    modules.modules.insert(name.into(), module.clone());
+    Ok(module)
 }
 
-impl ModuleResolver for LibraryResolver {
-    fn resolve(
-        &self,
-        engine: &Engine,
-        importer: Option<&str>,
-        name: &str,
-        position: Position,
-    ) -> Result<Rc<Module>, Box<EvalAltResult>> {
-        // Record the edge first so a failed import still reloads its importer once the module is fixed.
-        let source = {
-            let mut table = self.table.borrow_mut();
-            if let Some(importer) = importer {
-                table.importers.entry(name.to_string()).or_default().insert(importer.to_string());
-            }
-            if let Some(module) = table.modules.get(name) {
-                return Ok(Rc::clone(module));
-            }
-            if table.loading.iter().any(|loading| loading == name) {
-                let cycle = format!("import cycle: {} → {name}", table.loading.join(" → "));
-                return Err(Box::new(EvalAltResult::ErrorRuntime(cycle.into(), position)));
-            }
-            let Some(source) = table.sources.get(name).cloned() else {
-                return Err(Box::new(EvalAltResult::ErrorModuleNotFound(name.to_string(), position)));
-            };
-            table.loading.push(name.to_string());
-            source
-        };
-
-        // No borrow is held while the module runs: its own imports re-enter this resolver.
-        let module = compile_module(engine, name, &source);
-        let mut table = self.table.borrow_mut();
-        table.loading.retain(|loading| loading != name);
-        let module = Rc::new(module?);
-        table.modules.insert(name.to_string(), Rc::clone(&module));
-        Ok(module)
+/// Bind each source's dependency name without exposing the internal resolver's importer argument to scripts.
+pub(crate) fn install_require(lua: &Lua, environment: &Table, importer: &str) -> mlua::Result<()> {
+    let resolver = lua.globals().raw_get::<Value>("__joy_require")?;
+    if let Value::Function(resolver) = resolver {
+        let importer = importer.to_string();
+        environment.raw_set(
+            "require",
+            lua.create_function(move |_, name: String| resolver.call::<Table>((name, importer.clone())))?,
+        )?;
     }
+    Ok(())
 }
 
 /// A game's scripts: sources by name, compiled hook scripts, and imported modules, on one [`ScriptEngine`].
@@ -99,11 +106,16 @@ pub struct ScriptLibrary {
 impl ScriptLibrary {
     /// A library on `engine` (with the host's bindings already registered). Installs the library's import resolver,
     /// replacing the engine's default of refusing every import.
-    pub fn new(mut engine: ScriptEngine) -> Self {
+    pub fn new(engine: ScriptEngine) -> Self {
         let table = Rc::new(RefCell::new(ModuleTable::default()));
-        engine.rhai_mut().set_module_resolver(LibraryResolver {
-            table: Rc::clone(&table),
-        });
+        let resolver_table = Rc::clone(&table);
+        let resolver = engine
+            .lua()
+            .create_function(move |lua, (name, importer): (String, String)| {
+                resolve(lua, &resolver_table, &importer, &name)
+            })
+            .expect("the library resolver is a valid host function");
+        engine.lua().globals().raw_set("__joy_require", resolver).expect("the engine owns its host globals");
         Self {
             engine,
             table,
@@ -175,34 +187,40 @@ impl ScriptLibrary {
         name: &str,
         hook: &str,
         state: &mut ScriptState,
-        arguments: impl FuncArgs,
-    ) -> Result<Dynamic, ScriptError> {
+        arguments: impl IntoScriptArguments,
+    ) -> Result<Value, ScriptError> {
         self.compiled(name)?.call(&self.engine, hook, state, arguments)
     }
 
     /// [`ScriptLibrary::call`], reading the return value as `T` (see [`Script::call_as`]).
-    pub fn call_as<T: Clone + 'static>(
+    pub fn call_as<T: crate::FromScriptValue>(
         &self,
         name: &str,
         hook: &str,
         state: &mut ScriptState,
-        arguments: impl FuncArgs,
+        arguments: impl IntoScriptArguments,
     ) -> Result<T, ScriptError> {
         self.compiled(name)?.call_as(&self.engine, hook, state, arguments)
     }
 
-    /// Read the `export const` named `constant` from module `name` as a host record (compiling the module on first
+    /// Read the export named `constant` from module `name` as a host record (compiling the module on first
     /// use). Hosts read authored data, such as a part catalog, this way; cache the result rather than calling per frame.
     pub fn constant<T: DeserializeOwned>(&self, name: &str, constant: &str) -> Result<T, ScriptError> {
         let module = self.module(name)?;
         let context = format!("{name} {constant}");
-        let Some(value) = module.get_var_value::<Dynamic>(constant) else {
+        let value = crate::frozen::backing(self.engine.lua(), &module)
+            .and_then(|table| table.raw_get::<Value>(constant))
+            .map_err(|error| ScriptError::Conversion {
+                context: context.clone(),
+                message: error.to_string(),
+            })?;
+        if value.is_nil() {
             return Err(ScriptError::Conversion {
                 context,
-                message: "no `export const` with this name".to_string(),
+                message: "no module export with this name".into(),
             });
-        };
-        from_script_value(&context, &value)
+        }
+        from_script_value(self.engine.lua(), &context, &value)
     }
 
     /// Hot reload: replace source `name`, then recompile every module and hook script that depends on it. If any
@@ -210,30 +228,36 @@ impl ScriptLibrary {
     /// scripts that were recompiled.
     pub fn replace_source(&mut self, name: &str, source: &str) -> Result<Vec<String>, ScriptError> {
         let affected = self.dependents_of(name);
-        let previous_source = self.source(name);
-        let previous_modules = {
+        let previous = self.table.borrow().clone();
+        {
             let mut table = self.table.borrow_mut();
-            let previous = table.modules.clone();
-            table.sources.insert(name.to_string(), source.to_string());
-            for module in &affected {
-                table.modules.remove(module);
+            table.sources.insert(name.into(), source.into());
+            // Candidate chunks must never call an accepted module's closures: even a frozen export table
+            // can contain functions with mutable lexical upvalues. Rebuild imports in a fresh module cache.
+            // Persistent gameplay state belongs to ScriptState, not module initialization or upvalues.
+            table.modules.clear();
+            for importers in table.importers.values_mut() {
+                importers.retain(|importer| !affected.contains(importer) && !previous.modules.contains_key(importer));
             }
-            previous
-        };
+        }
 
-        match self.recompile(&affected) {
+        let candidate = (|| {
+            let recompiled = self.recompile(&affected)?;
+            // Preserve lazy-cache membership and validate previously loaded modules even when no affected
+            // hook imports them. All candidate evaluation finishes before accepting any script revision.
+            for module in previous.modules.keys() {
+                self.module(module)?;
+            }
+            Ok(recompiled)
+        })();
+        match candidate {
             Ok(recompiled) => {
                 let names: Vec<String> = recompiled.keys().cloned().collect();
                 self.scripts.extend(recompiled);
                 Ok(names)
             }
             Err(error) => {
-                let mut table = self.table.borrow_mut();
-                match previous_source {
-                    Some(text) => table.sources.insert(name.to_string(), text),
-                    None => table.sources.remove(name),
-                };
-                table.modules = previous_modules;
+                *self.table.borrow_mut() = previous;
                 Err(error)
             }
         }
@@ -263,16 +287,16 @@ impl ScriptLibrary {
     }
 
     /// A compiled module, compiling it (and its imports) on first use.
-    fn module(&self, name: &str) -> Result<Rc<Module>, ScriptError> {
-        if let Some(module) = self.table.borrow().modules.get(name) {
-            return Ok(Rc::clone(module));
-        }
-        let resolver = LibraryResolver {
-            table: Rc::clone(&self.table),
-        };
-        resolver.resolve(self.engine.rhai(), None, name, Position::NONE).map_err(|error| {
-            ScriptError::from_runtime(name, "<top level>", self.engine.limits().operations_per_call, *error)
-        })
+    fn module(&self, name: &str) -> Result<Table, ScriptError> {
+        let resolver = self
+            .engine
+            .lua()
+            .globals()
+            .raw_get::<Function>("__joy_require")
+            .map_err(|error| ScriptError::from_compile(name, error))?;
+        let value =
+            self.engine.execute(resolver, (name, name)).map_err(|error| ScriptError::from_compile(name, error))?;
+        Table::from_lua(value, self.engine.lua()).map_err(|error| ScriptError::from_compile(name, error))
     }
 
     /// `name` and everything that imports it, directly or through other modules.
@@ -302,6 +326,12 @@ impl ScriptLibrary {
             };
             let sources = self.part_sources(name, script.parts().iter().cloned())?;
             recompiled.insert(name.clone(), script.recompiled(&self.engine, &sources)?);
+            let mut table = self.table.borrow_mut();
+            for part in script.parts() {
+                if part != name {
+                    table.importers.entry(part.clone()).or_default().insert(name.clone());
+                }
+            }
         }
         for name in affected {
             let part_of_a_script = self.scripts.values().any(|script| script.parts().iter().any(|part| part == name));
@@ -322,11 +352,4 @@ impl std::fmt::Debug for ScriptLibrary {
             .field("scripts", &self.scripts.keys().collect::<Vec<_>>())
             .finish_non_exhaustive()
     }
-}
-
-/// Compile a module source and run its top level into a shared module.
-fn compile_module(engine: &Engine, name: &str, source: &str) -> Result<Module, Box<EvalAltResult>> {
-    let mut parsed = engine.compile(source).map_err(|error| Box::new(EvalAltResult::from(error)))?;
-    parsed.set_source(name);
-    Module::eval_ast_as_new(Scope::new(), &parsed, engine)
 }

@@ -1,161 +1,180 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The sandboxed script language: one Rhai engine configured for deterministic, file-free gameplay code, plus the
-//! limits every hook call runs under. Hosts own one [`ScriptEngine`] per set of bindings and register their types on it
-//! before compiling scripts.
+//! A private Lua VM with deterministic bindings and bounded calls.
 
+use std::cell::Cell;
 use std::fmt;
 use std::rc::Rc;
 
-use rhai::Engine;
-use rhai::Module;
-use rhai::module_resolvers::DummyModuleResolver;
-use rhai::packages::BasicArrayPackage;
-use rhai::packages::BasicMapPackage;
-use rhai::packages::CorePackage;
-use rhai::packages::Package;
+use mlua::Function;
+use mlua::HookTriggers;
+use mlua::IntoLuaMulti;
+use mlua::Lua;
+use mlua::LuaOptions;
+use mlua::StdLib;
+use mlua::Table;
+use mlua::Value;
+use mlua::VmState;
 
+use crate::IntoScriptValue;
 use crate::standard_library;
 
-/// Operations one hook call may run before it stops (a `while true {}` stops in well under a millisecond).
-pub const DEFAULT_OPERATIONS_PER_CALL: u64 = 200_000;
+/// Lua VM instructions permitted per call, including nested imports and protected calls.
+/// Native library work and trusted host callbacks must bound their own execution time.
+pub const DEFAULT_INSTRUCTIONS_PER_CALL: u64 = 2_000_000;
+/// Total Lua allocation ceiling per engine, including all scripts, modules, and persistent object states.
+pub const DEFAULT_MEMORY_BYTES: usize = 64 * 1024 * 1024;
 
-/// Nested script function calls per hook call; matches FORM's call depth.
-pub const DEFAULT_CALL_DEPTH: usize = 32;
-
-/// Expression nesting at the top level and inside functions.
-pub const DEFAULT_EXPRESSION_DEPTH: usize = 64;
-
-/// Characters in one string, elements in one array, and entries in one object map.
-pub const DEFAULT_COLLECTION_SIZE: usize = 10_000;
-
-/// Execution limits applied to every hook call. A limit ends only the call that exceeded it, with a
-/// [`crate::ScriptError::Runtime`]; the script and its state remain usable.
+/// Lua execution and allocation limits. A failed call preserves mutations already made to object state.
+/// Lua enforces its own fixed parser and stack-depth limits; those limits are not configurable here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ScriptLimits {
-    /// Operations (roughly expressions and statements) one call may run; stops runaway loops.
-    pub operations_per_call: u64,
-    /// Nested script function calls, including recursion.
-    pub call_depth: usize,
-    /// Expression nesting depth.
-    pub expression_depth: usize,
-    /// Largest string, array, or object map a script may build; zero turns the check off. Rhai checks sizes by walking
-    /// the value being changed, so hosts whose scripts keep large nested state (a battle's units) turn it off and rely
-    /// on the operation budget, which already bounds how much a call can build.
-    pub collection_size: usize,
+    /// VM instructions per top-level evaluation or hook call; zero disables the instruction budget.
+    pub instructions_per_call: u64,
+    /// Total bytes allocated by this VM; zero disables the memory ceiling. Host Rust allocations are excluded.
+    pub memory_bytes: usize,
 }
 
 impl Default for ScriptLimits {
     fn default() -> Self {
         Self {
-            operations_per_call: DEFAULT_OPERATIONS_PER_CALL,
-            call_depth: DEFAULT_CALL_DEPTH,
-            expression_depth: DEFAULT_EXPRESSION_DEPTH,
-            collection_size: DEFAULT_COLLECTION_SIZE,
+            instructions_per_call: DEFAULT_INSTRUCTIONS_PER_CALL,
+            memory_bytes: DEFAULT_MEMORY_BYTES,
         }
     }
 }
 
-/// The game script language: Rhai's core language with the engine's portable standard library and no access to files,
-/// modules, or the clock. Registered host types and functions are shared by every [`crate::Script`] compiled for this
-/// engine; register them before calling hooks that use them.
+/// One engine owns one Lua VM. Register host bindings through [`Self::lua`] before compiling scripts.
+/// Scripts execute in independent environments and cannot access files, clocks, dynamic source loaders, or coroutines.
 pub struct ScriptEngine {
-    engine: Engine,
+    lua: Lua,
     limits: ScriptLimits,
+    budget: Rc<ExecutionBudget>,
+}
+
+#[derive(Default)]
+struct ExecutionBudget {
+    remaining: Cell<u64>,
+    active: Cell<bool>,
+    exhausted: Cell<bool>,
 }
 
 impl ScriptEngine {
-    /// A sandboxed engine with the standard library (`vec3`, deterministic math, and [`crate::ScriptRandom`]) and
-    /// `limits` applied to every call. `print` and `debug` go to the `log` facade at info and debug levels.
+    /// Construct the sandbox and portable standard library. Invalid authored programs fail when compiled or called.
+    /// `memory_bytes` is applied after the VM's fixed standard-library setup.
     pub fn new(limits: ScriptLimits) -> Self {
-        let mut engine = Engine::new_raw();
-
-        // Language core: operators, strings, iteration, function pointers, arrays, and object maps. Rhai's math and
-        // time packages are left out on purpose: their transcendental functions call the platform's `f64` methods,
-        // which differ between native and WebAssembly builds, and the clock would make replays diverge.
-        engine.register_global_module(CorePackage::new().as_shared_module());
-        engine.register_global_module(BasicArrayPackage::new().as_shared_module());
-        engine.register_global_module(BasicMapPackage::new().as_shared_module());
-        standard_library::register(&mut engine);
-
-        // Registered operators must win over Rhai's built-ins, whose float comparisons are approximate (see
-        // `standard_library::register_exact_comparisons`). Arithmetic still uses the built-ins, which are exact.
-        engine.set_fast_operators(false);
-
-        // Sandbox: no `import` of other files, and floating-point `**` (the platform `powf`) is replaced by `powf()`.
-        engine.set_module_resolver(DummyModuleResolver::new());
-        engine.disable_symbol("**");
-
-        // Reading a state field that was never set is an error rather than a silent `()`, so typos surface at once.
-        engine.set_fail_on_invalid_map_property(true);
-
-        engine.on_print(|text| log::info!("[script] {text}"));
-        engine.on_debug(|text, source, position| {
-            log::debug!("[script] {} {position}: {text}", source.unwrap_or("<script>"));
-        });
-
-        let mut script_engine = Self {
-            engine,
+        let lua = Lua::new_with(StdLib::TABLE | StdLib::STRING | StdLib::MATH | StdLib::UTF8, LuaOptions::default())
+            .expect("the selected Lua standard libraries are safe");
+        crate::frozen::register(&lua).expect("readonly table support is valid");
+        standard_library::register(&lua).expect("engine standard library registration succeeds");
+        let budget = Rc::new(ExecutionBudget::default());
+        let observed = Rc::clone(&budget);
+        lua.set_global_hook(HookTriggers::new().every_nth_instruction(1), move |_, _| {
+            if !observed.active.get() {
+                return Ok(VmState::Continue);
+            }
+            let remaining = observed.remaining.get();
+            if remaining == 0 {
+                observed.exhausted.set(true);
+                return Err(mlua::Error::runtime("exceeded the instruction budget"));
+            }
+            observed.remaining.set(remaining - 1);
+            Ok(VmState::Continue)
+        })
+        .expect("Lua supports count hooks");
+        let protected_budget = Rc::clone(&budget);
+        let check_budget = lua
+            .create_function(move |_, ()| {
+                if protected_budget.exhausted.get() {
+                    return Err(mlua::Error::runtime("exceeded the instruction budget"));
+                }
+                Ok(())
+            })
+            .expect("the budget guard is a valid host callback");
+        lua.load(include_str!("protected_calls.lua"))
+            .set_name("joy/protected_calls.lua")
+            .call::<()>(check_budget)
+            .expect("protected calls preserve the execution budget");
+        lua.set_memory_limit(limits.memory_bytes).expect("Lua supports allocation ceilings");
+        Self {
+            lua,
             limits,
-        };
-        script_engine.set_limits(limits);
-        script_engine
+            budget,
+        }
     }
 
-    /// The limits every call runs under.
+    /// The limits subsequent script calls use.
     pub fn limits(&self) -> ScriptLimits {
         self.limits
     }
 
-    /// Replace the limits for later calls.
+    /// Replace limits for subsequent calls. Lowering memory below current usage rejects further allocations
+    /// until garbage collection or state cleanup brings usage below the new ceiling.
     pub fn set_limits(&mut self, limits: ScriptLimits) {
+        self.lua.set_memory_limit(limits.memory_bytes).expect("Lua supports allocation ceilings");
         self.limits = limits;
-        self.engine.set_max_operations(limits.operations_per_call);
-        self.engine.set_max_call_levels(limits.call_depth);
-        self.engine.set_max_expr_depths(limits.expression_depth, limits.expression_depth);
-        self.engine.set_max_string_size(limits.collection_size);
-        self.engine.set_max_array_size(limits.collection_size);
-        self.engine.set_max_map_size(limits.collection_size);
     }
 
-    /// The underlying Rhai engine, for compiling and calling (crate use) and inspection.
-    pub fn rhai(&self) -> &Engine {
-        &self.engine
+    /// Host access to this VM for binding userdata, globals, and serde values. Host code is trusted: executing
+    /// source directly through this handle bypasses the engine's hook budget and private environments.
+    pub fn lua(&self) -> &Lua {
+        &self.lua
     }
 
-    /// The underlying Rhai engine, for registering host types (`register_type_with_name`, `register_get`) and functions
-    /// (`register_fn`). Registering is the intended use; changing the sandbox or limits here bypasses
-    /// [`ScriptEngine::set_limits`].
-    pub fn rhai_mut(&mut self) -> &mut Engine {
-        &mut self.engine
-    }
-
-    /// Register a host enumeration as script type `type_name`: each variant becomes a constant read as
-    /// `TypeName::Variant`, values compare with `==` and `!=`, and `to_string` returns the variant's script name.
-    /// Variant names are the script spellings, independent of any serialized spelling the host uses.
-    pub fn register_enum<T>(&mut self, type_name: &str, variants: &[(&str, T)]) -> &mut Self
-    where
-        T: Clone + PartialEq + fmt::Debug + 'static,
-    {
-        let names: Rc<Vec<(String, T)>> =
-            Rc::new(variants.iter().map(|(name, value)| ((*name).to_string(), value.clone())).collect());
-
-        let mut module = Module::new();
-        for (name, value) in names.iter() {
-            module.set_var(name.as_str(), value.clone());
+    /// Expose named host values as a readonly enumeration table (`TypeName.Variant`). Register userdata's
+    /// equality and string conversion through its `UserData` implementation when using userdata variants.
+    pub fn register_enum<T: Clone + IntoScriptValue>(
+        &mut self,
+        type_name: &str,
+        variants: &[(&str, T)],
+    ) -> mlua::Result<&mut Self> {
+        let values = self.lua.create_table()?;
+        for (name, value) in variants {
+            values.set(*name, crate::arguments::value(&self.lua, value.clone())?)?;
         }
+        crate::frozen::freeze(&self.lua, &values)?;
+        self.lua.globals().set(type_name, values)?;
+        Ok(self)
+    }
 
-        let display_names = Rc::clone(&names);
-        let debug_names = Rc::clone(&names);
-        self.engine
-            .register_type_with_name::<T>(type_name)
-            .register_fn("==", |left: &mut T, right: T| *left == right)
-            .register_fn("!=", |left: &mut T, right: T| *left != right)
-            .register_fn("to_string", move |value: &mut T| variant_name(&display_names, value))
-            .register_fn("to_debug", move |value: &mut T| variant_name(&debug_names, value));
-        self.engine.register_static_module(type_name, module.into());
-        self
+    /// Run on a fresh coroutine, sharing an outer budget when imports evaluate nested chunks.
+    pub(crate) fn execute(&self, function: Function, arguments: impl IntoLuaMulti) -> mlua::Result<Value> {
+        if function.weak_lua() != &self.lua.weak() {
+            return Err(mlua::Error::runtime("script belongs to another Lua VM"));
+        }
+        let outer = self.budget.active.get();
+        if !outer {
+            self.budget.remaining.set(self.limits.instructions_per_call);
+            self.budget.exhausted.set(false);
+            self.budget.active.set(self.limits.instructions_per_call != 0);
+        }
+        let _guard = BudgetGuard {
+            budget: &self.budget,
+            outer,
+        };
+        let thread = self.lua.create_thread(function.clone())?;
+        let result = thread.resume::<Value>(arguments);
+        let stopped = self.budget.exhausted.get() || thread.is_resumable();
+        if result.is_err() || stopped {
+            // Dropping an errored Lua 5.4 coroutine does not close its pending <close> locals. Reset it
+            // while the original budget and any host loans are still active. Cleanup shares the remaining
+            // quota; its failures must not replace the original runtime error or its traceback.
+            let _ = thread.reset(function);
+        }
+        if stopped {
+            return Err(mlua::Error::runtime(format!(
+                "exceeded the instruction budget of {} per call",
+                self.limits.instructions_per_call
+            )));
+        }
+        result
+    }
+
+    /// An independent global namespace inheriting the current host bindings. Standard libraries and host
+    /// enumeration tables are readonly, so scripts cannot change another script's bindings through them.
+    pub(crate) fn environment(&self) -> mlua::Result<Table> {
+        environment(&self.lua)
     }
 }
 
@@ -164,17 +183,46 @@ impl Default for ScriptEngine {
         Self::new(ScriptLimits::default())
     }
 }
-
 impl fmt::Debug for ScriptEngine {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.debug_struct("ScriptEngine").field("limits", &self.limits).finish_non_exhaustive()
     }
 }
 
-/// The registered script name of an enumeration value, or its Rust debug spelling for an unregistered variant.
-fn variant_name<T: PartialEq + fmt::Debug>(names: &[(String, T)], value: &T) -> String {
-    match names.iter().find(|(_, variant)| variant == value) {
-        Some((name, _)) => name.clone(),
-        None => format!("{value:?}"),
+pub(crate) fn environment(lua: &Lua) -> mlua::Result<Table> {
+    let environment = lua.create_table()?;
+    let bindings = lua.create_table()?;
+    for pair in lua.globals().pairs::<Value, Value>() {
+        let (key, value) = pair?;
+        if key.as_string().is_some_and(|name| name.as_bytes().as_ref() == b"__joy_require") {
+            continue;
+        }
+        bindings.raw_set(key, value)?;
+    }
+
+    let metatable = lua.create_table()?;
+    metatable.raw_set("__index", bindings)?;
+    metatable.raw_set("__metatable", false)?;
+
+    environment.set_metatable(Some(metatable))?;
+    environment.raw_set("_G", environment.clone())?;
+    Ok(environment)
+}
+
+pub(crate) fn ensure_owner(lua: &Lua, value: &Value) -> mlua::Result<()> {
+    if value.weak_lua().is_some_and(|owner| owner != &lua.weak()) {
+        return Err(mlua::Error::runtime("value belongs to another Lua VM"));
+    }
+    Ok(())
+}
+
+/// A trusted host callback can unwind; the next independent call must still start a fresh budget.
+struct BudgetGuard<'a> {
+    budget: &'a ExecutionBudget,
+    outer: bool,
+}
+impl Drop for BudgetGuard<'_> {
+    fn drop(&mut self) {
+        self.budget.active.set(self.outer);
     }
 }

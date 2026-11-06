@@ -1,45 +1,31 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Compiled scripts, the hooks hosts call on them, and the per-object state those hooks keep.
-//!
-//! A script's top level runs once, at compile time, and may only declare what its functions share: `const` values,
-//! read inside functions as `global::NAME`. Hooks are ordinary script functions; the host calls one with an object's
-//! [`ScriptState`] bound as `this`, so `this.timer -= elapsed_seconds` persists between calls. Script parameters are
-//! copies; helpers called as methods (`this.update_awareness(…)`) share the caller's `this`.
-//!
-//! Hot reload replaces a script's compiled program in place. States are separate values, so every object keeps its
-//! fields through a reload; a source that fails to compile, or lacks a required hook, leaves the previous program
-//! running.
+//! Compiled hook functions and independently owned persistent state.
 
-use rhai::AST;
-use rhai::CallFnOptions;
-use rhai::Dynamic;
-use rhai::FuncArgs;
-use rhai::Map;
-use rhai::Module;
-use rhai::Scope;
+use mlua::Function;
+use mlua::Lua;
+use mlua::Table;
+use mlua::Value;
 
-use crate::engine::ScriptEngine;
-use crate::error::ScriptError;
+use crate::ScriptEngine;
+use crate::ScriptError;
+use crate::engine::ensure_owner;
+use crate::{
+    IntoScriptArguments,
+    IntoScriptValue,
+};
 
-/// Call-stack name used for failures while a script's top level defines its constants.
-const TOP_LEVEL: &str = "<top level>";
-
-/// Prefix of the generated function that forwards a host call to each hook (see [`dispatcher_source`]).
-pub(crate) const DISPATCH_PREFIX: &str = "__joy_hook_";
-
-/// A function a host calls on a script, by name and parameter count (`this` is not a parameter).
+/// A host-called function. Its Lua signature begins with explicit `this`, followed by `arity` arguments.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ScriptHook {
-    /// The script function's name.
+    /// Function name in the script's private environment.
     pub name: &'static str,
-    /// Its parameter count.
+    /// Number of host arguments, excluding the leading `this` parameter.
     pub arity: usize,
 }
-
 impl ScriptHook {
-    /// A hook named `name` taking `arity` parameters.
+    /// Declare one required hook.
     pub const fn new(name: &'static str, arity: usize) -> Self {
         Self {
             name,
@@ -48,283 +34,255 @@ impl ScriptHook {
     }
 }
 
-/// One scripted object's state: the object map its hooks see as `this`. Owned by the host object, not the script, so
-/// it survives hot reloads; dropping it releases everything the script stored.
+/// One object's state, allocated lazily on its first call or [`Self::set`]. Once bound it belongs to that VM.
+/// Cloning shares its table, matching Lua reference semantics. States and their VM remain alive while held by Rust.
 #[derive(Clone, Debug)]
 pub struct ScriptState {
-    value: Dynamic,
+    value: Value,
+    lua: Option<Lua>,
 }
-
 impl ScriptState {
-    /// An empty state; hooks (usually an `init` hook) add their fields.
+    /// An empty state that has not yet been attached to a VM.
     pub fn new() -> Self {
         Self {
-            value: Dynamic::from_map(Map::new()),
+            value: Value::Nil,
+            lua: None,
         }
     }
-
-    /// A field's value, or `None` when the script has not set it.
-    pub fn get(&self, field: &str) -> Option<Dynamic> {
-        self.value.read_lock::<Map>().and_then(|map| map.get(field).cloned())
+    /// A field handle, or `None` for an unset field. Tables and userdata retain reference identity.
+    pub fn get(&self, field: &str) -> Option<Value> {
+        let Value::Table(table) = &self.value else {
+            return None;
+        };
+        let value = table.raw_get::<Value>(field).ok()?;
+        (!value.is_nil()).then_some(value)
     }
-
-    /// A field's value as `T`, or `None` when it is unset or holds another type.
-    pub fn get_as<T: Clone + 'static>(&self, field: &str) -> Option<T> {
-        self.get(field).and_then(|value| value.try_cast::<T>())
+    /// A field as `T`, or `None` if missing or not convertible to `T`.
+    pub fn get_as<T: crate::FromScriptValue>(&self, field: &str) -> Option<T> {
+        crate::results::value(self.lua.as_ref()?, self.get(field)?).ok()
     }
-
-    /// Set a field, replacing any previous value.
-    pub fn set(&mut self, field: &str, value: impl Clone + 'static) {
-        if let Some(mut map) = self.value.write_lock::<Map>() {
-            map.insert(field.into(), Dynamic::from(value));
-        }
+    /// Set a field, binding a new state to `lua` if needed. Values from another VM are rejected.
+    pub fn set(&mut self, lua: &Lua, field: &str, value: impl IntoScriptValue) -> mlua::Result<()> {
+        let value = crate::arguments::value(lua, value)?;
+        ensure_owner(lua, &value)?;
+        self.bind(lua)?.raw_set(field, value)
     }
-
-    /// A state holding an existing object map (or any value a script returned for use as `this`).
-    pub fn from_value(value: Dynamic) -> Self {
-        Self {
+    /// Adopt an existing table as object state. Other value types and expired VM handles are errors.
+    pub fn from_value(value: Value) -> mlua::Result<Self> {
+        let Value::Table(table) = &value else {
+            return Err(mlua::Error::runtime("script state must be a table"));
+        };
+        let lua = table.weak_lua().try_upgrade().ok_or_else(|| mlua::Error::runtime("script state VM has expired"))?;
+        Ok(Self {
             value,
-        }
+            lua: Some(lua),
+        })
     }
-
-    /// The state's value, for converting with [`crate::from_script_value`].
-    pub fn value(&self) -> &Dynamic {
+    /// The table value, or `Nil` before the first binding, for [`crate::from_script_value`].
+    pub fn value(&self) -> &Value {
         &self.value
     }
-
-    /// Read a field in place, without copying it out of the state; `None` when the field is unset. Hosts use this to
-    /// read large script-owned collections (a battle's units) every step without cloning them.
-    pub fn with_field<R>(&self, field: &str, read: impl FnOnce(&Dynamic) -> R) -> Option<R> {
-        let map = self.value.read_lock::<Map>()?;
-        map.get(field).map(read)
+    /// Read a field handle without copying the collection it references.
+    pub fn with_field<R>(&self, field: &str, read: impl FnOnce(&Value) -> R) -> Option<R> {
+        self.get(field).as_ref().map(read)
     }
-
-    /// Change a field in place (a host edit to a script-owned record); does nothing when the field is unset.
-    pub fn edit_field(&mut self, field: &str, edit: impl FnOnce(&mut Dynamic)) {
-        if let Some(mut map) = self.value.write_lock::<Map>()
-            && let Some(value) = map.get_mut(field)
-        {
-            edit(value);
+    /// Edit an existing field and write its replacement back. An absent field is unchanged.
+    pub fn edit_field(&mut self, field: &str, edit: impl FnOnce(&mut Value)) -> mlua::Result<()> {
+        if let Some(mut value) = self.get(field) {
+            edit(&mut value);
+            let lua = self.lua.as_ref().expect("a table state owns its VM").clone();
+            self.set(&lua, field, value)?;
+        }
+        Ok(())
+    }
+    /// Number of fields in the state table.
+    pub fn len(&self) -> usize {
+        match &self.value {
+            Value::Table(table) => table.pairs::<Value, Value>().count(),
+            _ => 0,
         }
     }
-
-    /// How many fields the state holds.
-    pub fn len(&self) -> usize {
-        self.value.read_lock::<Map>().map_or(0, |map| map.len())
-    }
-
-    /// Whether the state holds no fields.
+    /// Whether the table has no fields.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+    pub(crate) fn bind(&mut self, lua: &Lua) -> mlua::Result<Table> {
+        ensure_owner(lua, &self.value)?;
+        if let Value::Table(table) = &self.value {
+            return Ok(table.clone());
+        }
+        let table = lua.create_table()?;
+        self.value = Value::Table(table.clone());
+        self.lua = Some(lua.clone());
+        Ok(table)
+    }
 }
-
 impl Default for ScriptState {
     fn default() -> Self {
         Self::new()
     }
 }
 
-/// A compiled script with the hooks its host requires. Compiled against one [`ScriptEngine`]; call it with the same
-/// engine, whose registered host functions it uses.
+/// Hook functions compiled together in a private environment. The originating VM must also be used for calls.
 #[derive(Clone, Debug)]
 pub struct Script {
     path: String,
-    // Source names whose functions make up the script; one, the path itself, unless compiled from parts.
     parts: Vec<String>,
-    hooks: Vec<HookEntry>,
-    program: AST,
+    hooks: Vec<ScriptHook>,
+    environment: Table,
     revision: u64,
+    // Keep the VM alive after its function handles and environment are released.
+    lua: Lua,
 }
-
-/// A declared hook and the generated dispatcher the host calls for it.
-#[derive(Clone, Debug)]
-struct HookEntry {
-    hook: ScriptHook,
-    dispatcher: String,
-}
-
 impl Script {
-    /// Compile `source`, run its top level once, and check that it defines every hook in `hooks`. `path` names the
-    /// script in errors and `print`/`debug` output (a project-relative path such as `assets/scripts/ai.rhai`).
+    /// Compile source, evaluate its declarations once, and validate every required hook, including its arity.
     pub fn compile(engine: &ScriptEngine, path: &str, source: &str, hooks: &[ScriptHook]) -> Result<Self, ScriptError> {
         Self::compile_parts(engine, path, &[(path, source)], hooks)
     }
-
-    /// Compile one script from several sources (`(name, source)` pairs): each part runs its own top level, with its
-    /// own constants and imports, and all their functions join one namespace, so a function in one part can call
-    /// another part's functions directly or as methods (`this.units[i].advance(...)`), which `import` does not allow.
-    /// `path` names the script; errors name the part that failed. Hooks may live in any part.
+    /// Compile sources into one private global namespace. Global function declarations are shared across parts;
+    /// each part's locals stay lexical to that part. Hooks take explicit `this` as their first parameter.
     pub fn compile_parts(
         engine: &ScriptEngine,
         path: &str,
         parts: &[(&str, &str)],
         hooks: &[ScriptHook],
     ) -> Result<Self, ScriptError> {
-        let hooks: Vec<HookEntry> = hooks
-            .iter()
-            .map(|hook| HookEntry {
-                hook: *hook,
-                dispatcher: format!("{DISPATCH_PREFIX}{}", hook.name),
-            })
-            .collect();
-        let program = prepare(engine, path, parts, &hooks)?;
+        let environment = prepare(engine, path, parts, hooks)?;
         Ok(Self {
-            path: path.to_string(),
-            parts: parts.iter().map(|(name, _)| (*name).to_string()).collect(),
-            hooks,
-            program,
+            path: path.into(),
+            parts: parts.iter().map(|(name, _)| (*name).into()).collect(),
+            hooks: hooks.to_vec(),
+            environment,
             revision: 0,
+            lua: engine.lua().clone(),
         })
     }
-
-    /// Hot reload: compile `source` with the same path and hooks and, if that succeeds, replace the program and
-    /// advance [`Script::revision`]. On failure the previous program keeps running and the error is returned.
+    /// Replace this script only after the new source and all required hooks validate. Object states are untouched.
     pub fn replace_source(&mut self, engine: &ScriptEngine, source: &str) -> Result<(), ScriptError> {
-        self.program = prepare(engine, &self.path, &[(self.path.as_str(), source)], &self.hooks)?;
+        self.check_engine(engine)?;
+        self.environment = prepare(engine, &self.path, &[(self.path.as_str(), source)], &self.hooks)?;
         self.revision += 1;
         Ok(())
     }
-
-    /// This script recompiled from its parts' current `sources` (in [`Script::parts`] order) with the same path and
-    /// hooks, one revision later; `self` is unchanged. [`crate::ScriptLibrary`] uses it to recompile a script and its
-    /// dependents before committing any of them.
     pub(crate) fn recompiled(&self, engine: &ScriptEngine, sources: &[String]) -> Result<Self, ScriptError> {
-        let parts: Vec<(&str, &str)> =
-            self.parts.iter().map(String::as_str).zip(sources.iter().map(String::as_str)).collect();
-        Ok(Self {
-            path: self.path.clone(),
-            parts: self.parts.clone(),
-            hooks: self.hooks.clone(),
-            program: prepare(engine, &self.path, &parts, &self.hooks)?,
-            revision: self.revision + 1,
-        })
+        let parts: Vec<_> = self.parts.iter().map(String::as_str).zip(sources.iter().map(String::as_str)).collect();
+        let mut next = Self::compile_parts(engine, &self.path, &parts, &self.hooks)?;
+        next.revision = self.revision + 1;
+        Ok(next)
     }
-
-    /// The source names the script was compiled from.
+    /// Source names used to compile this script, in evaluation order.
     pub fn parts(&self) -> &[String] {
         &self.parts
     }
-
-    /// The script's path.
+    /// Diagnostic path supplied by the host.
     pub fn path(&self) -> &str {
         &self.path
     }
-
-    /// The hooks every revision must define.
+    /// Hooks required by every accepted revision.
     pub fn hooks(&self) -> impl Iterator<Item = ScriptHook> + '_ {
-        self.hooks.iter().map(|entry| entry.hook)
+        self.hooks.iter().copied()
     }
-
-    /// Zero when compiled, plus one per accepted [`Script::replace_source`].
+    /// Number of accepted replacements since initial compilation.
     pub fn revision(&self) -> u64 {
         self.revision
     }
-
-    /// Call `hook` with `state` bound as `this` and `arguments` as its parameters (a tuple; values are copied into the
-    /// script). Returns what the hook returned, or `()` if it returned nothing. Only hooks declared at compile time can
-    /// be called. A failure, including an exceeded limit, ends only this call; changes the hook made to `state` before
-    /// failing are kept.
+    /// Call a declared hook. Tables and userdata are references, scalars are values; state mutations before an
+    /// error are preserved. Arguments and state must belong to this engine's VM. No return value becomes `Nil`.
     pub fn call(
         &self,
         engine: &ScriptEngine,
         hook: &str,
         state: &mut ScriptState,
-        arguments: impl FuncArgs,
-    ) -> Result<Dynamic, ScriptError> {
-        let Some(entry) = self.hooks.iter().find(|entry| entry.hook.name == hook) else {
+        arguments: impl IntoScriptArguments,
+    ) -> Result<Value, ScriptError> {
+        self.check_engine(engine)?;
+        let Some(entry) = self.hooks.iter().find(|entry| entry.name == hook) else {
             return Err(ScriptError::UndeclaredHook {
                 path: self.path.clone(),
-                name: hook.to_string(),
+                name: hook.into(),
             });
         };
-
-        // Constants were captured when the top level ran at compile time; never rerun it per call.
-        let options = CallFnOptions::new().eval_ast(false).rewind_scope(true).bind_this_ptr(&mut state.value);
-        let mut scope = Scope::new();
-        engine
-            .rhai()
-            .call_fn_with_options::<Dynamic>(options, &mut scope, &self.program, &entry.dispatcher, arguments)
-            .map_err(|error| ScriptError::from_runtime(&self.path, hook, engine.limits().operations_per_call, *error))
+        let call = || -> mlua::Result<Value> {
+            let mut arguments = arguments.into_script_arguments(engine.lua())?;
+            if arguments.len() != entry.arity {
+                return Err(mlua::Error::runtime(format!(
+                    "hook `{hook}` expects {} host arguments, received {}",
+                    entry.arity,
+                    arguments.len()
+                )));
+            }
+            for argument in &arguments {
+                ensure_owner(engine.lua(), argument)?;
+            }
+            arguments.push_front(Value::Table(state.bind(engine.lua())?));
+            let function = self.environment.raw_get::<Function>(hook)?;
+            engine.execute(function, arguments)
+        };
+        call().map_err(|error| ScriptError::from_runtime(&self.path, hook, error))
     }
-
-    /// [`Script::call`], reading the hook's return value as `T`; a [`ScriptError::ReturnType`] for any other type.
-    pub fn call_as<T: Clone + 'static>(
+    /// Call a hook and read its result as `T`, reporting a typed return-value mismatch.
+    pub fn call_as<T: crate::FromScriptValue>(
         &self,
         engine: &ScriptEngine,
         hook: &str,
         state: &mut ScriptState,
-        arguments: impl FuncArgs,
+        arguments: impl IntoScriptArguments,
     ) -> Result<T, ScriptError> {
         let value = self.call(engine, hook, state, arguments)?;
         let found = value.type_name().to_string();
-        value.try_cast::<T>().ok_or_else(|| ScriptError::ReturnType {
+        let mismatch = || ScriptError::ReturnType {
             path: self.path.clone(),
-            hook: hook.to_string(),
-            expected: engine.rhai().map_type_name(std::any::type_name::<T>()).to_string(),
-            found: engine.rhai().map_type_name(&found).to_string(),
-        })
+            hook: hook.into(),
+            expected: std::any::type_name::<T>().into(),
+            found: found.clone(),
+        };
+        crate::results::value(engine.lua(), value).map_err(|_| mismatch())
+    }
+
+    fn check_engine(&self, engine: &ScriptEngine) -> Result<(), ScriptError> {
+        if self.lua.weak() != engine.lua().weak() {
+            return Err(ScriptError::Conversion {
+                context: self.path.clone(),
+                message: "script belongs to another Lua VM".into(),
+            });
+        }
+        Ok(())
     }
 }
 
-/// Parse each part, run its top level into an encapsulated module (its constants become its functions' `global::`
-/// namespace), merge the parts' functions, check the required hooks, and add their dispatchers.
-fn prepare(engine: &ScriptEngine, path: &str, parts: &[(&str, &str)], hooks: &[HookEntry]) -> Result<AST, ScriptError> {
-    let mut program = AST::empty();
+fn prepare(
+    engine: &ScriptEngine,
+    path: &str,
+    parts: &[(&str, &str)],
+    hooks: &[ScriptHook],
+) -> Result<Table, ScriptError> {
+    let environment = engine.environment().map_err(|error| ScriptError::from_compile(path, error))?;
     for (name, source) in parts {
-        program = program.merge(&prepare_part(engine, name, source)?);
+        crate::library::install_require(engine.lua(), &environment, name)
+            .map_err(|error| ScriptError::from_compile(name, error))?;
+        crate::source::validate(source).map_err(|error| ScriptError::from_compile(name, error))?;
+        let function = engine
+            .lua()
+            .load(*source)
+            .set_mode(mlua::chunk::ChunkMode::Text)
+            .set_name(*name)
+            .set_environment(environment.clone())
+            .into_function()
+            .map_err(|error| ScriptError::from_compile(name, error))?;
+        engine.execute(function, ()).map_err(|error| ScriptError::from_compile(name, error))?;
     }
-    program.set_source(path);
-
-    for entry in hooks {
-        let hook = entry.hook;
-        let defined =
-            program.iter_functions().any(|function| function.name == hook.name && function.params.len() == hook.arity);
-        if !defined {
+    for hook in hooks {
+        let valid = environment.raw_get::<Function>(hook.name).is_ok_and(|function| {
+            let info = function.info();
+            info.what == "Lua" && usize::from(info.num_params) == hook.arity + 1 && !info.is_vararg
+        });
+        if !valid {
             return Err(ScriptError::MissingHook {
-                path: path.to_string(),
-                name: hook.name.to_string(),
+                path: path.into(),
+                name: hook.name.into(),
                 arity: hook.arity,
             });
         }
     }
-
-    let dispatchers: String = hooks.iter().map(dispatcher_source).collect();
-    let dispatchers = engine.rhai().compile(&dispatchers).map_err(|error| ScriptError::from_parse(path, error))?;
-    Ok(program.merge(&dispatchers))
-}
-
-/// One part's functions, with its top level run and its constants captured.
-fn prepare_part(engine: &ScriptEngine, name: &str, source: &str) -> Result<AST, ScriptError> {
-    let mut parsed = engine.rhai().compile(source).map_err(|error| ScriptError::from_parse(name, error))?;
-    parsed.set_source(name);
-
-    let module =
-        Module::eval_ast_as_new(Scope::new(), &parsed, engine.rhai()).map_err(
-            |error| match ScriptError::from_runtime(name, TOP_LEVEL, engine.limits().operations_per_call, *error) {
-                ScriptError::Runtime {
-                    location,
-                    message,
-                    ..
-                } => ScriptError::Compile {
-                    location,
-                    message,
-                },
-                other => other,
-            },
-        )?;
-    let mut program = AST::new_from_module(module);
-    program.set_source(name);
-    Ok(program)
-}
-
-/// `fn __joy_hook_tick(argument_0) { this.tick(argument_0) }`: a forwarding function for one hook.
-///
-/// Rhai runs a function called directly from Rust without the environment its module captured, so a hook reading
-/// `global::NAME` would fail; a function called from script keeps it. Each host call therefore enters through a
-/// generated dispatcher that calls the hook as a method, sharing `this`.
-fn dispatcher_source(entry: &HookEntry) -> String {
-    let parameters: Vec<String> = (0..entry.hook.arity).map(|index| format!("argument_{index}")).collect();
-    let parameters = parameters.join(", ");
-    format!("fn {}({parameters}) {{ this.{}({parameters}) }}\n", entry.dispatcher, entry.hook.name)
+    Ok(environment)
 }

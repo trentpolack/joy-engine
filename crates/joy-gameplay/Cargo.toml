@@ -19,13 +19,16 @@ publish = false
 
 [dependencies]
 joy-core.workspace = true
-joy-game-script.workspace = true
+joy-game-script = { workspace = true, optional = true }
 log.workspace = true
 joy-physics.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 indexmap.workspace = true
 thiserror.workspace = true
+
+[features]
+game-script = ["dep:joy-game-script"]
 
 [dev-dependencies]
 joy-test-support.workspace = true

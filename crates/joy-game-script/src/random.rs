@@ -13,9 +13,6 @@ use joy_core::random_range;
 use crate::loan::ScriptLoan;
 use crate::loan::ScriptResult;
 
-/// Script type name of [`ScriptRandom`].
-pub const RANDOM_TYPE_NAME: &str = "Random";
-
 /// A script handle to a host random stream. Pass it to hooks as an argument; draws advance the lent stream.
 #[derive(Clone, Debug)]
 pub struct ScriptRandom {
@@ -63,5 +60,12 @@ impl ScriptRandom {
 impl Default for ScriptRandom {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl mlua::UserData for ScriptRandom {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("next_unit", |_, random, ()| random.next_unit());
+        methods.add_method("range", |_, random, (minimum, maximum): (f64, f64)| random.range(minimum, maximum));
     }
 }

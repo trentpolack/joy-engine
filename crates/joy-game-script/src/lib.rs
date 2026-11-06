@@ -1,69 +1,52 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Game scripts: gameplay code written in [Rhai](https://rhai.rs) that hosts compile at run time, so native
-//! development builds can hot reload behavior without rebuilding the game. Renderer-free and headless; the same scripts
-//! run natively and in WebAssembly.
+//! Sandboxed Lua gameplay rules, portable math, persistent object state, and atomic hot reload.
 //!
-//! Data flow: a host builds one [`ScriptEngine`] (the sandboxed language plus the engine's standard library), registers
-//! its own types and functions on it, and compiles authored source into a [`Script`] that must declare the
-//! [`ScriptHook`]s the host calls. Each scripted object owns a [`ScriptState`], the object map its hooks see as
-//! `this`, so state survives between calls and across hot reloads. Host state that scripts may query during a call
-//! (a world, a random stream) is lent through a [`ScriptLoan`] and returned when the call ends.
+//! Hosts bind functions and userdata through [`ScriptEngine::lua`]. Each script has a private environment and
+//! declares hooks with explicit `this` as the first parameter. Hook arity counts the remaining host arguments.
+//! Tables have reference semantics and one-based array indices; copy authored records before editing a new unit.
 //!
 //! ```
-//! use joy_game_script::{
-//!     Script, ScriptEngine, ScriptHook, ScriptLimits, ScriptState,
-//! };
-//!
-//! const HOOKS: [ScriptHook; 1] = [ScriptHook::new("tick", 1)];
-//! let engine = ScriptEngine::new(ScriptLimits::default());
-//! let source = "const RATE = 2.0; fn tick(elapsed_seconds) { this.charge += elapsed_seconds * global::RATE; }";
-//! let script = Script::compile(&engine, "charger.rhai", source, &HOOKS)?;
-//!
+//! use joy_game_script::{Script, ScriptEngine, ScriptHook, ScriptState};
+//! let engine = ScriptEngine::default();
+//! let script = Script::compile(&engine, "charger.lua",
+//!     "function tick(this, dt) this.charge = this.charge + dt * 2 end", &[ScriptHook::new("tick", 1)])?;
 //! let mut state = ScriptState::new();
-//! state.set("charge", 0.0);
+//! state.set(engine.lua(), "charge", 0.0).unwrap();
 //! script.call(&engine, "tick", &mut state, (0.5,))?;
 //! assert_eq!(state.get_as::<f64>("charge"), Some(1.0));
 //! # Ok::<(), joy_game_script::ScriptError>(())
 //! ```
 //!
-//! # Libraries, Imports, and Data
+//! [`ScriptLibrary`] resolves only sources registered by the host. Data modules return export tables, which are
+//! recursively frozen. Replacing source validates its transitive importers before committing any compiled program.
+//! Object states remain on the same VM through reloads. [`ScriptLoan`] safely exposes host-owned state only during
+//! its lending call, and [`ScriptRandom`] preserves the host's seeded draw order.
 //!
-//! A game with several scripts keeps them in one [`ScriptLibrary`]: every source by name, the hook scripts compiled
-//! from them, and shared modules imported with `import "data/parts" as parts;`. Modules hold shared rules and authored
-//! data (`export const PARTS = [...]`); [`ScriptLibrary::constant`] reads such data into Rust records, and
-//! [`to_script_value`] and [`from_script_value`] move any `serde` record in and out of scripts. Replacing a source
-//! recompiles everything that imports it, or nothing if any dependent fails to compile.
-//!
-//! # Determinism
-//!
-//! Scripts compute in `f64`. Arithmetic, `sqrt`, and vector lengths are exact on every target, and the standard
-//! library routes transcendental functions through `joy_core::math::deterministic`, so a script that draws from a
-//! seeded stream ([`ScriptRandom`]) replays identically natively and in WebAssembly. Rhai's own math package, its
-//! floating-point `**` operator, and its clock functions are left out because they are not portable.
-//!
-//! # Sandbox and Limits
-//!
-//! Scripts cannot read files, load modules, or read the clock. Every hook call runs under [`ScriptLimits`]: an
-//! operation budget that stops runaway loops, call and expression depth limits, and collection size limits. A limit
-//! ends only that call, with a [`ScriptError`].
-//!
-//! # Binding Host Types
-//!
-//! Hosts register types and functions on [`ScriptEngine::rhai_mut`] with Rhai's own API, re-exported as [`rhai`] so
-//! the engine pins one version; [`ScriptEngine::register_enum`] covers enumerations. Pass small plain views by value
-//! and lend larger owned state through a [`ScriptLoan`]; script parameters are copies, so only `this` is mutable.
+//! Math uses `f64` and the engine's portable transcendental helpers. [`ScriptVec3`] is immutable f64 userdata;
+//! Clocks, unseeded randomness, dynamic loaders, and the platform power operator are unavailable.
+//! [`ScriptLimits`] bounds VM allocation and instructions. Protected calls cannot swallow an exhausted budget.
+//! Memory ceilings exclude Rust allocations inside trusted host callbacks.
 
+mod arguments;
 mod convert;
 mod engine;
 mod error;
+mod frozen;
 mod library;
 mod loan;
 mod random;
+mod results;
 mod script;
+mod source;
 mod standard_library;
 
+pub use arguments::{
+    IntoScriptArguments,
+    IntoScriptValue,
+    ScriptUserData,
+};
 pub use convert::{
     from_script_value,
     script_vec3,
@@ -82,11 +65,13 @@ pub use loan::{
     ScriptLoan,
     ScriptResult,
 };
+/// The exact mlua version embedded by Joy Engine, for host bindings and Lua values.
+pub use mlua;
 pub use random::ScriptRandom;
-/// The Rhai crate the engine embeds, for registering host types and functions and reading values scripts return.
-pub use rhai;
+pub use results::FromScriptValue;
 pub use script::{
     Script,
     ScriptHook,
     ScriptState,
 };
+pub use standard_library::ScriptVec3;
