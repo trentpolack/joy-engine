@@ -20,6 +20,7 @@ publish = false
 [dependencies]
 joy-core.workspace = true
 rhai.workspace = true
+serde.workspace = true
 thiserror.workspace = true
 log.workspace = true
 

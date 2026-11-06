@@ -200,8 +200,9 @@ zune-jpeg = "0.5.15"
 image-webp = "0.2.4"
 
 # Game scripts (simulation layer): Rhai is pure Rust, so it builds for `wasm32-unknown-unknown` without a C toolchain.
-# `no_time` removes clock functions (they break replays and need a browser shim), and `only_i64` keeps one integer type.
-rhai = { version = "1.27.0", default-features = false, features = ["std", "no_time", "only_i64"] }
+# `no_time` removes clock functions (they break replays and need a browser shim), `only_i64` keeps one integer type, and
+# `serde` converts host records to script values.
+rhai = { version = "1.27.0", default-features = false, features = ["std", "no_time", "only_i64", "serde"] }
 
 # Physics (simulation layer). Enhanced determinism keeps native and WebAssembly simulations identical.
 rapier3d = { version = "0.36.1", features = ["enhanced-determinism"] }

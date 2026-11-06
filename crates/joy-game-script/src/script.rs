@@ -80,6 +80,34 @@ impl ScriptState {
         }
     }
 
+    /// A state holding an existing object map (or any value a script returned for use as `this`).
+    pub fn from_value(value: Dynamic) -> Self {
+        Self {
+            value,
+        }
+    }
+
+    /// The state's value, for converting with [`crate::from_script_value`].
+    pub fn value(&self) -> &Dynamic {
+        &self.value
+    }
+
+    /// Read a field in place, without copying it out of the state; `None` when the field is unset. Hosts use this to
+    /// read large script-owned collections (a battle's units) every step without cloning them.
+    pub fn with_field<R>(&self, field: &str, read: impl FnOnce(&Dynamic) -> R) -> Option<R> {
+        let map = self.value.read_lock::<Map>()?;
+        map.get(field).map(read)
+    }
+
+    /// Change a field in place (a host edit to a script-owned record); does nothing when the field is unset.
+    pub fn edit_field(&mut self, field: &str, edit: impl FnOnce(&mut Dynamic)) {
+        if let Some(mut map) = self.value.write_lock::<Map>()
+            && let Some(value) = map.get_mut(field)
+        {
+            edit(value);
+        }
+    }
+
     /// How many fields the state holds.
     pub fn len(&self) -> usize {
         self.value.read_lock::<Map>().map_or(0, |map| map.len())
@@ -102,6 +130,8 @@ impl Default for ScriptState {
 #[derive(Clone, Debug)]
 pub struct Script {
     path: String,
+    // Source names whose functions make up the script; one, the path itself, unless compiled from parts.
+    parts: Vec<String>,
     hooks: Vec<HookEntry>,
     program: AST,
     revision: u64,
@@ -118,6 +148,19 @@ impl Script {
     /// Compile `source`, run its top level once, and check that it defines every hook in `hooks`. `path` names the
     /// script in errors and `print`/`debug` output (a project-relative path such as `assets/scripts/ai.rhai`).
     pub fn compile(engine: &ScriptEngine, path: &str, source: &str, hooks: &[ScriptHook]) -> Result<Self, ScriptError> {
+        Self::compile_parts(engine, path, &[(path, source)], hooks)
+    }
+
+    /// Compile one script from several sources (`(name, source)` pairs): each part runs its own top level, with its
+    /// own constants and imports, and all their functions join one namespace, so a function in one part can call
+    /// another part's functions directly or as methods (`this.units[i].advance(...)`), which `import` does not allow.
+    /// `path` names the script; errors name the part that failed. Hooks may live in any part.
+    pub fn compile_parts(
+        engine: &ScriptEngine,
+        path: &str,
+        parts: &[(&str, &str)],
+        hooks: &[ScriptHook],
+    ) -> Result<Self, ScriptError> {
         let hooks: Vec<HookEntry> = hooks
             .iter()
             .map(|hook| HookEntry {
@@ -125,9 +168,10 @@ impl Script {
                 dispatcher: format!("{DISPATCH_PREFIX}{}", hook.name),
             })
             .collect();
-        let program = prepare(engine, path, source, &hooks)?;
+        let program = prepare(engine, path, parts, &hooks)?;
         Ok(Self {
             path: path.to_string(),
+            parts: parts.iter().map(|(name, _)| (*name).to_string()).collect(),
             hooks,
             program,
             revision: 0,
@@ -137,9 +181,29 @@ impl Script {
     /// Hot reload: compile `source` with the same path and hooks and, if that succeeds, replace the program and
     /// advance [`Script::revision`]. On failure the previous program keeps running and the error is returned.
     pub fn replace_source(&mut self, engine: &ScriptEngine, source: &str) -> Result<(), ScriptError> {
-        self.program = prepare(engine, &self.path, source, &self.hooks)?;
+        self.program = prepare(engine, &self.path, &[(self.path.as_str(), source)], &self.hooks)?;
         self.revision += 1;
         Ok(())
+    }
+
+    /// This script recompiled from its parts' current `sources` (in [`Script::parts`] order) with the same path and
+    /// hooks, one revision later; `self` is unchanged. [`crate::ScriptLibrary`] uses it to recompile a script and its
+    /// dependents before committing any of them.
+    pub(crate) fn recompiled(&self, engine: &ScriptEngine, sources: &[String]) -> Result<Self, ScriptError> {
+        let parts: Vec<(&str, &str)> =
+            self.parts.iter().map(String::as_str).zip(sources.iter().map(String::as_str)).collect();
+        Ok(Self {
+            path: self.path.clone(),
+            parts: self.parts.clone(),
+            hooks: self.hooks.clone(),
+            program: prepare(engine, &self.path, &parts, &self.hooks)?,
+            revision: self.revision + 1,
+        })
+    }
+
+    /// The source names the script was compiled from.
+    pub fn parts(&self) -> &[String] {
+        &self.parts
     }
 
     /// The script's path.
@@ -203,27 +267,13 @@ impl Script {
     }
 }
 
-/// Parse, run the top level into an encapsulated module (its constants become the functions' `global::` namespace),
-/// check the required hooks, and add their dispatchers.
-fn prepare(engine: &ScriptEngine, path: &str, source: &str, hooks: &[HookEntry]) -> Result<AST, ScriptError> {
-    let mut parsed = engine.rhai().compile(source).map_err(|error| ScriptError::from_parse(path, error))?;
-    parsed.set_source(path);
-
-    let module =
-        Module::eval_ast_as_new(Scope::new(), &parsed, engine.rhai()).map_err(
-            |error| match ScriptError::from_runtime(path, TOP_LEVEL, engine.limits().operations_per_call, *error) {
-                ScriptError::Runtime {
-                    location,
-                    message,
-                    ..
-                } => ScriptError::Compile {
-                    location,
-                    message,
-                },
-                other => other,
-            },
-        )?;
-    let mut program = AST::new_from_module(module);
+/// Parse each part, run its top level into an encapsulated module (its constants become its functions' `global::`
+/// namespace), merge the parts' functions, check the required hooks, and add their dispatchers.
+fn prepare(engine: &ScriptEngine, path: &str, parts: &[(&str, &str)], hooks: &[HookEntry]) -> Result<AST, ScriptError> {
+    let mut program = AST::empty();
+    for (name, source) in parts {
+        program = program.merge(&prepare_part(engine, name, source)?);
+    }
     program.set_source(path);
 
     for entry in hooks {
@@ -242,6 +292,30 @@ fn prepare(engine: &ScriptEngine, path: &str, source: &str, hooks: &[HookEntry])
     let dispatchers: String = hooks.iter().map(dispatcher_source).collect();
     let dispatchers = engine.rhai().compile(&dispatchers).map_err(|error| ScriptError::from_parse(path, error))?;
     Ok(program.merge(&dispatchers))
+}
+
+/// One part's functions, with its top level run and its constants captured.
+fn prepare_part(engine: &ScriptEngine, name: &str, source: &str) -> Result<AST, ScriptError> {
+    let mut parsed = engine.rhai().compile(source).map_err(|error| ScriptError::from_parse(name, error))?;
+    parsed.set_source(name);
+
+    let module =
+        Module::eval_ast_as_new(Scope::new(), &parsed, engine.rhai()).map_err(
+            |error| match ScriptError::from_runtime(name, TOP_LEVEL, engine.limits().operations_per_call, *error) {
+                ScriptError::Runtime {
+                    location,
+                    message,
+                    ..
+                } => ScriptError::Compile {
+                    location,
+                    message,
+                },
+                other => other,
+            },
+        )?;
+    let mut program = AST::new_from_module(module);
+    program.set_source(name);
+    Ok(program)
 }
 
 /// `fn __joy_hook_tick(argument_0) { this.tick(argument_0) }`: a forwarding function for one hook.

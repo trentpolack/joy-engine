@@ -5,4 +5,5 @@
 //! game relies on. Run with `cargo test -p joy-game-script`.
 
 mod hooks;
+mod library;
 mod sandbox;

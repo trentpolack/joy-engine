@@ -87,6 +87,24 @@ pub enum ScriptError {
         call_stack: String,
     },
 
+    /// A host value could not become a script value, or a script value did not match the host type it was read as.
+    #[error("{context}: {message}")]
+    Conversion {
+        /// What was being converted (a script path and constant, or a host type).
+        context: String,
+        /// The serializer's description of the mismatch, naming the field.
+        message: String,
+    },
+
+    /// A source the library was asked to compile or import does not exist.
+    #[error("{path}: no script named `{name}` (imports name scripts added to the library, without `.rhai`)")]
+    UnknownScript {
+        /// The script that asked for it, or the name itself when the host asked.
+        path: String,
+        /// The missing name.
+        name: String,
+    },
+
     /// A hook returned a value of the wrong type.
     #[error("{path}: hook `{hook}` returned {found}, expected {expected}")]
     ReturnType {
@@ -110,16 +128,34 @@ impl ScriptError {
         }
     }
 
-    /// A runtime failure in `path` while running `hook`, unwrapping nested script calls down to the innermost error so
-    /// the location names the line that failed rather than the line that called it.
+    /// A runtime failure in `path` while running `hook`, unwrapping nested script calls and imports down to the
+    /// innermost error so the location names the line (and the imported script) that failed rather than the line that
+    /// called it.
     pub(crate) fn from_runtime(path: &str, hook: &str, operation_budget: u64, error: EvalAltResult) -> Self {
         let mut call_stack = vec![hook.to_string()];
+        let mut location_path = path.to_string();
         let mut error = error;
-        while let EvalAltResult::ErrorInFunctionCall(name, _, inner, _) = error {
-            if !name.starts_with(DISPATCH_PREFIX) && call_stack.last() != Some(&name) {
-                call_stack.push(name);
+        loop {
+            match error {
+                EvalAltResult::ErrorInFunctionCall(name, source, inner, _) => {
+                    if !name.starts_with(DISPATCH_PREFIX) && call_stack.last() != Some(&name) {
+                        call_stack.push(name);
+                    }
+                    if !source.is_empty() {
+                        location_path = source;
+                    }
+                    error = *inner;
+                }
+                EvalAltResult::ErrorInModule(module, inner, _) => {
+                    call_stack.push(format!("import \"{module}\""));
+                    location_path = module;
+                    error = *inner;
+                }
+                other => {
+                    error = other;
+                    break;
+                }
             }
-            error = *inner;
         }
 
         let position = error.take_position();
@@ -131,7 +167,7 @@ impl ScriptError {
             other => other.to_string(),
         };
         Self::Runtime {
-            location: ScriptLocation::at(path, position),
+            location: ScriptLocation::at(&location_path, position),
             message,
             call_stack: call_stack.join(" → "),
         }
