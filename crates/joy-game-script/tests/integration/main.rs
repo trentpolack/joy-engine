@@ -4,6 +4,7 @@
 //! Integration tests for `joy-game-script`: hooks and hot reload, and the sandbox, limits, determinism, and loans every
 //! game relies on. Run with `cargo test -p joy-game-script`.
 
+mod definitions;
 mod hooks;
 mod library;
 mod sandbox;

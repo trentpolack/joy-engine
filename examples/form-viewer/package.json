@@ -1,0 +1,19 @@
+{
+  "name": "@joy-engine/example-form-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "author": "Trent Polack",
+  "license": "MIT",
+  "scripts": {
+    "dev": "cargo run --package joy-engine --example form-viewer",
+    "build": "node ../../scripts/rust/build-web.mjs --example form-viewer --release --canvas form-viewer --title \"FORM VIEWER · Joy Engine\" --out dist",
+    "preview": "node ../../scripts/preview-web.mjs",
+    "check": "cargo check --package joy-engine --example form-viewer",
+    "test": "cargo test --package joy-engine --example form-viewer && cargo test --package joy-form",
+    "capture": "node ../../scripts/capture-web.mjs"
+  },
+  "dependencies": {
+    "joy-engine": "file:../.."
+  }
+}

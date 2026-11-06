@@ -7,6 +7,7 @@ Small feature demonstrations live beside the engine and consume its public `joy-
 | [Scene Effects](scene-effects/README.md) | Lighting, shadows, and post-processing inspection | `/examples/scene-effects/` |
 | [FORM Building](form-building/README.md) | Editable procedural recipes and baked building assets | `/examples/form-building/` |
 | [FORM Destruction](form-destruction/README.md) | Surface-projected impacts, load-path stress with staged collapse, ground charges that undermine, and synchronized chunk removal | `/examples/form-destruction/` |
+| [FORM Viewer](form-viewer/README.md) | Bundled FORM assets with live parameters, shading, and time-of-day controls | Local only (no `gameSite` metadata) |
 | [SDF Collisions](sdf-collisions/README.md) | Signed distance colliders for FORM props beside bounding boxes, with a native and browser benchmark | Local only (no `gameSite` metadata yet) |
 
 ## Run
@@ -18,6 +19,8 @@ npm run capture:example:form-destruction
 npm run capture:example:form-destruction -- --built
 ```
 From the standalone engine repository, use the workspace command, for example `npm run dev --workspace @joy-engine/example-form-destruction`.
+
+All six examples provide `dev`, `build`, `preview`, `check`, `test`, and `capture` workspace scripts. Use `npm run <script> --workspace @joy-engine/example-<name>` for any of them. SDF Collisions also provides `bench`, with the JoyGames shortcut `npm run bench:example:sdf-collisions`.
 
 ## Rust Entry Points
 Examples use `main.rs` composition roots with Rust modules under `src/`, registered as Cargo examples in the engine manifest. Run `cargo run --example scene-effects` from the engine root, or use the example's canonical npm `dev` script. Workspace `build` scripts emit browser releases into their `dist/`. `tests/integration/` contains headless example behavior and rendering scenarios.

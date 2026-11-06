@@ -45,12 +45,10 @@ use joy_core::math::DVec3;
 use joy_game_script::mlua::{
     Error,
     Table,
-    UserData,
-    UserDataFields,
-    UserDataMethods,
     Value as LuaValue,
 };
 use joy_game_script::{
+    LuaSignature,
     ScriptEngine,
     ScriptHook,
     ScriptLibrary,
@@ -158,7 +156,11 @@ impl EntityComponent for ScriptComponent {
 /// A game script engine with the entity and world views registered; create the entity scripts' [`ScriptLibrary`] from
 /// it.
 pub fn entity_script_engine(limits: ScriptLimits) -> ScriptEngine {
-    ScriptEngine::new(limits)
+    let mut engine = ScriptEngine::new(limits);
+    engine.definitions().record("ScriptEventRecord", &[("sender", "string"), ("data", "table<string, any>")]);
+    engine.definitions().include::<EntityView>();
+    engine.definitions().include::<WorldView>();
+    engine
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -452,27 +454,36 @@ impl WorldView {
     }
 }
 
-impl UserData for EntityView {
-    fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
+joy_game_script::lua_userdata! {
+    EntityView, "Entity",
+    fields |fields| {
         fields.add_field_method_get("id", |_, entity| Ok(entity.id.as_str().to_owned()));
         fields.add_field_method_get("kind", |_, entity| Ok(entity.kind.clone()));
         fields.add_field_method_get("position", |_, entity| Ok(ScriptVec3(entity.position)));
         fields.add_field_method_get("velocity", |_, entity| Ok(ScriptVec3(entity.velocity)));
     }
-
-    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods
-            .add_method("has_tag", |_, entity, tag: String| Ok(entity.tags.iter().any(|candidate| candidate == &tag)));
-        methods.add_method("component", |lua, entity, kind: String| match entity.components.get(&kind) {
-            Some(record) => to_script_value(lua, &kind, record).map_err(Error::external),
-            None => Ok(LuaValue::Nil),
+    methods |methods| {
+        methods.add_method("has_tag", LuaSignature::new(&["tag"]), |_, entity, tag: String| {
+            Ok(entity.tags.iter().any(|candidate| candidate == &tag))
         });
+        methods.add_method(
+            "component",
+            LuaSignature::new(&["kind"]).returns("table<string, any>|nil"),
+            |lua, entity, kind: String| match entity.components.get(&kind) {
+                Some(record) => to_script_value(lua, &kind, record).map_err(Error::external),
+                None => Ok(LuaValue::Nil),
+            },
+        );
     }
 }
 
-impl UserData for WorldView {
-    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("position", |_, world, id: String| {
+joy_game_script::lua_userdata! {
+    WorldView, "World",
+    fields |_fields| {
+
+    }
+    methods |methods| {
+        methods.add_method("position", LuaSignature::new(&["id"]), |_, world, id: String| {
             Ok(world
                 .snapshot
                 .index
@@ -480,7 +491,7 @@ impl UserData for WorldView {
                 .and_then(|index| world.snapshot.entities.get(*index))
                 .map(|entity| ScriptVec3(entity.position)))
         });
-        methods.add_method("kind", |_, world, id: String| {
+        methods.add_method("kind", LuaSignature::new(&["id"]), |_, world, id: String| {
             Ok(world
                 .snapshot
                 .index
@@ -488,27 +499,35 @@ impl UserData for WorldView {
                 .and_then(|index| world.snapshot.entities.get(*index))
                 .map(|entity| entity.kind.clone()))
         });
-        methods.add_method("within", |_, world, (center, radius, tag): (ScriptVec3, f64, String)| {
-            Ok(world
-                .snapshot
-                .within(center.0, radius, &tag)
-                .into_iter()
-                .filter(|entity| entity.id != world.entity)
-                .map(|entity| entity.id.as_str().to_owned())
-                .collect::<Vec<_>>())
-        });
-        methods.add_method("nearest", |_, world, (center, radius, tag): (ScriptVec3, f64, String)| {
-            Ok(world
-                .snapshot
-                .within(center.0, radius, &tag)
-                .into_iter()
-                .find(|entity| entity.id != world.entity)
-                .map(|entity| entity.id.as_str().to_owned()))
-        });
-        methods.add_method("timer_fired", |_, world, key: String| {
+        methods.add_method(
+            "within",
+            LuaSignature::new(&["center", "radius", "tag"]),
+            |_, world, (center, radius, tag): (ScriptVec3, f64, String)| {
+                Ok(world
+                    .snapshot
+                    .within(center.0, radius, &tag)
+                    .into_iter()
+                    .filter(|entity| entity.id != world.entity)
+                    .map(|entity| entity.id.as_str().to_owned())
+                    .collect::<Vec<_>>())
+            },
+        );
+        methods.add_method(
+            "nearest",
+            LuaSignature::new(&["center", "radius", "tag"]),
+            |_, world, (center, radius, tag): (ScriptVec3, f64, String)| {
+                Ok(world
+                    .snapshot
+                    .within(center.0, radius, &tag)
+                    .into_iter()
+                    .find(|entity| entity.id != world.entity)
+                    .map(|entity| entity.id.as_str().to_owned()))
+            },
+        );
+        methods.add_method("timer_fired", LuaSignature::new(&["key"]), |_, world, key: String| {
             Ok(world.snapshot.timers.get(&world.entity).is_some_and(|keys| keys.iter().any(|fired| fired == &key)))
         });
-        methods.add_method("contacts", |_, world, ()| {
+        methods.add_method("contacts", LuaSignature::new(&[]), |_, world, ()| {
             Ok(world
                 .snapshot
                 .contacts
@@ -516,31 +535,34 @@ impl UserData for WorldView {
                 .map(|others| others.iter().map(|id| id.as_str().to_owned()).collect::<Vec<_>>())
                 .unwrap_or_default())
         });
-        methods.add_method("events", |lua, world, name: String| {
-            world
-                .snapshot
-                .events
-                .iter()
-                .filter(|(event, _, _)| event == &name)
-                .map(|(_, sender, data)| {
-                    let record = lua.create_table()?;
-                    record.set("sender", sender.as_str())?;
-                    record.set("data", to_script_value(lua, &name, data).map_err(Error::external)?)?;
-                    Ok(record)
-                })
-                .collect::<Result<Vec<_>, Error>>()
-        });
-        methods.add_method("spawn", |lua, world, definition: Table| {
-            let value =
-                from_script_value::<Value>(lua, "spawn", &LuaValue::Table(definition)).map_err(Error::external)?;
+        methods.add_method(
+            "events",
+            LuaSignature::new(&["name"]).returns("ScriptEventRecord[]"),
+            |lua, world, name: String| {
+                world
+                    .snapshot
+                    .events
+                    .iter()
+                    .filter(|(event, _, _)| event == &name)
+                    .map(|(_, sender, data)| {
+                        let record = lua.create_table()?;
+                        record.set("sender", sender.as_str())?;
+                        record.set("data", to_script_value(lua, &name, data).map_err(Error::external)?)?;
+                        Ok(record)
+                    })
+                    .collect::<Result<Vec<_>, Error>>()
+            },
+        );
+        methods.add_method("spawn", LuaSignature::new(&["definition"]), |lua, world, definition: Table| {
+            let value = from_script_value::<Value>(lua, "spawn", &LuaValue::Table(definition)).map_err(Error::external)?;
             world.push(ScriptCommand::Spawn(value));
             Ok(())
         });
-        methods.add_method("remove", |_, world, id: String| {
+        methods.add_method("remove", LuaSignature::new(&["id"]), |_, world, id: String| {
             world.push(ScriptCommand::Remove(id));
             Ok(())
         });
-        methods.add_method("send", |lua, world, (name, data): (String, Table)| {
+        methods.add_method("send", LuaSignature::new(&["name", "data"]), |lua, world, (name, data): (String, Table)| {
             let data = from_script_value::<Value>(lua, &name, &LuaValue::Table(data)).map_err(Error::external)?;
             world.push(ScriptCommand::Send {
                 name,
@@ -548,23 +570,27 @@ impl UserData for WorldView {
             });
             Ok(())
         });
-        methods.add_method("start_timer", |_, world, (key, seconds, repeat): (String, f64, bool)| {
-            world.push(ScriptCommand::StartTimer {
-                key,
-                seconds,
-                repeat,
-            });
-            Ok(())
-        });
-        methods.add_method("set_velocity", |_, world, velocity: ScriptVec3| {
+        methods.add_method(
+            "start_timer",
+            LuaSignature::new(&["key", "seconds", "repeat_timer"]),
+            |_, world, (key, seconds, repeat): (String, f64, bool)| {
+                world.push(ScriptCommand::StartTimer {
+                    key,
+                    seconds,
+                    repeat,
+                });
+                Ok(())
+            },
+        );
+        methods.add_method("set_velocity", LuaSignature::new(&["velocity"]), |_, world, velocity: ScriptVec3| {
             world.push(ScriptCommand::SetVelocity(velocity.0));
             Ok(())
         });
-        methods.add_method("apply_impulse", |_, world, impulse: ScriptVec3| {
+        methods.add_method("apply_impulse", LuaSignature::new(&["impulse"]), |_, world, impulse: ScriptVec3| {
             world.push(ScriptCommand::ApplyImpulse(impulse.0));
             Ok(())
         });
-        methods.add_method("move_to", |_, world, position: ScriptVec3| {
+        methods.add_method("move_to", LuaSignature::new(&["position"]), |_, world, position: ScriptVec3| {
             world.push(ScriptCommand::MoveTo(position.0));
             Ok(())
         });

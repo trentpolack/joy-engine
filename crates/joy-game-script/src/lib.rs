@@ -3,7 +3,7 @@
 
 //! Sandboxed Lua gameplay rules, portable math, persistent object state, and atomic hot reload.
 //!
-//! Hosts bind functions and userdata through [`ScriptEngine::lua`]. Each script has a private environment and
+//! Hosts bind functions through [`ScriptEngine::bindings`] and describe userdata with [`lua_userdata!`]. Each script has a private environment and
 //! declares hooks with explicit `this` as the first parameter. Hook arity counts the remaining host arguments.
 //! Tables have reference semantics and one-based array indices; copy authored records before editing a new unit.
 //!
@@ -31,6 +31,7 @@
 
 mod arguments;
 mod convert;
+pub mod definitions;
 mod engine;
 mod error;
 mod frozen;
@@ -51,6 +52,12 @@ pub use convert::{
     from_script_value,
     script_vec3,
     to_script_value,
+};
+pub use definitions::{
+    LuaBindings,
+    LuaDefinitions,
+    LuaSignature,
+    LuaType,
 };
 pub use engine::{
     ScriptEngine,

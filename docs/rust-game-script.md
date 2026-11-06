@@ -64,17 +64,16 @@ Other sources use `local parts = require("data/parts")`. The name must match a s
 Use the re-exported `mlua` crate, so host functions, tables, and userdata agree with the engine's pinned ABI:
 
 ```rust
-use joy_engine::game_script::mlua;
+use joy_engine::game_script::LuaSignature;
 
-engine.lua().globals().set(
+engine.bindings().function(
     "armor_damage",
-    engine.lua().create_function(|_, (damage, armor): (f64, f64)| {
-        Ok((damage - armor).max(0.0))
-    })?,
+    LuaSignature::new(&["damage", "armor"]),
+    |_, (damage, armor): (f64, f64)| Ok((damage - armor).max(0.0)),
 )?;
 ```
 
-Rust host view types implement `mlua::UserData`; methods are called with Lua's colon syntax (`world:unit_position(id)`). Use `ScriptVec3(position)` to return an engine `DVec3`. `register_enum` builds a readonly table from host values implementing `IntoScriptValue`; userdata variants define equality and display in their own `UserData` implementation. Typed hook results use `FromScriptValue`: scalars, original Lua handles, vectors, options, sequences, and maps. Frozen collections are read through their private backing storage; returning a `Table` or `Value`, including inside a collection, preserves its original identity and never exposes the backing. Custom host result types implement `FromScriptValue` and can delegate userdata conversion to their existing `mlua::FromLua` implementation. Typed collection traversal follows the finite Rust result type; serde record conversion below retains its graph cycle and depth checks.
+Rust host view types use `lua_userdata!` to implement `mlua::UserData` and describe the same fields and methods to LuaLS; methods are called with Lua's colon syntax (`world:unit_position(id)`). Use `ScriptVec3(position)` to return an engine `DVec3`. `register_enum` builds a readonly table from host values implementing `IntoScriptValue` and `LuaType`; userdata variants define equality and display in their own `UserData` implementation. Typed hook results use `FromScriptValue`: scalars, original Lua handles, vectors, options, sequences, and maps. Frozen collections are read through their private backing storage; returning a `Table` or `Value`, including inside a collection, preserves its original identity and never exposes the backing. Custom host result types implement `FromScriptValue` and can delegate userdata conversion to their existing `mlua::FromLua` implementation. Typed collection traversal follows the finite Rust result type; serde record conversion below retains its graph cycle and depth checks.
 
 Host hook arguments use `IntoScriptArguments`: tuples of checked scalar values, Lua handles, `ScriptRandom`, `ScriptVec3`, and recursively checked Rust collections. Wrap custom host userdata as `ScriptUserData(my_view)` in the argument tuple; mlua callbacks continue using their normal `UserData` return values. Nested foreign handles are rejected before mlua can push them, including on browser builds where Rust panics abort. Binding registration and direct calls through `lua()` are trusted host operations, which can bypass the script sandbox and hook budget.
 
@@ -107,3 +106,59 @@ Coroutines and authored `__gc` finalizers are unavailable: Lua disables instruct
 
 ## Validation
 Run `cargo test -p joy-game-script` from the engine workspace for hook state, source parts, transitive reload acceptance and rollback, safe loans, null slots, cyclic and deep tables, foreign VM rejection, deterministic math and random draws, allocation ceilings, and protected-call budget recovery. Consumers additionally retain their existing gameplay recordings and browser captures; changing runtimes does not justify re-recording unexplained simulation differences.
+
+
+## Lua Editor Definitions
+The engine generates LuaLS `*.d.lua` libraries from its Rust registrations, without another dependency. Run these commands in the engine checkout, or use the same commands from JoyGames to include FRAMEBREAK's additional API:
+
+```bash
+npm run generate:lua-definitions
+npm run check:lua-definitions
+npm run watch:lua-definitions
+```
+
+Generation writes ignored `.lua-definitions/joy-engine.d.lua`; a consuming game's additions go in its own `.lua-definitions/` folder. The checked-in `.luarc.json` selects Lua 5.4, loads those folders through `workspace.library`, and disables the lowercase-global style warning for the engine's intentional private script namespaces. Generated files are editor metadata and must never be loaded as gameplay sources. `npm run check` refreshes them before checking Rust. JoyGames and FRAMEBREAK also refresh them at development startup. Keep the watch command running while changing Rust bindings for continuous updates; it scans only the relevant source trees and manifests once per second, coalesces changes, and keeps the previous output if compilation fails. The explicit check command is read-only and fails for missing or stale files.
+
+### Registering Functions and Types
+Use `engine.bindings().function(...)` for exposed callbacks. Callback argument and return types supply the Lua types; `LuaSignature` supplies argument names and descriptions that Rust does not retain:
+
+```rust
+engine.bindings().function(
+    "distance_scale",
+    LuaSignature::new(&["distance", "scale"]).doc("Distance is in world meters."),
+    |_, (distance, scale): (f64, f64)| Ok(distance * scale),
+)?;
+```
+
+`LuaSignature::argument(index, type)` and `returns(type)` describe dynamic `mlua::Value` or table contracts beside their conversions. Scalars, vectors, arrays, optional values, tuples, and the supported userdata types derive their signatures from Rust. A Rust `Option<T>` maps to `T|nil` through ordinary mlua callbacks; the explicit engine `null` sentinel has the separate `JoyNull` type. A callback returning that sentinel must describe it explicitly, such as `returns("Vec3|JoyNull")`. This does not change the serde record conversion rules described in this guide.
+
+Use `lua_userdata!` to declare each userdata's fields and methods once. The macro implements mlua's `UserData` and the engine's `LuaType`, running the same declarations against either the runtime or a definition collector. Callbacks are not executed by the collector:
+
+```rust
+joy_engine::game_script::lua_userdata! {
+    Counter, "Counter",
+    fields |fields| {
+        fields.add_field_method_get("value", |_, counter| Ok(counter.value));
+    }
+    methods |methods| {
+        methods.add_method_mut("advance", LuaSignature::new(&["amount"]), |_, counter, amount: i64| {
+            counter.value += amount;
+            Ok(counter.value)
+        });
+    }
+}
+```
+
+Include userdata passed only through hook arguments with `engine.definitions().include::<Counter>()`; types referenced by described callbacks and fields are discovered automatically. Dynamic table shapes can be named with `definitions().record(name, fields)`. Those shapes are explicit authoring contracts, not reflection over arbitrary table-building or serde code. Keep them beside the owning conversions and validate important record behavior through the existing gameplay tests.
+
+`engine.lua_definitions()` audits the actual public globals and one level of namespace members before emitting stable, sorted definitions. New, removed, replaced, or shadowed globals outside the registration layer fail the audit. Internal sandbox setup explicitly records removed standard bindings. Register callbacks in globals or one existing namespace, such as `math.helper`; deeper namespaces are intentionally outside this small API. Keep private VM plumbing on `engine.lua()`. The trusted raw handle remains available, but new public functions belong in `bindings()`.
+
+### Game Extensions
+The shared exporter uses `entity_script_engine` to include portable helpers, vectors, random streams, and the entity/world APIs. A game's native exporter builds its normal registrations and calls `lua_definitions_extension(&base_engine)` to emit only additions, rejecting conflicting shared signatures. FRAMEBREAK's exporter is a working example; its userdata remains in the game and reaches the generator through the public engine API.
+
+A consuming npm package declares `luaDefinitions.package` and `luaDefinitions.binary`, then runs `node <engine>/scripts/lua-definitions.mjs --project <game-directory>`. The binary writes only its metadata to stdout; the launcher owns output paths, atomic file replacement, freshness checks, and watching. Point the consumer's LuaLS library configuration at both generated directories. The engine never imports a game.
+
+### Editor Limits
+LuaLS understands declared types, methods, and vector operators, but its field annotations cannot enforce runtime read-only fields or separate getter and setter types. Generated field comments state those restrictions, including FRAMEBREAK's nullable `target_id` getter whose setter accepts an integer. Runtime tests continue to protect those contracts. Generic tables remain generic unless their registration supplies a structural description.
+
+LuaLS's standard basic and math libraries still describe functions that the sandbox removes, such as `load` and `math.random`; definitions are not a sandbox validator. The workspace disables the unavailable `os`, `io`, `debug`, and `coroutine` libraries. Engine compilation and runtime checks remain authoritative for sandbox restrictions, including restricted imports and the portable-power rule.

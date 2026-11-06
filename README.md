@@ -24,6 +24,8 @@ Browser builds require the wasm-bindgen CLI version pinned by `Cargo.lock`: `car
 
 Games using standard Lua 5.4 enable the facade's `game-script` feature. Lua is built through `mlua` with its `vendored` feature and a C compiler; browser builds additionally require WASI SDK 34 and `WASI_SDK_PATH`. Dependency versions, setup, and runtime integration are documented in [Game Scripts](docs/rust-game-script.md).
 
+`npm run generate:lua-definitions` creates the shared LuaLS library directly from Rust bindings. `npm run watch:lua-definitions` keeps it updated while editing, and `npm run check:lua-definitions` checks freshness. See [Lua editor definitions](docs/rust-game-script.md#lua-editor-definitions) for registering APIs and extending the library from a game.
+
 The engine owns its Cargo workspace, tests, assets, schemas, and build tooling. A hosting repository such as [JoyGames](https://github.com/trentpolack/JoyGames) consumes it as a submodule and provides its own site commands. npm workspaces remain useful for build orchestration, captures, metadata, and patch delivery.
 
 ## Guides

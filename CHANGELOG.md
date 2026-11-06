@@ -3,7 +3,11 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 11-06-2026
+### Example Tooling
+- Added FORM Viewer's npm workspace with native development, browser build/preview/capture, check, and FORM test commands, so all six examples have consistent npm entry points.
+
 ### Game Scripts
+- Added dependency-free LuaLS definition generation from typed function and userdata registrations, covering portable helpers and the entity/world API. Game exporters extend the shared definitions; generation audits public bindings, and the shared tooling generates, checks, and watches ignored editor libraries.
 - Replaced the Rhai backend with standard Lua 5.4 built through `mlua` and its `vendored` feature, including the entity `ScriptSystem` adapter. The `game-script` feature now enables scripting explicitly; FRAMEBREAK is the migrated game consumer. Lua hooks receive their persistent state as an explicit first argument, data modules use restricted `require`, and serde conversions name their owning VM.
 - Kept deterministic scalar math, immutable `f64` vector userdata, seeded streams, safe host loans, and atomic dependent reloads. Replaced Rhai-specific operation and collection settings with a Lua instruction budget and a total VM memory ceiling; limit and conversion failures remain recoverable.
 - Added reproducible vendored Lua builds, plus Emscripten-free browser builds using WASI SDK 34, a dependency-provided shared allocator, and WebAssembly exception support. Games without scripting keep their existing browser toolchain.

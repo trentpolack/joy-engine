@@ -44,7 +44,11 @@
     "docs:api": "cargo doc --workspace --all-features --no-deps",
     "build:web": "node scripts/rust/build-web.mjs",
     "audit:repo": "python3 -B scripts/audit/audit.py",
-    "test:audit": "python3 -B tests/tooling/test_audit.py"
+    "test:audit": "python3 -B tests/tooling/test_audit.py",
+    "generate:lua-definitions": "node scripts/lua-definitions.mjs",
+    "check:lua-definitions": "node scripts/lua-definitions.mjs --check",
+    "watch:lua-definitions": "node scripts/lua-definitions.mjs --watch",
+    "precheck": "npm run generate:lua-definitions"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

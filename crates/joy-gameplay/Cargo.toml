@@ -39,3 +39,8 @@ layer = "simulation"
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "joy-lua-definitions"
+path = "src/bin/joy-lua-definitions.rs"
+required-features = ["game-script"]

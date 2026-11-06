@@ -10,6 +10,7 @@ use joy_core::RandomSource;
 use joy_core::SeededRandom;
 use joy_core::random_range;
 
+use crate::LuaSignature;
 use crate::loan::ScriptLoan;
 use crate::loan::ScriptResult;
 
@@ -63,9 +64,17 @@ impl Default for ScriptRandom {
     }
 }
 
-impl mlua::UserData for ScriptRandom {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("next_unit", |_, random, ()| random.next_unit());
-        methods.add_method("range", |_, random, (minimum, maximum): (f64, f64)| random.range(minimum, maximum));
+crate::lua_userdata! {
+    ScriptRandom, "Random",
+    fields |_fields| {
+
+    }
+    methods |methods| {
+        methods.add_method("next_unit", LuaSignature::new(&[]), |_, random, ()| random.next_unit());
+        methods.add_method(
+            "range",
+            LuaSignature::new(&["minimum", "maximum"]),
+            |_, random, (minimum, maximum): (f64, f64)| random.range(minimum, maximum),
+        );
     }
 }

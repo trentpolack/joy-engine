@@ -4,6 +4,7 @@
 //! A private Lua VM with deterministic bindings and bounded calls.
 
 use std::cell::Cell;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::rc::Rc;
 
@@ -19,6 +20,11 @@ use mlua::VmState;
 
 use crate::IntoScriptValue;
 use crate::standard_library;
+use crate::{
+    LuaBindings,
+    LuaDefinitions,
+    LuaType,
+};
 
 /// Lua VM instructions permitted per call, including nested imports and protected calls.
 /// Native library work and trusted host callbacks must bound their own execution time.
@@ -45,12 +51,14 @@ impl Default for ScriptLimits {
     }
 }
 
-/// One engine owns one Lua VM. Register host bindings through [`Self::lua`] before compiling scripts.
+/// One engine owns one Lua VM. Register public callbacks through [`Self::bindings`] before compiling scripts.
 /// Scripts execute in independent environments and cannot access files, clocks, dynamic source loaders, or coroutines.
 pub struct ScriptEngine {
     lua: Lua,
     limits: ScriptLimits,
     budget: Rc<ExecutionBudget>,
+    definitions: LuaDefinitions,
+    standard_bindings: BTreeMap<String, Value>,
 }
 
 #[derive(Default)]
@@ -67,7 +75,9 @@ impl ScriptEngine {
         let lua = Lua::new_with(StdLib::TABLE | StdLib::STRING | StdLib::MATH | StdLib::UTF8, LuaOptions::default())
             .expect("the selected Lua standard libraries are safe");
         crate::frozen::register(&lua).expect("readonly table support is valid");
-        standard_library::register(&lua).expect("engine standard library registration succeeds");
+        let mut standard_bindings = crate::definitions::snapshot(&lua).expect("standard bindings are readable");
+        let mut definitions = LuaDefinitions::default();
+        standard_library::register(&lua, &mut definitions).expect("engine standard library registration succeeds");
         let budget = Rc::new(ExecutionBudget::default());
         let observed = Rc::clone(&budget);
         lua.set_global_hook(HookTriggers::new().every_nth_instruction(1), move |_, _| {
@@ -96,11 +106,18 @@ impl ScriptEngine {
             .set_name("joy/protected_calls.lua")
             .call::<()>(check_budget)
             .expect("protected calls preserve the execution budget");
+        // These wrappers retain the ordinary Lua signatures while enforcing the shared execution budget.
+        for name in ["pcall", "xpcall"] {
+            standard_bindings
+                .insert(name.to_owned(), lua.globals().raw_get(name).expect("protected calls are installed"));
+        }
         lua.set_memory_limit(limits.memory_bytes).expect("Lua supports allocation ceilings");
         Self {
             lua,
             limits,
             budget,
+            definitions,
+            standard_bindings,
         }
     }
 
@@ -122,9 +139,31 @@ impl ScriptEngine {
         &self.lua
     }
 
+    /// Register a host callback and its LuaLS signature together, before compiling scripts.
+    pub fn bindings(&mut self) -> LuaBindings<'_> {
+        LuaBindings::new(&self.lua, &mut self.definitions)
+    }
+
+    /// Describe host userdata passed as hook arguments, and any dynamic table contracts owned by this host.
+    pub fn definitions(&mut self) -> &mut LuaDefinitions {
+        &mut self.definitions
+    }
+
+    /// Generate LuaLS definitions from this engine's registrations. Reports raw, undocumented global changes.
+    pub fn lua_definitions(&self) -> mlua::Result<String> {
+        self.definitions.validate_bindings(&self.lua, &self.standard_bindings)?;
+        self.definitions.render()
+    }
+
+    /// Generate only this host's additions to a shared engine API; conflicting shared declarations are errors.
+    pub fn lua_definitions_extension(&self, base: &Self) -> mlua::Result<String> {
+        self.definitions.validate_bindings(&self.lua, &self.standard_bindings)?;
+        self.definitions.render_extension(&base.definitions)
+    }
+
     /// Expose named host values as a readonly enumeration table (`TypeName.Variant`). Register userdata's
     /// equality and string conversion through its `UserData` implementation when using userdata variants.
-    pub fn register_enum<T: Clone + IntoScriptValue>(
+    pub fn register_enum<T: Clone + IntoScriptValue + LuaType>(
         &mut self,
         type_name: &str,
         variants: &[(&str, T)],
@@ -134,6 +173,7 @@ impl ScriptEngine {
             values.set(*name, crate::arguments::value(&self.lua, value.clone())?)?;
         }
         crate::frozen::freeze(&self.lua, &values)?;
+        self.definitions.enum_table::<T>(&self.lua, type_name, &values)?;
         self.lua.globals().set(type_name, values)?;
         Ok(self)
     }
