@@ -40,7 +40,9 @@ pub struct ScriptLimits {
     pub call_depth: usize,
     /// Expression nesting depth.
     pub expression_depth: usize,
-    /// Largest string, array, or object map a script may build.
+    /// Largest string, array, or object map a script may build; zero turns the check off. Rhai checks sizes by walking
+    /// the value being changed, so hosts whose scripts keep large nested state (a battle's units) turn it off and rely
+    /// on the operation budget, which already bounds how much a call can build.
     pub collection_size: usize,
 }
 

@@ -30,9 +30,23 @@ impl ScriptRandom {
         }
     }
 
+    /// A handle owning its own stream from `seed` (script type `Random`, from `seeded_random(seed)` in scripts): for
+    /// procedural generation inside a script, such as a seeded contract board, independent of every host stream.
+    pub fn seeded(seed: i64) -> Self {
+        Self {
+            stream: ScriptLoan::holding("seeded random stream", SeededRandom::new(seed)),
+        }
+    }
+
     /// Lend `random` while `call` runs; every draw scripts make advances it, in call order.
     pub fn lend<R>(&self, random: &mut SeededRandom, call: impl FnOnce() -> R) -> R {
         self.stream.lend_copy(random, call)
+    }
+
+    /// Draw from the lent stream in a host function (a host-side rule that needs randomness during a script call);
+    /// a script error outside a lending call.
+    pub fn with_stream<R>(&self, draw: impl FnOnce(&mut SeededRandom) -> R) -> ScriptResult<R> {
+        self.stream.write(draw)
     }
 
     /// The next value in `[0, 1)`; a script error outside a lending call.

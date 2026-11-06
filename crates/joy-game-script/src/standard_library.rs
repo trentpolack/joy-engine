@@ -103,6 +103,8 @@ fn register_scalar_math(engine: &mut Engine) {
         .register_fn("fract", f64::fract)
         .register_fn("min", f64::min)
         .register_fn("max", f64::max)
+        .register_fn("min", |left: INT, right: INT| left.min(right))
+        .register_fn("max", |left: INT, right: INT| left.max(right))
         .register_fn("clamp", clamp)
         .register_fn("lerp", |from: f64, to: f64, t: f64| from + ((to - from) * t));
 
@@ -160,10 +162,12 @@ fn register_vectors(engine: &mut Engine) {
 // Random Streams
 // -------------------------------------------------------------------------------------------------------------------
 
-/// `Random` handles: `random.next_unit()` in `[0, 1)` and `random.range(min, max)`, one draw each.
+/// `Random` handles: `random.next_unit()` in `[0, 1)` and `random.range(min, max)`, one draw each, and
+/// `seeded_random(seed)` for a script-owned stream.
 fn register_random(engine: &mut Engine) {
     engine
         .register_type_with_name::<ScriptRandom>(RANDOM_TYPE_NAME)
+        .register_fn("seeded_random", |seed: INT| ScriptRandom::seeded(seed))
         .register_fn("next_unit", |random: &mut ScriptRandom| random.next_unit())
         .register_fn("range", |random: &mut ScriptRandom, minimum: f64, maximum: f64| random.range(minimum, maximum));
 }

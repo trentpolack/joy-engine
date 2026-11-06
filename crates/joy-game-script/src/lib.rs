@@ -28,6 +28,14 @@
 //! # Ok::<(), joy_game_script::ScriptError>(())
 //! ```
 //!
+//! # Libraries, Imports, and Data
+//!
+//! A game with several scripts keeps them in one [`ScriptLibrary`]: every source by name, the hook scripts compiled
+//! from them, and shared modules imported with `import "data/parts" as parts;`. Modules hold shared rules and authored
+//! data (`export const PARTS = [...]`); [`ScriptLibrary::constant`] reads such data into Rust records, and
+//! [`to_script_value`] and [`from_script_value`] move any `serde` record in and out of scripts. Replacing a source
+//! recompiles everything that imports it, or nothing if any dependent fails to compile.
+//!
 //! # Determinism
 //!
 //! Scripts compute in `f64`. Arithmetic, `sqrt`, and vector lengths are exact on every target, and the standard
@@ -47,13 +55,20 @@
 //! the engine pins one version; [`ScriptEngine::register_enum`] covers enumerations. Pass small plain views by value
 //! and lend larger owned state through a [`ScriptLoan`]; script parameters are copies, so only `this` is mutable.
 
+mod convert;
 mod engine;
 mod error;
+mod library;
 mod loan;
 mod random;
 mod script;
 mod standard_library;
 
+pub use convert::{
+    from_script_value,
+    script_vec3,
+    to_script_value,
+};
 pub use engine::{
     ScriptEngine,
     ScriptLimits,
@@ -62,6 +77,7 @@ pub use error::{
     ScriptError,
     ScriptLocation,
 };
+pub use library::ScriptLibrary;
 pub use loan::{
     ScriptLoan,
     ScriptResult,

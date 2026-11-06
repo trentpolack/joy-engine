@@ -35,6 +35,15 @@ impl<T: 'static> ScriptLoan<T> {
         }
     }
 
+    /// A loan that already holds `value` and keeps it (a value the script side owns outright, such as a script-local
+    /// random stream). Crate use only: hosts lend with [`ScriptLoan::lend`].
+    pub(crate) fn holding(label: &'static str, value: T) -> Self {
+        Self {
+            label,
+            slot: Rc::new(RefCell::new(Some(value))),
+        }
+    }
+
     /// Move `value` into the loan while `call` runs, then return it with `call`'s result. A nested `lend` of the same
     /// loan shadows the outer value until it returns. If `call` panics, the value is dropped with the loan.
     pub fn lend<R>(&self, value: T, call: impl FnOnce() -> R) -> (T, R) {

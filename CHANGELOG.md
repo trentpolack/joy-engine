@@ -5,6 +5,7 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR
 ## 11-05-2026
 ### Game Scripts
 - Added `joy-game-script` (`joy_engine::game_script`): sandboxed Rhai scripts for gameplay code that native development builds hot reload. `ScriptEngine` provides the language without file, module, or clock access, per-call `ScriptLimits` (an operation budget stops runaway loops), and a standard library of exact float comparisons, `math::deterministic` functions, `vec3`, and a seeded `Random` handle, so ported behavior matches its Rust original bit for bit natively and in WebAssembly. `Script` compiles source against required `ScriptHook`s, calls them with a per-object `ScriptState` bound as `this`, and hot reloads in place (a broken edit keeps the previous program; objects keep their state). `ScriptLoan` lends host state to registered functions for one call without `unsafe`. See [Game Scripts](docs/rust-game-script.md).
+- `ScriptLibrary` holds a game's scripts: `import` between library sources, hook scripts assembled from several parts that share a namespace (`compile_script_parts`), authored data read into Rust records (`constant`), and hot reload that recompiles every dependent of an edited source or nothing. `to_script_value` and `from_script_value` move `serde` records in and out of scripts (`script_vec3` marks vector fields), and `seeded_random(seed)` gives scripts their own streams.
 
 ## 11-04-2026
 ### Destruction
