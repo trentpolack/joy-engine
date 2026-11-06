@@ -13,11 +13,10 @@ use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
-use rhai::EvalAltResult;
-use rhai::Position;
+use mlua::Error;
 
 /// The result type of host functions registered on a script engine: a value, or the script error the call reports.
-pub type ScriptResult<T> = Result<T, Box<EvalAltResult>>;
+pub type ScriptResult<T> = mlua::Result<T>;
 
 /// A shared slot that holds host state while scripts run. Clones share the slot; capture one in each registered
 /// function that needs the state. Single-threaded, like the engine.
@@ -45,11 +44,19 @@ impl<T: 'static> ScriptLoan<T> {
     }
 
     /// Move `value` into the loan while `call` runs, then return it with `call`'s result. A nested `lend` of the same
-    /// loan shadows the outer value until it returns. If `call` panics, the value is dropped with the loan.
+    /// loan shadows the outer value until it returns. If `call` panics, the inner value is dropped and the outer
+    /// lending context is restored while unwinding, so retained script handles cannot access the failed loan.
     pub fn lend<R>(&self, value: T, call: impl FnOnce() -> R) -> (T, R) {
         let outer = self.slot.replace(Some(value));
+        let mut guard = LoanGuard {
+            slot: &self.slot,
+            outer,
+            active: true,
+        };
         let result = call();
-        let value = self.slot.replace(outer).expect("a lent value stays in its slot until its loan returns");
+        let value =
+            self.slot.replace(guard.outer.take()).expect("a lent value stays in its slot until its loan returns");
+        guard.active = false;
         (value, result)
     }
 
@@ -87,14 +94,14 @@ impl<T: 'static> ScriptLoan<T> {
         }
     }
 
-    fn not_lent_error(&self) -> Box<EvalAltResult> {
+    fn not_lent_error(&self) -> Error {
         let message = format!("the {} is only available during the host call that lends it", self.label);
-        Box::new(EvalAltResult::ErrorRuntime(message.into(), Position::NONE))
+        Error::runtime(message)
     }
 
-    fn busy_error(&self) -> Box<EvalAltResult> {
+    fn busy_error(&self) -> Error {
         let message = format!("the {} is already in use by another host function", self.label);
-        Box::new(EvalAltResult::ErrorRuntime(message.into(), Position::NONE))
+        Error::runtime(message)
     }
 }
 
@@ -111,5 +118,19 @@ impl<T> fmt::Debug for ScriptLoan<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         let lent = self.slot.try_borrow().map(|slot| slot.is_some()).unwrap_or(true);
         formatter.debug_struct("ScriptLoan").field("label", &self.label).field("lent", &lent).finish()
+    }
+}
+
+/// Restore a shadowed loan even when a trusted Rust callback unwinds.
+struct LoanGuard<'a, T> {
+    slot: &'a RefCell<Option<T>>,
+    outer: Option<T>,
+    active: bool,
+}
+impl<T> Drop for LoanGuard<'_, T> {
+    fn drop(&mut self) {
+        if self.active {
+            self.slot.replace(self.outer.take());
+        }
     }
 }

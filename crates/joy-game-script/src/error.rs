@@ -6,12 +6,7 @@
 
 use std::fmt;
 
-use rhai::EvalAltResult;
-use rhai::ParseError;
-use rhai::Position;
 use thiserror::Error;
-
-use crate::script::DISPATCH_PREFIX;
 
 /// Where in a script a failure happened. Line and column are one-based; zero means the position is unknown.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -22,17 +17,6 @@ pub struct ScriptLocation {
     pub line: usize,
     /// One-based column in characters, or zero.
     pub column: usize,
-}
-
-impl ScriptLocation {
-    /// A location in `path` at a Rhai position.
-    pub(crate) fn at(path: &str, position: Position) -> Self {
-        Self {
-            path: path.to_string(),
-            line: position.line().unwrap_or(0),
-            column: position.position().unwrap_or(0),
-        }
-    }
 }
 
 impl fmt::Display for ScriptLocation {
@@ -57,7 +41,7 @@ pub enum ScriptError {
     },
 
     /// The script does not define a hook its host requires.
-    #[error("{path}: missing hook `fn {name}` with {arity} parameter(s)")]
+    #[error("{path}: missing hook `function {name}` with {arity} parameter(s)")]
     MissingHook {
         /// The script's path.
         path: String,
@@ -97,7 +81,7 @@ pub enum ScriptError {
     },
 
     /// A source the library was asked to compile or import does not exist.
-    #[error("{path}: no script named `{name}` (imports name scripts added to the library, without `.rhai`)")]
+    #[error("{path}: no script named `{name}` (require names sources added to the library, without `.lua`)")]
     UnknownScript {
         /// The script that asked for it, or the name itself when the host asked.
         path: String,
@@ -120,56 +104,46 @@ pub enum ScriptError {
 }
 
 impl ScriptError {
-    /// A parse failure in `path`.
-    pub(crate) fn from_parse(path: &str, error: ParseError) -> Self {
+    pub(crate) fn from_compile(path: &str, error: mlua::Error) -> Self {
+        let message = error.to_string();
         Self::Compile {
-            location: ScriptLocation::at(path, error.1),
-            message: error.0.to_string(),
+            location: location(path, &message),
+            message,
         }
     }
 
-    /// A runtime failure in `path` while running `hook`, unwrapping nested script calls and imports down to the
-    /// innermost error so the location names the line (and the imported script) that failed rather than the line that
-    /// called it.
-    pub(crate) fn from_runtime(path: &str, hook: &str, operation_budget: u64, error: EvalAltResult) -> Self {
-        let mut call_stack = vec![hook.to_string()];
-        let mut location_path = path.to_string();
-        let mut error = error;
-        loop {
-            match error {
-                EvalAltResult::ErrorInFunctionCall(name, source, inner, _) => {
-                    if !name.starts_with(DISPATCH_PREFIX) && call_stack.last() != Some(&name) {
-                        call_stack.push(name);
-                    }
-                    if !source.is_empty() {
-                        location_path = source;
-                    }
-                    error = *inner;
-                }
-                EvalAltResult::ErrorInModule(module, inner, _) => {
-                    call_stack.push(format!("import \"{module}\""));
-                    location_path = module;
-                    error = *inner;
-                }
-                other => {
-                    error = other;
-                    break;
-                }
-            }
-        }
-
-        let position = error.take_position();
-        let message = match error {
-            EvalAltResult::ErrorTooManyOperations(..) => {
-                format!("exceeded the operation budget of {operation_budget} per call (a runaway loop?)")
-            }
-            EvalAltResult::ErrorRuntime(value, ..) => value.to_string(),
-            other => other.to_string(),
+    pub(crate) fn from_runtime(path: &str, hook: &str, error: mlua::Error) -> Self {
+        let message = error.to_string();
+        let call_stack = match message.split_once("stack traceback:") {
+            Some((_, stack)) => format!("{hook} → {}", stack.trim()),
+            None => hook.to_string(),
         };
         Self::Runtime {
-            location: ScriptLocation::at(&location_path, position),
+            location: location(path, &message),
             message,
-            call_stack: call_stack.join(" → "),
+            call_stack,
         }
+    }
+}
+
+/// Lua reports line numbers but no stable column. Keep its complete traceback in the error message.
+fn location(fallback: &str, message: &str) -> ScriptLocation {
+    for line in message.lines() {
+        let pieces: Vec<_> = line.trim().split(':').collect();
+        for (index, piece) in pieces.iter().enumerate().skip(1) {
+            if let Ok(number) = piece.parse::<usize>() {
+                let path = pieces[index - 1].trim().trim_start_matches("[string \"").trim_end_matches("\"]");
+                return ScriptLocation {
+                    path: path.to_string(),
+                    line: number,
+                    column: 0,
+                };
+            }
+        }
+    }
+    ScriptLocation {
+        path: fallback.into(),
+        line: 0,
+        column: 0,
     }
 }

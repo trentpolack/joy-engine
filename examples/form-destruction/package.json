@@ -1,6 +1,6 @@
 {
   "name": "@joy-engine/example-form-destruction",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "author": "Trent Polack",
@@ -16,7 +16,7 @@
   },
   "scripts": {
     "dev": "cargo run --package joy-engine --example form-destruction",
-    "build": "node ../../scripts/rust/build-web.mjs --example form-destruction --release --title \"FORM DESTRUCTION \u00b7 Joy Engine\" --out dist",
+    "build": "node ../../scripts/rust/build-web.mjs --example form-destruction --release --title \"FORM DESTRUCTION · Joy Engine\" --out dist",
     "preview": "node ../../scripts/preview-web.mjs",
     "check": "cargo check --package joy-engine --example form-destruction",
     "test": "cargo test --package joy-engine example_form_destruction",

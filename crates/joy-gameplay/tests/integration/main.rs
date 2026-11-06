@@ -5,6 +5,7 @@
 //! runtime. Run with `cargo test -p joy-gameplay`; no GPU or window stack is built.
 
 mod component_schemas;
+#[cfg(feature = "game-script")]
 mod entity_scripts;
 mod gameplay;
 mod gameplay_components;

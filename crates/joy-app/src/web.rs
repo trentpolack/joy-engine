@@ -5,6 +5,11 @@
 
 use wasm_bindgen::JsCast;
 
+// WASI libc and Rust must share one heap: independent allocators can reuse the same linear-memory pages.
+#[cfg(feature = "lua")]
+#[global_allocator]
+static SCRIPT_ALLOCATOR: libc_alloc::LibcAlloc = libc_alloc::LibcAlloc;
+
 /// Route `log` output and panics to the browser console. Repeated calls are harmless.
 pub(crate) fn init_logging() {
     console_error_panic_hook::set_once();

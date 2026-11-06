@@ -3,6 +3,11 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 11-06-2026
+### Game Scripts
+- Replaced the Rhai backend with standard Lua 5.4 built through `mlua` and its `vendored` feature, including the entity `ScriptSystem` adapter. The `game-script` feature now enables scripting explicitly; FRAMEBREAK is the migrated game consumer. Lua hooks receive their persistent state as an explicit first argument, data modules use restricted `require`, and serde conversions name their owning VM.
+- Kept deterministic scalar math, immutable `f64` vector userdata, seeded streams, safe host loans, and atomic dependent reloads. Replaced Rhai-specific operation and collection settings with a Lua instruction budget and a total VM memory ceiling; limit and conversion failures remain recoverable.
+- Added reproducible vendored Lua builds, plus Emscripten-free browser builds using WASI SDK 34, a dependency-provided shared allocator, and WebAssembly exception support. Games without scripting keep their existing browser toolchain.
+
 ### Runtime Spine
 - Breaking: the shell owns the fixed simulation tick. `App::fixed_update(frame, tick)` runs once per due tick between `input` and `simulation` (`ShellOptions::fixed_updates_per_second` and `HeadlessOptions::fixed_updates_per_second`, 60 by default), `FrameTime` gained `fixed_ticks` and `fixed_interpolation`, and `FixedTick` is exported from `runtime` and the prelude. `PhysicsWorld::present_at` blends bodies by the shell's fraction when physics steps once per tick.
 - Breaking: `World::update` is the one simulation boundary for `World` and `LevelRuntime`: delivered events and due timers, then systems and behaviors, then physics, then every owned body's pose written back to its entity, then contact events. `World` previously stepped physics first and never wrote poses back, and `LevelRuntime` clamped entity time to 0.1 seconds; both now run this order with the full elapsed time.

@@ -1,106 +1,109 @@
 # Game Scripts
-`joy_engine::game_script` (the `joy-game-script` crate) runs gameplay code written in [Rhai](https://rhai.rs), a small Rust-like scripting language implemented in pure Rust. Scripts are text assets: games load them through `GameAssets`, so native development builds hot reload behavior without rebuilding, while browser and release builds embed them. The same scripts run natively and in WebAssembly. A game can keep most of its rules and balance data in scripts: engine systems and hot inner loops (collision sweeps, projectile flight, structures, rendering) stay in Rust and are offered to scripts as host functions. FRAMEBREAK runs its whole battle (units, weapons, damage, AI, and missions), frame assembly, contract board, and every balance table this way.
+`joy_engine::game_script` runs gameplay rules and authored data in [Lua 5.4](https://www.lua.org/manual/5.4/), through a pinned [mlua](https://github.com/mlua-rs/mlua) binding. Enable the facade's `game-script` feature to use it. Games load `.lua` text through `GameAssets`: native development reloads edits, while browser and release builds embed the same source. Engine systems and hot inner loops remain Rust. FRAMEBREAK uses scripts for its battle rules, AI, assembly, missions, and balance tables.
 
-Rhai was chosen over Lua because the browser target is `wasm32-unknown-unknown`: Lua implementations wrap C code that needs a C toolchain and `setjmp`/`longjmp` there, while Rhai builds like any other Rust crate. It also enforces operation and depth limits, forbids file access by default, and binds Rust types directly.
+## Build Requirements
+The binding revision is `a0ad4535fc72ba89967a931c5be57b162b5f0f3f`, with `lua54`, `vendored`, and `serde` enabled. The locked `lua-src` package `551.1.0` supplies Lua **5.4.9**. Native builds need a C compiler; Cargo builds the vendored Lua source.
 
-## Modules
-| Module | Contents |
-| --- | --- |
-| `engine.rs` | `ScriptEngine` (the sandboxed language, host registration through `rhai_mut`, and `register_enum`) and `ScriptLimits`. |
-| `script.rs` | `Script` (compile one source or several parts, required hooks, hot reload through `replace_source`, `call`, and `call_as`), `ScriptHook`, and `ScriptState`. |
-| `library.rs` | `ScriptLibrary`: every source by name, `import` between them, hook scripts, data constants read into Rust, and hot reload that follows imports. |
-| `convert.rs` | `to_script_value`, `from_script_value`, and `script_vec3`, the `serde` bridge between host records and script values. |
-| `loan.rs` | `ScriptLoan`, which lends host state to registered functions for one call, and `ScriptResult`. |
-| `random.rs` | `ScriptRandom`, the script handle to a lent `SeededRandom`. |
-| `standard_library.rs` | Exact float comparisons, portable math, `vec3`, and `Random`. |
-| `error.rs` | `ScriptError` and `ScriptLocation`. |
+Browser builds keep Rust's `wasm32-unknown-unknown` target. Install WASI SDK 34 and set `WASI_SDK_PATH` (Linux x86-64 hosts can run `export WASI_SDK_PATH=$(bash joy-engine/scripts/rust/install-wasi-sdk.sh /path/to/cache)` from the hosting workspace). The wasm-bindgen CLI must match the locked Rust version (`0.2.129`). The existing npm browser commands configure the C compiler, archiver, C flags, and Rust linker flags before Cargo runs. Lua uses WASI's standard WebAssembly exception support for `setjmp` and `longjmp`. For direct browser checks from the engine root, run `node scripts/rust/lua-wasm-toolchain.mjs check --workspace --all-features --target wasm32-unknown-unknown --locked`.
 
-## Hosting a Script
-A host owns one `ScriptEngine`, registers its types on it, and compiles each script with the hooks it will call. Each scripted object owns a `ScriptState`, the object map a hook sees as `this`:
+The browser workflow preserves WebAssembly feature metadata through binding generation, exports `__wasm_call_ctors`, and supplies the WASI adapter before startup. Release output removes debug names after binding generation. The platform crate selects a shared libc heap through `libc_alloc` and a small C alignment adapter. No authored unsafe Rust, C++ runtime, or Emscripten is required. The browser adapter exposes no preopened files or directories, process arguments, or environment variables. Games that do not enable `game-script` need no WASI build tools.
+
+## Hosting Hooks
+A host owns one `ScriptEngine` and registers bindings before compiling. Each script runs in a private global environment; sources compiled as parts share their function declarations. Lexical locals belong to their own source chunk. A hook's first argument is explicitly `this`; `ScriptHook` arity counts only the remaining host arguments.
 
 ```rust
-use joy_engine::game_script::{Script, ScriptEngine, ScriptHook, ScriptLimits, ScriptState};
+use joy_engine::game_script::{Script, ScriptEngine, ScriptHook, ScriptState};
 
-const HOOKS: [ScriptHook; 2] = [ScriptHook::new("init", 0), ScriptHook::new("tick", 1)];
-
-let mut engine = ScriptEngine::new(ScriptLimits::default());
-// engine.rhai_mut().register_type_with_name::<MyView>("MyView").register_get("speed", ...);
-let script = Script::compile(&engine, "assets/scripts/charger.rhai", source, &HOOKS)?;
-
+let engine = ScriptEngine::default();
+let hooks = [ScriptHook::new("init", 0), ScriptHook::new("tick", 1)];
+let script = Script::compile(&engine, "scripts/charger.lua", source, &hooks)?;
 let mut state = ScriptState::new();
 script.call(&engine, "init", &mut state, ())?;
-let charge: f64 = script.call_as(&engine, "tick", &mut state, (elapsed_seconds,))?;
+let charge: f64 = script.call_as(&engine, "tick", &mut state, (0.5,))?;
 ```
 
-```rhai
-const RATE = 2.0;
+```lua
+local RATE = 2.0
 
-fn init() {
-    this.charge = 0.0;
-}
+function init(this)
+    this.charge = 0.0
+end
 
-fn tick(elapsed_seconds) {
-    this.add_charge(elapsed_seconds * global::RATE);
-    this.charge
-}
+function tick(this, elapsed_seconds)
+    add_charge(this, elapsed_seconds * RATE)
+    return this.charge
+end
 
-fn add_charge(amount) {
-    this.charge += amount;
-}
+function add_charge(this, amount)
+    this.charge = this.charge + amount
+end
 ```
 
-- A script's top level runs once, at compile time, and should only declare `const` values. Functions read them as `global::NAME`; Rhai functions cannot see other top-level variables.
-- Parameters are copies. Only `this` is shared, and helpers called as methods (`this.add_charge(…)`) share the caller's `this`. Return a modified value (`input = this.move(input)`) rather than expecting a parameter to change.
-- Reading a state field that was never set is an error, so typos surface immediately.
-- `spawn` and a few other names are reserved words in Rhai; hook names such as `init` and `think` are safe.
+`ScriptState::new()` has no VM until its first call or `set(lua, field, value)`. After binding it accepts only that VM. `from_value` adopts an existing table and reports a non-table value as an error. `get`, `get_as`, and `with_field` read fields; `edit_field` writes a replacement and reports conversion failures. A cloned state shares its table. States keep their VM alive, and state survives accepted hot reloads. An error ends the current call but keeps any mutations already made to state. Failed hooks close pending Lua 5.4 `<close>` locals while the same instruction budget and host loans remain active. Cleanup failures preserve the original runtime error; exhausted budgets can stop cleanup before it finishes.
 
-## Libraries, Imports, and Parts
-A game with more than one script keeps them in a `ScriptLibrary`: add every source by name (usually derived from its asset path), then compile the scripts whose hooks the host calls. Sources reach each other two ways:
+Lua tables use reference semantics. Passing a record, returning it, or assigning it to another field shares that table. Explicitly copy records when creating independent units or retaining historical snapshots. Array indices start at one; convert zero-based Rust collection IDs at the array access boundary. A missing field reads as `nil`, so arithmetic on a misspelled field errors, but optional fields need deliberate `nil` or `null` handling.
 
-- `import "data/parts" as parts;` loads another library source as a namespaced module. A module's top level runs once; its `export const` values are shared by every importer (`parts::ARM_WEAPONS`) and its functions are called qualified (`parts::find_part(id)`). Imports never read files.
-- `ScriptLibrary::compile_script_parts(name, parts, hooks)` assembles one hook script from several sources whose functions share a namespace. Rhai calls functions as methods (`this.units[i].advance(dt)`, which edits a unit in place) only within one namespace, so rules split across files for readability use parts rather than imports. Each part keeps its own constants and imports.
+## Libraries and Reloads
+`ScriptLibrary` owns sources by name, a module cache, and compiled hook scripts. A module returns an export table:
 
-`ScriptLibrary::replace_source` recompiles the edited source, every module that imports it, and every hook script built from it or importing it, and commits only if all of them compile. A broken edit changes nothing.
+```lua
+local PARTS = {
+    {id = "rifle", damage = 12.5, pellets = 1},
+    {id = "shotgun", damage = 4.0, pellets = 8},
+}
+return {PARTS = PARTS}
+```
 
-## Data Modules and Records
-Authored data can live in modules (`export const PARTS = [ ... ];`), with comments beside the numbers and helper functions for defaults. Rust reads it with `ScriptLibrary::constant::<T>(module, name)`, and any `serde` record moves in and out of scripts with `to_script_value` and `from_script_value`: structs become object maps, enums their variant names, `None` becomes `()`, and `f64` values stay bit for bit. Reading back is strict, so a missing field or misspelled variant is a `ScriptError::Conversion` naming the field. glam serializes `DVec3` as a plain array, so mark vector fields `#[serde(with = "script_vec3")]` (or `script_vec3::option`) to make them `vec3` values in scripts.
+Other sources use `local parts = require("data/parts")`. The name must match a source added by the host; imports never read arbitrary files. Exported tables, nested tables, table keys, and metatables are frozen, including cyclic graphs. Frozen tables retain their identity through private backing tables; writes, `rawset`, and table mutation functions cannot edit them. `pairs`, `ipairs`, `next`, length, and raw reads remain usable, while iteration and metatable inspection cannot expose the backing. Read frozen records from Rust through `from_script_value` or `constant`; direct mlua raw table traversal sees the empty proxy. The host conversion preserves serde array markers. Copy a catalog entry before changing an instance. Module functions may close over local constants; module initialization should only declare rules and data, with gameplay mutations owned by hook state. Reload candidates rebuild their imported module cache so a rejected edit cannot mutate an accepted module’s captured local values. Mutable module upvalues are not persistent gameplay state; retain that state in `ScriptState`.
 
-Records with `&'static str` fields cannot derive `Deserialize`; deserialize them through an owned spelling and intern the text, as FRAMEBREAK's `src/data/serde_static.rs` does.
+`compile_script_parts` runs several sources in one private namespace so `update_unit(this.units[index], dt)` can call a global helper declared in another part. Imports are normally top-level declarations. The library records the dependency graph while resolving imports. `replace_source` validates affected modules and every transitive hook importer before committing the new programs and source. A failed replacement restores the previous cache and dependency graph. An accepted replacement increments affected scripts' revisions; their host-owned object states are unchanged.
 
-## Hot Reload
-`Script::replace_source` compiles the new text with the same path and hooks. If it parses, runs, and defines every hook, it replaces the program and advances `revision`; otherwise it returns the error and the previous program keeps running. States belong to the host's objects, so every object keeps its fields across a reload; an edit that adds a field should set a default where the field is first read.
+`library.constant::<T>("data/parts", "PARTS")` reads an export into a serde record. Read and cache large catalogs during startup or accepted reloads, rather than converting them every frame.
 
-## Lending Host State
-Registered functions are `'static` closures and `unsafe` is forbidden, so scripts cannot borrow a host's world. `ScriptLoan<T>` moves a value into a shared slot for the length of one call and hands it back afterward. Registered functions read it with `read` or `write` and return `ScriptResult`. Handles a script keeps in `this` find the slot empty outside the call and fail with an error instead of reading stale state. Moving is a shallow copy, so lending a large owner every step is cheap. Hosts lending a field of `self` swap an empty stand-in into its place, and `lend_copy` copies small values in and back out.
+## Host Bindings and Loans
+Use the re-exported `mlua` crate, so host functions, tables, and userdata agree with the engine's pinned ABI:
 
-`ScriptRandom` lends a `SeededRandom` this way. The host keeps owning its gameplay stream, the script draws from it with `random.next_unit()` and `random.range(min, max)`, and Rust and script draws interleave in call order; host functions draw from the same lent stream with `ScriptRandom::with_stream`. Keep separate handles for gameplay and cosmetic streams. `seeded_random(seed)` gives a script its own stream for procedural generation (a seeded contract board), independent of every host stream.
+```rust
+use joy_engine::game_script::mlua;
 
-## Determinism
-Scripts compute in `f64`. The engine keeps script results identical to the equivalent Rust code, so a behavior can move between Rust and script without changing seeded recordings:
+engine.lua().globals().set(
+    "armor_damage",
+    engine.lua().create_function(|_, (damage, armor): (f64, f64)| {
+        Ok((damage - armor).max(0.0))
+    })?,
+)?;
+```
 
-- Rhai's float comparisons are approximate in builds with limits enabled: values within a relative `f64::EPSILON` compare equal, so `4.9e-17 <= 0.0` would be true. The standard library registers exact IEEE comparisons and turns off Rhai's operator fast path so they apply. Arithmetic still uses Rhai's built-ins, which are exact.
-- `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `exp`, `ln`, `log2`, `log10`, `powf`, `powi`, and `hypot` call `math::deterministic`. Rhai's own math package and the floating-point `**` operator, which use platform `f64` methods, are left out; `**` is a compile error.
-- `sqrt`, `floor`, `ceil`, `round`, `trunc`, `fract`, `min`, `max` (floats and integers), `clamp`, `lerp`, `PI()`, `TAU()`, `to_float`, and `to_int` match their Rust counterparts.
-- `vec3(x, y, z)` wraps `DVec3`: `x`, `y`, and `z` fields; `+`, `-`, `*`, and `/` (by vectors or scalars); `==` and `!=`; and `length`, `length_squared`, `distance`, `dot`, `cross`, and `lerp` methods. Normalization is left to scripts so they choose their own zero-length fallback.
-- Clock functions are compiled out (Rhai's `no_time` feature).
+Rust host view types implement `mlua::UserData`; methods are called with Lua's colon syntax (`world:unit_position(id)`). Use `ScriptVec3(position)` to return an engine `DVec3`. `register_enum` builds a readonly table from host values implementing `IntoScriptValue`; userdata variants define equality and display in their own `UserData` implementation. Typed hook results use `FromScriptValue`: scalars, original Lua handles, vectors, options, sequences, and maps. Frozen collections are read through their private backing storage; returning a `Table` or `Value`, including inside a collection, preserves its original identity and never exposes the backing. Custom host result types implement `FromScriptValue` and can delegate userdata conversion to their existing `mlua::FromLua` implementation. Typed collection traversal follows the finite Rust result type; serde record conversion below retains its graph cycle and depth checks.
 
-FRAMEBREAK's hostile AI was first ported line for line from Rust to `assets/scripts/hostile.rhai` with its six recorded battles matching exactly; its frame assembly and contract board ports still match their recordings exactly.
+Host hook arguments use `IntoScriptArguments`: tuples of checked scalar values, Lua handles, `ScriptRandom`, `ScriptVec3`, and recursively checked Rust collections. Wrap custom host userdata as `ScriptUserData(my_view)` in the argument tuple; mlua callbacks continue using their normal `UserData` return values. Nested foreign handles are rejected before mlua can push them, including on browser builds where Rust panics abort. Binding registration and direct calls through `lua()` are trusted host operations, which can bypass the script sandbox and hook budget.
 
-## Sandbox and Limits
-Scripts cannot read files or the clock, and import only other sources of their library. Every hook call runs under `ScriptLimits`: an operation budget (200,000 operations by default, which stops a runaway loop in well under a millisecond), a call depth of 32, an expression depth of 64, and strings, arrays, and maps of at most 10,000 elements. Rhai checks collection sizes by walking the value being changed, so a host whose script state nests large collections (a battle record holding every unit) sets `collection_size` to zero and relies on the operation budget. A limit ends only that call with a `ScriptError::Runtime`; the script and its states stay usable. `print` and `debug` write to the `log` facade at info and debug levels.
+`ScriptLoan<T>` safely moves a host owner into a temporary slot for a batch of calls. Registered callbacks capture a cloned loan and use `read` or `write`; access outside a lending call, or reentrant conflicting access, returns `mlua::Error`. `lend` returns the owner and callback result. `lend_copy` is for small copied values such as a random stream. Nested loans restore their outer value, including when a Rust callback unwinds. Retaining a script handle never extends access to a completed loan. Host callbacks must bound their own CPU and Rust allocations.
 
-## Performance
-Rhai interprets its syntax tree, so script code runs roughly 100 to 300 times slower than the equivalent Rust. Measured in FRAMEBREAK (release, native): a scripted hostile decision costs about 30 µs, and a full battle step with seven units (AI, movement, mounts, firing, damage, and the mission) about 1.5 ms. Keep per-element inner loops (collision sweeps, projectile flight, particle updates) in Rust as host functions, and write scripts to avoid copies:
+## Serde and Numeric Contracts
+`to_script_value(lua, context, &record)` and `from_script_value(lua, context, &value)` make VM ownership explicit. Tables and userdata from another VM are errors. Host vectors annotated with `#[serde(with = "script_vec3")]`, or `script_vec3::option`, become immutable `ScriptVec3` userdata. Other arrays stay arrays. Cyclic records and nesting deeper than 64 tables are conversion errors, avoiding recursive stack overflow on authored values.
 
-- Reading a variable, an array element, or a field into a local (`let unit = this.units[i]`, `for unit in this.units`) copies it, nested maps included. Read and write through the path instead (`this.units[i].armor`), and loop over indices.
-- Parameters are copies too: pass the few values a function needs rather than whole records, and edit records through method calls on their path.
-- Script functions win over host functions of the same name and arity, so name script methods distinctly from host functions (`move_body`, not `integrate`).
+`Option::None` becomes the global `null` sentinel, including inside arrays. Unlike `nil`, it keeps a one-based slot present and preserves length. Nullable script fields written back to Rust should use `null`. An array such as `{unit, null, unit}` retains all three entries. Sequences serialized from Rust or passed through checked `Vec`, slice, and array arguments carry mlua's array marker, preserving empty-array shape through serde. Typed `Option` results accept both `nil` and `null`.
 
-## Errors
-`ScriptError` messages lead with `path:line:column`. Runtime errors unwrap nested script calls to the line that failed and name the call stack (`think → move_frame`). Hosts decide what a failed call means; FRAMEBREAK idles the unit for that step and reports each distinct failure once.
+Lua 5.4 has signed 64-bit integers and `f64` floating-point numbers. Integer operations retain Lua integer semantics; mixing floats promotes arithmetic to floating point. Engine vector components and portable scalar helpers use `f64`. Integer IDs within `i64` retain exact values; converting large integers to floats can lose precision. Use explicit integer formatting for IDs and labels when a portable helper returns a float. The standard library exposes portable `sin`, `cos`, `tan`, `atan2`, `exp`, `ln`, `powf`, `powi`, `hypot`, and other engine math helpers, plus `sqrt`, `floor`, `round`, `abs`, `min`, `max`, `clamp`, `lerp`, `PI()`, and `TAU()`. The `math` namespace routes its transcendental functions to the same portable helpers. Use `fmod` for truncating remainder when porting Rust `%`; Lua `%` uses floor remainder.
 
-## Entity Scripts
-Games that build their world from `joy_engine::gameplay` entities do not bind their own types: an authored `script` component names a library script, and `gameplay::ScriptSystem` runs its `init(entity)` and `update(entity, world, elapsed_seconds)` hooks (`ENTITY_SCRIPT_HOOKS`) against engine-owned `Entity` and `World` views, applying the commands scripts return (`spawn`, `remove`, `send`, `start_timer`, `set_velocity`, `apply_impulse`, `move_to`). Create the library from `gameplay::entity_script_engine`, which registers those views; the world view's queries (`within`, `nearest`, `position`, `timer_fired`, `contacts`, `events`) read a snapshot captured once per update. This is the line between script and Rust: scripts decide, the world applies, and anything that needs solver access or runs per particle stays in Rust. See [simulation](rust-simulation.md#entity-scripts).
+Hooks and modules compile as text only. The platform `^` operator is rejected before compilation; use `powf(base, exponent)`. Dynamic source loading is unavailable, so scripts cannot compile around this restriction. Quoted strings, long strings, and comments are ordinary Lua text. `vec3(x, y, z)` creates engine f64 userdata with arithmetic and colon methods (`length`, `distance`, `dot`, `cross`, `lerp`, and normalization). Vectors are immutable: rebuild a vector to edit a component. Assigning a vector to a second field is safe because arithmetic produces a new value.
 
-## Binding Types
-Register host types on `ScriptEngine::rhai_mut()` with Rhai's API (`register_type_with_name`, `register_get`, `register_get_set`, and `register_fn`), re-exported as `joy_engine::game_script::rhai`, so games never depend on `rhai` directly and the engine pins one version. `register_enum` registers an enumeration whose variants read as `Type::Variant` and compare with `==`. Prefer small read-only views passed by value (wrap a snapshot in `Rc` so script copies are cheap), lend owned state that scripts query, and return decisions as values the host applies, so scripts never mutate simulation state behind the host's back.
+`ScriptRandom` exposes `random:next_unit()` and `random:range(minimum, maximum)`. Each method advances the engine's seeded stream exactly once. `random.lend(&mut host_stream, || ...)` preserves host/script draw order. `seeded_random(seed)` creates a separate script-owned stream. Gameplay and cosmetic streams remain separate; unseeded `math.random` and clocks are unavailable.
+
+## Limits and Diagnostics
+`ScriptLimits` exposes two honest Lua limits:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `instructions_per_call` | 2,000,000 | Lua VM instructions, including nested imports and protected calls. Native library work and Rust callbacks are outside this count. Zero disables it. |
+| `memory_bytes` | 64 MiB | Total VM allocations for scripts, modules, and persistent states, excluding trusted host Rust allocations. Zero disables it. |
+
+Each hook and top-level script evaluation starts a new budget. A hook executes on a fresh host-owned coroutine. A count hook raises an error when the instruction budget is exhausted. Sandboxed `pcall` and `xpcall` check the budget before running their handlers or continuing, so protected calls cannot swallow exhaustion, including inside nonyieldable native callbacks such as `table.sort` comparators and `string.gsub` replacements. Imports share their caller's budget. The next host call starts fresh.
+
+Coroutines and authored `__gc` finalizers are unavailable: Lua disables instruction hooks during garbage-collection finalizers. Standard library tables and the shared string metatable are protected from script edits. Allocation failure reports a script error; releasing state and collecting garbage can recover space. Native library operations and trusted host callbacks must bound their own CPU work; this instruction budget is not a wall-clock deadline. Lua's built-in parser and VM stack limits are not exposed as configurable expression or call-depth settings.
+
+`ScriptError` distinguishes compilation, missing hooks, undeclared hooks, return conversion, runtime errors, and serde conversion. Errors retain the source path and Lua traceback, including Lua's usual omission of eliminated tail-call frames. Lines are one-based; columns are zero when unavailable. A rejected reload leaves the previous program active, making these diagnostics suitable for live authoring overlays.
+
+## Validation
+Run `cargo test -p joy-game-script` from the engine workspace for hook state, source parts, transitive reload acceptance and rollback, safe loans, null slots, cyclic and deep tables, foreign VM rejection, deterministic math and random draws, allocation ceilings, and protected-call budget recovery. Consumers additionally retain their existing gameplay recordings and browser captures; changing runtimes does not justify re-recording unexplained simulation differences.

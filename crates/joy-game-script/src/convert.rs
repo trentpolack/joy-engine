@@ -5,7 +5,7 @@
 //! without registering a getter and setter per field.
 //!
 //! Structs become object maps keyed by field name, enums become their variant name (unit variants) or a one-key map,
-//! `Option::None` becomes `()`, and sequences become arrays. Integers become script integers and `f64` stays `f64`
+//! `Option::None` becomes `null`, and sequences become arrays. Integers become script integers and `f64` stays `f64`
 //! bit for bit, so seeded state survives the round trip. Reading back is strict: a missing field (without a serde
 //! default), an unknown variant, or a wrong type is a [`ScriptError::Conversion`] naming the field.
 //!
@@ -15,27 +15,32 @@
 //! `vec3` values, and fields scripts set to `vec3` read back into them. Unmarked `DVec3` fields stay arrays.
 
 use joy_core::math::DVec3;
-use rhai::Array;
-use rhai::Dynamic;
-use rhai::Map;
+use mlua::Lua;
+use mlua::LuaSerdeExt;
+use mlua::Value;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use std::collections::BTreeSet;
 
 use crate::error::ScriptError;
+use crate::standard_library::ScriptVec3;
 
 /// The one-key map a marked vector serializes to on its way to becoming a script `vec3`.
 const VECTOR_MARKER: &str = "__joy_vec3";
 
 /// Convert a host record into a script value. `context` names the value in errors (`"unit 12"`).
-pub fn to_script_value<T: Serialize>(context: &str, value: &T) -> Result<Dynamic, ScriptError> {
-    let value = rhai::serde::to_dynamic(value).map_err(|error| conversion_error(context, &error))?;
-    Ok(markers_to_vectors(value))
+pub fn to_script_value<T: Serialize>(lua: &Lua, context: &str, value: &T) -> Result<Value, ScriptError> {
+    let value = lua.to_value(value).map_err(|error| conversion_error(context, &error))?;
+    convert(lua, &value, true, 0, &mut BTreeSet::new()).map_err(|error| conversion_error(context, &error))
 }
 
-/// Read a script value as a host record. `context` names the value in errors (`"data/parts PARTS"`).
-pub fn from_script_value<T: DeserializeOwned>(context: &str, value: &Dynamic) -> Result<T, ScriptError> {
-    let value = vectors_to_markers(value);
-    rhai::serde::from_dynamic(&value).map_err(|error| conversion_error(context, &error))
+/// Read a script value as a host record. Rejects foreign VM handles, cycles, and nesting deeper than 64 tables.
+/// Repeated references without a cycle are read as independent host records. `null` preserves nullable array slots.
+pub fn from_script_value<T: DeserializeOwned>(lua: &Lua, context: &str, value: &Value) -> Result<T, ScriptError> {
+    crate::engine::ensure_owner(lua, value).map_err(|error| conversion_error(context, &error))?;
+    let value =
+        convert(lua, value, false, 0, &mut BTreeSet::new()).map_err(|error| conversion_error(context, &error))?;
+    lua.from_value(value).map_err(|error| conversion_error(context, &error))
 }
 
 /// `#[serde(with = "script_vec3")]` for `DVec3` fields shared with scripts (see the module documentation).
@@ -61,7 +66,7 @@ pub mod script_vec3 {
         Ok(DVec3::new(x, y, z))
     }
 
-    /// `#[serde(with = "script_vec3::option")]` for `Option<DVec3>` fields; `None` is `()` in scripts.
+    /// `#[serde(with = "script_vec3::option")]` for `Option<DVec3>` fields; `None` is `null` in scripts.
     pub mod option {
         use joy_core::math::DVec3;
         use serde::Deserialize;
@@ -122,51 +127,57 @@ fn conversion_error(context: &str, error: &dyn std::fmt::Display) -> ScriptError
     }
 }
 
-/// Replace every vector marker map with a `vec3`, in place.
-fn markers_to_vectors(value: Dynamic) -> Dynamic {
-    if value.is_map() {
-        let mut map = value.cast::<Map>();
-        if map.len() == 1
-            && let Some(components) = map.get(VECTOR_MARKER).and_then(vector_components)
+/// Bound recursion before traversing authored values; a graph containing a cycle is not a serde record.
+fn convert(
+    lua: &Lua,
+    value: &Value,
+    to_vectors: bool,
+    depth: usize,
+    ancestors: &mut BTreeSet<usize>,
+) -> mlua::Result<Value> {
+    crate::engine::ensure_owner(lua, value)?;
+    if depth > 64 {
+        return Err(mlua::Error::runtime("script record exceeds 64 levels of nesting"));
+    }
+    if !to_vectors
+        && let Value::UserData(userdata) = value
+        && let Ok(vector) = userdata.borrow::<ScriptVec3>()
+    {
+        let marker = lua.create_table()?;
+        marker.raw_set(VECTOR_MARKER, lua.create_sequence_from(vector.0.to_array())?)?;
+        return Ok(Value::Table(marker));
+    }
+    let Value::Table(table) = value else {
+        return Ok(value.clone());
+    };
+    let table = crate::frozen::backing(lua, table)?;
+    let pointer = table.to_pointer() as usize;
+    if !ancestors.insert(pointer) {
+        return Err(mlua::Error::runtime("cyclic table cannot be converted to a host record"));
+    }
+    let result = (|| {
+        if to_vectors
+            && table.pairs::<Value, Value>().count() == 1
+            && let Value::Table(components) = table.raw_get::<Value>(VECTOR_MARKER)?
         {
-            return Dynamic::from(DVec3::from_array(components));
+            let components =
+                [components.raw_get::<f64>(1)?, components.raw_get::<f64>(2)?, components.raw_get::<f64>(3)?];
+            return Ok(Value::UserData(lua.create_userdata(ScriptVec3(DVec3::from_array(components)))?));
         }
-        for entry in map.values_mut() {
-            *entry = markers_to_vectors(std::mem::take(entry));
+        let copy = lua.create_table()?;
+        if table.metatable().is_some_and(|metatable| metatable.to_pointer() == lua.array_metatable().to_pointer()) {
+            copy.set_metatable(Some(lua.array_metatable()))?;
         }
-        return Dynamic::from_map(map);
-    }
-    if value.is_array() {
-        let array: Array = value.cast::<Array>().into_iter().map(markers_to_vectors).collect();
-        return Dynamic::from_array(array);
-    }
-    value
-}
-
-/// A copy of `value` with every `vec3` replaced by a vector marker map, for deserializing.
-fn vectors_to_markers(value: &Dynamic) -> Dynamic {
-    if let Some(vector) = value.read_lock::<DVec3>() {
-        let components: Array = vector.to_array().into_iter().map(Dynamic::from_float).collect();
-        let mut map = Map::new();
-        map.insert(VECTOR_MARKER.into(), Dynamic::from_array(components));
-        return Dynamic::from_map(map);
-    }
-    if let Some(map) = value.read_lock::<Map>() {
-        let copy: Map = map.iter().map(|(key, entry)| (key.clone(), vectors_to_markers(entry))).collect();
-        return Dynamic::from_map(copy);
-    }
-    if let Some(array) = value.read_lock::<Array>() {
-        return Dynamic::from_array(array.iter().map(vectors_to_markers).collect());
-    }
-    value.clone()
-}
-
-/// The three floats of a marker's component array.
-fn vector_components(value: &Dynamic) -> Option<[f64; 3]> {
-    let array = value.read_lock::<Array>()?;
-    if array.len() != 3 {
-        return None;
-    }
-    let component = |index: usize| array[index].as_float().ok();
-    Some([component(0)?, component(1)?, component(2)?])
+        for pair in table.pairs::<Value, Value>() {
+            let (key, entry) = pair?;
+            if matches!(key, Value::Table(_) | Value::UserData(_) | Value::Function(_) | Value::Thread(_)) {
+                return Err(mlua::Error::runtime("host records require scalar table keys"));
+            }
+            let entry = convert(lua, &entry, to_vectors, depth + 1, ancestors)?;
+            copy.raw_set(key, entry)?;
+        }
+        Ok(Value::Table(copy))
+    })();
+    ancestors.remove(&pointer);
+    result
 }

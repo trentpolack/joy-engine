@@ -14,7 +14,7 @@
 //! | Layer | Modules (crates) | Owns |
 //! | --- | --- | --- |
 //! | foundation | [`core`] (`joy-core`), [`scripting`] (`joy-core`), [`render_types`] (`joy-render-types`) | Math, transforms, colors, seeded random, primitive shapes, script language information; GPU-free meshes, materials, and lights |
-//! | simulation | [`environment`] (`joy-environment`), [`terrain`] (`joy-terrain`), [`physics`] (`joy-physics`), [`gameplay`] (`joy-gameplay`), [`game_script`] (`joy-game-script`) | Solar time and wind, terrain heightfields, tile pyramids, streaming, detail, and craters, rigid bodies and vehicles, entities, controllers, levels, sandboxed Rhai game scripts |
+//! | simulation | [`environment`] (`joy-environment`), [`terrain`] (`joy-terrain`), [`physics`] (`joy-physics`), [`gameplay`] (`joy-gameplay`), `game_script` (`joy-game-script`) | Solar time and wind, terrain heightfields, tile pyramids, streaming, detail, and craters, rigid bodies and vehicles, entities, controllers, levels, sandboxed Lua game scripts (`game-script` feature) |
 //! | content | [`dcc`] (`joy-dcc-gltf`), [`form`] (`joy-form`), [`particles`] (`joy-fx`), [`project`] (`joy-project`) | GLB and glTF mesh import, the FORM procedural modeling language (renderer-free geometry), `.joyfx` particle documents, scripts, and simulation, project manifests |
 //! | rendering | [`rendering`] (`joy-renderer`, `joy-scene`) | The wgpu renderer every game, tool, and preview draws with, including particle drawing, and the scene presentation of levels, FORM meshes, and effects |
 //! | platform | [`runtime`] (`joy-app`, `joy-input`, `joy-audio`, `joy-storage`, `joy-ui`), [`development`] (`joy-devtools`, `joy-authoring`) | The game shell, frame phases, input and gamepads, audio, storage, egui UI and theme, dev tools, the authoring kit, browser glue |
@@ -77,6 +77,7 @@ pub use joy_render_types as render_types;
 #[doc(inline)]
 pub use joy_environment as environment;
 #[doc(inline)]
+#[cfg(feature = "game-script")]
 pub use joy_game_script as game_script;
 #[doc(inline)]
 pub use joy_gameplay as gameplay;

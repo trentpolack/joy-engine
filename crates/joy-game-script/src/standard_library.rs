@@ -1,12 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The engine's script standard library: exact float comparisons, portable scalar math, the `vec3` type, and the
-//! `Random` stream handle.
-//!
-//! Every function computes exactly what the matching Rust helper computes (IEEE comparisons,
-//! `joy_core::math::deterministic`, `clamp`, and glam's `DVec3` operators), so a behavior ported between Rust and script
-//! keeps its results bit for bit.
+//! Portable scalar math, immutable f64 vectors, and explicit seeded random streams.
 
 use std::f64::consts::PI;
 use std::f64::consts::TAU;
@@ -14,160 +9,196 @@ use std::f64::consts::TAU;
 use joy_core::math::DVec3;
 use joy_core::math::clamp;
 use joy_core::math::deterministic;
-use rhai::Engine;
-use rhai::INT;
+use mlua::FromLua;
+use mlua::Lua;
+use mlua::LuaSerdeExt;
+use mlua::MetaMethod;
+use mlua::Table;
+use mlua::UserData;
+use mlua::UserDataFields;
+use mlua::UserDataMethods;
+use mlua::Value;
 
-use crate::random::RANDOM_TYPE_NAME;
-use crate::random::ScriptRandom;
+use crate::ScriptRandom;
 
-/// Script type name of `DVec3`.
-pub const VECTOR_TYPE_NAME: &str = "vec3";
+type UnaryMath = fn(f64) -> f64;
+type BinaryMath = fn(f64, f64) -> f64;
 
-/// Register the standard library on `engine`.
-pub fn register(engine: &mut Engine) {
-    register_exact_comparisons(engine);
-    register_scalar_math(engine);
-    register_vectors(engine);
-    register_random(engine);
+/// An immutable Y-up world vector computed in `f64`, with immutable components. Arithmetic returns new
+/// userdata; assigning one vector to another field never creates a mutable alias. Rebuild a vector to edit components.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScriptVec3(pub DVec3);
+
+impl FromLua for ScriptVec3 {
+    fn from_lua(value: Value, lua: &Lua) -> mlua::Result<Self> {
+        crate::engine::ensure_owner(lua, &value)?;
+        if let Value::UserData(userdata) = &value {
+            return Ok(*userdata.borrow::<Self>()?);
+        }
+        Err(mlua::Error::FromLuaConversionError {
+            from: value.type_name(),
+            to: "vec3".into(),
+            message: Some("expected an f64 vec3 userdata".into()),
+        })
+    }
 }
 
-// -------------------------------------------------------------------------------------------------------------------
-// Comparisons
-// -------------------------------------------------------------------------------------------------------------------
-
-/// IEEE comparisons for floats, and for floats against integers, plus logical not.
-///
-/// Rhai's built-in float comparisons are approximate in builds with limits enabled: values within a relative
-/// `f64::EPSILON` compare equal, so a countdown at `4.9e-17` already passes `timer <= 0.0` a step before the same Rust
-/// code does. Ported behavior would drift from its Rust original and from golden recordings. The engine turns off
-/// Rhai's operator fast path ([`Engine::set_fast_operators`] in [`crate::ScriptEngine::new`]) so these registered
-/// operators replace the built-ins.
-fn register_exact_comparisons(engine: &mut Engine) {
-    engine
-        .register_fn("==", |left: f64, right: f64| left == right)
-        .register_fn("!=", |left: f64, right: f64| left != right)
-        .register_fn("<", |left: f64, right: f64| left < right)
-        .register_fn("<=", |left: f64, right: f64| left <= right)
-        .register_fn(">", |left: f64, right: f64| left > right)
-        .register_fn(">=", |left: f64, right: f64| left >= right);
-
-    // Mixed operands promote the integer, as Rust code written with `as f64` would.
-    engine
-        .register_fn("==", |left: INT, right: f64| (left as f64) == right)
-        .register_fn("!=", |left: INT, right: f64| (left as f64) != right)
-        .register_fn("<", |left: INT, right: f64| (left as f64) < right)
-        .register_fn("<=", |left: INT, right: f64| (left as f64) <= right)
-        .register_fn(">", |left: INT, right: f64| (left as f64) > right)
-        .register_fn(">=", |left: INT, right: f64| (left as f64) >= right)
-        .register_fn("==", |left: f64, right: INT| left == (right as f64))
-        .register_fn("!=", |left: f64, right: INT| left != (right as f64))
-        .register_fn("<", |left: f64, right: INT| left < (right as f64))
-        .register_fn("<=", |left: f64, right: INT| left <= (right as f64))
-        .register_fn(">", |left: f64, right: INT| left > (right as f64))
-        .register_fn(">=", |left: f64, right: INT| left >= (right as f64));
-
-    // Rhai implements `!` only on the fast path; every other operator keeps a registered or built-in fallback.
-    engine.register_fn("!", |value: bool| !value);
+impl UserData for ScriptVec3 {
+    fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("x", |_, vector| Ok(vector.0.x));
+        fields.add_field_method_get("y", |_, vector| Ok(vector.0.y));
+        fields.add_field_method_get("z", |_, vector| Ok(vector.0.z));
+    }
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_meta_method(MetaMethod::Add, |_, left, right: Self| Ok(Self(left.0 + right.0)));
+        methods.add_meta_method(MetaMethod::Sub, |_, left, right: Self| Ok(Self(left.0 - right.0)));
+        methods.add_meta_method(MetaMethod::Unm, |_, vector, ()| Ok(Self(-vector.0)));
+        methods.add_meta_function(MetaMethod::Mul, |lua, (left, right): (Value, Value)| match (&left, &right) {
+            (Value::UserData(_), Value::UserData(_)) => {
+                Ok(Self(Self::from_lua(left, lua)?.0 * Self::from_lua(right, lua)?.0))
+            }
+            (Value::UserData(_), _) => Ok(Self(Self::from_lua(left, lua)?.0 * f64::from_lua(right, lua)?)),
+            _ => Ok(Self(f64::from_lua(left, lua)? * Self::from_lua(right, lua)?.0)),
+        });
+        methods.add_meta_method(MetaMethod::Div, |lua, left, right: Value| {
+            if matches!(right, Value::UserData(_)) {
+                Ok(Self(left.0 / Self::from_lua(right, lua)?.0))
+            } else {
+                Ok(Self(left.0 / f64::from_lua(right, lua)?))
+            }
+        });
+        methods.add_meta_method(MetaMethod::Eq, |_, left, right: Self| Ok(left == &right));
+        methods.add_meta_method(MetaMethod::ToString, |_, vector, ()| {
+            Ok(format!("vec3({}, {}, {})", vector.0.x, vector.0.y, vector.0.z))
+        });
+        methods.add_method("length", |_, vector, ()| Ok(vector.0.length()));
+        methods.add_method("length_squared", |_, vector, ()| Ok(vector.0.length_squared()));
+        methods.add_method("distance", |_, vector, other: Self| Ok(vector.0.distance(other.0)));
+        methods.add_method("dot", |_, vector, other: Self| Ok(vector.0.dot(other.0)));
+        methods.add_method("cross", |_, vector, other: Self| Ok(Self(vector.0.cross(other.0))));
+        methods.add_method("lerp", |_, vector, (other, amount): (Self, f64)| Ok(Self(vector.0.lerp(other.0, amount))));
+        methods.add_method("normalize", |_, vector, ()| Ok(Self(vector.0.normalize())));
+        methods.add_method("normalize_or_zero", |_, vector, ()| Ok(Self(vector.0.normalize_or_zero())));
+    }
 }
 
-// -------------------------------------------------------------------------------------------------------------------
-// Scalars
-// -------------------------------------------------------------------------------------------------------------------
-
-/// Portable transcendental functions, exact rounding and comparison helpers, constants, and number conversions.
-fn register_scalar_math(engine: &mut Engine) {
-    // Transcendental functions differ by platform in the standard library; these use the portable `libm` versions.
-    engine
-        .register_fn("sin", deterministic::sin)
-        .register_fn("cos", deterministic::cos)
-        .register_fn("tan", deterministic::tan)
-        .register_fn("asin", deterministic::asin)
-        .register_fn("acos", deterministic::acos)
-        .register_fn("atan", deterministic::atan)
-        .register_fn("atan2", deterministic::atan2)
-        .register_fn("exp", deterministic::exp)
-        .register_fn("ln", deterministic::ln)
-        .register_fn("log2", deterministic::log2)
-        .register_fn("log10", deterministic::log10)
-        .register_fn("powf", deterministic::powf)
-        .register_fn("powi", |base: f64, exponent: INT| deterministic::powi(base, saturate_exponent(exponent)))
-        .register_fn("hypot", deterministic::hypot);
-
-    // Correctly rounded IEEE operations, identical on every target.
-    engine
-        .register_fn("sqrt", f64::sqrt)
-        .register_fn("floor", f64::floor)
-        .register_fn("ceil", f64::ceil)
-        .register_fn("round", f64::round)
-        .register_fn("trunc", f64::trunc)
-        .register_fn("fract", f64::fract)
-        .register_fn("min", f64::min)
-        .register_fn("max", f64::max)
-        .register_fn("min", |left: INT, right: INT| left.min(right))
-        .register_fn("max", |left: INT, right: INT| left.max(right))
-        .register_fn("clamp", clamp)
-        .register_fn("lerp", |from: f64, to: f64, t: f64| from + ((to - from) * t));
-
-    engine
-        .register_fn("PI", || PI)
-        .register_fn("TAU", || TAU)
-        .register_fn("to_float", |value: INT| value as f64)
-        .register_fn("to_int", |value: f64| value as INT);
+pub(crate) fn register(lua: &Lua) -> mlua::Result<()> {
+    let globals = lua.globals();
+    // Only library-named, in-memory imports are installed later by ScriptLibrary. Environment access and
+    // dynamic loaders would bypass both private globals and the source-level portable-power restriction.
+    for name in ["os", "io", "package", "require", "load", "dofile", "loadfile", "collectgarbage", "coroutine", "debug"]
+    {
+        globals.raw_set(name, Value::Nil)?;
+    }
+    globals.raw_set("_G", Value::Nil)?;
+    globals.raw_set("null", lua.null())?;
+    globals.raw_set(
+        "print",
+        lua.create_function(|_, values: mlua::Variadic<Value>| {
+            log::info!("[script] {}", values.iter().map(|value| format!("{value:?}")).collect::<Vec<_>>().join(" "));
+            Ok(())
+        })?,
+    )?;
+    register_math(lua)?;
+    globals
+        .raw_set("vec3", lua.create_function(|_, (x, y, z): (f64, f64, f64)| Ok(ScriptVec3(DVec3::new(x, y, z))))?)?;
+    globals.raw_set("seeded_random", lua.create_function(|_, seed: i64| Ok(ScriptRandom::seeded(seed)))?)?;
+    for name in ["math", "string", "table", "utf8"] {
+        if let Value::Table(table) = globals.raw_get::<Value>(name)? {
+            crate::frozen::freeze(lua, &table)?;
+        }
+    }
+    Ok(())
 }
 
-/// The script exponent for `powi`, saturated to the range the portable implementation accepts.
-fn saturate_exponent(exponent: INT) -> i32 {
-    exponent.clamp(INT::from(i32::MIN), INT::from(i32::MAX)) as i32
-}
-
-// -------------------------------------------------------------------------------------------------------------------
-// Vectors
-// -------------------------------------------------------------------------------------------------------------------
-
-/// `vec3(x, y, z)`: Y-up world vectors in `f64`, with components, arithmetic, comparison, and products.
-fn register_vectors(engine: &mut Engine) {
-    engine
-        .register_type_with_name::<DVec3>(VECTOR_TYPE_NAME)
-        .register_fn("vec3", DVec3::new)
-        .register_get_set("x", |vector: &mut DVec3| vector.x, |vector: &mut DVec3, value: f64| vector.x = value)
-        .register_get_set("y", |vector: &mut DVec3| vector.y, |vector: &mut DVec3, value: f64| vector.y = value)
-        .register_get_set("z", |vector: &mut DVec3| vector.z, |vector: &mut DVec3, value: f64| vector.z = value);
-
-    // Operators; compound assignment (`+=`) falls back to these.
-    engine
-        .register_fn("+", |left: DVec3, right: DVec3| left + right)
-        .register_fn("-", |left: DVec3, right: DVec3| left - right)
-        .register_fn("-", |vector: DVec3| -vector)
-        .register_fn("*", |left: DVec3, right: DVec3| left * right)
-        .register_fn("*", |vector: DVec3, scale: f64| vector * scale)
-        .register_fn("*", |scale: f64, vector: DVec3| scale * vector)
-        .register_fn("/", |left: DVec3, right: DVec3| left / right)
-        .register_fn("/", |vector: DVec3, divisor: f64| vector / divisor)
-        .register_fn("==", |left: &mut DVec3, right: DVec3| *left == right)
-        .register_fn("!=", |left: &mut DVec3, right: DVec3| *left != right);
-
-    // Products and measures. `length` is `sqrt(dot)`, exact on every target.
-    engine
-        .register_fn("length", |vector: &mut DVec3| vector.length())
-        .register_fn("length_squared", |vector: &mut DVec3| vector.length_squared())
-        .register_fn("distance", |from: &mut DVec3, to: DVec3| from.distance(to))
-        .register_fn("dot", |left: &mut DVec3, right: DVec3| left.dot(right))
-        .register_fn("cross", |left: &mut DVec3, right: DVec3| left.cross(right))
-        .register_fn("lerp", |from: &mut DVec3, to: DVec3, t: f64| from.lerp(to, t))
-        .register_fn("to_string", |vector: &mut DVec3| format!("vec3({}, {}, {})", vector.x, vector.y, vector.z))
-        .register_fn("to_debug", |vector: &mut DVec3| format!("vec3({}, {}, {})", vector.x, vector.y, vector.z));
-}
-
-// -------------------------------------------------------------------------------------------------------------------
-// Random Streams
-// -------------------------------------------------------------------------------------------------------------------
-
-/// `Random` handles: `random.next_unit()` in `[0, 1)` and `random.range(min, max)`, one draw each, and
-/// `seeded_random(seed)` for a script-owned stream.
-fn register_random(engine: &mut Engine) {
-    engine
-        .register_type_with_name::<ScriptRandom>(RANDOM_TYPE_NAME)
-        .register_fn("seeded_random", |seed: INT| ScriptRandom::seeded(seed))
-        .register_fn("next_unit", |random: &mut ScriptRandom| random.next_unit())
-        .register_fn("range", |random: &mut ScriptRandom, minimum: f64, maximum: f64| random.range(minimum, maximum));
+fn register_math(lua: &Lua) -> mlua::Result<()> {
+    let globals = lua.globals();
+    let math = globals.raw_get::<Table>("math")?;
+    for name in ["random", "randomseed", "noise"] {
+        math.raw_set(name, Value::Nil)?;
+    }
+    let unary: &[(&str, UnaryMath)] = &[
+        ("sinh", deterministic::sinh),
+        ("cosh", deterministic::cosh),
+        ("tanh", deterministic::tanh),
+        ("sin", deterministic::sin),
+        ("cos", deterministic::cos),
+        ("tan", deterministic::tan),
+        ("asin", deterministic::asin),
+        ("acos", deterministic::acos),
+        ("atan", deterministic::atan),
+        ("exp", deterministic::exp),
+        ("ln", deterministic::ln),
+        ("log2", deterministic::log2),
+        ("log10", deterministic::log10),
+        ("sqrt", f64::sqrt),
+        ("floor", f64::floor),
+        ("ceil", f64::ceil),
+        ("round", f64::round),
+        ("trunc", f64::trunc),
+        ("fract", f64::fract),
+        ("abs", f64::abs),
+    ];
+    for &(name, function) in unary {
+        let binding = lua.create_function(move |_, value: f64| Ok(function(value)))?;
+        globals.raw_set(name, binding.clone())?;
+        // Lua's non-transcendental functions retain integer and variadic semantics. Global engine helpers
+        // deliberately use f64, while the standard math namespace keeps the ordinary Lua contracts.
+        if !matches!(name, "sqrt" | "floor" | "ceil" | "abs") {
+            math.raw_set(name, binding)?;
+        }
+    }
+    let binary: &[(&str, BinaryMath)] = &[
+        ("atan2", deterministic::atan2),
+        ("powf", deterministic::powf),
+        ("pow", deterministic::powf),
+        ("hypot", deterministic::hypot),
+        ("min", f64::min),
+        ("max", f64::max),
+        ("fmod", |left, right| left % right),
+    ];
+    for &(name, function) in binary {
+        let binding = lua.create_function(move |_, (left, right): (f64, f64)| Ok(function(left, right)))?;
+        globals.raw_set(name, binding.clone())?;
+        if !matches!(name, "min" | "max" | "fmod") {
+            math.raw_set(name, binding)?;
+        }
+    }
+    math.raw_set(
+        "atan",
+        lua.create_function(|_, (y, x): (f64, Option<f64>)| {
+            Ok(match x {
+                Some(x) => deterministic::atan2(y, x),
+                None => deterministic::atan(y),
+            })
+        })?,
+    )?;
+    math.raw_set(
+        "log",
+        lua.create_function(|_, (value, base): (f64, Option<f64>)| {
+            Ok(match base {
+                Some(base) => deterministic::ln(value) / deterministic::ln(base),
+                None => deterministic::ln(value),
+            })
+        })?,
+    )?;
+    globals.raw_set(
+        "powi",
+        lua.create_function(|_, (base, exponent): (f64, i64)| {
+            Ok(deterministic::powi(base, exponent.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32))
+        })?,
+    )?;
+    globals.raw_set(
+        "clamp",
+        lua.create_function(|_, (value, minimum, maximum): (f64, f64, f64)| Ok(clamp(value, minimum, maximum)))?,
+    )?;
+    globals.raw_set(
+        "lerp",
+        lua.create_function(|_, (from, to, amount): (f64, f64, f64)| Ok(from + ((to - from) * amount)))?,
+    )?;
+    globals.raw_set("PI", lua.create_function(|_, ()| Ok(PI))?)?;
+    globals.raw_set("TAU", lua.create_function(|_, ()| Ok(TAU))?)?;
+    globals.raw_set("to_float", lua.create_function(|_, value: f64| Ok(value))?)?;
+    globals.raw_set("to_int", lua.create_function(|_, value: f64| Ok(value as i64))?)?;
+    Ok(())
 }

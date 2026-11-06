@@ -140,9 +140,10 @@ impl EntityComponent for VehicleComponent {
 }
 
 /// Whether the engine provides a runtime component for an authored type: `physics` and `vehicle` here, and `script`
-/// (see [`ScriptComponent`](super::ScriptComponent)).
+/// when the `game-script` feature is enabled.
 pub(crate) fn is_built_in_component(kind: &str) -> bool {
-    matches!(kind, component_type::PHYSICS | component_type::VEHICLE | component_type::SCRIPT)
+    matches!(kind, component_type::PHYSICS | component_type::VEHICLE)
+        || (cfg!(feature = "game-script") && kind == component_type::SCRIPT)
 }
 
 /// The engine's runtime component for an authored type, when it provides one.
@@ -150,6 +151,7 @@ pub(crate) fn built_in_component(kind: &str) -> Option<Box<dyn EntityComponent>>
     match kind {
         component_type::PHYSICS => Some(Box::new(PhysicsBodyComponent::default())),
         component_type::VEHICLE => Some(Box::new(VehicleComponent)),
+        #[cfg(feature = "game-script")]
         component_type::SCRIPT => Some(Box::new(super::script_system::ScriptComponent::default())),
         _ => None,
     }

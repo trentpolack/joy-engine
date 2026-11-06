@@ -63,7 +63,7 @@ joy-devtools.workspace = true
 joy-environment.workspace = true
 joy-form.workspace = true
 joy-fx.workspace = true
-joy-game-script.workspace = true
+joy-game-script = { workspace = true, optional = true }
 joy-gameplay.workspace = true
 joy-input.workspace = true
 joy-physics.workspace = true
@@ -86,6 +86,8 @@ egui.workspace = true
 joy-test-support = { workspace = true, optional = true }
 
 [features]
+# Only consumers using gameplay scripts need the Lua VM and browser WASI runtime.
+game-script = ["dep:joy-game-script", "joy-gameplay/game-script", "joy-app/lua"]
 # Games enable this in `[dev-dependencies]` only (`joy-engine = { workspace = true, features = ["test-support"] }`),
 # so test helpers never reach game builds.
 test-support = ["dep:joy-test-support"]
@@ -199,10 +201,11 @@ png = "0.18.1"
 zune-jpeg = "0.5.15"
 image-webp = "0.2.4"
 
-# Game scripts (simulation layer): Rhai is pure Rust, so it builds for `wasm32-unknown-unknown` without a C toolchain.
-# `no_time` removes clock functions (they break replays and need a browser shim), `only_i64` keeps one integer type, and
-# `serde` converts host records to script values.
-rhai = { version = "1.27.0", default-features = false, features = ["std", "no_time", "only_i64", "serde"] }
+# Vendored Lua 5.4.9; this mlua revision supports WASI SDK 34 on wasm32-unknown-unknown.
+mlua = { git = "https://github.com/mlua-rs/mlua", rev = "a0ad4535fc72ba89967a931c5be57b162b5f0f3f", features = ["lua54", "vendored", "serde"] }
+cc = "1.11.1"
+# Browser Rust and Lua must allocate from the same WASI heap.
+libc_alloc = "1.0.7"
 
 # Physics (simulation layer). Enhanced determinism keeps native and WebAssembly simulations identical.
 rapier3d = { version = "0.36.1", features = ["enhanced-determinism"] }
@@ -312,7 +315,8 @@ layers = ["foundation", "simulation", "content", "rendering", "platform"]
 # Math types reach every crate through `joy_core::math`, so a math library change stays in one module.
 glam = ["foundation"]
 rapier3d = ["simulation"]
-rhai = ["simulation"]
+mlua = ["simulation"]
+libc_alloc = ["platform"]
 wgpu = ["rendering", "platform"]
 winit = ["platform"]
 egui = ["platform"]

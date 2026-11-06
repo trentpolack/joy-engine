@@ -22,6 +22,8 @@ npm run docs:api
 
 Browser builds require the wasm-bindgen CLI version pinned by `Cargo.lock`: `cargo install wasm-bindgen-cli --version <lockfile-version> --locked`. `npm run docs:api` generates rustdoc locally; generated API output is not committed. Run `cargo doc --workspace --no-deps --open` to browse it.
 
+Games using standard Lua 5.4 enable the facade's `game-script` feature. Lua is built through `mlua` with its `vendored` feature and a C compiler; browser builds additionally require WASI SDK 34 and `WASI_SDK_PATH`. Dependency versions, setup, and runtime integration are documented in [Game Scripts](docs/rust-game-script.md).
+
 The engine owns its Cargo workspace, tests, assets, schemas, and build tooling. A hosting repository such as [JoyGames](https://github.com/trentpolack/JoyGames) consumes it as a submodule and provides its own site commands. npm workspaces remain useful for build orchestration, captures, metadata, and patch delivery.
 
 ## Guides
