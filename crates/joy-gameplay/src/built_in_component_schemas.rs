@@ -28,6 +28,7 @@ use super::entity_definition::{
     number_to_json,
     vector_to_json,
 };
+use super::physics_component::physics_field;
 use joy_core::{
     JsonRecord,
     PrimitiveShape,
@@ -119,6 +120,41 @@ fn physics_schema() -> ComponentSchema {
                 step: Some(0.01),
                 default: Some(number_to_json(BODY_DEFAULTS.angular_damping)),
                 ..field("angularDamping", ComponentFieldKind::Number)
+            },
+            ComponentFieldSchema {
+                default: Some(json!(BODY_DEFAULTS.sensor)),
+                description: text("Reports overlaps as contact events but never collides."),
+                ..field(physics_field::SENSOR, ComponentFieldKind::Boolean)
+            },
+            ComponentFieldSchema {
+                label: text("report contacts"),
+                default: Some(json!(BODY_DEFAULTS.report_contacts)),
+                description: text("Reports when this body starts and stops touching others."),
+                ..field(physics_field::REPORT_CONTACTS, ComponentFieldKind::Boolean)
+            },
+            ComponentFieldSchema {
+                label: text("can sleep"),
+                default: Some(json!(BODY_DEFAULTS.can_sleep)),
+                description: text("Lets the body stop simulating once it comes to rest."),
+                ..field(physics_field::CAN_SLEEP, ComponentFieldKind::Boolean)
+            },
+            ComponentFieldSchema {
+                label: text("collision membership"),
+                min: Some(0.0),
+                max: Some(f64::from(u32::MAX)),
+                step: Some(1.0),
+                default: Some(json!(BODY_DEFAULTS.groups.membership)),
+                description: text("Bit mask of the collision layers this body belongs to."),
+                ..field(physics_field::COLLISION_MEMBERSHIP, ComponentFieldKind::Number)
+            },
+            ComponentFieldSchema {
+                label: text("collision filter"),
+                min: Some(0.0),
+                max: Some(f64::from(u32::MAX)),
+                step: Some(1.0),
+                default: Some(json!(BODY_DEFAULTS.groups.filter)),
+                description: text("Bit mask of the collision layers this body interacts with."),
+                ..field(physics_field::COLLISION_FILTER, ComponentFieldKind::Number)
             },
         ],
         presets: vec![

@@ -15,6 +15,7 @@ use joy_physics::{
     PhysicsError,
     PhysicsWorld,
     PhysicsWorldOptions,
+    SdfCollisionStatistics,
     SdfPrimitive,
     SdfShape,
     TerrainColliderOptions,
@@ -37,6 +38,18 @@ fn simulate(world: &mut PhysicsWorld, seconds: f32) {
     for _ in 0..(seconds * 60.0).round() as usize {
         world.step(1.0 / 60.0).unwrap();
     }
+}
+
+/// Step at 60 Hz for `seconds` and return the largest SDF pair and contact counts any step reported.
+fn simulate_tracking_sdf(world: &mut PhysicsWorld, seconds: f32) -> SdfCollisionStatistics {
+    let mut peak = SdfCollisionStatistics::default();
+    for _ in 0..(seconds * 60.0).round() as usize {
+        world.step(1.0 / 60.0).unwrap();
+        let statistics = world.sdf_collision_statistics();
+        peak.pairs = peak.pairs.max(statistics.pairs);
+        peak.contacts = peak.contacts.max(statistics.contacts);
+    }
+    peak
 }
 
 /// A gentle 64 x 64 meter landscape: two levels of 16-cell tiles at one meter per sample, centered on the origin.
@@ -140,8 +153,8 @@ fn primitive_and_sdf_bodies_rest_where_gameplay_samples_the_ground() {
                 },
             )
             .unwrap();
-        simulate(&mut world, 5.0);
-        let statistics = world.sdf_collision_statistics();
+        // Record the busiest SDF contact search while the ring settles; once bodies sleep the solver skips their pairs.
+        let statistics = simulate_tracking_sdf(&mut world, 5.0);
         assert!(statistics.pairs >= 1 && statistics.contacts >= 1, "the ring touches terrain: {statistics:?}");
         let ball_pose = world.body_transform(ball).unwrap();
         let prop_pose = world.body_transform(prop).unwrap();

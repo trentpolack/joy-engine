@@ -10,6 +10,10 @@
 //!
 //! Units: effects use caller-defined world units, seconds, radians, and linear HDR RGB.
 
+use std::hash::{
+    Hash,
+    Hasher,
+};
 use std::sync::Arc;
 
 use indexmap::IndexMap;
@@ -20,6 +24,7 @@ use serde_json::{
 };
 
 use crate::constants::{
+    ParticleBlend,
     ParticleParameterType,
     ParticleRenderer,
     ParticleValueKind,
@@ -64,6 +69,9 @@ const MAXIMUM_PARAMETER_MAGNITUDE: f64 = 1e6;
 
 /// Serialized name of an emitter light's shadow flag.
 pub const PARTICLE_LIGHT_CASTS_SHADOW: &str = "castsShadow";
+
+/// Serialized name of an emitter's blend mode ([`ParticleBlend`]); written only when it is not the default.
+pub const PARTICLE_EMITTER_BLEND: &str = "blend";
 
 /// Upper bounds of color parameter channels: linear RGB may exceed one for HDR tints, and alpha is opacity.
 const COLOR_PARAMETER_LIMITS: [f64; 4] =
@@ -307,6 +315,25 @@ pub struct ParticleTexture {
     pub looping: bool,
 }
 
+/// A compact identity for an embedded texture source, computed once when an effect compiles: equal source text in any
+/// definition yields the same id, so per-frame texture lookups compare 64-bit ids instead of hashing or comparing the
+/// (up to 4 MiB) base64 source.
+///
+/// The id is a hash of the source text; owners that key decoded images by it (the renderer's `ParticleTextureSet`)
+/// confirm the text once when they decode, so a collision is reported instead of drawing the wrong image.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ParticleTextureId(u64);
+
+impl ParticleTextureId {
+    /// The id of `source`, a `data:image/png;base64,…` texture source.
+    pub fn of(source: &str) -> Self {
+        // `DefaultHasher::new` uses fixed keys, so ids are stable for the life of the process (they are never stored).
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        source.hash(&mut hasher);
+        Self(hasher.finish())
+    }
+}
+
 /// Point-light emission for an emitter's particles.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ParticleLight {
@@ -339,6 +366,9 @@ pub struct ParticleEmitterAsset {
     pub lifetime: f64,
     /// Geometry family.
     pub renderer: ParticleRenderer,
+    /// How the particles composite over what is behind them (serialized as `blend`, written only when not
+    /// [`ParticleBlend::Alpha`]).
+    pub blend: ParticleBlend,
     /// Embedded texture; required by textured and flipbook renderers.
     pub texture: Option<ParticleTexture>,
     /// Particle point lights.
@@ -374,6 +404,9 @@ impl ParticleEmitterAsset {
         record.insert("bursts".to_owned(), Value::Array(bursts));
         record.insert("lifetime".to_owned(), json_number(self.lifetime));
         record.insert("renderer".to_owned(), Value::from(self.renderer.as_str()));
+        if self.blend != ParticleBlend::default() {
+            record.insert(PARTICLE_EMITTER_BLEND.to_owned(), Value::from(self.blend.as_str()));
+        }
         record.insert("spawn".to_owned(), Value::from(self.spawn.clone()));
         record.insert("update".to_owned(), Value::from(self.update.clone()));
         if let Some(light) = &self.light {
@@ -451,6 +484,8 @@ pub struct CompiledEmitter {
     pub asset: ParticleEmitterAsset,
     /// Pixel dimensions of the embedded texture, when present.
     pub texture_dimensions: Option<ParticleTextureDimensions>,
+    /// Compact identity of the embedded texture source, when present.
+    pub texture_id: Option<ParticleTextureId>,
     /// Compiled spawn script.
     pub spawn_program: ParticleScript,
     /// Compiled update script.
@@ -641,6 +676,7 @@ pub fn compile_particle_effect(input: &Value) -> Result<CompiledParticleEffect, 
         compiled.push(CompiledEmitter {
             asset: emitter.clone(),
             texture_dimensions,
+            texture_id: emitter.texture.as_ref().map(|texture| ParticleTextureId::of(&texture.source)),
             spawn_program,
             update_program,
             trail_index: emitter.trail.as_ref().and_then(|trail| index_of(&trail.emitter)),
@@ -769,6 +805,13 @@ fn read_emitter(value: &Value, index: usize) -> Result<ParticleEmitterAsset, Par
         .and_then(Value::as_str)
         .and_then(ParticleRenderer::parse)
         .ok_or_else(|| invalid(format!("{id}: unknown particle renderer.")))?;
+    let blend = match item.get(PARTICLE_EMITTER_BLEND) {
+        None => ParticleBlend::default(),
+        Some(value) => value
+            .as_str()
+            .and_then(ParticleBlend::parse)
+            .ok_or_else(|| invalid(format!("{id}: unknown particle blend mode.")))?,
+    };
     let (Some(Value::String(spawn)), Some(Value::String(update))) = (item.get("spawn"), item.get("update")) else {
         return Err(invalid(format!("{id}: spawn and update scripts must be strings.")));
     };
@@ -831,6 +874,7 @@ fn read_emitter(value: &Value, index: usize) -> Result<ParticleEmitterAsset, Par
         bursts,
         lifetime,
         renderer,
+        blend,
         texture,
         light,
         spawn: spawn.clone(),

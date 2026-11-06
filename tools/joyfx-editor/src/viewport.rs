@@ -4,7 +4,8 @@
 //! The particle preview, drawn only through the engine renderer: an orbit camera framed
 //! into the preview region, the editor grid, an optional matte light-receiver surface, editor backgrounds, particle
 //! textures with a prepare/activate lifecycle, the editor's display processing, and per-frame statistics for the
-//! performance monitor.
+//! performance monitor. Particles reach the renderer through the same `ParticleFrame` games use, rebuilt every frame
+//! into kept allocations.
 //!
 //! The viewport borrows the application's effect each frame and never advances it; preview settings are presentation
 //! only and never change the exported effect.
@@ -16,13 +17,10 @@ use joy_engine::math::{
 };
 use joy_engine::particles::{
     CompiledParticleEffect,
-    ParticleBatch,
-    ParticleCameraBasis,
     ParticleEffect,
-    ParticleRenderMetrics,
+    ParticleFrame,
     ParticleTextureSet,
     collect_particle_lights,
-    create_particle_render_metrics,
 };
 use joy_engine::rendering::post_process::{
     AgxLook,
@@ -37,7 +35,6 @@ use joy_engine::rendering::{
     PostProcessSettings,
     RegionCamera,
     RenderScene,
-    TransparentDraw,
 };
 use joy_engine::runtime::{
     RenderTarget,
@@ -48,7 +45,6 @@ use crate::constants::{
     PREVIEW_LIGHT_LIMIT,
     PerformanceMode,
 };
-use crate::preview_geometry::PreviewGeometry;
 
 /// Height of the light-receiver surface; the grid floats two units above it.
 pub const PREVIEW_RECEIVER_HEIGHT: f64 = -120.0;
@@ -110,17 +106,11 @@ impl PreviewRegion {
     }
 }
 
-/// One emitter's geometry statistics in detailed profiling.
+/// One emitter's preview statistics in detailed profiling.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct EmitterGeometry {
+pub struct EmitterPreview {
     /// Emitter id.
     pub id: String,
-    /// Triangles built in the last render.
-    pub triangles: u64,
-    /// Vertices built in the last render.
-    pub vertices: u64,
-    /// Geometry CPU time in the last render, in milliseconds.
-    pub geometry_ms: f64,
     /// Particle lights the emitter contributed.
     pub lights: usize,
 }
@@ -128,19 +118,17 @@ pub struct EmitterGeometry {
 /// Statistics from the last rendered frame.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PreviewStatistics {
-    /// Geometry, sorting, and batch assembly CPU time, in milliseconds.
-    pub geometry_ms: f64,
-    /// CPU time recording the frame's commands, in milliseconds (not GPU execution).
+    /// CPU time building the frame's particle instances, grid, and lights, in milliseconds.
+    pub instance_ms: f64,
+    /// CPU time culling, sorting, uploading, and recording the frame's commands, in milliseconds (not GPU execution).
     pub submission_ms: f64,
-    /// Sort and batch time in detailed profiling, in milliseconds.
-    pub sort_ms: f64,
-    /// Nonempty scene geometry batches (post-processing draws excluded).
+    /// Nonempty scene draw batches: the receiver, the grid, and each particle batch (post-processing excluded).
     pub scene_batches: usize,
-    /// Triangles submitted.
-    pub triangles: usize,
-    /// Vertices submitted.
-    pub vertices: usize,
-    /// Vertex bytes submitted (excluding uniforms and textures).
+    /// Particle instances submitted.
+    pub particles: usize,
+    /// Particle instances drawn after culling.
+    pub particles_drawn: usize,
+    /// Instance and vertex bytes submitted (excluding uniforms and textures).
     pub upload_bytes: usize,
     /// Particle lights drawn.
     pub lights: usize,
@@ -148,19 +136,18 @@ pub struct PreviewStatistics {
     pub omitted_lights: usize,
     /// Scene precision and the configured display signal, including HDR headroom when available.
     pub range: String,
-    /// Per-emitter geometry in detailed profiling.
-    pub by_emitter: Vec<EmitterGeometry>,
+    /// Per-emitter statistics in detailed profiling.
+    pub by_emitter: Vec<EmitterPreview>,
 }
 
 impl Default for PreviewStatistics {
     fn default() -> Self {
         Self {
-            geometry_ms: 0.0,
+            instance_ms: 0.0,
             submission_ms: 0.0,
-            sort_ms: 0.0,
             scene_batches: 0,
-            triangles: 0,
-            vertices: 0,
+            particles: 0,
+            particles_drawn: 0,
             upload_bytes: 0,
             lights: 0,
             omitted_lights: 0,
@@ -193,11 +180,10 @@ pub struct ParticleViewport {
     home: CameraHome,
     grid: EditorGrid,
     grid_spacing: Option<f64>,
-    geometry: PreviewGeometry,
+    particles: ParticleFrame,
     scene: RenderScene,
     textures: ParticleTextureSet,
     textures_ready: bool,
-    metrics: Option<ParticleRenderMetrics>,
     performance_mode: PerformanceMode,
     stats: PreviewStatistics,
     /// Whether the editor grid draws.
@@ -230,11 +216,10 @@ impl ParticleViewport {
             camera,
             grid: EditorGrid::new(),
             grid_spacing: None,
-            geometry: PreviewGeometry::default(),
+            particles: ParticleFrame::new(),
             scene: RenderScene::new(),
             textures: ParticleTextureSet::new(),
             textures_ready: false,
-            metrics: None,
             performance_mode: PerformanceMode::Overview,
             stats: PreviewStatistics::default(),
             grid_visible: true,
@@ -289,32 +274,25 @@ impl ParticleViewport {
 
     /// Commit `definition` (prepared first) as the displayed one, releasing images it no longer uses.
     pub fn set_effect(&mut self, definition: Option<&CompiledParticleEffect>) {
-        self.geometry.clear();
-        self.metrics = definition
-            .filter(|_| self.performance_mode == PerformanceMode::Detailed)
-            .map(create_particle_render_metrics);
+        self.particles.clear();
         self.textures.activate(definition);
         self.textures_ready = true;
     }
 
     /// Release every image.
     pub fn release_textures(&mut self) {
-        self.geometry.clear();
+        self.particles.clear();
         self.textures.clear();
         self.textures_ready = false;
     }
 
-    /// Switch summary or detailed timing without changing the effect.
-    pub fn set_performance_mode(&mut self, mode: PerformanceMode, definition: Option<&CompiledParticleEffect>) {
+    /// Switch summary or detailed statistics without changing the effect.
+    pub fn set_performance_mode(&mut self, mode: PerformanceMode) {
         if self.performance_mode == mode {
             return;
         }
         self.performance_mode = mode;
-        // Entering detailed profiling needs a fresh build to populate the new per-emitter counters.
-        self.geometry.clear();
-        self.metrics = definition.filter(|_| mode == PerformanceMode::Detailed).map(create_particle_render_metrics);
         self.stats.by_emitter.clear();
-        self.stats.sort_ms = 0.0;
     }
 
     /// Apply a drag of `delta` logical pixels in a preview `region_height` pixels tall.
@@ -412,7 +390,7 @@ impl ParticleViewport {
         region: PreviewRegion,
     ) -> Result<(), String> {
         let monitoring = self.performance_mode != PerformanceMode::Disabled;
-        let geometry_watch = Stopwatch::start();
+        let instance_watch = Stopwatch::start();
         let basis = self.camera.basis();
         let illumination = effect.map(|effect| collect_particle_lights(effect, PREVIEW_LIGHT_LIMIT));
         let lights = illumination.as_ref().map(|selection| selection.point_lights()).unwrap_or_default();
@@ -432,18 +410,14 @@ impl ParticleViewport {
             self.grid_spacing = None;
             &[]
         };
-        self.geometry
-            .prepare(
-                effect.filter(|_| self.textures_ready),
-                &ParticleCameraBasis::from(basis),
-                grid,
-                self.metrics.as_mut(),
-            )
-            .map_err(|error| error.to_string())?;
-        let batches = &self.geometry.batches;
-        let draws: Vec<TransparentDraw<'_>> =
-            self.textures.transparent_draws(batches).map_err(|error| error.to_string())?;
-        let geometry_ms = if monitoring { geometry_watch.elapsed_milliseconds() } else { 0.0 };
+
+        // Textured particles draw only once their images are committed; the renderer sorts the grid's triangles with
+        // the effect's batches.
+        self.particles.clear();
+        if let Some(effect) = effect.filter(|_| self.textures_ready) {
+            self.particles.add_effect(effect, Some(&self.textures)).map_err(|error| error.to_string())?;
+        }
+        let instance_ms = if monitoring { instance_watch.elapsed_milliseconds() } else { 0.0 };
 
         let camera = RegionCamera::new(&self.camera, region.viewport_size, region.min, region.size);
         let inputs = FrameInputs {
@@ -451,7 +425,8 @@ impl ParticleViewport {
             ambient: Some(PREVIEW_AMBIENT),
             clear_color: PREVIEW_BACKGROUNDS[self.background].2,
             opaque_triangles: &opaque,
-            transparent_draws: &draws,
+            transparent_triangles: grid,
+            particles: Some(&self.particles),
             ..FrameInputs::default()
         };
         let submission_watch = Stopwatch::start();
@@ -460,42 +435,32 @@ impl ParticleViewport {
             return Ok(());
         }
         let submission_ms = submission_watch.elapsed_milliseconds();
-        let vertices = opaque.len() + draws.iter().map(|draw| draw.triangle_count() * 3).sum::<usize>();
-        let upload_bytes = (opaque.len() * std::mem::size_of::<ColorVertex>())
-            + batches
-                .iter()
-                .map(|batch| match batch {
-                    ParticleBatch::Colored(vertices) => vertices.len() * std::mem::size_of::<ColorVertex>(),
-                    ParticleBatch::Textured {
-                        vertices,
-                        ..
-                    } => vertices.len() * 36,
-                })
-                .sum::<usize>();
+        let particles = self.particles.instances().len();
+        let upload_bytes = std::mem::size_of_val(opaque.as_slice())
+            + std::mem::size_of_val(grid)
+            + std::mem::size_of_val(self.particles.instances());
         let diagnostics = target.renderer().diagnostics();
-        let by_emitter = match (&self.metrics, &illumination) {
-            (Some(metrics), Some(illumination)) => metrics
-                .emitters
+        let by_emitter = match (&illumination, effect) {
+            (Some(illumination), Some(effect)) if self.performance_mode == PerformanceMode::Detailed => effect
+                .definition()
+                .emitters()
                 .iter()
                 .enumerate()
-                .map(|(index, row)| EmitterGeometry {
-                    id: row.id.clone(),
-                    triangles: row.triangles,
-                    vertices: row.vertices,
-                    geometry_ms: row.geometry_ms,
+                .map(|(index, emitter)| EmitterPreview {
+                    id: emitter.asset.id.clone(),
                     lights: illumination.lights.iter().filter(|light| light.emitter_index == index).count(),
                 })
                 .collect(),
             _ => Vec::new(),
         };
         self.stats = PreviewStatistics {
-            geometry_ms,
+            instance_ms,
             submission_ms,
-            sort_ms: self.metrics.as_ref().map_or(0.0, |metrics| metrics.sort_ms),
             scene_batches: usize::from(!opaque.is_empty())
-                + batches.iter().filter(|batch| batch.vertex_count() > 0).count(),
-            triangles: vertices / 3,
-            vertices,
+                + usize::from(!grid.is_empty())
+                + self.particles.batches().len(),
+            particles,
+            particles_drawn: diagnostics.particles,
             upload_bytes,
             lights: lights.len(),
             omitted_lights: illumination.as_ref().map_or(0, |selection| selection.omitted),

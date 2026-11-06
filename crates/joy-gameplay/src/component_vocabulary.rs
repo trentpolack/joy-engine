@@ -23,6 +23,8 @@ pub mod component_type {
     pub const EFFECT: &str = "effect";
     /// Post-processing settings applied inside the entity's volume, or everywhere when unbounded.
     pub const POST_PROCESS: &str = "postProcess";
+    /// Game-script behavior: names the library script whose hooks drive the entity (see `ScriptSystem`).
+    pub const SCRIPT: &str = "script";
 }
 
 /// Built-in component presets: named starting records offered when an author adds a component.

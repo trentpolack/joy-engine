@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Rigid bodies, raycast vehicles, and scene queries behind a backend-neutral API.
+//! Rigid bodies, raycast vehicles, contact and sensor events, and filtered scene queries behind a backend-neutral API.
 //!
 //! [`PhysicsWorld`] owns a rapier3d solver and every body created through it, and hands out copyable [`BodyHandle`]
 //! values. Handles carry the identity of the world that created them, so a handle from another world (or a removed
@@ -29,7 +29,9 @@ mod backend_contract;
 mod convert;
 pub mod destruction;
 mod physics_body;
+mod physics_events;
 mod physics_heightfield;
+mod physics_query;
 mod physics_vehicle;
 mod physics_world;
 mod sdf;
@@ -47,6 +49,7 @@ pub use destruction::{
     ChunkChangeSet,
     ChunkDamageState,
     ChunkMaterialStrength,
+    ChunkPolyhedron,
     ChunkRaycastHit,
     ChunkStressOptions,
     ChunkStressStage,
@@ -54,16 +57,33 @@ pub use destruction::{
     ChunkStructure,
     ChunkSupportOptions,
     ChunkSupportState,
+    DebrisOptions,
+    DebrisPiece,
+    DebrisPool,
+    DebrisRelease,
+    DebrisSettlement,
     DestructibleChunkDefinition,
     DestructionError,
+    FRACTURE_ID_SEPARATOR,
     RadialDamage,
+    StructureColliderOptions,
+    StructureColliders,
     create_chunk_mesh_data,
+    fracture_chunk,
+    fracture_sites,
+    voronoi_fracture,
 };
 pub use physics_body::{
     BODY_DEFAULTS,
     BodyOptions,
 };
+pub use physics_events::{
+    CollisionGroups,
+    ContactPhase,
+    PhysicsEvent,
+};
 pub use physics_heightfield::HeightfieldOptions;
+pub use physics_query::QueryOptions;
 pub use physics_vehicle::{
     VEHICLE_DEFAULTS,
     VehicleInput,
@@ -182,4 +202,7 @@ pub enum PhysicsError {
     /// A heightfield grid was smaller than 2 x 2, its height count did not match, or a height was not finite.
     #[error("Heightfields need at least 2 x 2 finite heights, one per sample.")]
     InvalidHeightfield,
+    /// Convex hull points were fewer than four, not finite, or did not span a volume.
+    #[error("Convex bodies need at least four finite points that span a volume.")]
+    DegenerateHull,
 }

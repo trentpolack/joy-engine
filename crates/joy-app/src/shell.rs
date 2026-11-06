@@ -68,6 +68,7 @@ use crate::clock::{
     DEFAULT_MAXIMUM_FRAME_SECONDS,
     FrameClock,
 };
+use crate::fixed_tick::FixedTicker;
 use crate::surface::ConfiguredSurface;
 
 /// Seconds between reads of an HDR display's headroom and SDR white level.
@@ -95,6 +96,8 @@ pub struct ShellOptions {
     pub canvas_id: String,
     /// Upper bound on one frame's elapsed seconds.
     pub maximum_frame_seconds: f32,
+    /// Rate of [`App::fixed_update`] calls in ticks per second; default 60.
+    pub fixed_updates_per_second: f64,
 }
 
 impl Default for ShellOptions {
@@ -109,6 +112,7 @@ impl Default for ShellOptions {
             window_size: (1280, 800),
             canvas_id: "joy-canvas".to_owned(),
             maximum_frame_seconds: DEFAULT_MAXIMUM_FRAME_SECONDS,
+            fixed_updates_per_second: joy_core::FixedStepLoop::DEFAULT_UPDATES_PER_SECOND,
         }
     }
 }
@@ -185,6 +189,8 @@ struct Running {
     gamepads: GamepadPoller,
     dev_tools: DevTools,
     clock: FrameClock,
+    // Fixed simulation ticks owed to the app; reset whenever the clock is.
+    ticker: FixedTicker,
     requests: ShellRequests,
     started: Instant,
     /// Seconds since `started` at which an HDR surface's display is read again; zero reads on the next frame.
@@ -366,6 +372,7 @@ impl<A: App> ApplicationHandler for WindowedShell<A> {
             WindowEvent::Occluded(occluded) => {
                 // Hidden pages and minimized windows lose held input and must not catch up when shown again.
                 running.clock.reset();
+                running.ticker.reset();
                 running.input.set_visible(!occluded);
                 self.app.visibility_changed(!occluded);
             }
@@ -438,6 +445,8 @@ impl<A: App> WindowedShell<A> {
             self.fail(event_loop, ShellError::App(error.to_string()));
             return;
         }
+        // Compile the shading models' pipelines now, behind the loading screen, rather than in the first frames.
+        renderer.warm_up_pipelines();
 
         self.phase = Phase::Running(Box::new(Running {
             egui,
@@ -449,6 +458,7 @@ impl<A: App> WindowedShell<A> {
             gamepads: GamepadPoller::new(),
             dev_tools: DevTools::new(&self.options.title, self.options.development),
             clock: FrameClock::new(self.options.maximum_frame_seconds),
+            ticker: FixedTicker::new(self.options.fixed_updates_per_second),
             requests: ShellRequests::default(),
             started: Instant::now(),
             next_display_poll: DISPLAY_POLL_SECONDS,
@@ -491,6 +501,7 @@ impl<A: App> WindowedShell<A> {
             gamepads,
             dev_tools,
             clock,
+            ticker,
             requests,
             started,
             next_display_poll,
@@ -503,14 +514,18 @@ impl<A: App> WindowedShell<A> {
 
         if std::mem::take(&mut requests.reset_clock) {
             clock.reset();
+            ticker.reset();
         }
         let (width, height) = renderer.physical_size();
         if width == 0 || height == 0 {
             // A minimized window, or a canvas the page has not laid out yet: nothing to draw and no time passes.
             clock.reset();
+            ticker.reset();
             return Ok(());
         }
-        let time = clock.tick(started.elapsed().as_secs_f64());
+        let mut time = clock.tick(started.elapsed().as_secs_f64());
+        time.fixed_ticks = ticker.advance(time.elapsed_seconds);
+        time.fixed_interpolation = ticker.interpolation();
         follow_display(surface, gpu, renderer, egui, started.elapsed().as_secs_f64(), next_display_poll);
         // UI text entry suspends gameplay input, so typing into a field never drives the game.
         input.set_typing(egui.wants_keyboard());
@@ -530,8 +545,11 @@ impl<A: App> WindowedShell<A> {
             requests,
         };
 
-        // Simulation-facing phases.
+        // Simulation-facing phases: intent, the fixed ticks this frame owes, then variable-rate simulation.
         app.input(&mut frame)?;
+        for _ in 0..frame.time.fixed_ticks {
+            app.fixed_update(&mut frame, ticker.next_tick())?;
+        }
         app.simulation(&mut frame)?;
         app.presentation(&mut frame)?;
 

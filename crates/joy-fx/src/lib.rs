@@ -2,13 +2,14 @@
 // Licensed under the MIT License.
 
 //! Particle effects (`.joyfx`): documents, the particle script language, and deterministic simulation. Renderer-free:
-//! drawing lives in the renderer's `particles` module, which turns effects into camera-facing geometry and lights
+//! drawing lives in the renderer's `particles` module, which turns effects into GPU-instanced particles and lights
 //! (`joy_engine::particles` combines both for games and tools).
 //!
 //! Data flow: a `.joyfx` document compiles once into a shared [`CompiledParticleEffect`]
 //! ([`compile_particle_effect`]); each [`ParticleEffect`] instance owns its particles, seed, and parameters and advances
-//! in fixed [`PARTICLE_STEP_SECONDS`] ticks; the renderer reads the particles to build lights and triangles for its
-//! transparent queue.
+//! in fixed [`PARTICLE_STEP_SECONDS`] ticks; the renderer reads the particles to build lights and particle instances
+//! for its transparent queue. Games that play effects as one-shot cues keep them in a bounded [`ParticleEffectPool`],
+//! which owns eviction, cosmetic seeding, advancing, and cleanup.
 //!
 //! ```
 //! use joy_fx::{
@@ -39,12 +40,13 @@
 //! # Ownership
 //!
 //! Definitions are immutable and shared. Effects own their particles and borrow nothing from the caller after
-//! construction; the renderer's geometry builders borrow effects read-only.
+//! construction; the renderer's particle frames borrow effects read-only.
 
 mod asset;
 mod constants;
 mod language_information;
 mod particle_effect;
+mod particle_pool;
 mod profile;
 mod script;
 pub mod scripting;
@@ -55,6 +57,7 @@ pub use asset::{
     CompiledParticleEffect,
     MAXIMUM_EFFECT_PARTICLES,
     PARTICLE_EFFECT_VERSION,
+    PARTICLE_EMITTER_BLEND,
     PARTICLE_LIGHT_CASTS_SHADOW,
     ParticleAssetError,
     ParticleBurst,
@@ -65,11 +68,13 @@ pub use asset::{
     ParticleParameter,
     ParticleParameterValue,
     ParticleTexture,
+    ParticleTextureId,
     ParticleTrail,
     compile_particle_effect,
     parse_particle_effect,
 };
 pub use constants::{
+    ParticleBlend,
     ParticleParameterType,
     ParticleRenderer,
     ParticleValueKind,
@@ -84,6 +89,12 @@ pub use particle_effect::{
     ParticleFault,
     ParticlePhase,
     particle_seed,
+};
+pub use particle_pool::{
+    EffectPoolOptions,
+    MAXIMUM_POOL_UPDATE_SECONDS,
+    ParticleEffectPool,
+    PooledEffect,
 };
 pub use profile::{
     ParticleProfile,

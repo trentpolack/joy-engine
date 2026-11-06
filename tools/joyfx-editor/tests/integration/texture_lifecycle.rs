@@ -186,12 +186,12 @@ fn failed_decoding_preserves_active_textures() {
     let active = definition(&[&sources[0]]);
     viewport.prepare_effect(&active).unwrap();
     viewport.set_effect(Some(&active));
-    let retained = viewport.textures().get(&sources[0]).unwrap().clone();
+    let retained = viewport.textures().get_source(&sources[0]).unwrap().clone();
 
     let corrupt = corrupt_source();
     let failing = definition(&[&sources[1], &corrupt]);
     assert!(viewport.prepare_effect(&failing).is_err(), "corrupt pixels fail during prepare");
-    assert!(viewport.textures().get(&sources[0]).unwrap().ptr_eq(&retained), "the active image is untouched");
+    assert!(viewport.textures().get_source(&sources[0]).unwrap().ptr_eq(&retained), "the active image is untouched");
     assert_eq!(viewport.textures().len(), 1, "nothing from the failed prepare is kept");
     assert!(viewport.textures_ready());
 }
@@ -211,7 +211,7 @@ fn replacing_or_releasing_a_definition_drops_obsolete_images() {
     assert_eq!(viewport.textures().len(), 3);
     viewport.set_effect(Some(&second));
     assert_eq!(viewport.textures().len(), 1);
-    assert!(viewport.textures().get(&sources[0]).is_err());
+    assert!(viewport.textures().get_source(&sources[0]).is_none());
 
     // Untextured effects and disposal release everything.
     let plain = definition(&[]);

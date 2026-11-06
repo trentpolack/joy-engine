@@ -5,9 +5,11 @@
 //! entity systems, and exclusive controller possession.
 //!
 //! Lifecycle and control contracts:
-//! - Spawning registers the entity, attaches runtime components for authored types the [`ComponentRegistry`] knows (in
-//!   authored order), and then runs the behavior's `on_spawn`. Any failure removes the entity again, running the same
-//!   teardown as [`EntityWorld::remove`], before the error is returned.
+//! - Spawning registers the entity, attaches runtime components for authored types the [`ComponentRegistry`] knows or
+//!   the engine provides (`physics` and `vehicle`, which create the entity's body; a registered factory replaces them),
+//!   in authored order, and then runs the behavior's `on_spawn`. Any failure removes the entity again, running the same
+//!   teardown as [`EntityWorld::remove`], before the error is returned. A successful spawn sends
+//!   [`EntitySpawned`](super::EntitySpawned) and a removal sends [`EntityRemoved`](super::EntityRemoved).
 //! - Entities update in insertion order. Entities spawned during an update wait for the next update; entities removed
 //!   during an update are skipped for the rest of it. Systems run first, in the order they were added.
 //! - Possession is exclusive. Possessing an entity displaces its previous controller; both the previously and the newly
@@ -40,6 +42,14 @@ use super::entity_system::{
     SystemId,
 };
 use super::error::GameplayError;
+use super::physics_component::{
+    built_in_component,
+    is_built_in_component,
+};
+use super::world_events::{
+    EntityRemoved,
+    EntitySpawned,
+};
 
 /// Caller name used in delta-time errors.
 const WORLD_DELTA: &str = "World delta";
@@ -154,6 +164,9 @@ impl EntityWorld {
             return Err(error);
         }
         self.pending.extend(context.take_commands());
+        context.send_event(EntitySpawned {
+            id: id.clone(),
+        });
         Ok(id)
     }
 
@@ -161,7 +174,8 @@ impl EntityWorld {
     ///
     /// Ownership is detached first, then possession is released (clearing intent and calling `reset_control`), then
     /// `on_destroy` runs, then runtime components detach in reverse attachment order (each `on_detach`, then drop), and
-    /// finally the body the context lists for the entity (with any vehicle it carries) is removed from physics.
+    /// finally the body the context lists for the entity (with any vehicle it carries) is removed from physics and the
+    /// entity's timers are cancelled.
     pub fn remove(&mut self, id: &EntityId, context: &mut SimulationContext<'_>) -> bool {
         let Some(mut entity) = self.entities.shift_remove(id) else {
             return false;
@@ -182,9 +196,13 @@ impl EntityWorld {
 
         // The body listed for the entity (and the vehicle a chassis carries) is entity-owned.
         if let Some(body) = context.body(id) {
-            context.physics.remove_body(body);
+            context.detach_body(id, body);
         }
+        context.cancel_timers_owned_by(id);
         self.pending.extend(context.take_commands());
+        context.send_event(EntityRemoved {
+            id: id.clone(),
+        });
         true
     }
 
@@ -474,7 +492,8 @@ impl EntityWorld {
     // Private helpers
     // -----------------------------------------------------------------------------------------------------------------
 
-    /// Attach runtime components for every authored type the component registry knows, in authored order.
+    /// Attach runtime components for every authored type the component registry knows or the engine provides, in
+    /// authored order; a registered factory takes precedence over the engine's.
     ///
     /// A record removed by an earlier component's `on_attach` is skipped.
     fn attach_registered_components(
@@ -484,9 +503,13 @@ impl EntityWorld {
     ) -> Result<(), GameplayError> {
         let kinds: Vec<String> = match self.entities.get(id) {
             None => return Ok(()),
-            Some(entity) => {
-                entity.state.components.keys().filter(|kind| self.component_registry.contains(kind)).cloned().collect()
-            }
+            Some(entity) => entity
+                .state
+                .components
+                .keys()
+                .filter(|kind| self.component_registry.contains(kind) || is_built_in_component(kind))
+                .cloned()
+                .collect(),
         };
         for kind in kinds {
             let Some(entity) = self.entities.get(id) else {
@@ -495,7 +518,14 @@ impl EntityWorld {
             let Some(record) = entity.state.components.get(&kind) else {
                 continue;
             };
-            let component = self.component_registry.create(&kind, record, &entity.state)?;
+            let component = if self.component_registry.contains(&kind) {
+                self.component_registry.create(&kind, record, &entity.state)?
+            } else {
+                match built_in_component(&kind) {
+                    Some(component) => component,
+                    None => continue,
+                }
+            };
             self.attach_component(id, &kind, component, context)?;
         }
         Ok(())

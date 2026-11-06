@@ -5,6 +5,7 @@
 //! detached document, so editing one never changes the bundled original.
 
 use joy_engine::particles::{
+    ParticleBlend,
     ParticleBurst,
     ParticleEffectAsset,
     ParticleEmitterAsset,
@@ -119,6 +120,7 @@ pub fn create_emitter_template(id: &str, preset: EmitterPreset) -> ParticleEmitt
         bursts: Vec::new(),
         lifetime: 1.0,
         renderer: ParticleRenderer::Soft,
+        blend: ParticleBlend::Alpha,
         texture: None,
         light: None,
         spawn: "let angle = rand(0, tau);\nlet vertical = rand(-1, 1);\nlet radial = sqrt(1 - vertical * vertical);\nvelocity = vector(cos(angle) * radial, vertical, sin(angle) * radial) * 80;\nsize = 3;".to_owned(),

@@ -1,17 +1,21 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Particle drawing: turns `joy_fx` effects into renderer point lights and camera-facing triangles for the transparent
-//! queue (`FrameInputs::transparent_triangles` or `FrameInputs::transparent_draws`), and owns the decoded textures they
-//! sample. Simulation, documents, and scripts stay in `joy_fx`; `joy_engine::particles` combines both.
+//! Particle drawing: turns `joy_fx` effects into renderer point lights and GPU-instanced particles, and owns the
+//! decoded textures they sample. Simulation, documents, and scripts stay in `joy_fx`; `joy_engine::particles` combines
+//! both.
 //!
-//! [`collect_particle_lights`] turns particles into point lights; [`append_particle_effect`] or
-//! [`create_particle_effect_batches`] build triangles, using the same deterministic `f64` math as the simulation so
-//! geometry reproduces on every target.
+//! [`collect_particle_lights`] turns particles into point lights. [`ParticleFrame`] is the one way to submit particles
+//! for drawing: add every effect each frame, then pass the frame as
+//! [`FrameInputs::particles`](crate::FrameInputs::particles) (or
+//! [`TriangleFrame::particles`](crate::TriangleFrame::particles) for arcade triangle frames). Each particle becomes one
+//! compact [`ParticleInstance`]; the shaders expand it to face the camera and draw its shape analytically, and the
+//! renderer culls whole batches, sorts source-over batches back to front, and blends each emitter with its authored
+//! [`ParticleBlend`](joy_fx::ParticleBlend).
 //!
 //! ```
 //! use joy_fx::{ParticleEffect, ParticleEffectOptions, compile_particle_effect};
-//! use joy_renderer::particles::{PARTICLE_XY_BASIS, create_particle_effect_batches};
+//! use joy_renderer::particles::ParticleFrame;
 //! use serde_json::json;
 //!
 //! let definition = compile_particle_effect(&json!({
@@ -23,31 +27,28 @@
 //! }))?;
 //! let mut effect = ParticleEffect::new(&definition, ParticleEffectOptions { seed: 7, ..Default::default() })?;
 //! effect.update(0.1)?;
-//! let batches = create_particle_effect_batches(&effect, &PARTICLE_XY_BASIS, None, &[])?;
-//! assert_eq!(batches.len(), 1);
+//! let mut particles = ParticleFrame::new();
+//! particles.add_effect(&effect, None)?;
+//! assert_eq!((particles.instances().len(), particles.batches().len()), (8, 1));
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
 //! # Ownership
 //!
-//! Geometry builders borrow effects read-only and return owned vertices. [`ParticleTextureSet`] owns CPU images; the
-//! renderer owns their GPU copies.
+//! A [`ParticleFrame`] borrows effects only while they are added and keeps cheap texture handles until it is cleared.
+//! [`ParticleTextureSet`] owns CPU images; the renderer owns their GPU copies.
 
-mod batches;
+mod frame;
+mod instance;
 mod lights;
 mod texture_set;
 
-pub use batches::{
-    PARTICLE_XY_BASIS,
+pub use frame::{
     ParticleBatch,
-    ParticleCameraBasis,
+    ParticleFrame,
     ParticleRenderError,
-    ParticleRenderMetrics,
-    ParticleRenderMetricsRow,
-    append_particle_effect,
-    create_particle_effect_batches,
-    create_particle_render_metrics,
 };
+pub use instance::ParticleInstance;
 pub use lights::{
     ParticleLightSelection,
     ParticlePointLight,
@@ -58,15 +59,8 @@ pub use texture_set::{
     decode_particle_texture,
 };
 
-// Geometry, light, and texture helpers shared with `joy-scene`'s `AssetScene`, which sorts and lights many effects
-// together; an engine contract between the two crates rather than game-facing API.
-#[doc(hidden)]
-pub use batches::{
-    ParticleCorner,
-    ParticleTriangle,
-    batch_particle_triangles,
-    collect_particle_triangles,
-};
+// Light and texture helpers shared with `joy-scene`'s `AssetScene`, which lights many effects together and stages their
+// textures; an engine contract between the two crates rather than game-facing API.
 #[doc(hidden)]
 pub use lights::rank_particle_lights;
 #[doc(hidden)]

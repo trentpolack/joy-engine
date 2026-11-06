@@ -45,6 +45,12 @@ pub struct DestructionConfig {
     pub debris_mass: f32,
     /// Size fraction a directly fractured chunk keeps, in mesh and collider alike.
     pub fractured_chunk_scale: f64,
+    /// Voronoi shards a directly fractured chunk breaks into.
+    pub shards_per_fracture: usize,
+    /// Debris pieces that keep simulating before the oldest sleeping ones freeze into static rubble.
+    pub maximum_moving_debris: usize,
+    /// Debris pieces kept at all; the oldest leave beyond it.
+    pub maximum_debris: usize,
     /// Size fraction a support-released or overloaded chunk keeps: just enough clearance to slide past its neighbors.
     pub released_chunk_scale: f64,
     /// Debris friction.
@@ -85,6 +91,9 @@ pub const DESTRUCTION: DestructionConfig = DestructionConfig {
     debris_gravity: 24.0,
     debris_mass: 1.0,
     fractured_chunk_scale: 0.9,
+    shards_per_fracture: 4,
+    maximum_moving_debris: 192,
+    maximum_debris: 2048,
     released_chunk_scale: 0.97,
     debris_friction: 0.7,
     debris_restitution: 0.08,

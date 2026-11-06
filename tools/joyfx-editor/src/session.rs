@@ -128,10 +128,6 @@ pub struct EmitterPerformance {
     pub spawn_ms: f64,
     /// Update CPU per simulation step, in milliseconds.
     pub update_ms: f64,
-    /// Geometry CPU in the last render, in milliseconds.
-    pub geometry_ms: f64,
-    /// Triangles in the last render.
-    pub triangles: u64,
     /// Particle lights.
     pub lights: usize,
     /// Particles spawned since profiling began.
@@ -880,8 +876,7 @@ impl JoyfxEditor {
         if let Some(effect) = &mut self.effect {
             effect.set_profiling(mode == PerformanceMode::Detailed);
         }
-        let definition = self.effect.as_ref().map(|effect| effect.definition().clone());
-        self.viewport.set_performance_mode(mode, definition.as_ref());
+        self.viewport.set_performance_mode(mode);
         self.refresh_performance();
     }
 
@@ -928,15 +923,13 @@ impl JoyfxEditor {
                         update_sample: update,
                     },
                 );
-                let geometry = stats.by_emitter.iter().find(|row| row.id == emitter.id);
+                let preview = stats.by_emitter.iter().find(|row| row.id == emitter.id);
                 rows.push(EmitterPerformance {
                     id: emitter.id.clone(),
                     live: emitter.live,
                     spawn_ms: spawn,
                     update_ms: update,
-                    geometry_ms: geometry.map_or(0.0, |row| row.geometry_ms),
-                    triangles: geometry.map_or(0, |row| row.triangles),
-                    lights: geometry.map_or(0, |row| row.lights),
+                    lights: preview.map_or(0, |row| row.lights),
                     spawned: emitter.spawned,
                     dropped: emitter.dropped,
                     operations: emitter.operations,

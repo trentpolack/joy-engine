@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Renderer-free box geometry for chunk structures.
+//! Renderer-free geometry for chunk structures: closed boxes, and the exact faces of shaped (fractured) chunks.
 
 use serde_json::Value;
 
@@ -43,9 +43,10 @@ const FACE_CORNERS: [[[f64; 3]; 4]; 6] = [
     [[-1.0, 1.0, -1.0], [1.0, 1.0, -1.0], [1.0, 1.0, 1.0], [-1.0, 1.0, 1.0]],
 ];
 
-/// Build closed box geometry (four vertices and two triangles per face) for the given chunks, in iteration order.
+/// Build closed geometry for the given chunks, in iteration order: a box chunk is four vertices and two triangles per
+/// face, and a shaped chunk is a triangle fan per face of its polyhedron.
 ///
-/// Every chunk is a closed box, so removing a neighbor reveals an authored interior face. Positions are world units,
+/// Every chunk is closed, so removing a neighbor reveals an authored interior face. Positions are world units,
 /// colors are per-vertex linear material tints, and normals are left to the consumer (flat faces). Metadata records
 /// `chunkCount` and `closedInteriorSurfaces: true`. The result is plain data owned by the caller.
 pub fn create_chunk_mesh_data<'a>(chunks: impl IntoIterator<Item = &'a DestructibleChunkDefinition>) -> Mesh {
@@ -57,6 +58,19 @@ pub fn create_chunk_mesh_data<'a>(chunks: impl IntoIterator<Item = &'a Destructi
     for chunk in chunks {
         chunk_count += 1;
         let tint = material_tint(&chunk.material);
+        if let Some(shape) = &chunk.shape {
+            for face in &shape.faces {
+                let start = positions.len() as u32;
+                for index in face {
+                    positions.push(shape.vertices.get(*index as usize).copied().unwrap_or(chunk.center));
+                    colors.push(tint);
+                }
+                for corner in 1..(face.len() as u32).saturating_sub(1) {
+                    indices.extend_from_slice(&[start, start + corner, start + corner + 1]);
+                }
+            }
+            continue;
+        }
         for corners in &FACE_CORNERS {
             // Meshes this large exceed GPU index ranges long before u32.
             let start = positions.len() as u32;

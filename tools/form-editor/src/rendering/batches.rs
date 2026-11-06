@@ -5,7 +5,7 @@
 //!
 //! Markers are two triangles each, sized to a constant pixel footprint at the camera's focus distance and colored by
 //! their vertex tint, material base color, and emission, with alpha following the material's glTF policy. The engine
-//! draws them as unlit transparent runs after the scene, so FORM points get no renderer of their own.
+//! draws them as unlit transparent triangles sorted with the frame's other transparency, so FORM points get no renderer of their own.
 
 use joy_engine::form::{
     AlphaMode,

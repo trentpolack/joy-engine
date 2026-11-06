@@ -16,6 +16,7 @@ use serde::{
 };
 
 use super::DestructionError;
+use super::chunk_shape::ChunkPolyhedron;
 use super::chunk_stress::{
     ChunkStressModel,
     ChunkStressOptions,
@@ -33,20 +34,48 @@ use joy_core::math::DVec3;
 /// Direction components smaller than this are treated as parallel to a slab in ray tests.
 const PARALLEL_EPSILON: f64 = 1e-9;
 
-/// One authored chunk: a stable id, an axis-aligned box, a material name, and its starting hit points.
+/// How far a shape's bounds may differ from its chunk's box, relative to the chunk's largest dimension (at least one).
+const SHAPE_BOUNDS_TOLERANCE: f64 = 1.0e-6;
+
+/// One authored chunk: a stable id, its bounds, an optional exact shape, a material name, and its starting hit points.
+///
+/// Without a `shape` the chunk is the axis-aligned box `center` and `size` describe. With one (a fractured shard or an
+/// authored convex piece), damage, raycasts, occupancy, support bonds, stress mass, colliders, and meshes use the shape,
+/// and `center` and `size` must be its bounding box.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DestructibleChunkDefinition {
     /// Stable, nonempty id, unique within a structure.
     pub id: String,
-    /// Box center in world units.
+    /// Bounding box center in world units.
     pub center: DVec3,
-    /// Full box dimensions in world units; every component positive.
+    /// Full bounding box dimensions in world units; every component positive.
     pub size: DVec3,
     /// Nonempty material name (presentation looks it up; `frame` and `interior` have built-in chunk tints).
     pub material: String,
     /// Starting hit points; positive.
     pub hit_points: f64,
+    /// The piece's exact convex solid in world space, when it is not its bounding box.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<ChunkPolyhedron>,
+}
+
+impl DestructibleChunkDefinition {
+    /// The chunk's solid: its shape, or its box as a polyhedron.
+    pub fn solid(&self) -> ChunkPolyhedron {
+        match &self.shape {
+            Some(shape) => shape.clone(),
+            None => ChunkPolyhedron::from_box(self.center, self.size),
+        }
+    }
+
+    /// The chunk's volume in cubic world units.
+    pub fn volume(&self) -> f64 {
+        match &self.shape {
+            Some(shape) => shape.volume(),
+            None => self.size.x * self.size.y * self.size.z,
+        }
+    }
 }
 
 /// Damage applied to every active chunk whose box intersects a sphere.
@@ -448,7 +477,11 @@ impl ChunkStructure {
         }
         let blocked = self.active_chunks().any(|chunk| {
             let chunk_half_extents = chunk.size.map(|value| value / 2.0);
-            boxes_overlap(center, half_extents, chunk.center, chunk_half_extents)
+            let bounds_overlap = boxes_overlap(center, half_extents, chunk.center, chunk_half_extents);
+            match &chunk.shape {
+                Some(shape) => bounds_overlap && shape.overlaps_box(center, half_extents),
+                None => bounds_overlap,
+            }
         });
         Ok(!blocked)
     }
@@ -508,19 +541,47 @@ fn validate_definition(definition: &DestructibleChunkDefinition) -> Result<(), D
     if !finite_center || !positive_size || !positive_health {
         return Err(DestructionError::InvalidChunkDimensions);
     }
+    if let Some(shape) = &definition.shape {
+        validate_shape_bounds(definition, shape)?;
+    }
     Ok(())
 }
 
-/// Whether a sphere touches a chunk's box (closest-point distance, inclusive).
+/// A shape must be a valid convex solid whose bounding box is the chunk's `center` and `size`, so bounds-based
+/// rejection and anchoring agree with the exact shape.
+fn validate_shape_bounds(
+    definition: &DestructibleChunkDefinition,
+    shape: &ChunkPolyhedron,
+) -> Result<(), DestructionError> {
+    shape.validate()?;
+    let (minimum, maximum) = shape.bounds();
+    let tolerance = SHAPE_BOUNDS_TOLERANCE * definition.size.max_element().max(1.0);
+    let half = definition.size / 2.0;
+    let matches = (minimum - (definition.center - half)).abs().max_element() <= tolerance
+        && (maximum - (definition.center + half)).abs().max_element() <= tolerance;
+    if !matches {
+        return Err(DestructionError::InvalidChunkShape);
+    }
+    Ok(())
+}
+
+/// Whether a sphere touches a chunk (closest-point distance to its box, inclusive; a shaped chunk also tests its shape).
 fn sphere_intersects_box(center: DVec3, radius: f64, chunk: &DestructibleChunkDefinition) -> bool {
     let half = chunk.size / 2.0;
     // Chunk sizes are validated positive, so the box's lower corner never exceeds its upper corner.
     let closest = center.min(chunk.center + half).max(chunk.center - half);
-    (center - closest).length_squared() <= radius * radius
+    let reaches_bounds = (center - closest).length_squared() <= radius * radius;
+    match &chunk.shape {
+        Some(shape) => reaches_bounds && shape.reaches_sphere(center, radius),
+        None => reaches_bounds,
+    }
 }
 
-/// Slab test: the entry parameter of a ray into a chunk's box, or `None` when it misses.
+/// The entry parameter of a ray into a chunk (its shape when it has one, else its box), or `None` when it misses.
 fn ray_box_distance(origin: DVec3, direction: DVec3, chunk: &DestructibleChunkDefinition) -> Option<f64> {
+    if let Some(shape) = &chunk.shape {
+        return shape.ray_entry(origin, direction);
+    }
     let mut minimum: f64 = 0.0;
     let mut maximum = f64::INFINITY;
     for axis in 0..3 {

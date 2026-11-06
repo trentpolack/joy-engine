@@ -45,6 +45,7 @@ pub fn generate_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
                 size: DVec3::new(width, height, depth),
                 material: material.to_owned(),
                 hit_points: DESTRUCTION.hit_points,
+                shape: None,
             });
         }
     }
@@ -63,6 +64,7 @@ pub fn generate_structure(seed: i64) -> Vec<DestructibleChunkDefinition> {
                     size: DVec3::new(depth, height, depth),
                     material: FRAME_MATERIAL.to_owned(),
                     hit_points: DESTRUCTION.frame_hit_points,
+                    shape: None,
                 });
             }
         }

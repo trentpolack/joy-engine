@@ -6,7 +6,7 @@
 //! Geometry becomes a mesh through `form_mesh_asset` (the path games and the editor use), surfaces shade in the
 //! PBR pass with `MaterialTextures`, the studio environment lights them through `Renderer::prepare_environment_map`,
 //! the direct light casts directional (and alpha-masked) shadows, `EditorGrid` draws the reference grid, and point and
-//! inspection markers are unlit transparent runs. FORM content therefore looks the same here, in Joy Editor, and in
+//! inspection markers are unlit transparent triangles. FORM content therefore looks the same here, in Joy Editor, and in
 //! games.
 //!
 //! The preview occupies a rectangle of the window between the tool's panels. The engine's `RegionCamera` maps the orbit
@@ -41,7 +41,6 @@ use joy_engine::rendering::{
     Renderer,
     ShadingModel,
     ShadowOptions,
-    TransparentDraw,
     form_mesh_asset_with_textures,
 };
 use joy_engine::runtime::RenderTarget;
@@ -394,14 +393,16 @@ impl Viewport {
             angular_radius: LIGHT_ANGULAR_RADIUS,
             casts_shadow: lighting.casts_shadow,
         };
-        let draws = [TransparentDraw::Colored(&markers)];
+        // The grid then the markers, so equal depths keep the markers in front.
+        let mut transparent = Vec::with_capacity(grid.len() + markers.len());
+        transparent.extend_from_slice(grid);
+        transparent.append(&mut markers);
         let shaded = self.mode == ViewMode::Shaded && self.data.is_some();
         let inputs = FrameInputs {
             directional_light: Some(key_light),
             ambient: Some(EDITOR_AMBIENT),
             clear_color: EDITOR_BACKGROUND,
-            transparent_triangles: grid,
-            transparent_draws: if markers.is_empty() { &[] } else { &draws },
+            transparent_triangles: &transparent,
             image_lighting: self.environment.as_ref().filter(|_| shaded).map(|map| ImageLighting {
                 map,
                 intensity: lighting.environment_intensity as f32,

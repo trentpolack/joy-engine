@@ -2,6 +2,46 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 11-06-2026
+### Runtime Spine
+- Breaking: the shell owns the fixed simulation tick. `App::fixed_update(frame, tick)` runs once per due tick between `input` and `simulation` (`ShellOptions::fixed_updates_per_second` and `HeadlessOptions::fixed_updates_per_second`, 60 by default), `FrameTime` gained `fixed_ticks` and `fixed_interpolation`, and `FixedTick` is exported from `runtime` and the prelude. `PhysicsWorld::present_at` blends bodies by the shell's fraction when physics steps once per tick.
+- Breaking: `World::update` is the one simulation boundary for `World` and `LevelRuntime`: delivered events and due timers, then systems and behaviors, then physics, then every owned body's pose written back to its entity, then contact events. `World` previously stepped physics first and never wrote poses back, and `LevelRuntime` clamped entity time to 0.1 seconds; both now run this order with the full elapsed time.
+- Added typed world events (`EventQueue`, `World::events`, `SimulationContext::events`/`send_event`) with engine records `ContactEvent`, `TimerFired`, `EntitySpawned`, and `EntityRemoved`, and world timers (`start_timer`, `TimerRepeat`) cancelled with their owning entity. Everything an update produces reaches the game after it and behaviors during the next update.
+- `physics` and `vehicle` records create bodies through built-in runtime components (`PhysicsBodyComponent`, `VehicleComponent`), so entities spawned by the game or requested by behaviors get bodies like authored ones; `SimulationContext::attach_body` and `detach_body` manage component-created bodies. The `physics` record gained `sensor`, `reportContacts`, `canSleep`, `collisionMembership`, and `collisionFilter`.
+- Added entity scripts: an authored `script` component runs its Rhai script's `init` and `update` hooks through `ScriptSystem` against engine-owned `Entity` and `World` views, and the system applies the commands scripts return (spawn, remove, send, timers, and body pushes). Entity state survives hot reloads, and failures arrive once as `ScriptFailure` events.
+- `AssetScene::adopt` prepares FORM meshes, effects, and lights for entities spawned at runtime, and `follow` releases them when they leave; previously such entities drew fallback primitives.
+- FORM assets in levels draw with the layered shading model (`LEVEL_FORM_SHADING`) that FORM EDITOR previews with, so placed assets keep their palettes and maps.
+
+### Physics
+- Breaking: bodies sleep once they come to rest (`BodyOptions::can_sleep`, default true). Teleporting or removing a body wakes everything resting against it, so supports that disappear no longer leave sleeping bodies hovering.
+- Breaking: user forces act on every fixed step of the next `PhysicsWorld::step` call that runs one, instead of only its first, so a force set once per frame moves bodies the same distance at any frame rate.
+- Added collision groups (`CollisionGroups`, `BodyOptions::groups`), sensors (`BodyOptions::sensor`), contact and sensor events (`PhysicsWorld::events`, `PhysicsEvent`, `ContactPhase`, `BodyOptions::report_contacts`), and filtered queries (`QueryOptions`, `raycast_with`, `overlap_sphere`, `overlap_box`). Plain raycasts skip sensors.
+
+### Destruction
+- Chunks can be any convex piece: `DestructibleChunkDefinition::shape` (a `ChunkPolyhedron`) drives damage, raycasts, occupancy, support, stress mass and footprint, colliders, and meshes, and shaped chunks bond through exact shared faces. Breaking: chunk definition literals need `shape` (`None` keeps the box). Box structures behave exactly as before.
+- Added Voronoi fracture (`voronoi_fracture`, `fracture_chunk`, `fracture_sites`): seeded, deterministic convex pieces that fill a solid exactly.
+- Added `StructureColliders` and `DebrisPool`: surviving chunks keep static colliders and released chunks become rigid debris with their own shapes in the same physics world, so debris lands on what stands, sleeps, and freezes into solid rubble within a budget instead of vanishing. `PhysicsWorld` gained `create_convex_body`, `freeze_body`, and `is_sleeping`.
+- The FORM DESTRUCTION example uses them: impact-broken chunks shatter into Voronoi shards that pile on the ground and on the surviving wall.
+
+### Rendering
+- The shells compile every registered shading model's pipelines after `App::start` (`Renderer::warm_up_pipelines`), behind the loading screen, instead of stalling the first frames that show each material.
+- Point-light shadows cull casters with one sphere test per light before testing each cube face, and opaque batching resolves each material's model once before sorting instead of inside the sort comparison.
+- Added `GroundRing` and `append_ground_ring` for flat XZ rings and discs (selection, targeting, and blob shadows).
+
+### Particles
+- Breaking: particles draw as GPU instances (one 60-byte instance per particle, with every renderer's shape computed in the shader) instead of CPU-built triangles. Every consumer submits effects through `ParticleFrame` (`FrameInputs::particles`, or `TriangleFrame::particles` for the arcade renderer), which batches each effect by blend and texture, culls whole batches, and sorts only blended batches. Removed `append_particle_effect`, `create_particle_effect_batches`, `ParticleCameraBasis`, the textured transparent pipeline (`TransparentDraw`, `TexturedVertex`), and `AssetScene`'s particle geometry helpers (replaced by `add_particles`); Joy Editor, FORM EDITOR, and JOYFX EDITOR migrated, and JOYFX EDITOR's preview geometry cache is gone.
+- Added emitter blend modes (`blend`: `alpha`, `additive`, or `premultiplied`) to `.joyfx` documents, the schema, and JOYFX EDITOR's inspector. Particle edges are antialiased, and each compiled emitter carries a texture id so frames no longer hash texture sources.
+- Removed the geometry sections from the particle parity recording; simulation checkpoints are unchanged.
+- Added `ParticleEffectPool`: a bounded pool of one-shot effects that evicts the oldest when full, seeds each effect from its own cosmetic counter (`EffectPoolOptions`), advances or fixed-steps every effect, and logs and drops a failing effect instead of stopping the frame.
+
+### Platform
+- Added `runtime::KeyRepeat` (fire on press, repeat after a delay) and `runtime::ProgressSave` with `SaveStatus`, which loads, restores, guards, and saves one record of game progress so unreadable or damaged saves are never overwritten.
+- `joy-terrain` moved from the foundation layer to the simulation layer: it streams tiles from storage and selects detail for views, beside the physics that collides with it.
+
+### Documentation
+- The Rust standards now say what golden recordings protect: simulation outcomes and document contracts, not how presentation is produced, and recordings from the retired TypeScript runtimes are re-recorded deliberately when behavior moves into the engine.
+- Corrected the point-light limit in the scenes guide (1024, not 32), the side-hanging stress rule (a chunk's own strength), and the textured particle pipeline's path.
+
 ## 11-05-2026
 ### Game Scripts
 - Added `joy-game-script` (`joy_engine::game_script`): sandboxed Rhai scripts for gameplay code that native development builds hot reload. `ScriptEngine` provides the language without file, module, or clock access, per-call `ScriptLimits` (an operation budget stops runaway loops), and a standard library of exact float comparisons, `math::deterministic` functions, `vec3`, and a seeded `Random` handle, so ported behavior matches its Rust original bit for bit natively and in WebAssembly. `Script` compiles source against required `ScriptHook`s, calls them with a per-object `ScriptState` bound as `this`, and hot reloads in place (a broken edit keeps the previous program; objects keep their state). `ScriptLoan` lends host state to registered functions for one call without `unsafe`. See [Game Scripts](docs/rust-game-script.md).

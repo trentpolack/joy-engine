@@ -27,6 +27,7 @@ pub use asset_scene::{
     AssetSceneError,
     AssetSceneStage,
     EffectInstance,
+    LEVEL_FORM_SHADING,
 };
 pub use components::{
     ComponentError,

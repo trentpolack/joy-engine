@@ -14,8 +14,12 @@
 //! presentation, its effects, and its caches unchanged. Asset text always comes from the caller's `read` function (a
 //! file system, a bundle, or text fetched by a browser), never from this module, so it works the same in browsers.
 //!
-//! Textured and flipbook effects are supported (draw them with [`AssetScene::particle_batches`] and
-//! [`AssetScene::transparent_draws`]), and particle lights are available in world space.
+//! FORM assets draw with [`LEVEL_FORM_SHADING`] (the layered model FORM EDITOR previews with), so a placed asset keeps
+//! its palette, material factors, and embedded maps instead of collapsing to vertex colors.
+//!
+//! Effects draw through the renderer's one particle path: [`AssetScene::add_particles`] adds every entity's effect,
+//! textured and flipbook emitters included, to a caller-owned `ParticleFrame` at its entity transform, and particle
+//! lights are available in world space.
 
 use std::collections::{
     HashMap,
@@ -32,7 +36,8 @@ use crate::components::{
     RenderSource,
 };
 use indexmap::IndexMap;
-use joy_core::math::Vec3;
+use joy_core::Transform;
+use joy_core::math::Mat4;
 use joy_fx::{
     CompiledParticleEffect,
     ParticleAssetError,
@@ -54,27 +59,21 @@ use joy_gameplay::{
     resolve_level_objects,
 };
 use joy_renderer::particles::{
-    ParticleBatch,
-    ParticleCameraBasis,
+    ParticleFrame,
     ParticleLightSelection,
     ParticleRenderError,
     ParticleTextureSet,
-    ParticleTriangle,
-    batch_particle_triangles,
     collect_particle_lights,
-    collect_particle_triangles,
     rank_particle_lights,
     textured_sources,
 };
 use joy_renderer::{
-    ColorVertex,
     MAX_POINT_LIGHTS,
     MeshAsset,
     PointLight,
     RenderScene,
     ShadingModel,
     TextureAsset,
-    TransparentDraw,
 };
 use serde_json::Value;
 
@@ -99,6 +98,10 @@ const MAXIMUM_STEP_SECONDS: f64 = 0.1;
 
 /// Particle effect file extension.
 const EFFECT_EXTENSIONS: [&str; 1] = [".joyfx"];
+
+/// Shading model for FORM assets placed in levels: the layered model FORM EDITOR previews with, so authored palettes,
+/// material factors, and embedded maps look the same in the editor and in play.
+pub const LEVEL_FORM_SHADING: ShadingModel<'static> = ShadingModel::Layered;
 
 /// Name of the synthetic level used to resolve linked objects.
 const PRESENTATION_NAME: &str = "Presentation";
@@ -254,6 +257,8 @@ pub struct AssetScene {
     spawned: IndexMap<String, Vec<SpawnedEntity>>,
     effects: IndexMap<String, EffectInstance>,
     textures: ParticleTextureSet,
+    // Presentation records of running entities no stage prepared (spawned at runtime), keyed by entity id.
+    adopted: HashMap<String, EntityDefinition>,
 
     // Compiled caches, pruned to the displayed presentation at each commit.
     library: FormAssetLibrary,
@@ -282,6 +287,7 @@ impl AssetScene {
             spawned: IndexMap::new(),
             effects: IndexMap::new(),
             textures: ParticleTextureSet::new(),
+            adopted: HashMap::new(),
             library: FormAssetLibrary::new(),
             effect_cache: HashMap::new(),
             generation: 0,
@@ -402,7 +408,9 @@ impl AssetScene {
         self.placements = placements;
         self.spawned = spawned;
         self.effect_cache = effect_cache;
-        self.textures = ParticleTextureSet::from_textures(textures);
+        self.textures = ParticleTextureSet::new();
+        self.textures.insert_textures(textures);
+        self.adopted.clear();
         let displayed = &self.meshes;
         self.library.retain(|asset| displayed.values().any(|mesh| mesh.ptr_eq(asset)));
         self.entities = entities;
@@ -448,13 +456,79 @@ impl AssetScene {
         Ok(())
     }
 
+    /// Prepare presentation for running entities no stage prepared (spawned at runtime by the game or requested by
+    /// behaviors): their FORM meshes, effects, and lights, read through `read` and cached like a stage's. Returns how
+    /// many entities it adopted.
+    ///
+    /// Call it before [`follow`](Self::follow) on frames where entities may have spawned; entities already presented
+    /// cost a lookup. An entity whose records fail to prepare (an unreadable asset, an invalid effect) is still adopted,
+    /// drawing its fallback primitive without an effect, and the failure is reported through [`error`](Self::error), so
+    /// it is not read again every frame. `follow` releases adopted presentation once its entity leaves, and a commit
+    /// clears it so hot-reloaded assets are adopted afresh. Fails only after destruction.
+    pub fn adopt<'a, E: LevelEntity + 'a, R: Display>(
+        &mut self,
+        entities: impl IntoIterator<Item = &'a E>,
+        mut read: impl FnMut(&str) -> Result<String, R>,
+    ) -> Result<usize, AssetSceneError> {
+        if self.destroyed {
+            return Err(AssetSceneError::Destroyed);
+        }
+        let prepared: HashSet<&str> = self.entities.iter().map(|entity| entity.id.as_str()).collect();
+        let newcomers: Vec<EntityDefinition> = entities
+            .into_iter()
+            .filter(|entity| {
+                let id = entity.entity_id();
+                !prepared.contains(id) && !self.adopted.contains_key(id)
+            })
+            .map(|entity| {
+                let mut definition = runtime_definition(entity);
+                definition.transform = *entity.entity_transform();
+                definition
+            })
+            .collect();
+        if newcomers.is_empty() {
+            return Ok(0);
+        }
+
+        let mut text_read = |path: &str| read(path).map_err(|error| error.to_string());
+        let mut staging = Staging::default();
+        for entity in &newcomers {
+            if let Err(error) = self.stage_entity(entity, &mut text_read, &mut staging) {
+                self.error = error.to_string();
+            }
+        }
+
+        // Everything staged; adopt it without disturbing the running presentation.
+        let Staging {
+            meshes,
+            effects,
+            effect_cache,
+            textures,
+            ..
+        } = staging;
+        self.meshes.extend(meshes);
+        for (id, staged) in effects {
+            if let StagedEffect::Created(instance) = staged {
+                self.effects.insert(id, *instance);
+            }
+        }
+        self.effect_cache.extend(effect_cache);
+        self.textures.insert_textures(textures);
+        let adopted = newcomers.len();
+        for entity in newcomers {
+            self.adopted.insert(entity.id.clone(), entity);
+        }
+        Ok(adopted)
+    }
+
     /// Present running entities (for example `World::presented_entities`) with the prepared assets, at their current
     /// transforms, without reading assets or restarting effects.
     ///
     /// Use this when a `LevelRuntime` built from [`AssetSceneStage::entities`] owns the simulation: spawned placement
     /// entities are runtime entities then, so they move (or disappear) with the simulation rather than their parent.
-    /// Entities the stage did not prepare draw their `render` primitives and `light` components. Does nothing after
-    /// destruction.
+    /// Entities spawned at runtime present what [`adopt`](Self::adopt) prepared for them, or their `render` primitives
+    /// and `light` components until adopted; adopted presentation is released once its entity is no longer listed.
+    /// Does nothing after destruction.
     pub fn follow<'a, E: LevelEntity + 'a>(
         &mut self,
         scene: &mut RenderScene,
@@ -470,8 +544,9 @@ impl AssetScene {
             entities
                 .into_iter()
                 .map(|entity| {
-                    let mut definition = match prepared.get(entity.entity_id()) {
-                        Some(definition) => (*definition).clone(),
+                    let id = entity.entity_id();
+                    let mut definition = match prepared.get(id).copied().or_else(|| self.adopted.get(id)) {
+                        Some(definition) => definition.clone(),
                         None => runtime_definition(entity),
                     };
                     definition.transform = *entity.entity_transform();
@@ -481,6 +556,7 @@ impl AssetScene {
         };
         let meshes = &self.meshes;
         self.level.sync_with(scene, &presented, selected, |id, _| Ok(meshes.get(id).cloned()))?;
+        self.release_departed(&presented);
         self.entities = presented;
         Ok(())
     }
@@ -510,54 +586,17 @@ impl AssetScene {
         }
     }
 
-    /// Camera-facing colored particles of every entity's effect, in world space, attached to entity transforms.
+    /// Add every entity's effect to `frame`, placed by its entity transform (sizes scale with it; billboards stay
+    /// camera-facing), with this scene's decoded textures. Clear `frame` first when it holds only this scene's
+    /// particles; the renderer culls, sorts, and draws it (`FrameInputs::particles`).
     ///
-    /// The result is unsorted; pass it as `FrameInputs::transparent_triangles`. Textured and flipbook emitters are
-    /// omitted here; draw them with [`particle_batches`](Self::particle_batches).
-    pub fn particles(&self, camera: &ParticleCameraBasis) -> Vec<ColorVertex> {
-        let mut vertices = Vec::new();
+    /// Fails, leaving the effects added so far, only if an effect's texture is missing, which a committed or adopted
+    /// stage rules out.
+    pub fn add_particles(&self, frame: &mut ParticleFrame) -> Result<(), ParticleRenderError> {
         for (entity, instance) in self.attached_effects() {
-            let basis = local_basis(camera, entity);
-            let Ok(triangles) = collect_particle_triangles(&instance.effect, &basis, None, false) else {
-                continue;
-            };
-            for triangle in triangles {
-                for corner in triangle.corners {
-                    let world = to_world(entity, corner.position);
-                    vertices.push(ColorVertex {
-                        position: world.map(|value| value as f32),
-                        color: corner.color.map(|value| value as f32),
-                    });
-                }
-            }
+            frame.add_transformed_effect(&instance.effect, Some(&self.textures), &entity_matrix(entity))?;
         }
-        vertices
-    }
-
-    /// Every entity's particles, colored and textured, as world-space material runs sorted back to front across
-    /// entities. Draw them with [`transparent_draws`](Self::transparent_draws).
-    pub fn particle_batches(&self, camera: &ParticleCameraBasis) -> Result<Vec<ParticleBatch>, ParticleRenderError> {
-        let mut triangles: Vec<ParticleTriangle> = Vec::new();
-        for (entity, instance) in self.attached_effects() {
-            let basis = local_basis(camera, entity);
-            for mut triangle in collect_particle_triangles(&instance.effect, &basis, None, true)? {
-                for corner in &mut triangle.corners {
-                    corner.position = to_world(entity, corner.position);
-                }
-                triangles.push(triangle);
-            }
-        }
-        let depths = triangles.iter().map(|triangle| triangle.depth(&camera.backward)).collect();
-        Ok(batch_particle_triangles(triangles, depths))
-    }
-
-    /// Borrow renderer draws for batches from [`particle_batches`](Self::particle_batches), using this scene's decoded
-    /// effect textures.
-    pub fn transparent_draws<'a>(
-        &'a self,
-        batches: &'a [ParticleBatch],
-    ) -> Result<Vec<TransparentDraw<'a>>, ParticleTextureError> {
-        self.textures.transparent_draws(batches)
+        Ok(())
     }
 
     /// The strongest particle lights of every effect in world space (positions follow entity transforms; ranges stay
@@ -570,10 +609,9 @@ impl AssetScene {
             // Each effect's own top lights are enough to find the global top lights.
             let selection = collect_particle_lights(&instance.effect, MAX_POINT_LIGHTS);
             total += selection.lights.len() + selection.omitted;
+            let placement = entity_matrix(entity);
             for mut selected in selection.lights {
-                let local = selected.light.position.to_array().map(f64::from);
-                let [x, y, z] = to_world(entity, local);
-                selected.light.position = Vec3::new(x as f32, y as f32, z as f32);
+                selected.light.position = placement.transform_point3(selected.light.position);
                 lights.push(selected);
             }
         }
@@ -611,6 +649,7 @@ impl AssetScene {
         self.meshes.clear();
         self.placements.clear();
         self.spawned.clear();
+        self.adopted.clear();
         self.library.clear();
         self.effect_cache.clear();
         self.textures.clear();
@@ -762,7 +801,7 @@ impl AssetScene {
             let text = read(&asset).map_err(|message| read_error(&asset, message))?;
             let compiled = self
                 .library
-                .resolve_asset(&asset, &text, &mut *read, variant.as_deref(), &parameters, ShadingModel::Lit)
+                .resolve_asset(&asset, &text, &mut *read, variant.as_deref(), &parameters, LEVEL_FORM_SHADING)
                 .map_err(|source| AssetSceneError::Mesh {
                     path: asset.clone(),
                     source,
@@ -796,13 +835,13 @@ impl AssetScene {
             })?,
         };
         staging.effect_cache.insert(text.clone(), definition.clone());
-        for source in textured_sources(&definition) {
+        for (id, source) in textured_sources(&definition) {
             if staging.textures.contains_key(&source) {
                 continue;
             }
-            let texture = match self.textures.get(&source) {
-                Ok(existing) => existing.clone(),
-                Err(_) => ParticleTextureSet::decode(&source).map_err(|error| AssetSceneError::Texture {
+            let texture = match self.textures.get(id) {
+                Some(existing) => existing.clone(),
+                None => ParticleTextureSet::decode(&source).map_err(|error| AssetSceneError::Texture {
                     path: path.clone(),
                     source: error,
                 })?,
@@ -836,6 +875,22 @@ impl AssetScene {
             }
         }
         presented
+    }
+
+    /// Release the meshes and effects of adopted entities that `presented` no longer lists.
+    fn release_departed(&mut self, presented: &[EntityDefinition]) {
+        if self.adopted.is_empty() {
+            return;
+        }
+        let listed: HashSet<&str> = presented.iter().map(|entity| entity.id.as_str()).collect();
+        let departed: Vec<String> = self.adopted.keys().filter(|id| !listed.contains(id.as_str())).cloned().collect();
+        for id in departed {
+            self.adopted.remove(&id);
+            self.meshes.remove(&id);
+            if let Some(mut instance) = self.effects.shift_remove(&id) {
+                instance.effect.destroy();
+            }
+        }
     }
 
     /// Entities that have a running effect, in entity order.
@@ -897,10 +952,10 @@ fn placement_index(parent_id: &str, entity_id: &str) -> Option<usize> {
     entity_id.strip_prefix(parent_id)?.strip_prefix(PLACEMENT_ID_SEPARATOR)?.parse().ok()
 }
 
-/// A presentation record for a running entity the stage did not prepare: its `render` and `light` components only.
+/// A presentation record for a running entity the stage did not prepare: its `render`, `light`, and `effect` components.
 fn runtime_definition<E: LevelEntity>(entity: &E) -> EntityDefinition {
     let mut definition = EntityDefinition::new(entity.entity_id());
-    for kind in [component_type::RENDER, component_type::LIGHT] {
+    for kind in [component_type::RENDER, component_type::LIGHT, component_type::EFFECT] {
         if let Some(record) = entity.entity_component(kind) {
             definition.components.insert(kind.to_owned(), record.clone());
         }
@@ -908,42 +963,8 @@ fn runtime_definition<E: LevelEntity>(entity: &E) -> EntityDefinition {
     definition
 }
 
-/// The camera basis expressed in an entity's rotated frame, so attached particles stay camera-facing.
-fn local_basis(camera: &ParticleCameraBasis, entity: &EntityDefinition) -> ParticleCameraBasis {
-    let angles = entity.transform.rotation.to_array().map(f64::from);
-    ParticleCameraBasis {
-        right: rotate(camera.right, angles, true),
-        up: rotate(camera.up, angles, true),
-        backward: rotate(camera.backward, angles, true),
-    }
-}
-
-/// Transform an effect-space point by the entity's scale, rotation, and position.
-fn to_world(entity: &EntityDefinition, point: [f64; 3]) -> [f64; 3] {
+/// The effect-to-world matrix of an entity: scale, then XYZ Euler rotation, then translation, as its meshes draw.
+fn entity_matrix(entity: &EntityDefinition) -> Mat4 {
     let transform = &entity.transform;
-    let scale = transform.scale.to_array().map(f64::from);
-    let angles = transform.rotation.to_array().map(f64::from);
-    let position = transform.position.to_array().map(f64::from);
-    let rotated = rotate([point[0] * scale[0], point[1] * scale[1], point[2] * scale[2]], angles, false);
-    [rotated[0] + position[0], rotated[1] + position[1], rotated[2] + position[2]]
+    Transform::new(transform.position, transform.rotation, transform.scale).matrix()
 }
-
-/// Rotate a direction with the engine's XYZ Euler convention (X, then Y, then Z), or its inverse.
-fn rotate(point: [f64; 3], angles: [f64; 3], inverse: bool) -> [f64; 3] {
-    let [mut x, mut y, mut z] = point;
-    let axes = if inverse { [2, 1, 0] } else { [0, 1, 2] };
-    for axis in axes {
-        let angle = angles[axis] * if inverse { -1.0 } else { 1.0 };
-        let (cosine, sine) = (libm::cos(angle), libm::sin(angle));
-        match axis {
-            0 => (y, z) = ((y * cosine) - (z * sine), (y * sine) + (z * cosine)),
-            1 => (x, z) = ((x * cosine) + (z * sine), (-x * sine) + (z * cosine)),
-            _ => (x, y) = ((x * cosine) - (y * sine), (x * sine) + (y * cosine)),
-        }
-    }
-    [x, y, z]
-}
-
-#[cfg(test)]
-#[path = "asset_scene.test.rs"]
-mod tests;

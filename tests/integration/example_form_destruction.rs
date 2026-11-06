@@ -90,24 +90,33 @@ fn released_chunks_land_persist_and_release_on_reset() {
     debris.spawn(&mut scene, [&chunk], true).unwrap();
     for _ in 0..60 {
         debris.update(&mut scene, STEP).unwrap();
-        assert!(debris.snapshot().pieces.iter().all(|piece| piece.position.y > 0.2), "debris stays above the ground");
+        assert!(debris.snapshot().pieces.iter().all(|piece| piece.position.y > 0.0), "debris stays above the ground");
     }
     assert!(debris.snapshot().pieces[0].position.y < 1.0, "a chunk released four meters up lands within a second");
     for _ in 0..60 * 20 {
         debris.update(&mut scene, STEP).unwrap();
     }
-    assert_eq!(debris.count(), 1, "debris persists beyond the former lifetime");
-    assert!(debris.snapshot().pieces[0].velocity.length() < 0.15, "ground friction stops debris sliding");
+    let shards = DESTRUCTION.shards_per_fracture;
+    assert_eq!(
+        debris.count(),
+        shards,
+        "a fractured chunk shatters into shards that persist beyond the former lifetime"
+    );
+    assert!(
+        debris.snapshot().pieces.iter().all(|piece| piece.velocity.length() < 0.15),
+        "ground friction stops debris"
+    );
 
     debris.spawn(&mut scene, &chunks, true).unwrap();
     debris.spawn(&mut scene, &chunks, true).unwrap();
-    assert_eq!(debris.count(), chunks.len(), "every chunk persists; duplicate releases allocate nothing");
-    assert_eq!(scene.len(), chunks.len() + 1);
+    let pieces = chunks.len() * shards;
+    assert_eq!(debris.count(), pieces, "every shard persists; duplicate releases allocate nothing");
+    assert_eq!(scene.len(), pieces + 1);
     debris.reset(&mut scene);
     assert!(debris.snapshot().pieces.is_empty());
     assert_eq!(scene.len(), 1, "reset keeps the ground and releases every debris mesh");
     debris.spawn(&mut scene, [&chunk], true).unwrap();
-    assert_eq!(debris.count(), 1, "a reset lets the same chunk release again");
+    assert_eq!(debris.count(), shards, "a reset lets the same chunk release again");
     debris.dispose(&mut scene);
     assert!(scene.is_empty());
 }
@@ -144,6 +153,7 @@ fn support_released_chunks_rest_on_surviving_structure_and_fractures_escape() {
         size: DVec3::new(1.0, 1.0, 1.0),
         material: "masonry".to_owned(),
         hit_points: 6.0,
+        shape: None,
     };
     let upper = DestructibleChunkDefinition {
         id: "upper".to_owned(),

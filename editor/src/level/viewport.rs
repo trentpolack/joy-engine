@@ -25,7 +25,7 @@ use joy_engine::math::{
     Vec2,
     Vec3,
 };
-use joy_engine::particles::ParticleCameraBasis;
+use joy_engine::particles::ParticleFrame;
 use joy_engine::rendering::{
     AssetScene,
     Camera,
@@ -132,6 +132,8 @@ pub struct LevelViewport {
     assets: AssetScene,
     scene: RenderScene,
     post_process: PostProcessVolumes,
+    // The particles drawn this frame, rebuilt each render into kept allocations.
+    particles: ParticleFrame,
 
     // Camera and view aids.
     /// The orbit camera.
@@ -171,6 +173,7 @@ impl LevelViewport {
             assets: AssetScene::new(),
             scene: RenderScene::new(),
             post_process: PostProcessVolumes::new(),
+            particles: ParticleFrame::new(),
             camera: initial_camera(),
             grid: EditorGrid::new(),
             show_grid: true,
@@ -473,20 +476,15 @@ impl LevelViewport {
             self.grid_spacing = None;
             Vec::new()
         };
-        let particle_basis = ParticleCameraBasis {
-            right: basis.right.to_array().map(f64::from),
-            up: basis.up.to_array().map(f64::from),
-            backward: basis.backward.to_array().map(f64::from),
-        };
-        let batches = self.assets.particle_batches(&particle_basis).unwrap_or_default();
-        let draws = self.assets.transparent_draws(&batches).unwrap_or_default();
+        self.particles.clear();
+        self.assets.add_particles(&mut self.particles).map_err(|error| error.to_string())?;
         let lights = self.assets.lights();
         let inputs = FrameInputs {
             lights: &lights,
             ambient: Some(VIEWPORT_AMBIENT),
             clear_color: CLEAR_COLOR,
             transparent_triangles: &grid,
-            transparent_draws: &draws,
+            particles: Some(&self.particles),
             ..Default::default()
         };
         let camera = RegionCamera::new(&self.camera, self.viewport_size, self.region.origin, self.region.size);

@@ -146,6 +146,7 @@ fn draw_bands(renderer: &mut TriangleRenderer, output: &wgpu::TextureView, color
         transparent: &[],
         uniforms: bytemuck::cast_slice(&uniforms),
         clear_color: LinearColor::rgb(0.0, 0.0, 0.0),
+        particles: None,
     };
     renderer.render(output, &frame).expect("frame renders");
 }

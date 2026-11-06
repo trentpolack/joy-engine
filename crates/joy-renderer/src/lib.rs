@@ -21,8 +21,8 @@
 //! The renderer draws meshes, terrain, lights, and particles without knowing where they came from: `joy-scene` turns
 //! authored levels, FORM meshes, and per-entity particle effects into scene contents and lights frames from the
 //! simulation's `EnvironmentFrame` and the renderer's [`SkyOptions`], so games, tools, and previews present the same
-//! content the same way. Textured transparent draws ([`TransparentDraw`], [`TextureAsset`]) carry particle sprites from
-//! [`particles`] into the scene pass. Paged continuous-LOD terrain ([`terrain`]) draws `joy_terrain` surfaces through
+//! content the same way. GPU-instanced particles ([`particles::ParticleFrame`], sampling [`TextureAsset`]s for sprites)
+//! join the scene pass's transparency queue through [`FrameInputs::particles`]. Paged continuous-LOD terrain ([`terrain`]) draws `joy_terrain` surfaces through
 //! [`TerrainInstance`]s in the same scene.
 
 mod camera;
@@ -111,10 +111,9 @@ pub use frame::{
     FrameInputs,
     MAX_POINT_LIGHTS,
     PresentationTime,
-    TexturedVertex,
-    TransparentDraw,
 };
 pub use geometry::{
+    GroundRing,
     ShadedShape,
     ShadedTriangle,
     add_circle,
@@ -126,6 +125,7 @@ pub use geometry::{
     add_ring,
     add_shaded_shape,
     add_triangle,
+    append_ground_ring,
 };
 pub use gpu::{
     BackendPreference,
@@ -224,6 +224,7 @@ pub use texture::{
 };
 pub use triangle_renderer::{
     TriangleFrame,
+    TriangleParticles,
     TriangleRenderer,
     TriangleRendererOptions,
 };

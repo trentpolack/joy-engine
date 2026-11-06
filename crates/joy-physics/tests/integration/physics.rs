@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Physics behavior worth protecting: resting contact, bounded fixed stepping, ownership, raycast vehicles, transform
-//! conventions, and determinism, plus signed distance field colliders.
+//! Physics behavior worth protecting: resting contact, sleeping and waking, bounded fixed stepping, ownership, raycast
+//! vehicles, transform conventions, contact and sensor events, filtered queries, and determinism, plus signed distance
+//! field colliders.
 
 use joy_core::math::Vec3;
 use joy_core::{
@@ -12,10 +13,14 @@ use joy_core::{
 use joy_physics::{
     BodyHandle,
     BodyOptions,
+    CollisionGroups,
+    ContactPhase,
     PhysicsError,
     PhysicsWorld,
     PhysicsWorldOptions,
+    QueryOptions,
     SdfBakeOptions,
+    SdfCollisionStatistics,
     SdfPrimitive,
     SdfShape,
     VehicleInput,
@@ -30,6 +35,18 @@ fn simulate(world: &mut PhysicsWorld, seconds: f32) {
     for _ in 0..frames {
         world.step(1.0 / 60.0).unwrap();
     }
+}
+
+/// Step at 60 Hz for `seconds` and return the largest SDF pair and contact counts any step reported.
+fn simulate_tracking_sdf(world: &mut PhysicsWorld, seconds: f32) -> SdfCollisionStatistics {
+    let mut peak = SdfCollisionStatistics::default();
+    for _ in 0..(seconds * 60.0).round() as usize {
+        world.step(1.0 / 60.0).unwrap();
+        let statistics = world.sdf_collision_statistics();
+        peak.pairs = peak.pairs.max(statistics.pairs);
+        peak.contacts = peak.contacts.max(statistics.contacts);
+    }
+    peak
 }
 
 /// A large static ground box whose top face is at y = 0.
@@ -577,7 +594,9 @@ fn sdf_bodies_rest_stack_and_answer_raycasts() {
             },
         )
         .unwrap();
-    simulate(&mut world, 4.0);
+    // Record the busiest SDF contact search while the bodies settle; once they sleep the solver skips their pairs.
+    let statistics = simulate_tracking_sdf(&mut world, 4.0);
+    assert!(statistics.pairs >= 5 && statistics.contacts >= 5, "{statistics:?}");
 
     // Everything settles at its resting height without tipping, sinking, or drifting.
     for (level, body) in stack.iter().enumerate() {
@@ -590,8 +609,6 @@ fn sdf_bodies_rest_stack_and_answer_raycasts() {
     assert!((ring_pose.position.y - 0.15).abs() < 0.01, "{ring_pose:?}");
     assert!(ring_pose.rotation.x.abs() < 0.02 && ring_pose.rotation.z.abs() < 0.02);
     assert!((world.body_transform(tray).unwrap().position.y - 0.3).abs() < 0.02);
-    let statistics = world.sdf_collision_statistics();
-    assert!(statistics.pairs >= 5 && statistics.contacts >= 5, "{statistics:?}");
 
     // Rays stop at SDF surfaces, pass through the ring's hole to the ground, and report outward normals.
     let top = world.raycast(Vec3::new(-3.0, 5.0, 0.0), Vec3::new(-3.0, -1.0, 0.0)).unwrap();
@@ -726,4 +743,87 @@ fn identical_worlds_produce_bit_identical_results() {
         trace
     };
     assert_eq!(run(), run());
+}
+
+#[test]
+fn resting_bodies_sleep_and_wake_when_their_support_is_removed() {
+    let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let support = world
+        .create_body(BodyOptions {
+            half_extents: Vec3::new(1.0, 0.25, 1.0),
+            position: Vec3::new(0.0, 2.0, 0.0),
+            ..BodyOptions::new(PrimitiveShape::Box)
+        })
+        .unwrap();
+    let crate_body = world
+        .create_body(BodyOptions {
+            mass: 1.0,
+            half_extents: Vec3::splat(0.25),
+            position: Vec3::new(0.0, 2.6, 0.0),
+            ..BodyOptions::new(PrimitiveShape::Box)
+        })
+        .unwrap();
+    simulate(&mut world, 4.0);
+    let rested = world.body_transform(crate_body).unwrap().position.y;
+    assert!((rested - 2.5).abs() < 0.02, "the crate rests on its support: {rested}");
+
+    // Removing a static support wakes what slept on it; without the wake the crate would hover where it rested.
+    world.remove_body(support);
+    simulate(&mut world, 0.5);
+    let falling = world.body_transform(crate_body).unwrap().position.y;
+    assert!(falling < rested - 0.5, "the crate falls once its support is gone: {falling}");
+}
+
+#[test]
+fn sensors_report_overlaps_and_queries_respect_collision_groups() {
+    const PLAYER: u32 = 1 << 0;
+    const PICKUP: u32 = 1 << 1;
+    let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let pickup = world
+        .create_body(BodyOptions {
+            radius: 0.5,
+            position: Vec3::new(0.0, 1.0, 0.0),
+            groups: CollisionGroups::new(PICKUP, PLAYER),
+            sensor: true,
+            ..BodyOptions::new(PrimitiveShape::Sphere)
+        })
+        .unwrap();
+    let player = world
+        .create_body(BodyOptions {
+            mass: 1.0,
+            radius: 0.3,
+            position: Vec3::new(0.0, 3.0, 0.0),
+            groups: CollisionGroups::new(PLAYER, u32::MAX),
+            ..BodyOptions::new(PrimitiveShape::Sphere)
+        })
+        .unwrap();
+
+    // The falling player passes through the sensor (no collision response) and is reported entering, then leaving.
+    let mut phases = Vec::new();
+    for _ in 0..90 {
+        world.step(1.0 / 60.0).unwrap();
+        for event in world.events() {
+            assert!(event.sensor && event.other(pickup) == Some(player), "{event:?}");
+            phases.push(event.phase);
+        }
+    }
+    assert_eq!(phases, vec![ContactPhase::Started, ContactPhase::Ended]);
+    assert!(world.body_transform(player).unwrap().position.y < 0.0, "sensors never block");
+
+    // Overlaps find the sensor only when asked to and only for layers it interacts with.
+    let center = Vec3::new(0.0, 1.0, 0.0);
+    let solid_only = world.overlap_sphere(center, 0.2, &QueryOptions::ALL_SOLID).unwrap();
+    assert!(solid_only.is_empty());
+    let as_player = QueryOptions {
+        groups: CollisionGroups::new(PLAYER, PICKUP),
+        include_sensors: true,
+        ..QueryOptions::ALL_SOLID
+    };
+    assert_eq!(world.overlap_sphere(center, 0.2, &as_player).unwrap(), vec![pickup]);
+    let as_pickup = QueryOptions {
+        groups: CollisionGroups::new(PICKUP, PICKUP),
+        ..as_player
+    };
+    assert!(world.overlap_sphere(center, 0.2, &as_pickup).unwrap().is_empty());
+    assert!(world.raycast(Vec3::new(0.0, 3.0, 0.0), Vec3::new(0.0, -1.0, 0.0)).is_none(), "rays skip sensors");
 }

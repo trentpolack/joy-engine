@@ -26,6 +26,15 @@ use super::entity_definition::{
     EntityTransform,
 };
 use super::error::GameplayError;
+use super::world_events::{
+    EventQueue,
+    WorldEvents,
+};
+use super::world_timers::{
+    TimerId,
+    TimerRepeat,
+    WorldTimers,
+};
 use joy_physics::{
     BodyHandle,
     PhysicsWorld,
@@ -261,24 +270,36 @@ pub(crate) enum EntityCommand {
 
 /// Borrowed simulation services available to behaviors and systems.
 ///
-/// Gives mutable access to the physics world and read access to the entity-to-body map owned by the composition root
-/// (`World` or `LevelRuntime`). A body listed for an entity (vehicle chassis included) is owned by that entity: removing
-/// the entity removes it from physics. Structural changes (spawning and removing entities) are requested
-/// here and applied by the world: immediately after the requesting behavior or system returns during an update, or at
-/// the start of the next update when requested from a spawn or destroy hook.
+/// Gives mutable access to the physics world, the entity-to-body map, the world's events, and its timers, all owned by
+/// the composition root ([`World`](super::World)). A body listed for an entity (vehicle chassis included) is owned by
+/// that entity: removing the entity removes it from physics. Structural changes (spawning and removing entities) are
+/// requested here and applied by the world: immediately after the requesting behavior or system returns during an
+/// update, or at the start of the next update when requested from a spawn or destroy hook.
+///
+/// Events read here are those the previous update produced (see [`WorldEvents`]); events sent here are produced by the
+/// current update.
 pub struct SimulationContext<'a> {
     /// The physics world.
     pub physics: &'a mut PhysicsWorld,
-    bodies: &'a IndexMap<EntityId, BodyHandle>,
+    bodies: &'a mut IndexMap<EntityId, BodyHandle>,
+    events: &'a mut WorldEvents,
+    timers: &'a mut WorldTimers,
     commands: Vec<EntityCommand>,
 }
 
 impl<'a> SimulationContext<'a> {
     /// Borrow simulation services for one call.
-    pub fn new(physics: &'a mut PhysicsWorld, bodies: &'a IndexMap<EntityId, BodyHandle>) -> Self {
+    pub fn new(
+        physics: &'a mut PhysicsWorld,
+        bodies: &'a mut IndexMap<EntityId, BodyHandle>,
+        events: &'a mut WorldEvents,
+        timers: &'a mut WorldTimers,
+    ) -> Self {
         Self {
             physics,
             bodies,
+            events,
+            timers,
             commands: Vec::new(),
         }
     }
@@ -286,6 +307,58 @@ impl<'a> SimulationContext<'a> {
     /// The live body owned by an entity, if any. Vehicle operations take a vehicle entity's body.
     pub fn body(&self, id: &EntityId) -> Option<BodyHandle> {
         self.bodies.get(id).copied().filter(|handle| self.physics.contains_body(*handle))
+    }
+
+    /// Record `body` as owned by an entity, so its pose is written back to the entity after each physics step, its
+    /// contacts name the entity, and removing the entity removes it. A body the entity owned before is removed from
+    /// physics first.
+    pub fn attach_body(&mut self, id: &EntityId, body: BodyHandle) {
+        if let Some(previous) = self.bodies.insert(id.clone(), body)
+            && previous != body
+        {
+            self.physics.remove_body(previous);
+        }
+    }
+
+    /// Remove an entity's body from physics when it is the one listed for the entity. Returns whether it was removed.
+    pub fn detach_body(&mut self, id: &EntityId, body: BodyHandle) -> bool {
+        if self.bodies.get(id) != Some(&body) {
+            return false;
+        }
+        self.bodies.shift_remove(id);
+        self.physics.remove_body(body)
+    }
+
+    /// Events the previous update produced, readable by type.
+    pub fn events(&self) -> &EventQueue {
+        self.events.delivered()
+    }
+
+    /// Send an event; the game reads it after this update and behaviors read it during the next one.
+    pub fn send_event<T: 'static>(&mut self, event: T) {
+        self.events.send(event);
+    }
+
+    /// Start a timer that fires a [`TimerFired`](super::TimerFired) event after `seconds` of simulation time, counted
+    /// from the next update. An owned timer is cancelled when its entity is removed.
+    pub fn start_timer(
+        &mut self,
+        owner: Option<EntityId>,
+        key: impl Into<std::borrow::Cow<'static, str>>,
+        seconds: f64,
+        repeat: TimerRepeat,
+    ) -> TimerId {
+        self.timers.start(owner, key, seconds, repeat)
+    }
+
+    /// Stop a running timer. Returns whether it was running.
+    pub fn cancel_timer(&mut self, timer: TimerId) -> bool {
+        self.timers.cancel(timer)
+    }
+
+    /// Cancel every timer an entity owns (the world does this when the entity is removed).
+    pub(crate) fn cancel_timers_owned_by(&mut self, id: &EntityId) {
+        self.timers.cancel_owned_by(id);
     }
 
     /// Request that a copy of `definition` be spawned. It is not updated in the frame that requested it.

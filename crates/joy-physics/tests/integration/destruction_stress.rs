@@ -42,6 +42,7 @@ fn wall() -> Vec<DestructibleChunkDefinition> {
                 size: DVec3::new(1.0, 1.0, 0.5),
                 material: "masonry".to_owned(),
                 hit_points: 2.0,
+                shape: None,
             });
         }
     }
@@ -99,6 +100,7 @@ fn bearing_chunk(id: &str, center: [f64; 3], size: [f64; 3]) -> DestructibleChun
         size: DVec3::from_array(size),
         material: id.to_owned(),
         hit_points: 1.0,
+        shape: None,
     }
 }
 

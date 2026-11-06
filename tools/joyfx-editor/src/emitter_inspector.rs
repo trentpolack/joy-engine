@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 //! The EMITTER tab of the compose panel:
-//! identity, renderer, timing, the sprite texture for textured renderers, particle light emission, bursts, and child
-//! emission. Numeric fields are kit number fields, so they share drafts, keyboard steps, and property undo with the
+//! identity, renderer, blend mode, timing, the sprite texture for textured renderers, particle light emission, bursts,
+//! and child emission. Numeric fields are kit number fields, so they share drafts, keyboard steps, and property undo with the
 //! parameter panel; switches and menus are structural edits.
 
 use joy_engine::development::{
@@ -17,7 +17,10 @@ use joy_engine::egui::{
     RichText,
     Ui,
 };
-use joy_engine::particles::ParticleRenderer;
+use joy_engine::particles::{
+    ParticleBlend,
+    ParticleRenderer,
+};
 use joy_engine::runtime::theme::{
     colors,
     layout,
@@ -108,6 +111,18 @@ impl EmitterInspector {
                             for renderer in ParticleRenderer::ALL {
                                 if ui.selectable_label(renderer == emitter.renderer, renderer.as_str()).clicked() && renderer != emitter.renderer {
                                     renderer_change = Some(renderer);
+                                }
+                            }
+                        });
+                    });
+                });
+                ui.horizontal_top(|ui| {
+                    field(ui, column, "Blend", |ui| {
+                        egui::ComboBox::from_id_salt("blend").width(column - 8.0).selected_text(emitter.blend.as_str()).show_ui(ui, |ui| {
+                            for blend in ParticleBlend::ALL {
+                                if ui.selectable_label(blend == emitter.blend, blend.as_str()).on_hover_text(blend_help(blend)).clicked() && blend != emitter.blend {
+                                    emitter.blend = blend;
+                                    edits.structural = true;
                                 }
                             }
                         });
@@ -275,6 +290,15 @@ impl EmitterInspector {
             lab.structure_changed();
         }
         action
+    }
+}
+
+/// What a blend mode does, for its menu entry.
+fn blend_help(blend: ParticleBlend) -> &'static str {
+    match blend {
+        ParticleBlend::Alpha => "Straight alpha: the color covers what is behind by its alpha.",
+        ParticleBlend::Additive => "Additive: color times alpha adds light and never darkens; drawn unsorted.",
+        ParticleBlend::Premultiplied => "Premultiplied: alpha sets how much is hidden, color how much light is added.",
     }
 }
 

@@ -22,6 +22,7 @@ pub use joy_app::{
     AppResult,
     AssetFetcher,
     DEFAULT_MAXIMUM_FRAME_SECONDS,
+    FixedTick,
     Frame,
     FrameClock,
     FrameTime,
@@ -61,6 +62,7 @@ pub use joy_input::{
     InputError,
     InputManager,
     InputMap,
+    KeyRepeat,
     PRESS_THRESHOLD,
     PointerState,
     gamepad,
@@ -72,14 +74,16 @@ pub use joy_storage::{
     StorageError,
 };
 pub use joy_storage::{
+    ProgressSave,
+    SaveGuard,
+    SaveSlot,
+    SaveStatus,
+    SaveWrite,
+};
+pub use joy_storage::{
     SaveFileError,
     save_binary_file,
     save_text_file,
-};
-pub use joy_storage::{
-    SaveGuard,
-    SaveSlot,
-    SaveWrite,
 };
 pub use joy_ui::{
     Viewport,

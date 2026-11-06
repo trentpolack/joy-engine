@@ -13,7 +13,9 @@
 use joy_engine::particles::{
     DEFAULT_PARTICLE_TEXTURE,
     PARTICLE_EFFECT_VERSION,
+    PARTICLE_EMITTER_BLEND,
     PARTICLE_LIGHT_CASTS_SHADOW,
+    ParticleBlend,
     ParticleBurst,
     ParticleChild,
     ParticleEffectAsset,
@@ -634,6 +636,11 @@ fn lenient_emitter(record: &Map<String, Value>, index: usize) -> ParticleEmitter
         .unwrap_or_default();
     let renderer =
         record.get("renderer").and_then(Value::as_str).and_then(ParticleRenderer::parse).unwrap_or(template.renderer);
+    let blend = record
+        .get(PARTICLE_EMITTER_BLEND)
+        .and_then(Value::as_str)
+        .and_then(ParticleBlend::parse)
+        .unwrap_or(template.blend);
     let texture = record.get("texture").and_then(Value::as_object).map(|texture| ParticleTexture {
         source: texture.get("source").and_then(Value::as_str).unwrap_or(DEFAULT_PARTICLE_TEXTURE).into(),
         columns: count(texture.get("columns")).min(64),
@@ -669,6 +676,7 @@ fn lenient_emitter(record: &Map<String, Value>, index: usize) -> ParticleEmitter
         bursts,
         lifetime: number("lifetime", template.lifetime),
         renderer,
+        blend,
         texture,
         light,
         spawn: text("spawn", ""),
