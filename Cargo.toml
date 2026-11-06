@@ -63,6 +63,7 @@ joy-devtools.workspace = true
 joy-environment.workspace = true
 joy-form.workspace = true
 joy-fx.workspace = true
+joy-game-script.workspace = true
 joy-gameplay.workspace = true
 joy-input.workspace = true
 joy-physics.workspace = true
@@ -117,6 +118,7 @@ default-members = [
   "crates/joy-environment",
   "crates/joy-form",
   "crates/joy-fx",
+  "crates/joy-game-script",
   "crates/joy-gameplay",
   "crates/joy-input",
   "crates/joy-physics",
@@ -153,6 +155,7 @@ joy-environment = { path = "crates/joy-environment" }
 joy-engine = { path = "." }
 joy-form = { path = "crates/joy-form" }
 joy-fx = { path = "crates/joy-fx" }
+joy-game-script = { path = "crates/joy-game-script" }
 joy-gameplay = { path = "crates/joy-gameplay" }
 joy-input = { path = "crates/joy-input" }
 joy-physics = { path = "crates/joy-physics" }
@@ -195,6 +198,10 @@ png = "0.18.1"
 # JPEG and WebP decoding for embedded FORM material maps (PNG, JPEG, or WebP) on every target, browsers included.
 zune-jpeg = "0.5.15"
 image-webp = "0.2.4"
+
+# Game scripts (simulation layer): Rhai is pure Rust, so it builds for `wasm32-unknown-unknown` without a C toolchain.
+# `no_time` removes clock functions (they break replays and need a browser shim), and `only_i64` keeps one integer type.
+rhai = { version = "1.27.0", default-features = false, features = ["std", "no_time", "only_i64"] }
 
 # Physics (simulation layer). Enhanced determinism keeps native and WebAssembly simulations identical.
 rapier3d = { version = "0.36.1", features = ["enhanced-determinism"] }
@@ -304,6 +311,7 @@ layers = ["foundation", "simulation", "content", "rendering", "platform"]
 # Math types reach every crate through `joy_core::math`, so a math library change stays in one module.
 glam = ["foundation"]
 rapier3d = ["simulation"]
+rhai = ["simulation"]
 wgpu = ["rendering", "platform"]
 winit = ["platform"]
 egui = ["platform"]
@@ -321,6 +329,11 @@ debug = "line-tables-only"
 # Dependencies (wgpu, naga, rapier) run optimized even in debug builds, so games stay playable while iterating.
 opt-level = 2
 debug = false
+
+[profile.dev.package.joy-renderer]
+# Workspace members are excluded from the dependency wildcard. Particle generation and submission need level 2's
+# loop optimization to stay interactive in the native editor and development web builds.
+opt-level = 2
 
 [profile.release]
 lto = "thin"

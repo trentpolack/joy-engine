@@ -76,3 +76,58 @@ fn adjacent_triangles_of_one_kind_merge_and_equal_depths_keep_their_order() {
     );
     assert_eq!(queue.mesh_order, [0, 1]);
 }
+
+#[test]
+fn single_runs_preserve_stable_depth_order_and_drop_incomplete_triangles() {
+    let texture = TextureAsset::from_rgba8(1, 1, vec![255; 4]).unwrap();
+    for (depths, expected_tags) in [([9.0, 8.0, 8.0], [1.0, 2.0, 3.0]), ([8.0, 9.0, 8.0], [2.0, 1.0, 3.0])] {
+        let mut vertices: Vec<_> = depths
+            .into_iter()
+            .enumerate()
+            .flat_map(|(index, depth)| {
+                colored(depth).map(|mut vertex| {
+                    vertex.color[0] = (index + 1) as f32;
+                    vertex
+                })
+            })
+            .collect();
+        vertices.push(colored(100.0)[0]);
+        let mut transient = Vec::new();
+        let queue = build_transparent_queue(
+            &[],
+            &[],
+            &[TransparentDraw::Colored(&vertices)],
+            Vec3::ZERO,
+            Vec3::NEG_Z,
+            &mut transient,
+        );
+        assert_eq!(queue.steps, [TransparentStep::Colored(0..9)]);
+        assert_eq!(transient.iter().step_by(3).map(|vertex| vertex.color[0]).collect::<Vec<_>>(), expected_tags);
+
+        let vertices: Vec<_> = vertices
+            .iter()
+            .map(|vertex| TexturedVertex {
+                position: vertex.position,
+                color: vertex.color,
+                uv: [0.25, 0.75],
+            })
+            .collect();
+        let draws = [TransparentDraw::Textured {
+            texture: &texture,
+            vertices: &vertices,
+        }];
+        let queue = build_transparent_queue(&[], &[], &draws, Vec3::ZERO, Vec3::NEG_Z, &mut Vec::new());
+        assert_eq!(
+            queue.steps,
+            [TransparentStep::Textured {
+                texture: texture.id(),
+                vertices: 0..9
+            }]
+        );
+        assert_eq!(
+            queue.textured_vertices.iter().step_by(3).map(|vertex| vertex.color[0]).collect::<Vec<_>>(),
+            expected_tags
+        );
+        assert!(queue.textured_vertices.iter().all(|vertex| vertex.uv == [0.25, 0.75]));
+    }
+}

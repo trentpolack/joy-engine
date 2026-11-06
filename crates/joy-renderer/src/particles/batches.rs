@@ -47,6 +47,12 @@ const ROUND_SAMPLES: usize = 16;
 /// Samples of the billow outline.
 const BILLOW_SAMPLES: usize = 24;
 
+/// Segments of the ring outline.
+const RING_SAMPLES: usize = 32;
+
+/// Rotation of the billow's smaller lobe relative to its outer outline.
+const BILLOW_INNER_ROTATION: f64 = 0.7;
+
 /// Seconds of velocity a streak ribbon trails behind its particle.
 const STREAK_SECONDS: f64 = 0.035;
 
@@ -186,6 +192,7 @@ pub fn append_particle_effect(
         return Err(ParticleRenderError::TexturedEffect);
     }
     let mut scratch = Vec::new();
+    let mut local = Vec::new();
     for particle in effect.particles() {
         if !is_visible(particle) {
             continue;
@@ -194,7 +201,7 @@ pub fn append_particle_effect(
             continue;
         };
         scratch.clear();
-        append_colored_particle(&mut scratch, particle, emitter.asset.renderer, camera);
+        append_colored_particle(&mut scratch, &mut local, particle, emitter.asset.renderer, camera);
         vertices.extend(scratch.as_chunks::<COLORED_STRIDE>().0.iter().map(|vertex| colored_vertex(vertex)));
     }
     Ok(())
@@ -298,8 +305,29 @@ pub fn collect_particle_triangles(
     }
 
     let emitters = effect.definition().emitters();
-    let mut triangles = Vec::new();
+    let capacity = effect
+        .particles()
+        .iter()
+        .filter(|particle| is_visible(particle))
+        .filter_map(|particle| emitters.get(particle.emitter_index))
+        .map(|emitter| match emitter.asset.renderer {
+            ParticleRenderer::Ring => RING_SAMPLES * 2,
+            ParticleRenderer::Billow => BILLOW_SAMPLES * 2,
+            ParticleRenderer::Streak => ROUND_SAMPLES + 2,
+            ParticleRenderer::Square => 2,
+            renderer if renderer.is_textured() => {
+                if include_textured {
+                    2
+                } else {
+                    0
+                }
+            }
+            _ => ROUND_SAMPLES,
+        })
+        .sum();
+    let mut triangles = Vec::with_capacity(capacity);
     let mut scratch = Vec::new();
+    let mut local = Vec::new();
     for particle in effect.particles() {
         if !is_visible(particle) {
             continue;
@@ -319,10 +347,10 @@ pub fn collect_particle_triangles(
                 return Err(ParticleRenderError::MissingTexture);
             };
             let animated = renderer == ParticleRenderer::Flipbook;
-            append_textured_particle(&mut scratch, particle, texture, animated, camera, dimensions);
+            append_textured_particle(&mut scratch, &mut local, particle, texture, animated, camera, dimensions);
             (TEXTURED_STRIDE, Some(texture.source.clone()))
         } else {
-            append_colored_particle(&mut scratch, particle, renderer, camera);
+            append_colored_particle(&mut scratch, &mut local, particle, renderer, camera);
             (COLORED_STRIDE, None)
         };
         for triangle in scratch.chunks_exact(stride * 3) {
@@ -358,47 +386,31 @@ pub fn batch_particle_triangles(triangles: Vec<ParticleTriangle>, depths: Vec<f6
     let mut order: Vec<usize> = (0..triangles.len()).collect();
     order.sort_by(|left, right| depths[*left].partial_cmp(&depths[*right]).unwrap_or(std::cmp::Ordering::Equal));
 
-    let mut batches: Vec<ParticleBatch> = Vec::new();
-    for index in order {
-        let triangle = &triangles[index];
-        let same_material = match (batches.last(), &triangle.source) {
-            (Some(ParticleBatch::Colored(_)), None) => true,
-            (
-                Some(ParticleBatch::Textured {
-                    source,
-                    ..
-                }),
-                Some(next),
-            ) => source.as_ref() == next.as_ref(),
-            _ => false,
-        };
-        if !same_material {
-            batches.push(match &triangle.source {
-                None => ParticleBatch::Colored(Vec::new()),
-                Some(source) => ParticleBatch::Textured {
-                    source: source.clone(),
-                    vertices: Vec::new(),
-                },
-            });
-        }
-        match batches.last_mut() {
-            Some(ParticleBatch::Colored(vertices)) => {
-                vertices.extend(triangle.corners.iter().map(|corner| ColorVertex {
+    let mut batches = Vec::new();
+    // Size each run once; large smoke batches otherwise repeatedly reallocate and copy the vertex stream.
+    for run in order.chunk_by(|left, right| triangles[*left].source == triangles[*right].source) {
+        let corners = run.iter().flat_map(|index| &triangles[*index].corners);
+        match &triangles[run[0]].source {
+            None => {
+                let mut vertices = Vec::with_capacity(run.len() * 3);
+                vertices.extend(corners.map(|corner| ColorVertex {
                     position: corner.position.map(|value| value as f32),
                     color: corner.color.map(|value| value as f32),
                 }));
+                batches.push(ParticleBatch::Colored(vertices));
             }
-            Some(ParticleBatch::Textured {
-                vertices,
-                ..
-            }) => {
-                vertices.extend(triangle.corners.iter().map(|corner| TexturedVertex {
+            Some(source) => {
+                let mut vertices = Vec::with_capacity(run.len() * 3);
+                vertices.extend(corners.map(|corner| TexturedVertex {
                     position: corner.position.map(|value| value as f32),
                     color: corner.color.map(|value| value as f32),
                     uv: corner.uv.map(|value| value as f32),
                 }));
+                batches.push(ParticleBatch::Textured {
+                    source: source.clone(),
+                    vertices,
+                });
             }
-            None => {}
         }
     }
     batches
@@ -436,6 +448,7 @@ fn billow_shape() -> &'static [f64; BILLOW_SAMPLES] {
 /// Append one particle's colored triangles (stride 7) in world space.
 fn append_colored_particle(
     vertices: &mut Vec<f64>,
+    local: &mut Vec<f64>,
     particle: &EffectParticle,
     renderer: ParticleRenderer,
     camera: &ParticleCameraBasis,
@@ -451,33 +464,35 @@ fn append_colored_particle(
     let edge = [color[0], color[1], color[2], 0.0];
 
     // Local billboard geometry around the origin; streak ribbons are written directly in world space first.
-    let mut local = Vec::new();
+    local.clear();
     match renderer {
-        ParticleRenderer::Circle => add_radial_polygon(&mut local, 0.0, 0.0, size, color, &ROUND, rotation, 0.0),
-        ParticleRenderer::Square => append_quad(&mut local, size, rotation, color),
-        ParticleRenderer::Ring => add_ring(&mut local, 0.0, 0.0, size, f64::max(0.15, size * 0.045), color, 32, 0.0),
+        ParticleRenderer::Circle => add_radial_polygon(local, 0.0, 0.0, size, color, &ROUND, rotation, 0.0),
+        ParticleRenderer::Square => append_quad(local, size, rotation, color),
+        ParticleRenderer::Ring => {
+            add_ring(local, 0.0, 0.0, size, f64::max(0.15, size * 0.045), color, RING_SAMPLES, 0.0)
+        }
         ParticleRenderer::Streak => {
             append_streak(vertices, particle, color, camera);
-            add_gradient_radial_polygon(&mut local, 0.0, 0.0, size * 1.7, color, edge, &ROUND, rotation, 0.0);
+            add_gradient_radial_polygon(local, 0.0, 0.0, size * 1.7, color, edge, &ROUND, rotation, 0.0);
         }
         ParticleRenderer::Billow => {
             // Overlapping feathered lobes give volume without project-specific code.
             let shape = billow_shape();
-            add_gradient_radial_polygon(&mut local, 0.0, 0.0, size, color, edge, shape, rotation, 0.0);
+            add_gradient_radial_polygon(local, 0.0, 0.0, size, color, edge, shape, rotation, 0.0);
             let inner = [color[0] * 1.5, color[1] * 1.5, color[2] * 1.5, color[3] * 0.65];
             add_gradient_radial_polygon(
-                &mut local,
+                local,
                 0.0 - (size * 0.16),
                 0.0 - (size * 0.18),
                 size * 0.65,
                 inner,
                 edge,
                 shape,
-                rotation + 0.7,
+                rotation + BILLOW_INNER_ROTATION,
                 0.0 + 0.01,
             );
         }
-        _ => add_gradient_radial_polygon(&mut local, 0.0, 0.0, size, color, edge, &ROUND, rotation, 0.0),
+        _ => add_gradient_radial_polygon(local, 0.0, 0.0, size, color, edge, &ROUND, rotation, 0.0),
     }
 
     let origin = [particle.x, particle.y, particle.z];
@@ -531,6 +546,7 @@ fn append_quad(out: &mut Vec<f64>, size: f64, rotation: f64, color: [f64; 4]) {
 /// Append one textured or flipbook sprite (stride 9) in world space.
 fn append_textured_particle(
     out: &mut Vec<f64>,
+    local: &mut Vec<f64>,
     particle: &EffectParticle,
     texture: &ParticleTexture,
     animated: bool,
@@ -543,8 +559,8 @@ fn append_textured_particle(
         f64::max(0.0, particle.b),
         f64::min(1.0, particle.alpha),
     ];
-    let mut local = Vec::with_capacity(6 * COLORED_STRIDE);
-    append_quad(&mut local, particle.size, particle.rotation, color);
+    local.clear();
+    append_quad(local, particle.size, particle.rotation, color);
 
     let frames = f64::from(texture.frames);
     let columns = f64::from(texture.columns);
@@ -605,22 +621,25 @@ fn add_gradient_radial_polygon(
     rotation: f64,
     z: f64,
 ) {
-    let count = shape.len() as f64;
+    let directions = cached_outline(shape.len(), rotation);
+    let direction =
+        |index| directions.map_or_else(|| outline_direction(index, shape.len(), rotation), |values| values[index]);
+    let mut first_direction = direction(0);
     for index in 0..shape.len() {
-        let first_angle = rotation + (((index as f64 / count) * PI) * 2.0);
-        let second_angle = rotation + ((((index + 1) as f64 / count) * PI) * 2.0);
+        let second_direction = direction(index + 1);
         let first = shape[index];
         let second = shape[(index + 1) % shape.len()];
         vertices.extend_from_slice(&[x, y, z]);
         vertices.extend_from_slice(&center);
-        vertices.push(x + ((deterministic::cos(first_angle) * radius) * first));
-        vertices.push(y + ((deterministic::sin(first_angle) * radius) * first));
+        vertices.push(x + ((first_direction[0] * radius) * first));
+        vertices.push(y + ((first_direction[1] * radius) * first));
         vertices.push(z);
         vertices.extend_from_slice(&edge);
-        vertices.push(x + ((deterministic::cos(second_angle) * radius) * second));
-        vertices.push(y + ((deterministic::sin(second_angle) * radius) * second));
+        vertices.push(x + ((second_direction[0] * radius) * second));
+        vertices.push(y + ((second_direction[1] * radius) * second));
         vertices.push(z);
         vertices.extend_from_slice(&edge);
+        first_direction = second_direction;
     }
 }
 
@@ -636,19 +655,49 @@ fn add_ring(
     segments: usize,
     z: f64,
 ) {
-    let count = segments as f64;
+    let directions = cached_outline(segments, 0.0);
+    let direction = |index| directions.map_or_else(|| outline_direction(index, segments, 0.0), |values| values[index]);
+    let mut first_direction = direction(0);
     for index in 0..segments {
-        let first_angle = ((index as f64 / count) * PI) * 2.0;
-        let second_angle = (((index + 1) as f64 / count) * PI) * 2.0;
+        let second_direction = direction(index + 1);
         let inner = f64::max(0.0, radius - width);
         let outer = radius + width;
-        let corners = [(inner, first_angle), (outer, first_angle), (outer, second_angle), (inner, second_angle)];
+        let corners =
+            [(inner, first_direction), (outer, first_direction), (outer, second_direction), (inner, second_direction)];
         for corner in [0, 1, 2, 0, 2, 3] {
-            let (corner_radius, angle) = corners[corner];
-            vertices.push(x + (deterministic::cos(angle) * corner_radius));
-            vertices.push(y + (deterministic::sin(angle) * corner_radius));
+            let (corner_radius, direction) = corners[corner];
+            vertices.push(x + (direction[0] * corner_radius));
+            vertices.push(y + (direction[1] * corner_radius));
             vertices.push(z);
             vertices.extend_from_slice(&color);
         }
+        first_direction = second_direction;
+    }
+}
+
+/// Fixed directions include the closing sample at tau: substituting sample zero would change reference geometry.
+/// Rotating particles compute each distinct direction once, using the same arithmetic as the fixed outlines.
+fn outline_direction(index: usize, segments: usize, rotation: f64) -> [f64; 2] {
+    let angle = rotation + (((index as f64 / segments as f64) * PI) * 2.0);
+    [deterministic::cos(angle), deterministic::sin(angle)]
+}
+
+fn cached_outline(segments: usize, rotation: f64) -> Option<&'static [[f64; 2]]> {
+    static ROUND: OnceLock<[[f64; 2]; ROUND_SAMPLES + 1]> = OnceLock::new();
+    static BILLOW: OnceLock<[[f64; 2]; BILLOW_SAMPLES + 1]> = OnceLock::new();
+    static BILLOW_INNER: OnceLock<[[f64; 2]; BILLOW_SAMPLES + 1]> = OnceLock::new();
+    static RING: OnceLock<[[f64; 2]; RING_SAMPLES + 1]> = OnceLock::new();
+    let build = |index| outline_direction(index, segments, rotation);
+    if rotation == 0.0 {
+        match segments {
+            ROUND_SAMPLES => Some(ROUND.get_or_init(|| std::array::from_fn(build))),
+            BILLOW_SAMPLES => Some(BILLOW.get_or_init(|| std::array::from_fn(build))),
+            RING_SAMPLES => Some(RING.get_or_init(|| std::array::from_fn(build))),
+            _ => None,
+        }
+    } else if segments == BILLOW_SAMPLES && rotation == BILLOW_INNER_ROTATION {
+        Some(BILLOW_INNER.get_or_init(|| std::array::from_fn(build)))
+    } else {
+        None
     }
 }

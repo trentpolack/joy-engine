@@ -22,7 +22,6 @@ use joy_engine::particles::{
     ParticleRenderMetrics,
     ParticleTextureSet,
     collect_particle_lights,
-    create_particle_effect_batches,
     create_particle_render_metrics,
 };
 use joy_engine::rendering::post_process::{
@@ -49,6 +48,7 @@ use crate::constants::{
     PREVIEW_LIGHT_LIMIT,
     PerformanceMode,
 };
+use crate::preview_geometry::PreviewGeometry;
 
 /// Height of the light-receiver surface; the grid floats two units above it.
 pub const PREVIEW_RECEIVER_HEIGHT: f64 = -120.0;
@@ -146,7 +146,7 @@ pub struct PreviewStatistics {
     pub lights: usize,
     /// Particle lights over the preview's light cap.
     pub omitted_lights: usize,
-    /// Display range, `HDR Scene → SDR Output`.
+    /// Scene precision and the configured display signal, including HDR headroom when available.
     pub range: String,
     /// Per-emitter geometry in detailed profiling.
     pub by_emitter: Vec<EmitterGeometry>,
@@ -193,6 +193,7 @@ pub struct ParticleViewport {
     home: CameraHome,
     grid: EditorGrid,
     grid_spacing: Option<f64>,
+    geometry: PreviewGeometry,
     scene: RenderScene,
     textures: ParticleTextureSet,
     textures_ready: bool,
@@ -229,6 +230,7 @@ impl ParticleViewport {
             camera,
             grid: EditorGrid::new(),
             grid_spacing: None,
+            geometry: PreviewGeometry::default(),
             scene: RenderScene::new(),
             textures: ParticleTextureSet::new(),
             textures_ready: false,
@@ -287,6 +289,7 @@ impl ParticleViewport {
 
     /// Commit `definition` (prepared first) as the displayed one, releasing images it no longer uses.
     pub fn set_effect(&mut self, definition: Option<&CompiledParticleEffect>) {
+        self.geometry.clear();
         self.metrics = definition
             .filter(|_| self.performance_mode == PerformanceMode::Detailed)
             .map(create_particle_render_metrics);
@@ -296,6 +299,7 @@ impl ParticleViewport {
 
     /// Release every image.
     pub fn release_textures(&mut self) {
+        self.geometry.clear();
         self.textures.clear();
         self.textures_ready = false;
     }
@@ -306,6 +310,8 @@ impl ParticleViewport {
             return;
         }
         self.performance_mode = mode;
+        // Entering detailed profiling needs a fresh build to populate the new per-emitter counters.
+        self.geometry.clear();
         self.metrics = definition.filter(|_| mode == PerformanceMode::Detailed).map(create_particle_render_metrics);
         self.stats.by_emitter.clear();
         self.stats.sort_ms = 0.0;
@@ -411,7 +417,7 @@ impl ParticleViewport {
         let illumination = effect.map(|effect| collect_particle_lights(effect, PREVIEW_LIGHT_LIMIT));
         let lights = illumination.as_ref().map(|selection| selection.point_lights()).unwrap_or_default();
         let opaque = if self.receiver_visible { Self::receiver_geometry() } else { Vec::new() };
-        let grid: Vec<ColorVertex> = if self.grid_visible && region.size.y > 0.0 {
+        let grid: &[ColorVertex] = if self.grid_visible && region.size.y > 0.0 {
             let view = EditorGridView {
                 target: self.camera.target.to_array().map(f64::from),
                 backward: basis.backward.to_array().map(f64::from),
@@ -421,21 +427,22 @@ impl ParticleViewport {
             };
             let frame = self.grid.frame(&view).map_err(|error| error.to_string())?;
             self.grid_spacing = Some(frame.spacing);
-            frame.triangles.clone()
+            &frame.triangles
         } else {
             self.grid_spacing = None;
-            Vec::new()
+            &[]
         };
-        let batches = match effect {
-            Some(effect) if self.textures_ready => {
-                create_particle_effect_batches(effect, &ParticleCameraBasis::from(basis), self.metrics.as_mut(), &grid)
-                    .map_err(|error| error.to_string())?
-            }
-            _ if grid.is_empty() => Vec::new(),
-            _ => vec![ParticleBatch::Colored(grid)],
-        };
+        self.geometry
+            .prepare(
+                effect.filter(|_| self.textures_ready),
+                &ParticleCameraBasis::from(basis),
+                grid,
+                self.metrics.as_mut(),
+            )
+            .map_err(|error| error.to_string())?;
+        let batches = &self.geometry.batches;
         let draws: Vec<TransparentDraw<'_>> =
-            self.textures.transparent_draws(&batches).map_err(|error| error.to_string())?;
+            self.textures.transparent_draws(batches).map_err(|error| error.to_string())?;
         let geometry_ms = if monitoring { geometry_watch.elapsed_milliseconds() } else { 0.0 };
 
         let camera = RegionCamera::new(&self.camera, region.viewport_size, region.min, region.size);
@@ -465,7 +472,7 @@ impl ParticleViewport {
                     } => vertices.len() * 36,
                 })
                 .sum::<usize>();
-        let hdr = target.renderer().diagnostics().hdr;
+        let diagnostics = target.renderer().diagnostics();
         let by_emitter = match (&self.metrics, &illumination) {
             (Some(metrics), Some(illumination)) => metrics
                 .emitters
@@ -492,7 +499,7 @@ impl ParticleViewport {
             upload_bytes,
             lights: lights.len(),
             omitted_lights: illumination.as_ref().map_or(0, |selection| selection.omitted),
-            range: format!("{} Scene → SDR Output", if hdr { "HDR" } else { "SDR" }),
+            range: format!("{} Scene → {} Output", if diagnostics.hdr { "HDR" } else { "SDR" }, diagnostics.display),
             by_emitter,
         };
         Ok(())
