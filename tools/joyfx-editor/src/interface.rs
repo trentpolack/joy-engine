@@ -889,8 +889,8 @@ impl Interface {
             ui.set_min_height(HEADING_HEIGHT - 20.0);
             components::panel_heading(ui, "Parameters");
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if named(ui.button(RichText::new("+ Add").color(colors::ACCENT)), "Add parameter")
-                    .on_hover_text("Add parameter")
+                if named(ui.button(RichText::new("+ ADD").color(colors::ACCENT)), "Add Parameter")
+                    .on_hover_text("Add Parameter")
                     .clicked()
                     && let Err(message) = lab.add_parameter()
                 {
@@ -898,24 +898,22 @@ impl Interface {
                 }
             });
         });
+
         ui.separator();
+
+        // Scrollable list of parameters that scripts can use.
+        //  TODO (trent, 11/5/26): This layout needs a significant polish pass.
         egui::ScrollArea::vertical().id_salt("parameters").auto_shrink([false, false]).show(ui, |ui| {
-            ui.label(RichText::new("SHAPE THE MOTION. FIND THE FEEL.").monospace().color(colors::ACCENT).size(layout::TYPE_XS));
-            components::guidance(ui, "Whole effect · saved in .joyfx. Save exports the current definition; LIVE marks the accepted audition.");
             ui.horizontal(|ui| {
-                if ui.add_enabled(lab.can_undo(), egui::Button::new("Undo property")).clicked() {
+                if ui.add_enabled(lab.can_undo(), egui::Button::new("UNDO")).clicked() {
                     lab.undo();
                 }
-                if ui.add_enabled(lab.can_redo(), egui::Button::new("Redo property")).clicked() {
+                if ui.add_enabled(lab.can_redo(), egui::Button::new("REDO")).clicked() {
                     lab.redo();
                 }
             });
-            components::guidance(ui, "Type directly · Shift + arrows fine · Alt + arrows coarse. Script undo is separate.");
-            ui.add_space(layout::SPACE_SM);
+
             self.parameters.show(ui, lab);
-            ui.add_space(layout::SPACE_LG);
-            ui.label(RichText::new("TAKE IT WITH YOU").monospace().strong().color(colors::TEXT).size(layout::TYPE_SM));
-            components::guidance(ui, "Save a .joyfx asset to use this effect in any Joy Engine project.");
         });
     }
 

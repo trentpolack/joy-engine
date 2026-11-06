@@ -67,10 +67,16 @@ pub(crate) fn build_transparent_queue(
     forward: Vec3,
     transient: &mut Vec<MeshVertex>,
 ) -> TransparentQueue {
-    let depth = |positions: [[f32; 3]; 3]| {
-        let centroid = positions.iter().map(|position| Vec3::from_array(*position)).sum::<Vec3>() / 3.0;
-        (centroid - eye).dot(forward)
-    };
+    // JOYFX and AssetScene already sort particle runs. When one run is the whole transparent scene, reuse that
+    // ordering if it also holds in the renderer's f32 view space. Rounding can change it, so never assume it holds.
+    if mesh_depths.is_empty()
+        && triangles.is_empty()
+        && let [draw] = draws
+        && let Some(queue) = ordered_single_run(draw, eye, forward, transient)
+    {
+        return queue;
+    }
+    let depth = |positions| triangle_depth(positions, eye, forward);
 
     // Gather every element with its view depth, in the order supplied.
     let mut elements: Vec<(f32, Element<'_>)> =
@@ -148,6 +154,66 @@ pub(crate) fn build_transparent_queue(
         }
     }
     queue
+}
+
+fn triangle_depth(positions: [[f32; 3]; 3], eye: Vec3, forward: Vec3) -> f32 {
+    let centroid = positions.iter().map(|position| Vec3::from_array(*position)).sum::<Vec3>() / 3.0;
+    (centroid - eye).dot(forward)
+}
+
+/// Avoid the sortable-element allocation and second sort for one ordered material run. Mixed scenes and unsorted
+/// runs use the general queue, including its stable ordering of equal depths.
+fn ordered_single_run(
+    draw: &TransparentDraw<'_>,
+    eye: Vec3,
+    forward: Vec3,
+    transient: &mut Vec<MeshVertex>,
+) -> Option<TransparentQueue> {
+    let mut queue = TransparentQueue::default();
+    match draw {
+        TransparentDraw::Colored(vertices) => {
+            let triangles = vertices.as_chunks::<3>().0;
+            let depths = triangles
+                .iter()
+                .map(|triangle| triangle_depth(triangle.each_ref().map(|vertex| vertex.position), eye, forward));
+            if !depths.is_sorted_by(|left, right| left.total_cmp(right).is_ge()) {
+                return None;
+            }
+            let start = transient.len() as u32;
+            transient.reserve(triangles.len() * 3);
+            transient.extend(
+                triangles
+                    .iter()
+                    .flatten()
+                    .map(|vertex| MeshVertex::colored(vertex.position, LinearColor::from(vertex.color))),
+            );
+            let end = transient.len() as u32;
+            if start != end {
+                queue.steps.push(TransparentStep::Colored(start..end));
+            }
+        }
+        TransparentDraw::Textured {
+            texture,
+            vertices,
+        } => {
+            let triangles = vertices.as_chunks::<3>().0;
+            let depths = triangles
+                .iter()
+                .map(|triangle| triangle_depth(triangle.each_ref().map(|vertex| vertex.position), eye, forward));
+            if !depths.is_sorted_by(|left, right| left.total_cmp(right).is_ge()) {
+                return None;
+            }
+            let count = triangles.len() * 3;
+            queue.textured_vertices.extend_from_slice(&vertices[..count]);
+            if count > 0 {
+                queue.steps.push(TransparentStep::Textured {
+                    texture: texture.id(),
+                    vertices: 0..count as u32,
+                });
+            }
+        }
+    }
+    Some(queue)
 }
 
 #[cfg(test)]
