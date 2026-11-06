@@ -53,20 +53,40 @@ fn ui_lands_on_sdr_white_and_blends_over_the_scene() {
     let opaque = composite_over(&gpu, sdr_white_level, white, scene);
     assert!((opaque - sdr_white_level).abs() < 0.01, "opaque UI white is {opaque}");
 
-    // Half-covered UI (premultiplied quarter-bright light) adds its scaled light to half the scene behind it.
+    // The intermediate stores gamma-space RGB, as egui paints it, without hardware sRGB conversion.
+    // Half-bright linear gray therefore needs encoding before it reaches the composite.
+    let encoded_gray = f64::from(egui::ecolor::gamma_from_linear(0.5));
+    let gray = wgpu::Color {
+        r: encoded_gray,
+        g: encoded_gray,
+        b: encoded_gray,
+        a: 1.0,
+    };
+    let opaque_gray = composite_over(&gpu, sdr_white_level, gray, scene);
+    let expected_gray = 0.5 * sdr_white_level;
+    assert!(
+        (opaque_gray - expected_gray).abs() < 0.02,
+        "opaque gray composites to {opaque_gray}, expected {expected_gray}"
+    );
+
+    // egui premultiplies encoded RGB. At half coverage, this gray contributes quarter-bright linear light.
     let translucent = wgpu::Color {
-        r: 0.25,
-        g: 0.25,
-        b: 0.25,
+        r: encoded_gray * 0.5,
+        g: encoded_gray * 0.5,
+        b: encoded_gray * 0.5,
         a: 0.5,
     };
     let blended = composite_over(&gpu, sdr_white_level, translucent, scene);
     let expected = (0.25 * sdr_white_level) + 0.5;
     assert!((blended - expected).abs() < 0.02, "translucent UI composites to {blended}, expected {expected}");
+
+    // An untouched UI pixel leaves the scene intact, including the zero-alpha unpremultiply boundary.
+    let transparent = composite_over(&gpu, sdr_white_level, wgpu::Color::TRANSPARENT, scene);
+    assert!((transparent - scene.r as f32).abs() < 0.01, "transparent UI composites to {transparent}");
 }
 
-/// Clear the UI intermediate to `interface` (linear, premultiplied) and the output to `scene`, composite, and return the
-/// output's red channel.
+/// Clear the UI intermediate to `interface` (sRGB-encoded RGB, premultiplied by linear alpha) and the output to `scene`
+/// (linear), composite, and return the output's red channel.
 #[cfg(not(target_arch = "wasm32"))]
 fn composite_over(gpu: &GpuContext, sdr_white_level: f32, interface: wgpu::Color, scene: wgpu::Color) -> f32 {
     let device = gpu.device();

@@ -3,12 +3,11 @@
 
 //! UI over extended linear (scRGB) presentation targets.
 //!
-//! egui's painter writes gamma-space colors unless its target format encodes sRGB itself, so it cannot paint straight
-//! into a linear float surface. On those surfaces egui paints into an sRGB-format intermediate instead (its linear
-//! framebuffer path), and [`LinearComposite`] blends that intermediate over the scene, scaled so UI white matches the
+//! egui paints premultiplied sRGB-encoded colors into an ordinary UNORM intermediate. [`LinearComposite`] unpremultiplies
+//! them, decodes to linear light, and premultiplies again before blending over the scene, scaled so UI white matches the
 //! display's SDR white. Standard and extended sRGB targets do not need it.
 
-/// Format egui paints into before compositing: sRGB encoding keeps 8-bit UI gradients smooth and decodes on load.
+/// Store egui's encoded RGB without hardware sRGB conversion; the composite shader owns linearization.
 pub(crate) const INTERFACE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// The composite pass.

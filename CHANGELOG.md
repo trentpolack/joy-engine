@@ -33,6 +33,7 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR
 - The FORM DESTRUCTION example uses them: impact-broken chunks shatter into Voronoi shards that pile on the ground and on the surviving wall.
 
 ### Rendering
+- Corrected the scRGB UI compositing test to supply premultiplied sRGB colors matching egui's intermediate, preserving the linear-light blend expectation and covering opaque gray and transparent UI. Updated the stale intermediate-format comments; runtime compositing is unchanged.
 - The shells compile every registered shading model's pipelines after `App::start` (`Renderer::warm_up_pipelines`), behind the loading screen, instead of stalling the first frames that show each material.
 - Point-light shadows cull casters with one sphere test per light before testing each cube face, and opaque batching resolves each material's model once before sorting instead of inside the sort comparison.
 - Added `GroundRing` and `append_ground_ring` for flat XZ rings and discs (selection, targeting, and blob shadows).
