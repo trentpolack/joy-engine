@@ -5,6 +5,7 @@
 //! [`theme`], [`hud_text`] for in-game text, and the display metrics ([`Viewport`], [`display_scale`]) that layout,
 //! picking, and painting share. Browsers translate DOM input into egui events themselves, because egui-winit's pinned
 //! release does not build for WebAssembly.
+//! [`ui_layout`] connects native Taffy layout trees to measured text and stably identified, clipped egui regions.
 
 mod display;
 mod egui_layer;
@@ -13,6 +14,7 @@ mod linear_composite;
 pub mod theme;
 #[cfg(test)]
 mod theme_build;
+pub mod ui_layout;
 #[cfg(target_arch = "wasm32")]
 mod web_input;
 

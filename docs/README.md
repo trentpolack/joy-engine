@@ -11,6 +11,7 @@ Joy Engine is a Rust workspace shared by native games, WebAssembly games, and au
 - [Input](input.md), [audio](audio.md), and [storage](rust-storage.md).
 - [Live tuning](tuning.md), [asset hot reload](hot-reload.md), the [console and profiling](console-and-profiling.md), and the [authoring kit](rust-authoring.md).
 - [Joy Editor](../editor/README.md) and [engine examples](../examples/README.md).
+- [Direct Taffy layout](rust-ui-layout.md): native layout trees, egui regions, and editor integration.
 - [Patch delivery](patch-delivery.md).
 - [Repository audit](repository-audit.md): repeatable maintenance checks and independent audit tests.
 

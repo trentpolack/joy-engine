@@ -762,13 +762,11 @@ impl FormEditor {
                     let panes = self.layout.panes(workbench);
                     self.panes = panes;
                     if let Some(rect) = panes.left {
-                        ui.scope_builder(UiBuilder::new().max_rect(rect).id_salt("script-pane"), |ui| {
-                            self.script_pane(ui)
-                        });
+                        joy_engine::runtime::ui_layout::show_region(ui, "script-pane", rect, |ui| self.script_pane(ui));
                     }
                     match panes.center {
                         Some(rect) => {
-                            ui.scope_builder(UiBuilder::new().max_rect(rect).id_salt("preview-pane"), |ui| {
+                            joy_engine::runtime::ui_layout::show_region(ui, "preview-pane", rect, |ui| {
                                 self.preview_pane(ui)
                             });
                         }
@@ -778,7 +776,7 @@ impl FormEditor {
                         }),
                     }
                     if let Some(rect) = panes.right {
-                        ui.scope_builder(UiBuilder::new().max_rect(rect).id_salt("inspector-pane"), |ui| {
+                        joy_engine::runtime::ui_layout::show_region(ui, "inspector-pane", rect, |ui| {
                             self.inspector_pane(ui)
                         });
                     }

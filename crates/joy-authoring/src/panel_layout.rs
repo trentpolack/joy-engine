@@ -36,6 +36,7 @@ use serde::{
     Serialize,
 };
 
+use crate::pane_geometry::PaneGeometry;
 use joy_storage::Storage;
 use joy_ui::theme::{
     colors,
@@ -162,6 +163,7 @@ struct SavedLayout {
 /// Three resizable panes with persisted widths.
 #[derive(Clone, Debug)]
 pub struct PanelLayout {
+    geometry: PaneGeometry,
     options: PanelLayoutOptions,
     storage: Option<Storage>,
     left_width: f32,
@@ -176,6 +178,7 @@ impl PanelLayout {
     /// A layout with saved preferences from `storage` when present and readable; unreadable preferences are ignored.
     pub fn new(options: PanelLayoutOptions, storage: Option<Storage>) -> Self {
         let mut layout = Self {
+            geometry: PaneGeometry::new(),
             left_width: options.left.default_width,
             right_width: options.right.default_width,
             options,
@@ -265,51 +268,24 @@ impl PanelLayout {
     }
 
     /// The pane rectangles inside `area` for this frame. Widths clamp to the space available without changing the
-    /// saved preferences.
-    pub fn panes(&self, area: Rect) -> PanelRects {
-        if self.maximized && self.options.maximize_mode == MaximizeMode::Viewport {
-            return PanelRects {
-                left: None,
-                center: Some(area),
-                right: None,
-            };
-        }
-        let width = area.width();
-        let left = (self.left_width.min(width * self.options.left_fraction)).max(self.options.left.minimum);
-        let right = (self.right_width.min(width - left - self.options.center_minimum)).max(self.options.right.minimum);
-        let [left_collapsed, center_collapsed, right_collapsed] = self.collapsed;
-        let left = if left_collapsed { 0.0 } else { left };
-        let right = if right_collapsed { 0.0 } else { right };
-        let column = |x0: f32, x1: f32| Rect::from_min_max(pos2(x0, area.top()), pos2(x1, area.bottom()));
-        if center_collapsed {
-            // Without a center the visible side panels share the space at their preferred ratio.
-            return match (left_collapsed, right_collapsed) {
-                (false, false) => {
-                    let split = area.left() + (width * (left / (left + right).max(1.0)));
-                    PanelRects {
-                        left: Some(column(area.left(), split)),
-                        center: None,
-                        right: Some(column(split, area.right())),
-                    }
-                }
-                (false, true) => PanelRects {
-                    left: Some(area),
-                    center: None,
-                    right: None,
-                },
-                _ => PanelRects {
-                    left: None,
-                    center: None,
-                    right: Some(area),
-                },
-            };
-        }
-        let center_left = area.left() + left;
-        let center_right = (area.right() - right).max(center_left);
+    /// saved preferences. Retains Taffy layout caches; does not mutate document or preference state.
+    pub fn panes(&mut self, area: Rect) -> PanelRects {
+        let width = area.width().max(0.0);
+        let left = self.left_width.min(width * self.options.left_fraction).max(self.options.left.minimum);
+        // A hidden left pane must not reserve space when sizing the right pane.
+        let left_space = if self.collapsed[0] { 0.0 } else { left };
+        let right =
+            self.right_width.min(width - left_space - self.options.center_minimum).max(self.options.right.minimum);
+        let hidden = if self.maximized && self.options.maximize_mode == MaximizeMode::Viewport {
+            [true, false, true]
+        } else {
+            self.collapsed
+        };
+        let [left, center, right] = self.geometry.compute(area, [left, right], hidden);
         PanelRects {
-            left: (!left_collapsed).then(|| column(area.left(), center_left)),
-            center: Some(column(center_left, center_right)),
-            right: (!right_collapsed).then(|| column(center_right, area.right())),
+            left,
+            center,
+            right,
         }
     }
 
@@ -472,107 +448,5 @@ impl PanelLayout {
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
-mod tests {
-    use super::*;
-    use egui::vec2;
-
-    fn storage(name: &str) -> (Storage, std::path::PathBuf) {
-        let directory = std::env::temp_dir().join(format!("joy-panel-layout-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&directory);
-        (Storage::in_directory(&directory), directory)
-    }
-
-    fn area(width: f32) -> Rect {
-        Rect::from_min_size(pos2(0.0, 40.0), vec2(width, 600.0))
-    }
-
-    #[test]
-    fn widths_clamp_for_display_without_changing_preferences() {
-        let layout = PanelLayout::new(PanelLayoutOptions::default(), None);
-        let panes = layout.panes(area(1400.0));
-        assert_eq!(panes.left.unwrap().width(), 280.0);
-        assert_eq!(panes.right.unwrap().width(), 260.0);
-        assert_eq!(panes.center.unwrap().width(), 860.0);
-        // A narrow window: the left side caps at 36% and keeps its minimum; the right keeps its minimum.
-        let narrow = layout.panes(area(600.0));
-        assert!((narrow.left.unwrap().width() - 216.0).abs() < 0.01);
-        assert!((narrow.right.unwrap().width() - 220.0).abs() < 0.01);
-        assert_eq!(layout.widths(), (280.0, 260.0), "preferences are untouched");
-    }
-
-    #[test]
-    fn preferences_persist_and_never_collapse_every_pane() {
-        let (storage, directory) = storage("persist");
-        let options = PanelLayoutOptions {
-            storage_key: "joy-editor-panels-test-v2".to_owned(),
-            ..Default::default()
-        };
-        let mut layout = PanelLayout::new(options.clone(), Some(storage.clone()));
-        layout.set_widths(900.0, 300.0);
-        assert!(layout.toggle(PaneSide::Left));
-        assert!(!layout.set_collapsed(PaneSide::Center, true), "the center is not collapsible here");
-        assert!(layout.toggle(PaneSide::Right));
-        let reopened = PanelLayout::new(options.clone(), Some(storage.clone()));
-        assert_eq!(reopened.widths(), (600.0, 300.0), "widths clamp to their limits");
-        assert!(reopened.is_collapsed(PaneSide::Left) && reopened.is_collapsed(PaneSide::Right));
-        assert_eq!(reopened.panes(area(1000.0)).center, Some(area(1000.0)));
-        let saved = storage.load("joy-editor-panels-test-v2").unwrap().unwrap();
-        assert!(saved.contains("\"leftCollapsed\":true"), "camelCase document key names: {saved}");
-
-        let collapsible = PanelLayoutOptions {
-            center_collapsible: true,
-            ..options.clone()
-        };
-        let mut layout = PanelLayout::new(collapsible, None);
-        assert!(layout.toggle(PaneSide::Left) && layout.toggle(PaneSide::Right));
-        assert!(!layout.set_collapsed(PaneSide::Center, true), "the last visible pane stays");
-        // Unreadable preferences fall back to defaults.
-        storage.save("joy-editor-panels-test-v2", "{not json").unwrap();
-        assert_eq!(PanelLayout::new(options, Some(storage)).widths(), (280.0, 260.0));
-        let _ = std::fs::remove_dir_all(directory);
-    }
-
-    #[test]
-    fn dividers_resize_by_drag_keys_and_reset_on_double_click() {
-        let context = egui::Context::default();
-        let mut layout = PanelLayout::new(PanelLayoutOptions::default(), None);
-        let run = |layout: &mut PanelLayout, events: Vec<egui::Event>| {
-            let input = egui::RawInput {
-                screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(1400.0, 700.0))),
-                events,
-                ..Default::default()
-            };
-            let mut output = context.run_ui(input, |root| {
-                let panes = layout.panes(area(1400.0));
-                layout.dividers(root, &panes);
-            });
-            output.textures_delta.clear();
-        };
-        let handle = pos2(280.0, 300.0);
-        let button = |pos, pressed| egui::Event::PointerButton {
-            pos,
-            button: egui::PointerButton::Primary,
-            pressed,
-            modifiers: Default::default(),
-        };
-        run(&mut layout, vec![egui::Event::PointerMoved(handle)]);
-        run(&mut layout, vec![button(handle, true)]);
-        run(&mut layout, vec![egui::Event::PointerMoved(handle + vec2(60.0, 0.0))]);
-        run(&mut layout, vec![button(handle + vec2(60.0, 0.0), false)]);
-        assert_eq!(layout.widths().0, 340.0);
-        let key = |key| egui::Event::Key {
-            key,
-            physical_key: None,
-            pressed: true,
-            repeat: false,
-            modifiers: Default::default(),
-        };
-        run(&mut layout, vec![key(Key::ArrowLeft)]);
-        assert_eq!(layout.widths().0, 320.0, "a focused divider steps by 20 points");
-        let moved = pos2(320.0, 300.0);
-        run(&mut layout, vec![egui::Event::PointerMoved(moved)]);
-        run(&mut layout, vec![button(moved, true), button(moved, false)]);
-        run(&mut layout, vec![button(moved, true), button(moved, false)]);
-        assert_eq!(layout.widths().0, 280.0, "double-click restores the default");
-    }
-}
+#[path = "panel_layout.test.rs"]
+mod tests;

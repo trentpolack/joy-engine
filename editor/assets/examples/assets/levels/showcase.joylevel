@@ -75,7 +75,7 @@
       },
       "components": {
         "render": {
-          "asset": "assets/form/cottage.formlab"
+          "asset": "assets/form/cottage.forminst"
         }
       }
     },

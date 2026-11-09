@@ -3,6 +3,11 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 11-09-2026
+### Editor Layout
+- Adopted Taffy directly for the shared editor pane layout and XYZ/RGBA inspector columns, retaining egui widgets, rendering, input, and history. Narrow panes stay inside their standalone or hosted area, component groups wrap into rows, and saved widths return when space becomes available.
+- Added `runtime::ui_layout` with native Taffy exports, nested rectangle conversion, text measurement, and stable clipped egui regions. FORM EDITOR, JOYFX EDITOR, and Joy Editor use the shared region bridge; removed manual pane rectangles, component-column width arithmetic, and duplicated pane scope setup. `PanelLayout::panes` now requires mutable access to retain its geometry cache.
+- Corrected the bundled showcase's old FORM-instance asset extension.
+
 ### Rendering
 - GPU frame profiling works on Apple GPUs. Each profile mark pass now dispatches one thread, because Metal samples a pass's timestamps only when its encoder executes work, and the empty mark passes resolved every timestamp to zero. A device whose timestamps never advance falls back to CPU timings with one warning instead of reporting zero GPU time.
 

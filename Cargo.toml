@@ -241,6 +241,8 @@ wgpu = { version = "30.0.1", default-features = false, features = [
 ] }
 winit = "0.30.13"
 egui = "0.36.2"
+# Layout only; egui continues to own widgets, input, text, and painting.
+taffy = { version = "0.15.1", default-features = false, features = ["std", "taffy_tree", "flexbox", "grid", "block_layout"] }
 egui-wgpu = { version = "0.36.2", default-features = false }
 
 # Native only: members list these under `cfg(not(target_arch = "wasm32"))`.

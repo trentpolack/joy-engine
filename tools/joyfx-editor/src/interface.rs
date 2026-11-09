@@ -307,10 +307,10 @@ impl Interface {
                 let workspace = Rect::from_min_max(pos2(area.left(), top), area.right_bottom());
                 let panes = self.layout.panes(workspace);
                 if let Some(rect) = panes.left {
-                    pane(ui, rect, |ui| self.compose_panel(ui, lab));
+                    pane(ui, "compose-pane", rect, |ui| self.compose_panel(ui, lab));
                 }
                 if let Some(rect) = panes.right {
-                    pane(ui, rect, |ui| self.parameter_panel(ui, lab));
+                    pane(ui, "parameter-pane", rect, |ui| self.parameter_panel(ui, lab));
                 }
                 if let Some(rect) = panes.center {
                     let viewport = self.preview_panel(ui, lab, rect);
@@ -635,7 +635,7 @@ impl Interface {
         let bottom = Rect::from_min_max(pos2(rect.left(), viewport.bottom()), rect.max);
 
         // Heading and toolbar.
-        pane(ui, top, |ui| {
+        pane(ui, "preview-controls", top, |ui| {
             ui.horizontal(|ui| {
                 ui.set_min_height(HEADING_HEIGHT - 22.0);
                 components::panel_heading(ui, "Preview");
@@ -732,7 +732,7 @@ impl Interface {
         }
 
         // Options, replay window, timeline, diagnostics, and the monitor.
-        pane(ui, bottom, |ui| {
+        pane(ui, "preview-details", bottom, |ui| {
             egui::ScrollArea::vertical().id_salt("preview-options").auto_shrink([false, false]).show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     components::checkbox(ui, &mut lab.viewport.grid_visible, "Line grid").on_hover_text(
@@ -969,7 +969,7 @@ fn named(response: egui::Response, name: &str) -> egui::Response {
 }
 
 /// Draw `contents` in an opaque panel filling `rect`.
-fn pane(ui: &mut Ui, rect: Rect, contents: impl FnOnce(&mut Ui)) {
+fn pane(ui: &mut Ui, id_salt: &str, rect: Rect, contents: impl FnOnce(&mut Ui)) {
     ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::PANEL);
     ui.painter().rect_stroke(
         rect,
@@ -978,10 +978,7 @@ fn pane(ui: &mut Ui, rect: Rect, contents: impl FnOnce(&mut Ui)) {
         egui::StrokeKind::Inside,
     );
     let inner = rect.shrink(layout::SPACE_MD);
-    ui.scope_builder(UiBuilder::new().max_rect(inner).layout(Layout::top_down(Align::Min)), |ui| {
-        ui.set_clip_rect(rect.intersect(ui.clip_rect()));
-        contents(ui);
-    });
+    joy_engine::runtime::ui_layout::show_region(ui, id_salt, inner, contents);
 }
 
 /// One emitter stack row.

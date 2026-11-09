@@ -109,6 +109,170 @@ fn arrow_keys_step_with_shift_fine_and_alt_coarse() {
 }
 
 #[test]
+fn component_groups_fit_narrow_inspectors_without_changing_values() {
+    let context = egui::Context::default();
+    let mut values = [0.1, 0.2, 0.3, 0.4];
+    let mut drafts = NumericDrafts::default();
+    for width in [240.0, 90.0, 240.0] {
+        pass(&context, vec![], |ui| {
+            let host = Rect::from_min_size(ui.cursor().min, vec2(width, 280.0));
+            joy_ui::ui_layout::show_region(ui, "inspector", host, |ui| {
+                let left = ui.cursor().left();
+                let response = ComponentGroup::rgba("color", &mut values)
+                    .bounds(&[0.0; 4], &[1.0; 4])
+                    .defaults(Some(&[0.0; 4]))
+                    .show(ui, &mut drafts);
+                assert!(
+                    response.response.rect.right() <= left + width + 0.1,
+                    "component group must fit its inspector: {:?}",
+                    response.response.rect
+                );
+                assert!(!response.changed);
+            });
+        });
+    }
+    assert_eq!(values, [0.1, 0.2, 0.3, 0.4]);
+}
+
+#[test]
+fn component_draft_and_focus_follow_the_value_when_grid_rows_change() {
+    let context = egui::Context::default();
+    let mut values = [1.0, 2.0, 3.0, 4.0];
+    let mut drafts = NumericDrafts::default();
+    let mut draw = |width, events, drafts: &mut NumericDrafts| {
+        let mut rect = Rect::NOTHING;
+        pass(&context, events, |ui| {
+            let host = Rect::from_min_size(ui.cursor().min, vec2(width, 280.0));
+            joy_ui::ui_layout::show_region(ui, "inspector", host, |ui| {
+                rect = ComponentGroup::rgba("components", &mut values).without_sliders().show(ui, drafts).response.rect;
+            });
+        });
+        rect
+    };
+    let rect = draw(240.0, vec![], &mut drafts);
+    let third = pos2(rect.left() + (rect.width() * 0.625), rect.center().y);
+    draw(240.0, click(third), &mut drafts);
+    draw(240.0, vec![egui::Event::Text("invalid".to_owned())], &mut drafts);
+    let id = *drafts.rejected.keys().next().expect("third component has an invalid draft");
+    let focus = context.memory(|memory| memory.focused());
+    assert!(focus.is_some());
+    let wrapped = draw(90.0, vec![], &mut drafts);
+    assert!(wrapped.height() > rect.height(), "component controls wrap into multiple rows");
+    assert_eq!(context.memory(|memory| memory.focused()), focus);
+    assert_eq!(drafts.rejected(id).unwrap().text, "invalid");
+    draw(240.0, vec![], &mut drafts);
+    assert_eq!(drafts.rejected.len(), 1, "resizing must not create a second field identity");
+    assert_eq!(values, [1.0, 2.0, 3.0, 4.0]);
+}
+
+#[test]
+fn component_scrubbing_stays_one_gesture_when_grid_rows_change() {
+    let context = egui::Context::default();
+    let mut drafts = NumericDrafts::default();
+    let mut values = [1.0; 4];
+    let mut draw = |width, events| {
+        let mut response = None;
+        pass(&context, events, |ui| {
+            let host = Rect::from_min_size(ui.cursor().min, vec2(width, 280.0));
+            joy_ui::ui_layout::show_region(ui, "inspector", host, |ui| {
+                response = Some(
+                    ComponentGroup::rgba("components", &mut values)
+                        .bounds(&[0.0; 4], &[2.0; 4])
+                        .step(0.1)
+                        .without_sliders()
+                        .show(ui, &mut drafts),
+                );
+            });
+        });
+        response.unwrap()
+    };
+    let rect = draw(240.0, vec![]).response.rect;
+    let third = pos2(rect.left() + (rect.width() * 0.625), rect.center().y);
+    draw(
+        240.0,
+        vec![
+            egui::Event::PointerMoved(third),
+            egui::Event::PointerButton {
+                pos: third,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: Default::default(),
+            },
+        ],
+    );
+    let moving = draw(240.0, vec![egui::Event::PointerMoved(third + vec2(10.0, 0.0))]);
+    assert!(!moving.committed());
+    let resized = draw(120.0, vec![egui::Event::PointerMoved(third + vec2(20.0, 0.0))]);
+    assert_eq!(resized.component, Some(2));
+    assert_eq!(resized.phase, EditPhase::Continuing);
+    let released = draw(
+        120.0,
+        vec![egui::Event::PointerButton {
+            pos: third + vec2(20.0, 0.0),
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: Default::default(),
+        }],
+    );
+    assert!(released.committed());
+    assert!(!draw(240.0, vec![]).committed(), "the gesture commits only on release");
+    assert_eq!(values, [1.0, 1.0, 2.0, 1.0]);
+}
+
+#[test]
+fn scrolled_components_keep_every_visible_field_interactive() {
+    let context = egui::Context::default();
+    let mut drafts = NumericDrafts::default();
+    let mut values = [1.0; 4];
+    let mut draw = |events| {
+        let mut rect = Rect::NOTHING;
+        pass(&context, events, |ui| {
+            let host = Rect::from_min_size(ui.cursor().min, vec2(240.0, 70.0));
+            joy_ui::ui_layout::show_region(ui, "inspector", host, |ui| {
+                egui::ScrollArea::vertical().vertical_scroll_offset(120.0).show(ui, |ui| {
+                    ui.add_space(120.0);
+                    rect = ComponentGroup::rgba("components", &mut values)
+                        .without_sliders()
+                        .show(ui, &mut drafts)
+                        .response
+                        .rect;
+                    ui.add_space(120.0);
+                });
+            });
+        });
+        rect
+    };
+    draw(vec![]);
+    draw(vec![]);
+    let rect = draw(vec![]);
+    let fourth = pos2(rect.right() - (rect.width() * 0.125), rect.center().y);
+    draw(click(fourth));
+    draw(vec![egui::Event::Text("8".to_owned())]);
+    draw(vec![key(Key::Enter, Default::default())]);
+    assert_eq!(values, [1.0, 1.0, 1.0, 8.0], "a visible scrolled component must accept edits");
+}
+
+#[test]
+fn confirmed_component_errors_wrap_and_keep_the_next_row_below_them() {
+    let context = egui::Context::default();
+    let mut drafts = NumericDrafts::default();
+    let mut values = [1.0; 4];
+    pass(&context, vec![], |ui| {
+        let host = Rect::from_min_size(ui.cursor().min, vec2(120.0, 280.0));
+        joy_ui::ui_layout::show_region(ui, "inspector", host, |ui| {
+            let group_id = ui.id().with(egui::IdSalt::new(Id::new("components")));
+            let first_id = group_id.with(0_usize).with(Id::new("value"));
+            drafts.reject(first_id, "invalid".into(), "Enter a finite number.".into(), true);
+            ComponentGroup::rgba("components", &mut values).without_sliders().show(ui, &mut drafts);
+            let first_region = ui.ctx().read_response(group_id.with(0_usize)).unwrap();
+            let second_row = ui.ctx().read_response(group_id.with(2_usize)).unwrap();
+            assert!(second_row.rect.top() >= first_region.rect.bottom(), "next row overlaps a confirmed error");
+            assert!(first_region.rect.width() <= 56.1, "validation text must wrap within its Grid track");
+        });
+    });
+}
+
+#[test]
 fn scrubbing_moves_continuously_and_commits_once_on_release() {
     let context = egui::Context::default();
     let mut drafts = NumericDrafts::default();

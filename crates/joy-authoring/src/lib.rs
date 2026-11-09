@@ -12,10 +12,12 @@
 
 mod authoring_tool;
 mod choice_controls;
+mod component_layout;
 pub mod components;
 pub mod file_dialogs;
 mod lab_controls;
 pub mod lab_values;
+mod pane_geometry;
 pub mod panel_layout;
 mod property_history;
 mod script_editor;

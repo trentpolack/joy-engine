@@ -208,16 +208,22 @@ impl LevelUi {
                     origin: Vec2::new(center.min.x, center.min.y),
                     size: Vec2::new(center.width(), center.height()),
                 };
-                self.viewport(ui, center, level, controls);
-                self.viewport_overlay(ui, center, level, controls);
+                joy_engine::runtime::ui_layout::show_region(ui, "viewport-pane", center, |ui| {
+                    self.viewport(ui, center, level, controls);
+                    self.viewport_overlay(ui, center, level, controls);
+                });
             }
             if let Some(left) = panes.left {
                 controls.insert("outliner", left);
-                self.outliner(ui, left, level, controls);
+                joy_engine::runtime::ui_layout::show_region(ui, "outliner-pane", left, |ui| {
+                    self.outliner(ui, left, level, controls);
+                });
             }
             if let Some(right) = panes.right {
                 controls.insert("inspector", right);
-                self.inspector(ui, right, level, access, controls);
+                joy_engine::runtime::ui_layout::show_region(ui, "inspector-pane", right, |ui| {
+                    self.inspector(ui, right, level, access, controls);
+                });
             }
             self.status_bar(ui, status, level, controls);
             self.panels.dividers(ui, &panes);

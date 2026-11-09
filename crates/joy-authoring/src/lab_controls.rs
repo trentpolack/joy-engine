@@ -844,53 +844,64 @@ impl<'a> ComponentGroup<'a> {
 
     /// Draw the group and apply edits; [`ControlResponse::component`] names the component that changed.
     pub fn show(self, ui: &mut Ui, drafts: &mut NumericDrafts) -> ControlResponse {
-        let count = self.values.len().max(1);
-        let spacing = ui.spacing().item_spacing.x;
-        let column_width = ((ui.available_width() - (spacing * (count as f32 - 1.0))) / count as f32).max(36.0);
         ui.push_id(self.id_salt, |ui| {
-            ui.horizontal_top(|ui| {
-                let mut combined: Option<ControlResponse> = None;
-                for (component, value) in self.values.iter_mut().enumerate() {
-                    let rules = NumericRules {
-                        minimum: self.minimums.and_then(|bounds| bounds.get(component).copied()),
-                        maximum: self.maximums.and_then(|bounds| bounds.get(component).copied()),
-                        integer: false,
-                    };
-                    let default = self.defaults.and_then(|defaults| defaults.get(component).copied());
-                    let label = self.labels.get(component).copied().unwrap_or("");
-                    let accessible = match &self.name {
-                        Some(name) => format!("{name} {label}"),
-                        None => label.to_owned(),
-                    };
-                    let response = ui
-                        .vertical(|ui| {
-                            ui.set_width(column_width);
-                            ui.push_id(component, |ui| {
-                                component_column(
-                                    ui,
-                                    value,
-                                    label,
-                                    &accessible,
-                                    rules,
-                                    default,
-                                    self.step,
-                                    self.slider,
-                                    column_width,
-                                    drafts,
-                                )
-                            })
-                            .inner
-                        })
-                        .inner
-                        .with_component(component);
-                    combined = Some(match combined {
-                        Some(previous) => previous.merge(response),
-                        None => response,
-                    });
+            let tracks = crate::component_layout::component_tracks(ui, self.values.len());
+            let row_width = ui.available_width();
+            let count = self.values.len();
+            let mut combined: Option<ControlResponse> = None;
+            let mut row_origin = ui.cursor().min;
+            let mut row_bottom = row_origin.y;
+            for (component, value) in self.values.iter_mut().enumerate() {
+                let column = component % tracks.len();
+                if column == 0 {
+                    row_origin = ui.cursor().min;
+                    row_bottom = row_origin.y;
                 }
-                combined.expect("groups have at least one component")
-            })
-            .inner
+                let (offset, width) = tracks[column];
+                // Column content can extend below the scroll viewport. The parent's clip, not its remaining layout
+                // height, determines what is visible; every column in this row shares that same viewport.
+                let rect = Rect::from_min_size(row_origin + vec2(offset, 0.0), vec2(width, f32::INFINITY));
+                let rules = NumericRules {
+                    minimum: self.minimums.and_then(|bounds| bounds.get(component).copied()),
+                    maximum: self.maximums.and_then(|bounds| bounds.get(component).copied()),
+                    integer: false,
+                };
+                let default = self.defaults.and_then(|defaults| defaults.get(component).copied());
+                let label = self.labels.get(component).copied().unwrap_or("");
+                let accessible = match &self.name {
+                    Some(name) => format!("{name} {label}"),
+                    None => label.to_owned(),
+                };
+                // IDs depend on the component, not its row; a resize keeps drafts and focus with their value.
+                let region = joy_ui::ui_layout::show_region(ui, component, rect, |ui| {
+                    component_column(
+                        ui,
+                        value,
+                        label,
+                        &accessible,
+                        rules,
+                        default,
+                        self.step,
+                        self.slider,
+                        width,
+                        drafts,
+                    )
+                });
+                row_bottom = row_bottom.max(region.response.rect.bottom());
+                let response = region.inner.with_component(component);
+                combined = Some(match combined {
+                    Some(previous) => previous.merge(response),
+                    None => response,
+                });
+                if column + 1 == tracks.len() || component + 1 == count {
+                    // A rejected draft can make an earlier column taller than the last one.
+                    ui.advance_cursor_after_rect(Rect::from_min_max(
+                        row_origin,
+                        pos2(row_origin.x + row_width, row_bottom),
+                    ));
+                }
+            }
+            combined.unwrap_or_else(|| ControlResponse::idle(ui.allocate_response(Vec2::ZERO, Sense::hover())))
         })
         .inner
     }
@@ -915,7 +926,10 @@ fn component_column(
     let modified = is_modified(*value, default);
     let mut reset = None;
     ui.horizontal(|ui| {
-        let (rect, _) = ui.allocate_exact_size(vec2(width - RESET_BUTTON_SIZE, 14.0), Sense::hover());
+        let (rect, _) = ui.allocate_exact_size(
+            vec2((width - RESET_BUTTON_SIZE - ui.spacing().item_spacing.x).max(0.0), 14.0),
+            Sense::hover(),
+        );
         paint_label(ui, rect, label, colors::MUTED, layout::TYPE_XS);
         if let Some(default) = default {
             reset = Some((reset_button(ui, modified, default), default));
@@ -1303,8 +1317,8 @@ fn paint_label(ui: &Ui, rect: Rect, text: &str, color: Color32, size: f32) {
 
 fn show_draft_error(ui: &mut Ui, message: &str, width: f32) {
     ui.scope(|ui| {
-        ui.set_max_width(width.max(120.0));
-        ui.label(egui::RichText::new(message).color(colors::DANGER).size(layout::TYPE_XS));
+        ui.set_max_width(width.max(1.0));
+        ui.add(egui::Label::new(egui::RichText::new(message).color(colors::DANGER).size(layout::TYPE_XS)).wrap());
     });
 }
 

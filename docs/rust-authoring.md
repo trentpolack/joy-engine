@@ -3,6 +3,9 @@ The authoring kit is the shared egui toolkit that FORM EDITOR, JOYFX EDITOR, and
 
 Keep tool UI in modules separate from document and model logic; the kit follows the same split (`lab_values.rs` holds the UI-free rules behind `lab_controls.rs`), so a later UI technology change touches only UI modules.
 
+## Layout Foundation
+The editors use Taffy directly for pane geometry and inspector component tracks, with egui retaining widgets, text editing, focus, input, and painting. `joy_engine::runtime::ui_layout` re-exports Taffy's native types and supplies the coordinate, text measurement, and clipped-region bridge; see [Direct Taffy Layout](rust-ui-layout.md). Shared editor compositions belong in `joy-authoring`, while document state and history remain with each tool.
+
 ## Look
 `runtime::theme::apply_editor(ctx)` applies the editor/lab preset to an egui context. Its values come from two editable assets: [`assets/ui/theme-default.json`](../assets/ui/theme-default.json) owns game/editor palettes, syntax colors, and font choices; [`assets/ui/layout.json`](../assets/ui/layout.json) owns shared type sizes, spacing, corners, borders, and control heights. Cargo generates the Rust constants when either file changes, for native and WebAssembly builds. Edit the JSON and rebuild; no separate generation command or duplicated Rust values are needed. Invalid values stop the build with the asset and field name.
 
@@ -19,7 +22,7 @@ Discrete controls edit the same `&mut f64` values: `toggle_control` (zero or one
 | --- | --- |
 | `NumberField` | Exact numeric field. Shows the authored value exactly (`lab_values::format_number`), scrubs by horizontal drag (one step per 2 points), steps with arrow keys (Shift a tenth, or one for integer fields; Alt ten steps), and validates drafts on Enter or focus loss against bounds, integrality, and an optional extra `check`. |
 | `ScalarControl` | Bounded scalar: a slider over the authored range plus an exact field, an optional label column, and a reset button while modified. The slider appears only for finite, distinct bounds. |
-| `ComponentGroup` | XYZ (`xyz`) and RGBA (`rgba`) groups: equal columns with a component label, an exact field, and a short slider per bounded component; per-component defaults and resets. |
+| `ComponentGroup` | XYZ (`xyz`) and RGBA (`rgba`) groups: equal Taffy Grid columns with a component label, an exact field, and a short slider per bounded component; per-component defaults and resets. Narrow inspectors wrap components into additional rows, preserving each field's focus and draft. |
 | `ColorControl` | Linear-RGBA swatch over a checkerboard with an sRGB picker and hex entry. Choosing converts RGB to linear within the owner's bounds and preserves alpha. |
 | `lab_slider` | The lab range slider (thin rail, accent fill, round thumb) used by the controls and available alone (JOYFX EDITOR's timeline). It never clamps or rounds values it did not edit; arrow keys step it while focused. |
 | `reset_button`, `modified_marker`, `is_modified` | Default/modified indication: modified values draw in the accent color, and the reset button restores the default. |
@@ -63,11 +66,13 @@ Draw panes first and dividers last so dividers win hit tests over pane content:
 ```rust
 let panes = self.layout.panes(area);
 if let Some(rect) = panes.left {
-    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| self.compose_panel(ui));
+    joy_engine::runtime::ui_layout::show_region(ui, "compose-pane", rect, |ui| self.compose_panel(ui));
 }
 // center and right panes
 self.layout.dividers(ui, &panes);
 ```
+
+`panes` takes `&mut self` because it retains a Taffy tree and layout caches. Preferred widths and the saved JSON format are unchanged. When a host is too narrow for the usual side-panel minimums, Flexbox shrinks the visible panes to stay inside it; widening the host restores the preferred widths. A hidden pane releases its space. `show_region` gives each pane stable widget identities and clips its content and hit tests to its host, including when tools run inside a Joy Editor tab.
 
 ## Script Editor
 `ScriptEditor` is the code editor for FORM and JOYFX scripts on egui's `TextEdit`. It borrows the script text each frame and owns only presentation state:
