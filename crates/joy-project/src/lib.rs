@@ -12,6 +12,7 @@ pub use project_manifest::{
     ProjectManifest,
     ProjectManifestError,
     ProjectPreview,
+    ProjectRunCommand,
     parse_project_manifest,
     parse_project_manifest_text,
 };

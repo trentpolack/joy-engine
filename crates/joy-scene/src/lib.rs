@@ -34,6 +34,7 @@ pub use components::{
     ComponentError,
     EFFECT_COMPONENT_DEFAULTS,
     EffectComponentDefaults,
+    EnvironmentComponent,
     LIGHT_COMPONENT_DEFAULTS,
     LightComponent,
     LightComponentDefaults,

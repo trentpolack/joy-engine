@@ -6,6 +6,14 @@
     "root": "dist",
     "entry": "index.html"
   },
+  "run": {
+    "command": "cargo",
+    "arguments": [
+      "run",
+      "--manifest-path",
+      "Cargo.toml"
+    ]
+  },
   "capabilities": [
     {
       "id": "procedural-meshes",

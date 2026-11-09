@@ -1,15 +1,14 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Rigid bodies, raycast vehicles, contact and sensor events, and filtered scene queries behind a backend-neutral API.
+//! Rigid bodies, contact and sensor events, and filtered scene queries behind a backend-neutral API.
 //!
 //! [`PhysicsSimulation`] owns a rapier3d solver and every body created through it, and hands out copyable [`BodyHandle`]
 //! values. Handles carry the identity of the world that created them, so a handle from another world (or a removed
-//! body) is reported as unknown instead of aliasing an unrelated body. A raycast vehicle is a kind of body: its chassis
-//! is created with [`PhysicsSimulation::create_vehicle`] and every vehicle operation takes the chassis body's handle.
+//! body) is reported as unknown instead of aliasing an unrelated body.
 //!
-//! Coordinates are meters in Y-up world space; rotations are XYZ Euler radians applied X, then Y, then Z. Vehicles use
-//! up = +Y, forward = +Z, and right = +X in chassis space. Time is in seconds and the solver advances in fixed steps
+//! Coordinates are meters in Y-up world space; rotations are XYZ Euler radians applied X, then Y, then Z. Time is in
+//! seconds and the solver advances in fixed steps
 //! with bounded catch-up.
 //!
 //! Authored physics values preserve the established tuning contract. Rapier parameter mapping and solver limitations
@@ -33,7 +32,6 @@ mod physics_events;
 mod physics_heightfield;
 mod physics_query;
 mod physics_simulation;
-mod physics_vehicle;
 mod sdf;
 mod terrain_colliders;
 
@@ -95,14 +93,6 @@ pub use physics_simulation::{
     PhysicsSimulation,
     PhysicsSimulationOptions,
 };
-pub use physics_vehicle::{
-    VEHICLE_DEFAULTS,
-    VehicleInput,
-    VehicleOptions,
-    VehicleTuning,
-    WHEEL_DEFAULTS,
-    WheelOptions,
-};
 pub use sdf::{
     SDF_BAKE_DEFAULTS,
     SdfBakeOptions,
@@ -130,7 +120,7 @@ pub struct BodyHandle {
     pub(crate) raw: rapier3d::dynamics::RigidBodyHandle,
 }
 
-/// Copied world-space pose of a body or wheel. Mutating it never changes the simulation.
+/// Copied world-space pose of a body. Mutating it never changes the simulation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PhysicsTransform {
     /// World position in meters.
@@ -177,15 +167,6 @@ pub enum PhysicsError {
     /// The body handle does not name a live body in this world.
     #[error("Physics body is not owned by this world or has been removed.")]
     UnknownBody,
-    /// The body is live but was not created as a vehicle chassis.
-    #[error("Physics body is not a vehicle.")]
-    NotAVehicle,
-    /// A vehicle chassis was configured as a static body.
-    #[error("Vehicle chassis must be a dynamic body (mass greater than zero).")]
-    InvalidChassis,
-    /// A vehicle was configured without wheels.
-    #[error("A vehicle requires at least one wheel.")]
-    NoWheels,
     /// A mutation batch named an empty shape id.
     #[error("Physics mutation batches need a nonnegative sequence and nonempty shape ids.")]
     InvalidMutationBatch,

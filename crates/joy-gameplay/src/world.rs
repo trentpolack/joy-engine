@@ -69,8 +69,7 @@ pub struct PresentedEntity<'a> {
 
 /// Owns entity simulation and physics without browser, input, or rendering facilities.
 ///
-/// `bodies` maps entities to the physics bodies they own (a vehicle is a kind of body, so a kart's chassis is listed
-/// here too); behaviors read it through [`SimulationContext`], and removing an entity removes its listed body. Fields
+/// `bodies` maps entities to the physics bodies they own; behaviors read it through [`SimulationContext`], and removing an entity removes its listed body. Fields
 /// are public so composition roots can borrow them independently; use [`World::split`] to obtain an entity world and
 /// context together.
 ///
@@ -82,7 +81,7 @@ pub struct World {
     pub entities: EntityWorld,
     /// Physics owner.
     pub physics: PhysicsSimulation,
-    /// Body owned by each entity, including vehicle chassis bodies.
+    /// Body owned by each entity.
     pub bodies: IndexMap<EntityId, BodyHandle>,
     // Events produced and delivered at update boundaries, and running timers.
     events: EventChannel,
@@ -216,7 +215,7 @@ impl World {
         })
     }
 
-    /// Spawn a copied definition; `physics` and `vehicle` records create the entity's body.
+    /// Spawn a copied definition; a `physics` record creates the entity's body.
     pub fn spawn(&mut self, definition: &EntityDefinition) -> Result<EntityId, GameplayError> {
         let (entities, mut context) = self.split();
         entities.spawn(definition, &mut context)

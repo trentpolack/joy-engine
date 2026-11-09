@@ -43,7 +43,7 @@ fn level_round_trip_is_byte_identical_and_preserves_custom_components() {
     assert_eq!(level.name, "Engine Test Yard");
     assert_eq!(
         level.entities.iter().map(|entity| entity.id.as_str()).collect::<Vec<_>>(),
-        ["ground", "crate", "kart", "lamp", "look"]
+        ["ground", "crate", "mover", "lamp", "look"]
     );
     let crate_entity = &level.entities[1];
     assert_eq!(crate_entity.kind, "prop");
@@ -52,8 +52,8 @@ fn level_round_trip_is_byte_identical_and_preserves_custom_components() {
         Value::Object(crate_entity.components["spawner"].clone()),
         json!({"rate": 2, "label": "Crates", "nested": {"enabled": true, "list": [1, 2.5, "x", null]}})
     );
-    let kart = &level.entities[2];
-    assert_eq!(kart.components["vehicle"]["wheels"].as_array().unwrap().len(), 4);
+    let mover = &level.entities[2];
+    assert_eq!(mover.kind, "mover");
     let look = &level.entities[4];
     assert_eq!(look.components["postProcess"]["unbounded"], json!(true));
 }

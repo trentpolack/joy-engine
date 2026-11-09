@@ -22,7 +22,9 @@
 //! [`ScriptLibrary`] resolves only sources registered by the host. Data modules return export tables, which are
 //! recursively frozen. Replacing source validates its transitive importers before committing any compiled program.
 //! Object states remain on the same VM through reloads. [`ScriptLoan`] safely exposes host-owned state only during
-//! its lending call, and [`ScriptRandom`] preserves the host's seeded draw order.
+//! its lending call, and [`ScriptRandom`] preserves the host's seeded draw order. [`ScriptSources`] owns a game's
+//! shipped sources and accepts development edits only once the host validates the whole set; [`intern`] gives data
+//! records read from modules shared `'static` text.
 //!
 //! Math uses `f64` and the engine's portable transcendental helpers. [`ScriptVec3`] is immutable f64 userdata;
 //! Clocks, unseeded randomness, dynamic loaders, and the platform power operator are unavailable.
@@ -35,12 +37,14 @@ pub mod definitions;
 mod engine;
 mod error;
 mod frozen;
+mod intern;
 mod library;
 mod loan;
 mod random;
 mod results;
 mod script;
 mod source;
+mod sources;
 mod standard_library;
 
 pub use arguments::{
@@ -67,6 +71,7 @@ pub use error::{
     ScriptError,
     ScriptLocation,
 };
+pub use intern::intern;
 pub use library::ScriptLibrary;
 pub use loan::{
     ScriptLoan,
@@ -80,5 +85,12 @@ pub use script::{
     Script,
     ScriptHook,
     ScriptState,
+};
+pub use sources::{
+    SCRIPT_EXTENSION,
+    ScriptEditError,
+    ScriptSource,
+    ScriptSources,
+    library_from,
 };
 pub use standard_library::ScriptVec3;

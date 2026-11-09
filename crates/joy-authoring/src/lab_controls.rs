@@ -725,7 +725,7 @@ impl<'a> ScalarControl<'a> {
                 if let Some(label) = &label {
                     let (rect, _) =
                         ui.allocate_exact_size(vec2(SCALAR_LABEL_WIDTH, ui.spacing().interact_size.y), Sense::hover());
-                    paint_label(ui, rect, label, colors::MUTED, layout::TYPE_SM);
+                    paint_label(ui, rect, label, colors::muted(), layout::TYPE_SM);
                 }
                 let reset_width = if default.is_some() { RESET_BUTTON_SIZE + ui.spacing().item_spacing.x } else { 0.0 };
                 if slider && let Some(range) = rules.slider_range() {
@@ -930,7 +930,7 @@ fn component_column(
             vec2((width - RESET_BUTTON_SIZE - ui.spacing().item_spacing.x).max(0.0), 14.0),
             Sense::hover(),
         );
-        paint_label(ui, rect, label, colors::MUTED, layout::TYPE_XS);
+        paint_label(ui, rect, label, colors::muted(), layout::TYPE_XS);
         if let Some(default) = default {
             reset = Some((reset_button(ui, modified, default), default));
         }
@@ -1051,23 +1051,23 @@ pub fn lab_slider(
     let fraction = if span > 0.0 { ((*value - minimum) / span).clamp(0.0, 1.0) as f32 } else { 0.0 };
     let center = pos2(left + ((right - left) * fraction), rect.center().y);
     let rail = Rect::from_min_max(pos2(left, rect.center().y - 3.5), pos2(right, rect.center().y + 3.5));
-    painter.rect_filled(rail, CornerRadius::same(4), colors::BUTTON);
+    painter.rect_filled(rail, CornerRadius::same(4), colors::button());
     painter.rect_filled(
         Rect::from_min_max(rail.min, pos2(center.x, rail.max.y)),
         CornerRadius::same(4),
-        colors::ACCENT,
+        colors::accent(),
     );
     painter.rect_stroke(
         rail,
         CornerRadius::same(4),
-        Stroke::new(layout::BORDER_THIN, colors::SLIDER_EDGE),
+        Stroke::new(layout::BORDER_THIN, colors::slider_edge()),
         StrokeKind::Inside,
     );
     let active = response.dragged() || response.has_focus();
-    let thumb = if response.hovered() || active { colors::ACCENT_HOVER } else { colors::ACCENT };
-    painter.circle(center, thumb_radius, thumb, Stroke::new(layout::BORDER_FOCUS, colors::SLIDER_EDGE));
+    let thumb = if response.hovered() || active { colors::accent_hover() } else { colors::accent() };
+    painter.circle(center, thumb_radius, thumb, Stroke::new(layout::BORDER_FOCUS, colors::slider_edge()));
     if response.has_focus() {
-        painter.circle_stroke(center, thumb_radius + 2.5, Stroke::new(layout::BORDER_THIN, colors::ACCENT));
+        painter.circle_stroke(center, thumb_radius + 2.5, Stroke::new(layout::BORDER_THIN, colors::accent()));
     }
     response
 }
@@ -1178,7 +1178,7 @@ fn picker_contents(
     memory: &mut PickerMemory,
 ) -> (bool, EditPhase) {
     if let Err(message) = drafts.require_valid() {
-        ui.colored_label(colors::DANGER, message);
+        ui.colored_label(colors::danger(), message);
         return (false, EditPhase::Idle);
     }
     let mut changed = false;
@@ -1208,7 +1208,7 @@ fn picker_contents(
     }
 
     ui.horizontal(|ui| {
-        ui.label(egui::RichText::new("sRGB").color(colors::MUTED).size(layout::TYPE_SM));
+        ui.label(egui::RichText::new("sRGB").color(colors::muted()).size(layout::TYPE_SM));
         let response = ui.add(TextEdit::singleline(&mut memory.hex).font(FontId::monospace(12.0)).desired_width(90.0));
         if response.lost_focus() {
             match lab_values::picked_color_hex(&memory.hex, values, minimums, maximums) {
@@ -1228,9 +1228,9 @@ fn picker_contents(
         }
     });
     if let Some(message) = &memory.hex_error {
-        ui.colored_label(colors::DANGER, message);
+        ui.colored_label(colors::danger(), message);
     }
-    ui.label(egui::RichText::new(COLOR_PICKER_HINT).color(colors::MUTED).size(layout::TYPE_XS));
+    ui.label(egui::RichText::new(COLOR_PICKER_HINT).color(colors::muted()).size(layout::TYPE_XS));
     (changed, phase)
 }
 
@@ -1255,11 +1255,11 @@ pub fn reset_button(ui: &mut Ui, modified: bool, default: f64) -> Response {
     let (rect, response) =
         ui.allocate_exact_size(Vec2::splat(RESET_BUTTON_SIZE), if modified { Sense::click() } else { Sense::hover() });
     let color = if !modified {
-        colors::BORDER
+        colors::border()
     } else if response.hovered() {
-        colors::ACCENT_HOVER
+        colors::accent_hover()
     } else {
-        colors::ACCENT
+        colors::accent()
     };
     paint_reset_icon(ui, rect, color);
     if modified { response.on_hover_text(format!("Reset to default {}", format_number(default))) } else { response }
@@ -1268,7 +1268,7 @@ pub fn reset_button(ui: &mut Ui, modified: bool, default: f64) -> Response {
 /// The accent dot after a modified property's heading.
 pub fn modified_marker(ui: &mut Ui, modified: bool) {
     if modified {
-        ui.label(egui::RichText::new("•").color(colors::ACCENT)).on_hover_text("Modified from its default");
+        ui.label(egui::RichText::new("•").color(colors::accent())).on_hover_text("Modified from its default");
     }
 }
 
@@ -1278,27 +1278,27 @@ pub fn modified_marker(ui: &mut Ui, modified: bool) {
 
 fn text_color(rejected: bool, modified: bool) -> Color32 {
     if rejected {
-        colors::DANGER
+        colors::danger()
     } else if modified {
-        colors::ACCENT
+        colors::accent()
     } else {
-        colors::TEXT
+        colors::text()
     }
 }
 
 fn paint_field(ui: &Ui, rect: Rect, focused: bool, rejected: bool, text: &str, color: Color32, align: Align) {
     let stroke_color = if rejected {
-        colors::DANGER
+        colors::danger()
     } else if focused {
-        colors::ACCENT
+        colors::accent()
     } else {
-        colors::BORDER
+        colors::border()
     };
     let painter = ui.painter_at(rect.expand(1.0));
     painter.rect(
         rect,
         CornerRadius::ZERO,
-        colors::FIELD,
+        colors::field(),
         Stroke::new(layout::BORDER_THIN, stroke_color),
         StrokeKind::Inside,
     );
@@ -1318,7 +1318,7 @@ fn paint_label(ui: &Ui, rect: Rect, text: &str, color: Color32, size: f32) {
 fn show_draft_error(ui: &mut Ui, message: &str, width: f32) {
     ui.scope(|ui| {
         ui.set_max_width(width.max(1.0));
-        ui.add(egui::Label::new(egui::RichText::new(message).color(colors::DANGER).size(layout::TYPE_XS)).wrap());
+        ui.add(egui::Label::new(egui::RichText::new(message).color(colors::danger()).size(layout::TYPE_XS)).wrap());
     });
 }
 
@@ -1338,9 +1338,9 @@ fn paint_swatch(ui: &Ui, rect: Rect, color: Color32, focused: bool) {
     let painter = ui.painter_at(rect.expand(2.0));
     painter.rect_filled(rect, CornerRadius::ZERO, color);
     let stroke = if focused {
-        Stroke::new(layout::BORDER_FOCUS, colors::ACCENT)
+        Stroke::new(layout::BORDER_FOCUS, colors::accent())
     } else {
-        Stroke::new(layout::BORDER_THIN, colors::BORDER)
+        Stroke::new(layout::BORDER_THIN, colors::border())
     };
     painter.rect_stroke(rect, CornerRadius::ZERO, stroke, StrokeKind::Inside);
 }

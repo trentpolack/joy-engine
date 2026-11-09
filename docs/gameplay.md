@@ -10,9 +10,9 @@ The headless gameplay layer separates authored data, runtime ownership, and pres
 | `LevelDocument` | Validated authored edits, selection, and bounded undo/redo. |
 | `LevelRuntime` | Instantiate copied level data and physics. |
 | `LevelScene` / `AssetScene` | Present meshes, lights, and effects in the rendering layer. |
-| `PhysicsSimulation` | Fixed-step rigid bodies, ray queries, and raycast vehicles. |
+| `PhysicsSimulation` | Fixed-step rigid bodies and ray queries. |
 
-Unknown authored components remain data; only registered runtime behavior runs. Resource acquisition and rollback follow component/entity lifecycle hooks. Spawn/removal requests from hooks apply at update boundaries. Possession changes clear old intent, and removing an entity releases its body (a vehicle is a kind of body, so its chassis and wheels go with it).
+Unknown authored components remain data; only registered runtime behavior runs. Resource acquisition and rollback follow component/entity lifecycle hooks. Spawn/removal requests from hooks apply at update boundaries. Possession changes clear old intent, and removing an entity releases its body.
 
 ## Authored Data
 `.joylevel` and `.joyobject` are versioned JSON documents. Entity IDs are stable and unique; component records retain project-specific data. Coordinates are Y up and +Z forward, distances are meters where the level contract specifies them, and rotations are XYZ Euler radians. Runtime transforms are copies and never write back into the authoring document.
@@ -23,7 +23,7 @@ Unknown authored components remain data; only registered runtime behavior runs. 
 `LevelDocument::transact` edits an isolated draft and validates before acceptance. `ComponentSchemaCatalog` provides advisory issues and field metadata for inspectors; runtimes validate their own boundaries. `search_grid` and `trace_grid_route` provide deterministic weighted navigation with project-owned costs and occupancy.
 
 ## Physics and Destruction
-Rapier provides rigid bodies and configurable raycast vehicles through engine-owned types. Vehicle tires are suspension rays rather than solid rolling colliders. Keep barriers thick enough and speeds appropriate for the discrete solver. See [simulation and physics](rust-simulation.md) for determinism, ownership, and vehicle limits.
+Rapier provides rigid bodies through engine-owned types. Keep barriers thick enough and speeds appropriate for the discrete solver. See [simulation and physics](rust-simulation.md) for determinism, ownership, and solver limits.
 
 Bodies are boxes, spheres, or planes by default. `SdfShape` colliders give non-convex procedural geometry (FORM meshes baked to distance grids, or analytical shapes) its true silhouette in collision; see [SDF colliders](rust-simulation.md#sdf-colliders).
 

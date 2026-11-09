@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Level runtime behavior: component-driven bodies and vehicles with entity scale, rollback, transform sync, handle
-//! freshness, a controller driving a kart through its behavior, and the world's spawn, contact, and timer contract.
+//! Level runtime behavior: component-driven bodies with entity scale, rollback, transform sync, handle freshness, a
+//! controller driving a mover through its behavior, and the world's spawn, contact, and timer contract.
 
 use std::cell::Cell;
 use std::rc::Rc;
@@ -27,31 +27,26 @@ use joy_gameplay::{
     parse_level,
     serialize_level,
 };
-use joy_physics::{
-    ContactPhase,
-    VehicleInput,
-};
+use joy_physics::ContactPhase;
 use serde_json::json;
 
-/// Engine-owned fixture: static ground, a scaled dynamic crate, a four-wheel kart, and a lamp.
+/// Engine-owned fixture: static ground, a scaled dynamic crate, a pushable mover, and a lamp.
 const TEST_YARD: &str = include_str!("../fixtures/test-yard.joylevel");
 
-/// Forwards the possessed entity's control intent to its vehicle every update.
-struct KartBehavior;
+/// Newtons of push per unit of throttle intent, enough to slide the mover's 150 kg past ground friction.
+const PUSH_FORCE: f32 = 4000.0;
 
-impl EntityBehavior for KartBehavior {
+/// Forwards the possessed entity's control intent to its body as a push along +Z every update.
+struct MoverBehavior;
+
+impl EntityBehavior for MoverBehavior {
     fn update(&mut self, entity: &mut EntityState, context: &mut SimulationContext<'_>, _elapsed_seconds: f32) {
-        let Some(vehicle) = context.body(entity.id()) else {
+        let Some(body) = context.body(entity.id()) else {
             return;
         };
-        let intent = &entity.control_intent;
-        let input = VehicleInput {
-            throttle: intent.number("throttle") as f32,
-            steer: intent.number("steer") as f32,
-            brake: intent.number("brake") as f32,
-        };
-        // Intent values were validated on delivery, so the vehicle accepts them.
-        context.physics.set_vehicle_input(vehicle, input).expect("delivered intent is finite");
+        let throttle = entity.control_intent.number("throttle") as f32;
+        // Intent values were validated on delivery, so the force is finite.
+        context.physics.apply_force(body, Vec3::new(0.0, 0.0, throttle * PUSH_FORCE), None).expect("finite intent");
     }
 }
 
@@ -69,7 +64,7 @@ impl EntityBehavior for CountedProp {
 fn registry() -> EntityRegistry {
     let mut registry = EntityRegistry::new();
     registry.register_plain("prop").unwrap();
-    registry.register("kart", |_| Box::new(KartBehavior)).unwrap();
+    registry.register("mover", |_| Box::new(MoverBehavior)).unwrap();
     registry
 }
 
@@ -96,13 +91,11 @@ fn prop(id: &str, y: f32, mass: f32, scale: Vec3) -> EntityDefinition {
 }
 
 #[test]
-fn runtime_builds_scaled_bodies_and_vehicles_and_syncs_transforms() {
+fn runtime_builds_scaled_bodies_and_syncs_transforms() {
     let level = parse_level(TEST_YARD).unwrap();
     let mut runtime = LevelRuntime::new(&level, registry()).unwrap();
-    assert_eq!(runtime.physics().body_count(), 3, "ground, crate, and kart have physics; the lamp does not");
-    assert_eq!(runtime.physics().vehicle_count(), 1);
+    assert_eq!(runtime.physics().body_count(), 3, "ground, crate, and mover have physics; the lamp does not");
     let crate_id = EntityId::from("crate");
-    let kart = EntityId::from("kart");
     assert!(runtime.body(&EntityId::from("lamp")).is_none());
 
     // The crate's unit box is scaled by 1.5 once: its top face is 0.75 above its center.
@@ -113,79 +106,38 @@ fn runtime_builds_scaled_bodies_and_vehicles_and_syncs_transforms() {
     assert!((runtime.physics().body_transform(crate_body).unwrap().rotation.y - 0.3).abs() < 1e-5);
     assert!((runtime.physics().body_mass(crate_body).unwrap() - 12.0).abs() < 1e-4);
 
-    // Wheels start at the authored chassis-local positions.
-    let vehicle = runtime.body(&kart).unwrap();
-    assert!(runtime.physics().is_vehicle(vehicle) && !runtime.physics().is_vehicle(crate_body));
-    let wheels = runtime.physics().wheel_transforms(vehicle);
-    assert_eq!(wheels.len(), 4);
-    assert!((wheels[0].position - Vec3::new(-0.7, 0.65, -3.2)).abs().max_element() < 1e-5, "{:?}", wheels[0]);
-
     // After settling, the crate rests on the ground and entity transforms follow their bodies.
     simulate(&mut runtime, 2.0);
     let crate_state = &runtime.entities().get(&crate_id).unwrap().state;
     assert!((crate_state.transform.position.y - 0.75).abs() < 0.05, "{:?}", crate_state.transform);
     assert_eq!(crate_state.transform.position, runtime.physics().body_transform(crate_body).unwrap().position);
     assert_eq!(crate_state.transform.scale, Vec3::splat(1.5));
-    assert_eq!(runtime.physics().grounded_wheel_count(vehicle), 4);
     assert_eq!(serialize_level(runtime.level()), TEST_YARD, "authored data is never modified");
     assert_eq!(serialize_level(&level), TEST_YARD);
 }
 
 #[test]
-fn controller_intent_drives_the_kart_through_its_behavior() {
+fn controller_intent_drives_the_mover_through_its_behavior() {
     let level = parse_level(TEST_YARD).unwrap();
     let mut runtime = LevelRuntime::new(&level, registry()).unwrap();
-    let kart = EntityId::from("kart");
+    let mover = EntityId::from("mover");
     let mut controller =
         IntentController::new(runtime.entities_mut(), |_, _| ControlIntent::new().with("throttle", 1.0));
-    controller.possess(runtime.entities_mut(), Some(&kart)).unwrap();
+    controller.possess(runtime.entities_mut(), Some(&mover)).unwrap();
 
     simulate(&mut runtime, 0.5);
-    let start = runtime.entities().get(&kart).unwrap().state.transform.position;
+    let start = runtime.entities().get(&mover).unwrap().state.transform.position;
     for _ in 0..120 {
         controller.update(runtime.entities_mut(), 1.0 / 60.0).unwrap();
         runtime.step(1.0 / 60.0).unwrap();
     }
-    let end = runtime.entities().get(&kart).unwrap().state.transform.position;
-    assert!(end.z - start.z > 2.0, "positive throttle drives the kart along +Z: {start} -> {end}");
-    assert!(runtime.physics().vehicle_speed(runtime.body(&kart).unwrap()) > 1.0);
+    let end = runtime.entities().get(&mover).unwrap().state.transform.position;
+    assert!(end.z - start.z > 2.0, "positive throttle pushes the mover along +Z: {start} -> {end}");
+    assert!(runtime.physics().body_velocity(runtime.body(&mover).unwrap()).unwrap().z > 1.0);
 
     // Releasing possession clears intent, so the behavior forwards a zero throttle.
     controller.possess(runtime.entities_mut(), None).unwrap();
-    assert!(runtime.entities().get(&kart).unwrap().state.control_intent.is_empty());
-}
-
-#[test]
-fn uniform_vehicle_scaling_scales_wheel_geometry_and_nonuniform_scaling_rolls_back() {
-    let mut kart = prop("kart", 4.0, 10.0, Vec3::splat(2.0));
-    kart.kind = "kart".to_owned();
-    let wheels =
-        json!({"wheels": [{"position": [0.5, 0, 1], "radius": 0.3, "suspensionRestLength": 0.2, "driven": true}]});
-    kart.components.insert("vehicle".to_owned(), wheels.as_object().cloned().unwrap());
-    let mut level = LevelData::new("Scaled");
-    level.entities.push(kart.clone());
-
-    let mut runtime = LevelRuntime::new(&level, registry()).unwrap();
-    let wheel = runtime.physics().wheel_transforms(runtime.body(&EntityId::from("kart")).unwrap())[0];
-    assert_eq!(wheel.position.x, 1.0);
-    assert_eq!(wheel.position.z, 2.0);
-
-    // A nonuniformly scaled vehicle fails and leaves no entity, body, or vehicle behind.
-    let mut stretched = kart.clone();
-    stretched.id = "stretched".to_owned();
-    stretched.transform.scale = Vec3::new(2.0, 1.0, 2.0);
-    let error = runtime.spawn(&stretched).unwrap_err();
-    assert_eq!(
-        error,
-        GameplayError::PhysicsComponent {
-            entity: EntityId::from("stretched"),
-            source: PhysicsComponentError::NonUniformVehicleScale,
-        }
-    );
-    assert!(error.to_string().contains("uniform"));
-    assert!(!runtime.entities().contains(&EntityId::from("stretched")));
-    assert_eq!(runtime.physics().body_count(), 1);
-    assert_eq!(runtime.physics().vehicle_count(), 1);
+    assert!(runtime.entities().get(&mover).unwrap().state.control_intent.is_empty());
 }
 
 #[test]
@@ -227,35 +179,23 @@ fn malformed_later_components_roll_back_level_setup() {
         }
     ));
     assert_eq!(destroyed.get(), 2, "the failed entity and the earlier ground were both destroyed");
-
-    let mut vehicle_only = EntityDefinition::new("cart");
-    vehicle_only.components.insert("vehicle".to_owned(), json!({"wheels": []}).as_object().cloned().unwrap());
-    let mut level = LevelData::new("Vehicle only");
-    level.entities.push(vehicle_only);
-    let error = LevelRuntime::new(&level, EntityRegistry::new()).unwrap_err();
-    assert_eq!(error.to_string(), "Entity cart: vehicle requires a physics component.");
 }
 
 #[test]
 fn dynamic_replacement_receives_fresh_handles_and_stale_handles_drop() {
-    let mut kart = prop("kart", 4.0, 10.0, Vec3::ONE);
-    kart.components.insert(
-        "vehicle".to_owned(),
-        json!({"wheels": [{"position": [0, 0, 0], "driven": true}]}).as_object().cloned().unwrap(),
-    );
+    let mover = prop("mover", 4.0, 10.0, Vec3::ONE);
     let mut level = LevelData::new("Replacement");
-    level.entities.push(kart.clone());
-    let id = EntityId::from("kart");
+    level.entities.push(mover.clone());
+    let id = EntityId::from("mover");
 
     for inspect_before_step in [false, true] {
         let mut runtime = LevelRuntime::new(&level, registry()).unwrap();
         let body = runtime.body(&id).unwrap();
         assert!(runtime.remove(&id));
         assert!(!runtime.physics().contains_body(body), "removing an entity removes the body it owns");
-        assert!(!runtime.physics().is_vehicle(body));
-        assert_eq!(runtime.physics().vehicle_count(), 0);
+        assert_eq!(runtime.physics().body_count(), 0);
 
-        let mut replacement = kart.clone();
+        let mut replacement = mover.clone();
         replacement.transform.position = Vec3::new(3.0, 9.0, 2.0);
         runtime.spawn(&replacement).unwrap();
         if inspect_before_step {
@@ -266,7 +206,6 @@ fn dynamic_replacement_receives_fresh_handles_and_stale_handles_drop() {
         assert_ne!(runtime.body(&id), Some(body));
         assert_eq!(runtime.world().bodies.len(), 1);
         assert_eq!(runtime.physics().body_count(), 1);
-        assert_eq!(runtime.physics().vehicle_count(), 1);
     }
 }
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "BLAST GARDEN / Cultivation burst",
+  "name": "Cultivation burst",
   "maxParticles": 384,
   "parameters": {
     "power": { "value": 1, "min": 0.35, "max": 2.5 },

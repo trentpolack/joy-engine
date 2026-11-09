@@ -229,7 +229,7 @@ fn kit_widgets_paint_and_respond_to_synthetic_input() {
     };
     // The right panel paints the panel fill over the scene.
     let panel = pixel(WIDTH - 20, HEIGHT - 20);
-    let expected = theme::colors::PANEL;
+    let expected = theme::colors::panel();
     assert!(
         panel
             .iter()

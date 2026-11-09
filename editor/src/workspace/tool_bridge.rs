@@ -104,6 +104,16 @@ impl ToolTab {
         }
     }
 
+    /// Draw the tool's toolbar actions (Apply or Run, Live) into the host toolbar.
+    pub fn toolbar_actions(&mut self, ui: &mut joy_engine::egui::Ui) {
+        self.tool.toolbar_actions(ui);
+    }
+
+    /// Where the tool's preview stands, for the host toolbar.
+    pub fn preview_state(&self) -> Option<joy_engine::development::ToolPreviewState> {
+        self.tool.preview_state()
+    }
+
     /// The tool's display name.
     pub fn tool_name(&self) -> &str {
         &self.name

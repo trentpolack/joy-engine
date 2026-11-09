@@ -24,6 +24,7 @@ use egui::{
     pos2,
     vec2,
 };
+use joy_storage::Storage;
 use joy_ui::theme::{
     colors,
     layout,
@@ -213,10 +214,10 @@ pub enum StatusTone {
 impl StatusTone {
     fn color(self) -> Color32 {
         match self {
-            Self::Good => colors::SUCCESS,
-            Self::Pending => colors::ACCENT_HOVER,
-            Self::Problem => colors::DANGER,
-            Self::Quiet => colors::MUTED,
+            Self::Good => colors::success(),
+            Self::Pending => colors::accent_hover(),
+            Self::Problem => colors::danger(),
+            Self::Quiet => colors::muted(),
         }
     }
 }
@@ -224,20 +225,20 @@ impl StatusTone {
 /// The product wordmark (`JOY EDITOR`) in the accent display face; the version shows on hover.
 pub fn brand(ui: &mut Ui, product: &str, version: &str) -> egui::Response {
     let family = text_styles::strong_family();
-    let title = spaced(&product.to_uppercase(), FontId::new(BRAND_SIZE, family), colors::ACCENT, BRAND_SPACING);
+    let title = spaced(&product.to_uppercase(), FontId::new(BRAND_SIZE, family), colors::accent(), BRAND_SPACING);
     ui.label(title).on_hover_text(format!("{product} {version}"))
 }
 
 /// A tool's name in the toolbar (`FORM`, `JOYFX`, `LEVEL`): small, spaced, accent capitals.
 pub fn tool_badge(ui: &mut Ui, name: &str) -> egui::Response {
     let family = text_styles::strong_family();
-    ui.label(spaced(name, FontId::new(layout::TYPE_SM + 1.0, family), colors::ACCENT, BADGE_SPACING))
+    ui.label(spaced(name, FontId::new(layout::TYPE_SM + 1.0, family), colors::accent(), BADGE_SPACING))
 }
 
 /// A thin vertical rule between header or toolbar groups.
 pub fn rule(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(1.0, 26.0), Sense::hover());
-    ui.painter().rect_filled(rect, 0.0, colors::LINE);
+    ui.painter().rect_filled(rect, 0.0, colors::line());
 }
 
 /// A borderless text action (`Open…`, `▷ Run Project`, `Apply ⌘↵`): text only until hovered or focused.
@@ -314,8 +315,8 @@ pub fn document_tab(
     let height = ui.available_height();
     let glyph_font = FontId::new(layout::TYPE_SM, text_styles::strong_family());
     let name_font = FontId::proportional(layout::TYPE_MD + 1.0);
-    let glyph_galley = ui.painter().layout_no_wrap(glyph.to_owned(), glyph_font, colors::MUTED);
-    let name_galley = ui.painter().layout_no_wrap(name.to_owned(), name_font, colors::TEXT);
+    let glyph_galley = ui.painter().layout_no_wrap(glyph.to_owned(), glyph_font, colors::muted());
+    let name_galley = ui.painter().layout_no_wrap(name.to_owned(), name_font, colors::text());
     let marker_width = if marker == TabMarker::None { 0.0 } else { 14.0 };
     let width =
         (BUTTON_PADDING * 2.0) + 26.0 + glyph_galley.size().x + marker_width + name_galley.size().x + TAB_CLOSE_WIDTH;
@@ -323,39 +324,39 @@ pub fn document_tab(
     let painter = ui.painter();
 
     let fill = if active {
-        colors::PANEL
+        colors::panel()
     } else if tab.hovered() {
-        colors::SURFACE.gamma_multiply(0.6)
+        colors::surface().gamma_multiply(0.6)
     } else {
-        colors::TABS
+        colors::tabs()
     };
     painter.rect_filled(rect, 0.0, fill);
-    painter.line_segment([rect.right_top(), rect.right_bottom()], Stroke::new(layout::BORDER_THIN, colors::LINE));
+    painter.line_segment([rect.right_top(), rect.right_bottom()], Stroke::new(layout::BORDER_THIN, colors::line()));
     if active {
         let accent = Rect::from_min_size(rect.min, vec2(rect.width(), TAB_ACCENT_HEIGHT));
-        painter.rect_filled(accent, 0.0, colors::ACCENT);
+        painter.rect_filled(accent, 0.0, colors::accent());
     }
     let center_y = rect.center().y;
     let glyph_position = pos2(rect.min.x + (BUTTON_PADDING * 1.6), center_y - (glyph_galley.size().y / 2.0));
-    painter.galley(glyph_position, glyph_galley.clone(), colors::MUTED);
+    painter.galley(glyph_position, glyph_galley.clone(), colors::muted());
     let marker_left = glyph_position.x + glyph_galley.size().x + 10.0;
     match marker {
         TabMarker::None => {}
         TabMarker::Dirty => {
-            painter.circle_filled(pos2(marker_left + 4.0, center_y), 3.5, colors::ACCENT_HOVER);
+            painter.circle_filled(pos2(marker_left + 4.0, center_y), 3.5, colors::accent_hover());
         }
         TabMarker::Conflict => {
-            painter.circle_filled(pos2(marker_left + 4.0, center_y), 3.5, colors::DANGER);
+            painter.circle_filled(pos2(marker_left + 4.0, center_y), 3.5, colors::danger());
         }
     }
     let name_position = pos2(marker_left + marker_width, center_y - (name_galley.size().y / 2.0));
-    let name_color = if active { colors::TEXT } else { colors::MUTED };
+    let name_color = if active { colors::text() } else { colors::muted() };
     painter.galley(name_position, name_galley, name_color);
 
     let close_rect =
         Rect::from_center_size(pos2(rect.right() - (TAB_CLOSE_WIDTH / 2.0) - 6.0, center_y), vec2(20.0, 20.0));
     let close = ui.interact(close_rect, ui.id().with(("close-tab", id_salt)), Sense::click());
-    let close_color = if close.hovered() { colors::ACCENT } else { colors::MUTED };
+    let close_color = if close.hovered() { colors::accent() } else { colors::muted() };
     let painter = ui.painter();
     let cross = close_rect.shrink(6.0);
     let stroke = Stroke::new(1.4, close_color);
@@ -370,18 +371,18 @@ pub fn document_tab(
 /// Paint the shell's row backgrounds and hairlines for `rows`.
 pub fn paint_chrome(ui: &Ui, rows: &ShellRows) {
     let painter = ui.painter();
-    let line = Stroke::new(layout::BORDER_THIN, colors::LINE);
-    painter.rect_filled(rows.header, 0.0, colors::HEADER);
+    let line = Stroke::new(layout::BORDER_THIN, colors::line());
+    painter.rect_filled(rows.header, 0.0, colors::header());
     painter.line_segment([rows.header.left_bottom(), rows.header.right_bottom()], line);
     if let Some(tabs) = rows.tabs {
-        painter.rect_filled(tabs, 0.0, colors::TABS);
+        painter.rect_filled(tabs, 0.0, colors::tabs());
         painter.line_segment([tabs.left_bottom(), tabs.right_bottom()], line);
     }
     if let Some(toolbar) = rows.toolbar {
-        painter.rect_filled(toolbar, 0.0, colors::PANEL);
+        painter.rect_filled(toolbar, 0.0, colors::panel());
         painter.line_segment([toolbar.left_bottom(), toolbar.right_bottom()], line);
     }
-    painter.rect_filled(rows.status, 0.0, colors::HEADER);
+    painter.rect_filled(rows.status, 0.0, colors::header());
     painter.line_segment([rows.status.left_top(), rows.status.right_top()], line);
 }
 
@@ -390,13 +391,48 @@ pub fn status_text(ui: &mut Ui, rect: Rect, left: &str, right: &str) -> egui::Re
     let inner = rect.shrink2(vec2(layout::SPACE_LG + 4.0, 0.0));
     ui.scope_builder(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::left_to_right(Align::Center)), |ui| {
         let response =
-            ui.add(egui::Label::new(RichText::new(left).size(layout::TYPE_MD).color(colors::MUTED)).truncate());
+            ui.add(egui::Label::new(RichText::new(left).size(layout::TYPE_MD).color(colors::muted())).truncate());
         ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-            ui.label(RichText::new(right).size(layout::TYPE_MD).color(colors::MUTED));
+            ui.label(RichText::new(right).size(layout::TYPE_MD).color(colors::muted()));
         });
         response
     })
     .inner
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Theme
+// ---------------------------------------------------------------------------------------------------------------------
+
+/// Storage key of the editors' chosen palette (its name), shared by Joy Editor and the standalone tool editors.
+pub const THEME_STORAGE_KEY: &str = "joy.editor.theme";
+
+/// Apply the saved palette from `storage` (Joy when none is saved or storage is unavailable) and the editor look.
+/// Call once, during an editor's first UI pass.
+pub fn restore_theme(context: &egui::Context, storage: Option<&Storage>) {
+    let saved = storage.and_then(|storage| storage.load(THEME_STORAGE_KEY).ok().flatten());
+    let palette = saved.as_deref().and_then(joy_ui::theme::palette_named).unwrap_or(joy_ui::theme::palettes::JOY);
+    joy_ui::theme::set_palette(context, palette);
+}
+
+/// A `Theme` menu offering every bundled palette; choosing one applies it to the whole context and saves it to
+/// `storage`. Returns the menu button's response.
+pub fn theme_menu(ui: &mut Ui, storage: Option<&Storage>) -> egui::Response {
+    let button = quiet_menu_button(ui, "Theme").on_hover_text("Editor colors");
+    egui::Popup::menu(&button).show(|ui| {
+        ui.set_min_width(170.0);
+        let active = joy_ui::theme::active_palette();
+        for palette in joy_ui::theme::palettes::ALL {
+            if ui.selectable_label(palette == active, palette.name).clicked() && palette != active {
+                joy_ui::theme::set_palette(ui.ctx(), palette);
+                if let Some(storage) = storage {
+                    // A preference that cannot be stored still applies for this session.
+                    let _ = storage.save(THEME_STORAGE_KEY, palette.name);
+                }
+            }
+        }
+    });
+    button
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -439,9 +475,9 @@ fn chrome_button_with(
         _ => FontId::proportional(layout::TYPE_MD + 1.0),
     };
     let text_color = match style {
-        ChromeStyle::Accent => colors::ON_ACCENT,
-        _ if !ui.is_enabled() => colors::MUTED.gamma_multiply(0.6),
-        _ => colors::TEXT,
+        ChromeStyle::Accent => colors::on_accent(),
+        _ if !ui.is_enabled() => colors::muted().gamma_multiply(0.6),
+        _ => colors::text(),
     };
     let galley = ui.painter().layout_no_wrap(label.to_owned(), font, text_color);
     let decoration = match trailing {
@@ -462,27 +498,27 @@ fn chrome_button_with(
     match style {
         ChromeStyle::Quiet => {
             if hovered {
-                painter.rect_filled(rect, radius, colors::SURFACE.gamma_multiply(0.7));
+                painter.rect_filled(rect, radius, colors::surface().gamma_multiply(0.7));
             }
         }
         ChromeStyle::Chip => {
-            let fill = if active || hovered { colors::SURFACE } else { colors::SURFACE.gamma_multiply(0.55) };
-            let border = if active { colors::BORDER } else { colors::LINE };
+            let fill = if active || hovered { colors::surface() } else { colors::surface().gamma_multiply(0.55) };
+            let border = if active { colors::border() } else { colors::line() };
             painter.rect(rect, radius, fill, Stroke::new(layout::BORDER_THIN, border), StrokeKind::Inside);
         }
         ChromeStyle::Accent => {
-            let fill = if hovered { colors::ACCENT_HOVER } else { colors::ACCENT };
+            let fill = if hovered { colors::accent_hover() } else { colors::accent() };
             painter.rect_filled(rect, radius, fill);
         }
     }
     if response.has_focus() {
-        painter.rect_stroke(rect, radius, Stroke::new(layout::BORDER_FOCUS, colors::ACCENT), StrokeKind::Inside);
+        painter.rect_stroke(rect, radius, Stroke::new(layout::BORDER_FOCUS, colors::accent()), StrokeKind::Inside);
     }
     let content_width = galley.size().x + decoration;
     let left = rect.center().x - (content_width / 2.0);
     let label_left = if trailing == Trailing::LeadingPlay { left + decoration } else { left };
     painter.galley(pos2(label_left, rect.center().y - (galley.size().y / 2.0)), galley.clone(), text_color);
-    let decoration_color = if style == ChromeStyle::Accent { text_color } else { colors::MUTED };
+    let decoration_color = if style == ChromeStyle::Accent { text_color } else { colors::muted() };
     match trailing {
         Trailing::None => {}
         Trailing::Chevron => {
@@ -493,7 +529,7 @@ fn chrome_button_with(
         Trailing::Dots => {
             let center = rect.center();
             for offset in [-5.0, 0.0, 5.0] {
-                painter.circle_filled(center + vec2(offset, 0.0), 1.6, colors::TEXT);
+                painter.circle_filled(center + vec2(offset, 0.0), 1.6, colors::text());
             }
         }
         Trailing::LeadingPlay => {

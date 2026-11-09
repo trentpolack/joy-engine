@@ -27,7 +27,7 @@ use crate::rendering::viewport::Viewport;
 pub fn result_toolbar(ui: &mut Ui, inspection: &mut OutputInspection, viewport: &mut Viewport) -> Option<String> {
     let mut failure = None;
     ui.horizontal_wrapped(|ui| {
-        let caption = ui.label(RichText::new("SHOW").color(colors::MUTED).size(layout::TYPE_XS));
+        let caption = ui.label(RichText::new("SHOW").color(colors::muted()).size(layout::TYPE_XS));
         let choices = inspection.output_choices();
         let current = choices
             .iter()
@@ -53,7 +53,7 @@ pub fn result_toolbar(ui: &mut Ui, inspection: &mut OutputInspection, viewport: 
         {
             failure = Some(error);
         }
-        ui.label(RichText::new(inspection.kind()).color(colors::MUTED).size(layout::TYPE_XS));
+        ui.label(RichText::new(inspection.kind()).color(colors::muted()).size(layout::TYPE_XS));
     });
     failure
 }
@@ -74,7 +74,7 @@ pub fn attribute_panel(ui: &mut Ui, inspection: &mut OutputInspection, viewport:
         if toggle.clicked() {
             state.toggle(ui);
         }
-        ui.label(RichText::new(inspection.summary()).color(colors::MUTED).size(layout::TYPE_XS).monospace());
+        ui.label(RichText::new(inspection.summary()).color(colors::muted()).size(layout::TYPE_XS).monospace());
     });
     state.store(ui.ctx());
     if state.is_open() {
@@ -99,7 +99,7 @@ fn attribute_body(ui: &mut Ui, inspection: &mut OutputInspection, viewport: &mut
             if domain != inspection.domain() {
                 inspection.choose_domain(domain, viewport);
             }
-            ui.label(RichText::new("VIEW").color(colors::MUTED).size(layout::TYPE_XS));
+            ui.label(RichText::new("VIEW").color(colors::muted()).size(layout::TYPE_XS));
             let views = inspection.view_names();
             let mut view = inspection.view().to_owned();
             let label = |name: &str| if name.is_empty() { "Material".to_owned() } else { name.to_owned() };
@@ -127,9 +127,9 @@ fn attribute_body(ui: &mut Ui, inspection: &mut OutputInspection, viewport: &mut
             }
         });
         ui.horizontal(|ui| {
-            ui.label(RichText::new(inspection.selection_info()).color(colors::TEXT).size(layout::TYPE_XS));
+            ui.label(RichText::new(inspection.selection_info()).color(colors::text()).size(layout::TYPE_XS));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(RichText::new(inspection.range()).color(colors::MUTED).size(layout::TYPE_XS));
+                ui.label(RichText::new(inspection.range()).color(colors::muted()).size(layout::TYPE_XS));
             });
         });
         let headings = inspection.headings();
@@ -139,7 +139,7 @@ fn attribute_body(ui: &mut Ui, inspection: &mut OutputInspection, viewport: &mut
         egui::ScrollArea::both().id_salt("attribute-scroll").max_height(160.0).show(ui, |ui| {
             egui::Grid::new("attribute-table").striped(true).spacing([12.0, 2.0]).show(ui, |ui| {
                 for heading in &headings {
-                    ui.label(RichText::new(heading).color(colors::MUTED).size(layout::TYPE_XS).strong());
+                    ui.label(RichText::new(heading).color(colors::muted()).size(layout::TYPE_XS).strong());
                 }
                 ui.end_row();
                 for (index, cells) in &rows {

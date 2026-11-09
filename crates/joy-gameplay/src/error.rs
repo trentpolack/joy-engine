@@ -181,12 +181,9 @@ pub enum ComponentSchemaError {
     UnknownPreset(String),
 }
 
-/// A `physics` or `vehicle` component could not become solver objects.
+/// A `physics` component could not become a solver body.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum PhysicsComponentError {
-    /// A `vehicle` component appeared without a `physics` component.
-    #[error("vehicle requires a physics component.")]
-    VehicleWithoutPhysics,
     /// The entity scale had a zero or negative component.
     #[error("Physics entity scale must be positive.")]
     NonPositiveScale,
@@ -202,24 +199,6 @@ pub enum PhysicsComponentError {
     /// The sphere radius was not finite and positive.
     #[error("Sphere radius must be finite and positive.")]
     InvalidRadius,
-    /// A vehicle was placed on a nonuniformly scaled entity.
-    #[error("Vehicle physics requires uniform entity scale.")]
-    NonUniformVehicleScale,
-    /// `wheels` was missing or not an array.
-    #[error("Vehicle wheels must be an array.")]
-    InvalidWheels,
-    /// A wheel entry was not an object.
-    #[error("wheel component must be an object.")]
-    InvalidWheel,
-    /// A wheel position was not three finite numbers.
-    #[error("Wheel position requires three finite numbers.")]
-    InvalidWheelPosition,
-    /// A wheel radius, rest length, or travel was negative or not a finite number.
-    #[error("Wheel dimensions must be finite and nonnegative.")]
-    InvalidWheelDimensions,
-    /// A wheel flag (`steering`, `driven`, `brake`) was present but not a boolean.
-    #[error("Wheel {0} must be boolean.")]
-    InvalidWheelFlag(&'static str),
     /// A numeric option was present but not a number.
     #[error("{0} must be a finite number.")]
     NotANumber(&'static str),
@@ -290,7 +269,7 @@ pub enum GameplayError {
     /// A level still linked object templates.
     #[error("Entity {0}: resolve linked objects with resolve_level_objects before creating LevelRuntime.")]
     UnresolvedTemplate(EntityId),
-    /// A physics or vehicle component could not be built.
+    /// A physics component could not be built.
     #[error("Entity {entity}: {source}")]
     PhysicsComponent {
         /// The entity whose component failed.

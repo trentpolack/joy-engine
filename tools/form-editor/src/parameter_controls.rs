@@ -144,7 +144,7 @@ impl ParameterControls {
             }
         });
         egui::CollapsingHeader::new(
-            RichText::new("Tuning keys & defaults").color(colors::ACCENT).size(layout::TYPE_SM),
+            RichText::new("Tuning keys & defaults").color(colors::accent()).size(layout::TYPE_SM),
         )
         .id_salt("form-editor-tuning-help")
         .show(ui, |ui| {
@@ -198,7 +198,7 @@ impl ParameterControls {
             ui.add_space(layout::SPACE_XS);
         }
         if matches == 0 {
-            ui.label(RichText::new("No matching parameters.").color(colors::MUTED));
+            ui.label(RichText::new("No matching parameters.").color(colors::muted()));
         }
         actions
     }
@@ -221,11 +221,12 @@ fn numeric_group(
         ui.set_min_height(32.0);
         ui.add_sized(
             egui::vec2(28.0, 30.0),
-            egui::Label::new(RichText::new(parameter.kind.badge()).color(colors::MUTED).size(layout::TYPE_XS)),
+            egui::Label::new(RichText::new(parameter.kind.badge()).color(colors::muted()).size(layout::TYPE_XS)),
         )
         .on_hover_text(format!("{} parameter", parameter.kind.name()));
-        let title_label = ui
-            .label(RichText::new(title).color(colors::TEXT).text_style(egui::TextStyle::Button).size(layout::TYPE_SM));
+        let title_label = ui.label(
+            RichText::new(title).color(colors::text()).text_style(egui::TextStyle::Button).size(layout::TYPE_SM),
+        );
         if let Some(info) = &parameter.text.info {
             title_label.on_hover_text(info.as_str());
         }
@@ -245,7 +246,9 @@ fn numeric_group(
                 "Default"
             };
             ui.label(
-                RichText::new(state).color(if modified { colors::ACCENT } else { colors::MUTED }).size(layout::TYPE_SM),
+                RichText::new(state)
+                    .color(if modified { colors::accent() } else { colors::muted() })
+                    .size(layout::TYPE_SM),
             )
             .on_hover_text(format!("Script default: {}", defaults.join(", ")));
             if parameter.kind == ParameterKind::Color {
@@ -319,11 +322,12 @@ fn text_group(
     ui.horizontal(|ui| {
         ui.add_sized(
             egui::vec2(28.0, 30.0),
-            egui::Label::new(RichText::new(ParameterKind::Text.badge()).color(colors::MUTED).size(layout::TYPE_XS)),
+            egui::Label::new(RichText::new(ParameterKind::Text.badge()).color(colors::muted()).size(layout::TYPE_XS)),
         )
         .on_hover_text("text parameter");
-        let title_label = ui
-            .label(RichText::new(title).color(colors::TEXT).text_style(egui::TextStyle::Button).size(layout::TYPE_SM));
+        let title_label = ui.label(
+            RichText::new(title).color(colors::text()).text_style(egui::TextStyle::Button).size(layout::TYPE_SM),
+        );
         if let Some(info) = &parameter.text.info {
             title_label.on_hover_text(info.as_str());
         }
@@ -341,7 +345,9 @@ fn text_group(
                 "Default"
             };
             ui.label(
-                RichText::new(state).color(if modified { colors::ACCENT } else { colors::MUTED }).size(layout::TYPE_SM),
+                RichText::new(state)
+                    .color(if modified { colors::accent() } else { colors::muted() })
+                    .size(layout::TYPE_SM),
             )
             .on_hover_text(format!("Script default: {}", parameter.default_value));
         });
@@ -374,11 +380,11 @@ pub fn reset_override_button(ui: &mut Ui, overridden: bool, name: &str) -> egui:
     let sense = if overridden { egui::Sense::click() } else { egui::Sense::hover() };
     let (rect, response) = ui.allocate_exact_size(size, sense);
     let color = if !overridden {
-        colors::ACCENT.gamma_multiply(0.3)
+        colors::accent().gamma_multiply(0.3)
     } else if response.hovered() {
-        colors::ACCENT_HOVER
+        colors::accent_hover()
     } else {
-        colors::ACCENT
+        colors::accent()
     };
     let painter = ui.painter();
     let center = rect.center();

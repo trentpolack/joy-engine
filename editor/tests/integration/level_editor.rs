@@ -215,7 +215,6 @@ fn schema_driven_properties_add_fields_dim_inactive_fields_and_show_issues() {
     level.change_property(&path(&["light", "range"]), Some(json!(0))).unwrap();
     level.add_component(&ComponentChoice::Preset("render.mesh".into()), None, &assets);
     assert!(level.status().contains("already has a render component"));
-    level.add_component(&ComponentChoice::Preset("vehicle.four-wheel".into()), None, &assets);
     level.add_component(&ComponentChoice::Custom, Some("gameplay"), &assets);
 
     let components = level.display_components();
@@ -260,12 +259,6 @@ fn schema_driven_properties_add_fields_dim_inactive_fields_and_show_issues() {
     assert!(range.is_some_and(|field| field.issue.is_some() && field.label.contains("· m")));
     assert_eq!(light.label, "Point Light");
     assert_eq!(light.type_name.as_deref(), Some("light"));
-    let vehicle = group("vehicle");
-    assert!(
-        !vehicle.issues.iter().any(|issue| issue.contains("requires")),
-        "the collider satisfies the vehicle: {:?}",
-        vehicle.issues
-    );
     let render = group("render");
     assert!(!render.missing_fields.is_empty(), "+ FIELD offers omitted schema fields");
     let custom = group("custom");
@@ -284,13 +277,7 @@ fn schema_driven_properties_add_fields_dim_inactive_fields_and_show_issues() {
     level.change_property(&path(&["custom", "nested", "0"]), None).unwrap();
     assert_eq!(level.display_components()["custom"]["nested"][0]["label"], "retain me");
     level.change_property(&path(&["physics"]), None).unwrap();
-    let issues = level.selected_issues();
-    assert!(
-        issues.iter().any(|issue| issue.message.contains("requires")),
-        "a vehicle without physics reports it: {issues:?}"
-    );
-    level.change_property(&path(&["vehicle"]), None).unwrap();
-    assert!(!level.display_components().contains_key("vehicle"));
+    assert!(!level.display_components().contains_key("physics"));
 }
 
 #[test]

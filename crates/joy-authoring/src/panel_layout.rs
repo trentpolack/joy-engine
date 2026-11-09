@@ -411,9 +411,9 @@ impl PanelLayout {
 
         let active = response.dragged() || response.has_focus();
         let color = if active {
-            colors::ACCENT
+            colors::accent()
         } else if response.hovered() {
-            colors::ACCENT_HOVER
+            colors::accent_hover()
         } else {
             Color32::TRANSPARENT
         };

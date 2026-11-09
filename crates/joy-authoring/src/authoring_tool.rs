@@ -48,6 +48,28 @@ pub enum ToolHosting {
     },
 }
 
+/// Where a tool's preview stands, for the host toolbar's `Preview:` label.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToolPreviewState {
+    /// The preview shows the current document.
+    Current,
+    /// Edits wait to be applied or built.
+    Pending,
+    /// The latest build or apply failed; the preview keeps its last accepted result.
+    Failed,
+}
+
+impl ToolPreviewState {
+    /// The host toolbar's label.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Current => "Preview: Current",
+            Self::Pending => "Preview: Pending",
+            Self::Failed => "Preview: Failed",
+        }
+    }
+}
+
 /// Implemented by authoring tools so the same tool runs standalone and as a Joy Editor tab.
 pub trait AuthoringTool: App {
     /// Display name, for example `FORM EDITOR`.
@@ -88,4 +110,14 @@ pub trait AuthoringTool: App {
     /// The tab became active: re-apply renderer settings the tool owns. Called before the first frame after
     /// activation; [`App::start`] has already run once.
     fn activated(&mut self, _context: &mut StartContext<'_>) {}
+
+    /// Draw the document actions a host shows in its toolbar beside the tool's name, such as Apply or Run and Live.
+    /// Hosts call this during their UI pass while the tab is active; a hosted tool that draws actions here leaves them
+    /// out of its own layout. Draws nothing by default.
+    fn toolbar_actions(&mut self, _ui: &mut egui::Ui) {}
+
+    /// Where the tool's preview stands, for the host toolbar; `None` (the default) shows no preview state.
+    fn preview_state(&self) -> Option<ToolPreviewState> {
+        None
+    }
 }

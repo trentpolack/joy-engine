@@ -202,7 +202,7 @@ impl PhysicsSimulation {
         Some(body.is_sleeping())
     }
 
-    /// Remove a body, including the vehicle it carries when it is a vehicle chassis. Returns whether a live body was
+    /// Remove a body. Returns whether a live body was
     /// removed.
     pub fn remove_body(&mut self, handle: BodyHandle) -> bool {
         let Some(raw) = self.resolve_body(handle) else {
@@ -388,7 +388,7 @@ impl PhysicsSimulation {
         let raw = self.solver.bodies.insert(body);
         let collider = self.solver.colliders.insert_with_parent(collider.build(), raw, &mut self.solver.bodies);
         if let Some(body) = self.solver.bodies.get_mut(raw) {
-            // Mass is queried (and used by vehicles) before the first step, so resolve it immediately.
+            // Mass is queried before the first step, so resolve it immediately.
             body.recompute_mass_properties_from_colliders(&self.solver.colliders);
         }
         self.bodies.insert(
@@ -397,7 +397,6 @@ impl PhysicsSimulation {
                 collider,
                 dynamic,
                 previous_pose: pose,
-                vehicle: None,
             },
         );
         BodyHandle {

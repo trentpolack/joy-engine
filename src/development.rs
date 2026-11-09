@@ -56,6 +56,7 @@ pub use joy_authoring::{
     ToolDocument,
     ToolFileReader,
     ToolHosting,
+    ToolPreviewState,
     ValueCheck,
     ViewportActions,
     ViewportGesture,

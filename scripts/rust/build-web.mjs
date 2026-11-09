@@ -48,7 +48,7 @@ const THIRD_PARTY_LICENSES = [
   'crates/joy-physics/src/sdf/LICENSE-sdf-dcd-demo',
   'crates/joy-ui/fonts/Archivo-OFL.txt',
   'crates/joy-ui/fonts/ArchivoBlack-OFL.txt',
-  'crates/joy-ui/fonts/Meslo-LICENSE.txt'
+  'crates/joy-ui/fonts/JetBrainsMono-OFL.txt'
 ];
 // Fonts the page's loading screen uses, copied into `fonts/` beside it; the engine already embeds and licenses them.
 const STATUS_FONTS = [

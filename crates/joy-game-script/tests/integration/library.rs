@@ -423,3 +423,40 @@ fn checked_host_sequences_keep_empty_array_markers_and_nullable_slots() {
         vec![Some(2), None, Some(4)]
     );
 }
+
+#[test]
+fn script_sources_accept_only_edits_the_host_validates() {
+    use joy_game_script::{
+        ScriptSource,
+        ScriptSources,
+    };
+    const SOURCES: [ScriptSource; 2] = [
+        ScriptSource::new("rules/damage", "return { scale = 2 }"),
+        ScriptSource::new(
+            "battle",
+            "local damage = require(\"rules/damage\")\nfunction hit(this, amount) return amount * damage.scale end",
+        ),
+    ];
+    let hooks = [ScriptHook::new("hit", 1)];
+    let validate = |sources: &std::collections::BTreeMap<String, String>| {
+        let mut library = joy_game_script::library_from(ScriptEngine::default(), sources);
+        library.compile_script("battle", &hooks)
+    };
+    let mut sources = ScriptSources::new("assets/scripts", &SOURCES);
+    assert_eq!(sources.path("rules/damage"), "assets/scripts/rules/damage.lua");
+    assert_eq!(sources.name_for_path("assets/scripts/battle.lua"), Some("battle"));
+    assert!(sources.apply_edit("assets/form/pillar.form", "", validate).is_none(), "other assets are not scripts");
+
+    // A broken edit keeps the shipped revision; a valid one replaces it for every later library.
+    let broken = sources.apply_edit("assets/scripts/rules/damage.lua", "return {", validate).unwrap();
+    assert!(broken.unwrap_err().to_string().starts_with("assets/scripts/rules/damage.lua: "));
+    assert_eq!(sources.get("rules/damage"), Some(SOURCES[0].shipped));
+    let accepted = sources.apply_edit("assets/scripts/rules/damage.lua", "return { scale = 3 }", validate).unwrap();
+    assert_eq!(accepted.unwrap(), "rules/damage");
+    let mut library = sources.library(ScriptEngine::default());
+    library.compile_script("battle", &hooks).unwrap();
+    let mut state = ScriptState::new();
+    let damage: f64 = library.call_as("battle", "hit", &mut state, (5.0,)).unwrap();
+    assert_eq!(damage, 15.0);
+    assert_eq!(sources.shipped("rules/damage"), Some(SOURCES[0].shipped));
+}

@@ -87,25 +87,25 @@ pub fn inspector_tabs(ui: &mut Ui, tab: &mut InspectorTab) {
         for candidate in InspectorTab::ALL {
             let selected = *tab == candidate;
             let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 30.0), egui::Sense::click());
-            let fill = if selected || response.hovered() { colors::SURFACE } else { colors::BUTTON };
+            let fill = if selected || response.hovered() { colors::surface() } else { colors::button() };
             let painter = ui.painter();
             painter.rect_filled(rect, 0.0, fill);
             if selected {
                 painter.hline(
                     rect.x_range(),
                     rect.bottom() - layout::BORDER_THIN,
-                    egui::Stroke::new(layout::BORDER_FOCUS, colors::ACCENT),
+                    egui::Stroke::new(layout::BORDER_FOCUS, colors::accent()),
                 );
             }
             if response.has_focus() {
                 painter.rect_stroke(
                     rect,
                     0.0,
-                    egui::Stroke::new(layout::BORDER_THIN, colors::ACCENT),
+                    egui::Stroke::new(layout::BORDER_THIN, colors::accent()),
                     egui::StrokeKind::Inside,
                 );
             }
-            let color = if selected { colors::ACCENT } else { colors::MUTED };
+            let color = if selected { colors::accent() } else { colors::muted() };
             painter.with_clip_rect(rect).text(
                 rect.center(),
                 egui::Align2::CENTER_CENTER,

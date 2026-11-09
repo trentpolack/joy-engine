@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The physics simulation owner: fixed-step advancement with bounded catch-up, body bookkeeping (including the vehicles
+//! The physics simulation owner: fixed-step advancement with bounded catch-up, body bookkeeping (including the bodies
 //! some bodies carry), contact and sensor events, and raycasts.
 
 use std::fmt;
@@ -14,7 +14,6 @@ use std::sync::atomic::{
 use indexmap::IndexMap;
 use joy_core::EventChannel;
 use joy_core::math::Vec3;
-use rapier3d::control::DynamicRayCastVehicleController;
 use rapier3d::dynamics::RigidBodyHandle;
 use rapier3d::geometry::{
     Collider,
@@ -27,7 +26,6 @@ use rapier3d::parry::query::{
     DefaultQueryDispatcher,
     QueryDispatcher,
 };
-use rapier3d::pipeline::QueryFilter;
 
 use super::convert::{
     finite_number,
@@ -48,7 +46,6 @@ use super::{
     QueryOptions,
     RaycastHit,
     SdfCollisionStatistics,
-    WheelOptions,
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -118,28 +115,12 @@ pub(super) struct BodyRecord {
     /// The body's pose before the most recent fixed step, for presentation between steps. Creation and teleports set
     /// it to the new pose so a body never blends across a jump.
     pub(super) previous_pose: Pose,
-    /// The raycast vehicle this body carries when it was created as a vehicle chassis; it lives and dies with the body.
-    pub(super) vehicle: Option<VehicleRecord>,
 }
 
-/// Bookkeeping for the raycast vehicle a chassis body carries.
-pub(super) struct VehicleRecord {
-    /// Solver controller bound to the chassis body; its wheel order matches `wheels`.
-    pub(super) controller: DynamicRayCastVehicleController,
-    /// Validated wheel configuration (friction slip resolved).
-    pub(super) wheels: Vec<WheelOptions>,
-    /// Drive force in newtons at full throttle.
-    pub(super) engine_force: f32,
-    /// Steering angle in radians at full steer.
-    pub(super) max_steer: f32,
-    /// Brake impulse bound at full brake.
-    pub(super) brake_force: f32,
-}
-
-/// Owns a rapier solver and every body created through it, including the raycast vehicles chassis bodies carry.
+/// Owns a rapier solver and every body created through it.
 ///
 /// Independent instances share no simulation state. Collisions are discrete: thin surfaces and very fast bodies can
-/// tunnel, and raycast tires have no solid wheel collider. Dropping the world releases everything it owns.
+/// tunnel. Dropping the world releases everything it owns.
 pub struct PhysicsSimulation {
     // Identity stamped into every handle this world issues.
     pub(super) world_id: u64,
@@ -151,8 +132,7 @@ pub struct PhysicsSimulation {
     // Presentation fraction supplied by an outer fixed tick (see `present_at`); `None` uses the accumulator's.
     presentation_fraction: Option<f32>,
 
-    // Solver state. Bodies (and the vehicles some of them carry) are kept in insertion order so iteration is
-    // deterministic.
+    // Solver state. Bodies are kept in insertion order so iteration is deterministic.
     pub(super) solver: rapier3d::pipeline::PhysicsWorld,
     pub(super) bodies: IndexMap<RigidBodyHandle, BodyRecord>,
 
@@ -185,7 +165,6 @@ impl fmt::Debug for PhysicsSimulation {
             .field("max_sub_steps", &self.max_sub_steps)
             .field("accumulator", &self.accumulator)
             .field("bodies", &self.bodies.len())
-            .field("vehicles", &self.vehicle_count())
             .field("resident_shapes", &self.resident_shapes.len())
             .finish()
     }
@@ -238,7 +217,7 @@ impl PhysicsSimulation {
     /// Advance by real elapsed seconds and return the number of fixed steps executed.
     ///
     /// Elapsed time accumulates and is clamped to `fixed_step * max_sub_steps`, so excess catch-up time is discarded.
-    /// Each fixed step updates every vehicle (in creation order) and advances the solver. Pending user forces act on
+    /// Each fixed step advances the solver. Pending user forces act on
     /// every fixed step this call runs and are cleared afterwards; when no fixed step is due they stay pending. The
     /// contact and sensor events of this call replace the previous call's ([`events`](Self::events)).
     /// `elapsed_seconds` must be finite and nonnegative; on failure no state changes.
@@ -294,11 +273,6 @@ impl PhysicsSimulation {
         self.bodies.len()
     }
 
-    /// Number of live bodies that carry a raycast vehicle.
-    pub fn vehicle_count(&self) -> usize {
-        self.bodies.values().filter(|record| record.vehicle.is_some()).count()
-    }
-
     /// Fixed simulation step in seconds.
     pub fn fixed_step(&self) -> f32 {
         self.fixed_step
@@ -347,7 +321,7 @@ impl PhysicsSimulation {
     }
 
     // -----------------------------------------------------------------------------------------------------------------
-    // Internal helpers shared by the body and vehicle modules
+    // Internal helpers shared with the body module
     // -----------------------------------------------------------------------------------------------------------------
 
     /// Resolve a public handle to a live solver handle owned by this world.
@@ -443,27 +417,8 @@ impl PhysicsSimulation {
         }
     }
 
-    /// Execute one fixed step: vehicles first (cannon's pre-step), then the solver, then translate its events.
+    /// Execute one fixed step: the solver, then translate its events.
     fn advance_fixed_step(&mut self) {
-        let dt = self.fixed_step;
-
-        // Vehicles update in their chassis bodies' creation order.
-        for (chassis, record) in self.bodies.iter_mut() {
-            let Some(vehicle) = record.vehicle.as_mut() else {
-                continue;
-            };
-
-            // Wheel rays ignore their own chassis but may land on any other body, static or dynamic.
-            let filter = QueryFilter::default().exclude_rigid_body(*chassis);
-            let queries = self.solver.broad_phase.as_query_pipeline_mut(
-                self.solver.narrow_phase.query_dispatcher(),
-                &mut self.solver.bodies,
-                &mut self.solver.colliders,
-                filter,
-            );
-            vehicle.controller.update_vehicle(dt, queries);
-        }
-
         // Remember where every body starts this step; presentation blends from here toward the solved pose.
         for (handle, record) in self.bodies.iter_mut() {
             if let Some(body) = self.solver.bodies.get(*handle) {

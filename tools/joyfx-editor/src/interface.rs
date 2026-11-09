@@ -24,6 +24,7 @@ use joy_engine::development::{
     SaveRequest,
     ViewportShortcut,
     components,
+    editor_shell,
     viewport_input,
 };
 use joy_engine::egui::{
@@ -44,13 +45,10 @@ use joy_engine::egui::{
 };
 use joy_engine::math::Vec2;
 use joy_engine::particles::decode_particle_texture;
+use joy_engine::runtime::Storage;
 use joy_engine::runtime::theme::{
     colors,
     layout,
-};
-use joy_engine::runtime::{
-    Storage,
-    theme,
 };
 
 use crate::constants::{
@@ -151,6 +149,8 @@ pub struct Interface {
     region: Option<PreviewRegion>,
     hosted: bool,
     backend: String,
+    // Where the standalone theme choice persists.
+    theme_storage: Option<Storage>,
 }
 
 impl Interface {
@@ -172,7 +172,8 @@ impl Interface {
             ..PanelLayoutOptions::default()
         };
         Self {
-            layout: PanelLayout::new(options, storage),
+            layout: PanelLayout::new(options, storage.clone()),
+            theme_storage: storage,
             spawn_editor: ParticleScriptEditor::new("joyfx-editor-spawn"),
             update_editor: ParticleScriptEditor::new("joyfx-editor-update"),
             inspector: EmitterInspector::default(),
@@ -197,6 +198,11 @@ impl Interface {
     /// Set the renderer label shown in the diagnostics bar (`WEBGPU`, `WEBGL 2`, `VULKAN`, …).
     pub fn set_backend_label(&mut self, label: impl Into<String>) {
         self.backend = label.into();
+    }
+
+    /// Where the standalone theme choice persists.
+    pub fn theme_storage(&self) -> Option<&Storage> {
+        self.theme_storage.as_ref()
     }
 
     /// Switch between standalone chrome and a hosted tab.
@@ -360,7 +366,7 @@ impl Interface {
     // -----------------------------------------------------------------------------------------------------------------
 
     fn header(&mut self, ui: &mut Ui, lab: &mut JoyfxEditor, rect: Rect) {
-        ui.painter_at(rect).rect_filled(rect, CornerRadius::ZERO, colors::PANEL);
+        ui.painter_at(rect).rect_filled(rect, CornerRadius::ZERO, colors::panel());
         components::header_rule(ui, rect);
         let inner = rect.shrink2(vec2(HEADER_INSET, layout::SPACE_SM));
         let title_area = Rect::from_min_max(inner.min, pos2(inner.right() - HEADER_ACTIONS_WIDTH, inner.bottom()));
@@ -369,6 +375,7 @@ impl Interface {
         });
         let buttons = Rect::from_min_max(pos2(inner.right() - HEADER_ACTIONS_WIDTH, inner.top()), inner.max);
         ui.scope_builder(UiBuilder::new().max_rect(buttons).layout(Layout::right_to_left(Align::Center)), |ui| {
+            editor_shell::theme_menu(ui, self.theme_storage.as_ref());
             if ui.add(components::button("?")).on_hover_text("Script Reference").clicked() {
                 self.reference_open = true;
             }
@@ -386,12 +393,12 @@ impl Interface {
     }
 
     fn project_bar(&mut self, ui: &mut Ui, lab: &mut JoyfxEditor, rect: Rect) {
-        ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::PANEL);
-        ui.painter().line_segment([rect.left_bottom(), rect.right_bottom()], Stroke::new(1.0, colors::BORDER));
+        ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::panel());
+        ui.painter().line_segment([rect.left_bottom(), rect.right_bottom()], Stroke::new(1.0, colors::border()));
         let inner = rect.shrink2(vec2(28.0, 10.0));
         ui.scope_builder(UiBuilder::new().max_rect(inner).layout(Layout::left_to_right(Align::Center)), |ui| {
             let (dot, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
-            ui.painter().rect_filled(dot, CornerRadius::ZERO, colors::ACCENT);
+            ui.painter().rect_filled(dot, CornerRadius::ZERO, colors::accent());
             let mut name = lab.asset().name.clone();
             let response = ui.add(
                 egui::TextEdit::singleline(&mut name)
@@ -404,10 +411,10 @@ impl Interface {
                 lab.document_changed();
             }
             ui.add_space(layout::SPACE_MD);
-            ui.label(RichText::new("PARTICLE ASSET / .JOYFX").monospace().color(colors::MUTED).size(layout::TYPE_XS));
+            ui.label(RichText::new("PARTICLE ASSET / .JOYFX").monospace().color(colors::muted()).size(layout::TYPE_XS));
             if let Some(notice) = &self.notice {
                 ui.add_space(layout::SPACE_MD);
-                ui.label(RichText::new(notice).color(colors::SUCCESS).size(layout::TYPE_XS));
+                ui.label(RichText::new(notice).color(colors::success()).size(layout::TYPE_XS));
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let mut selected = self.example_index;
@@ -426,7 +433,7 @@ impl Interface {
                         lab.show_error(joy_engine::development::lab_values::REPAIR_DRAFTS_MESSAGE);
                     }
                 }
-                ui.label(RichText::new("EXAMPLES").monospace().color(colors::MUTED).size(layout::TYPE_XS));
+                ui.label(RichText::new("EXAMPLES").monospace().color(colors::muted()).size(layout::TYPE_XS));
             });
         });
     }
@@ -438,22 +445,25 @@ impl Interface {
     fn compose_panel(&mut self, ui: &mut Ui, lab: &mut JoyfxEditor) {
         ui.horizontal(|ui| {
             ui.set_min_height(HEADING_HEIGHT - 20.0);
-            components::panel_heading(ui, "Compose");
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if ui.add(components::primary_button("Apply")).on_hover_text("Apply (Ctrl+Enter)").clicked() {
-                    lab.apply(false);
-                }
-                let mut live = lab.live();
-                if components::checkbox(ui, &mut live, "Live").changed() {
-                    lab.set_live(live);
-                }
-            });
+            components::panel_heading(ui, "Emitters");
+            // A hosting editor shows Apply and Live in its toolbar (`AuthoringTool::toolbar_actions`).
+            if !self.hosted {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui.add(components::primary_button("Apply")).on_hover_text("Apply (Ctrl+Enter)").clicked() {
+                        lab.apply(false);
+                    }
+                    let mut live = lab.live();
+                    if components::checkbox(ui, &mut live, "Live").changed() {
+                        lab.set_live(live);
+                    }
+                });
+            }
         });
         ui.separator();
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Emitter Stack").monospace().color(colors::MUTED).size(layout::TYPE_XS));
+            ui.label(RichText::new("Emitter Stack").monospace().color(colors::muted()).size(layout::TYPE_XS));
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if named(ui.button(RichText::new("+ Add").color(colors::ACCENT)), "Add emitter")
+                if named(ui.button(RichText::new("+ Add").color(colors::accent())), "Add emitter")
                     .on_hover_text("Add emitter")
                     .clicked()
                 {
@@ -564,13 +574,13 @@ impl Interface {
             }
         }
         if let Some(message) = lab.error() {
-            egui::Frame::new().fill(colors::FIELD).stroke(Stroke::new(1.0, colors::DANGER)).inner_margin(6).show(
+            egui::Frame::new().fill(colors::field()).stroke(Stroke::new(1.0, colors::danger())).inner_margin(6).show(
                 ui,
                 |ui| {
                     ui.set_width(ui.available_width());
                     ui.add(
                         egui::Label::new(
-                            RichText::new(message).monospace().color(colors::DANGER).size(layout::TYPE_SM),
+                            RichText::new(message).monospace().color(colors::danger()).size(layout::TYPE_SM),
                         )
                         .wrap(),
                     );
@@ -579,12 +589,12 @@ impl Interface {
         }
         ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new("SPAWN / UPDATE").monospace().color(colors::MUTED).size(layout::TYPE_XS));
+                ui.label(RichText::new("SPAWN / UPDATE").monospace().color(colors::muted()).size(layout::TYPE_XS));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     ui.label(
                         RichText::new("Ctrl / Cmd + Enter to apply")
                             .monospace()
-                            .color(colors::MUTED)
+                            .color(colors::muted())
                             .size(layout::TYPE_XS),
                     );
                 });
@@ -640,9 +650,9 @@ impl Interface {
                 ui.set_min_height(HEADING_HEIGHT - 22.0);
                 components::panel_heading(ui, "Preview");
                 let (text, color) = match (lab.preview_state(), lab.error().is_some()) {
-                    (_, true) => ("LIVE · FIX ERROR", colors::DANGER),
-                    (PreviewState::Pending, false) => ("PENDING CHANGES", colors::ACCENT_HOVER),
-                    (PreviewState::Live, false) => ("LIVE", colors::SUCCESS),
+                    (_, true) => ("LIVE · FIX ERROR", colors::danger()),
+                    (PreviewState::Pending, false) => ("PENDING CHANGES", colors::accent_hover()),
+                    (PreviewState::Live, false) => ("LIVE", colors::success()),
                 };
                 components::status_badge(ui, text, color);
                 if !compact {
@@ -664,7 +674,7 @@ impl Interface {
                 if ui.button("Step").on_hover_text("Step one 60 Hz tick").clicked() {
                     lab.step();
                 }
-                ui.label(RichText::new("Seed").color(colors::MUTED).size(layout::TYPE_SM));
+                ui.label(RichText::new("Seed").color(colors::muted()).size(layout::TYPE_SM));
                 let mut drafts = std::mem::take(&mut lab.drafts);
                 let response = joy_engine::development::NumberField::new("seed", &mut self.seed_draft)
                     .step(1.0)
@@ -676,7 +686,7 @@ impl Interface {
                 if response.committed() && response.changed {
                     lab.set_seed(self.seed_draft.trunc() as i64);
                 }
-                ui.label(RichText::new("Speed").color(colors::MUTED).size(layout::TYPE_SM));
+                ui.label(RichText::new("Speed").color(colors::muted()).size(layout::TYPE_SM));
                 let label = SPEEDS.iter().find(|(speed, _)| *speed == lab.speed).map_or("1×", |(_, label)| *label);
                 egui::ComboBox::from_id_salt("speed").width(56.0).selected_text(label).show_ui(ui, |ui| {
                     for (speed, label) in SPEEDS {
@@ -720,13 +730,13 @@ impl Interface {
                 "DRAG TO ORBIT · SHIFT + DRAG TO PAN · SCROLL TO ZOOM"
             },
             FontId::monospace(layout::TYPE_XS),
-            colors::MUTED.gamma_multiply(0.8),
+            colors::muted().gamma_multiply(0.8),
         );
         if actions.response.has_focus() {
             painter.rect_stroke(
                 viewport.shrink(1.0),
                 CornerRadius::ZERO,
-                Stroke::new(layout::BORDER_FOCUS, colors::ACCENT),
+                Stroke::new(layout::BORDER_FOCUS, colors::accent()),
                 egui::StrokeKind::Inside,
             );
         }
@@ -795,10 +805,11 @@ impl Interface {
                     components::guidance(ui, "Editor only · restart on change · Loop repeats the window");
                 });
                 ui.separator();
+                emitter_lanes(ui, lab);
                 ui.horizontal(|ui| {
                     let time = lab.time();
                     let duration = lab.timeline_seconds();
-                    ui.label(RichText::new(format!("{time:.2} s")).monospace().color(colors::MUTED));
+                    ui.label(RichText::new(format!("{time:.2} s")).monospace().color(colors::muted()));
                     let mut value = time.min(duration);
                     let width = (ui.available_width() - 70.0).max(60.0);
                     let response = joy_engine::development::lab_slider(
@@ -813,11 +824,11 @@ impl Interface {
                     if response.changed() {
                         lab.seek(value);
                     }
-                    ui.label(RichText::new(format!("{duration:.2} s")).monospace().color(colors::MUTED));
+                    ui.label(RichText::new(format!("{duration:.2} s")).monospace().color(colors::muted()));
                 });
                 egui::Frame::new()
-                    .fill(colors::CANVAS)
-                    .stroke(Stroke::new(1.0, colors::ACCENT))
+                    .fill(colors::canvas())
+                    .stroke(Stroke::new(1.0, colors::accent()))
                     .inner_margin(egui::Margin::symmetric(12, 8))
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
@@ -826,13 +837,18 @@ impl Interface {
                             let count = effect.map_or(0, |effect| effect.particles().len());
                             let dropped = effect.map_or(0, |effect| effect.dropped_particles());
                             ui.label(
-                                RichText::new(group_thousands(count as u64)).monospace().strong().color(colors::ACCENT),
+                                RichText::new(group_thousands(count as u64))
+                                    .monospace()
+                                    .strong()
+                                    .color(colors::accent()),
                             );
-                            ui.label(RichText::new("PARTICLES").monospace().color(colors::TEXT).size(layout::TYPE_SM));
-                            ui.label(RichText::new(dropped.to_string()).monospace().strong().color(colors::ACCENT));
-                            ui.label(RichText::new("DROPPED").monospace().color(colors::TEXT).size(layout::TYPE_SM));
                             ui.label(
-                                RichText::new(&self.backend).monospace().color(colors::ACCENT).size(layout::TYPE_SM),
+                                RichText::new("PARTICLES").monospace().color(colors::text()).size(layout::TYPE_SM),
+                            );
+                            ui.label(RichText::new(dropped.to_string()).monospace().strong().color(colors::accent()));
+                            ui.label(RichText::new("DROPPED").monospace().color(colors::text()).size(layout::TYPE_SM));
+                            ui.label(
+                                RichText::new(&self.backend).monospace().color(colors::accent()).size(layout::TYPE_SM),
                             );
                             if !compact {
                                 Self::monitor_control(ui, lab);
@@ -861,13 +877,13 @@ impl Interface {
                 lab.frame_current_effect(Vec2::new(viewport.width(), viewport.height()));
             }
             if viewport.width() >= COMPACT_PREVIEW_WIDTH {
-                ui.label(RichText::new("Y-UP / PERSPECTIVE").monospace().color(colors::MUTED).size(layout::TYPE_XS));
+                ui.label(RichText::new("Y-UP / PERSPECTIVE").monospace().color(colors::muted()).size(layout::TYPE_XS));
             }
         });
     }
 
     fn monitor_control(ui: &mut Ui, lab: &mut JoyfxEditor) {
-        ui.label(RichText::new("MONITOR").monospace().color(colors::TEXT).size(layout::TYPE_SM));
+        ui.label(RichText::new("MONITOR").monospace().color(colors::text()).size(layout::TYPE_SM));
         let mode = lab.performance_mode();
         let mut selected = mode;
         egui::ComboBox::from_id_salt("monitor").width(150.0).selected_text(mode.label()).show_ui(ui, |ui| {
@@ -887,9 +903,9 @@ impl Interface {
     fn parameter_panel(&mut self, ui: &mut Ui, lab: &mut JoyfxEditor) {
         ui.horizontal(|ui| {
             ui.set_min_height(HEADING_HEIGHT - 20.0);
-            components::panel_heading(ui, "Parameters");
+            components::panel_heading(ui, "Effect parameters");
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                if named(ui.button(RichText::new("+ ADD").color(colors::ACCENT)), "Add Parameter")
+                if named(ui.button(RichText::new("+ ADD").color(colors::accent())), "Add Parameter")
                     .on_hover_text("Add Parameter")
                     .clicked()
                     && let Err(message) = lab.add_parameter()
@@ -970,11 +986,11 @@ fn named(response: egui::Response, name: &str) -> egui::Response {
 
 /// Draw `contents` in an opaque panel filling `rect`.
 fn pane(ui: &mut Ui, id_salt: &str, rect: Rect, contents: impl FnOnce(&mut Ui)) {
-    ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::PANEL);
+    ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::panel());
     ui.painter().rect_stroke(
         rect,
         CornerRadius::ZERO,
-        Stroke::new(layout::BORDER_THIN, colors::LINE),
+        Stroke::new(layout::BORDER_THIN, colors::line()),
         egui::StrokeKind::Inside,
     );
     let inner = rect.shrink(layout::SPACE_MD);
@@ -987,18 +1003,18 @@ fn emitter_row(ui: &mut Ui, selected: bool, enabled: bool, id: &str, detail: &st
     response.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, selected, id));
     let painter = ui.painter_at(rect);
     let fill = if selected {
-        colors::SELECTED_ROW
+        colors::selected_row()
     } else if response.hovered() {
-        colors::SURFACE
+        colors::surface()
     } else {
-        colors::PANEL
+        colors::panel()
     };
     painter.rect_filled(rect, CornerRadius::ZERO, fill);
     if response.has_focus() {
         painter.rect_stroke(
             rect,
             CornerRadius::ZERO,
-            Stroke::new(layout::BORDER_THIN, colors::ACCENT),
+            Stroke::new(layout::BORDER_THIN, colors::accent()),
             egui::StrokeKind::Inside,
         );
     }
@@ -1006,27 +1022,27 @@ fn emitter_row(ui: &mut Ui, selected: bool, enabled: bool, id: &str, detail: &st
         painter.rect_filled(
             Rect::from_min_size(rect.min, vec2(layout::BORDER_ACCENT * 0.5, rect.height())),
             CornerRadius::ZERO,
-            colors::ACCENT,
+            colors::accent(),
         );
     }
     painter.circle_filled(
         rect.left_center() + vec2(24.0, 0.0),
         3.0,
-        if enabled { colors::ACCENT } else { colors::BORDER },
+        if enabled { colors::accent() } else { colors::border() },
     );
     painter.text(
         rect.left_center() + vec2(44.0, 0.0),
         Align2::LEFT_CENTER,
         id,
         FontId::proportional(layout::TYPE_MD),
-        colors::TEXT,
+        colors::text(),
     );
     painter.text(
         rect.right_center() - vec2(10.0, 0.0),
         Align2::RIGHT_CENTER,
         detail,
         FontId::monospace(layout::TYPE_XS),
-        colors::MUTED,
+        colors::muted(),
     );
     response
 }
@@ -1046,10 +1062,10 @@ fn performance_panel(ui: &mut Ui, lab: &JoyfxEditor) {
         stats.lights.to_string()
     };
     let item = |ui: &mut Ui, label: &str, value: String| {
-        ui.label(RichText::new(label).monospace().color(colors::TEXT).size(layout::TYPE_SM));
-        ui.label(RichText::new(value).monospace().strong().color(colors::CREAM).size(layout::TYPE_SM));
+        ui.label(RichText::new(label).monospace().color(colors::text()).size(layout::TYPE_SM));
+        ui.label(RichText::new(value).monospace().strong().color(colors::cream()).size(layout::TYPE_SM));
     };
-    egui::Frame::new().fill(colors::CANVAS).inner_margin(egui::Margin::symmetric(12, 6)).show(ui, |ui| {
+    egui::Frame::new().fill(colors::canvas()).inner_margin(egui::Margin::symmetric(12, 6)).show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal_wrapped(|ui| {
             item(ui, "Range", stats.range.clone());
@@ -1075,7 +1091,7 @@ fn performance_panel(ui: &mut Ui, lab: &JoyfxEditor) {
             egui::ScrollArea::both().id_salt("emitter-performance").max_height(110.0).show(ui, |ui| {
                 egui::Grid::new("emitter-performance-table").striped(true).show(ui, |ui| {
                     for heading in ["Emitter", "Live", "Spawn CPU", "Update CPU", "Lights", "Spawned Total", "Dropped Total", "Operations Total"] {
-                        ui.label(RichText::new(heading).monospace().size(layout::TYPE_XS).color(colors::MUTED));
+                        ui.label(RichText::new(heading).monospace().size(layout::TYPE_XS).color(colors::muted()));
                     }
                     ui.end_row();
                     for row in &view.emitters {
@@ -1099,6 +1115,71 @@ fn performance_panel(ui: &mut Ui, lab: &JoyfxEditor) {
     });
 }
 
+/// Height of one emitter lane in the timeline.
+const LANE_HEIGHT: f32 = 22.0;
+/// Width of the emitter names beside their lanes.
+const LANE_LABEL_WIDTH: f32 = 96.0;
+
+/// One lane per emitter across the replay window: its continuous emission as a bar (fading over the particles'
+/// lifetime after emission stops), each burst as a diamond, and the playhead across every lane.
+fn emitter_lanes(ui: &mut Ui, lab: &JoyfxEditor) {
+    let horizon = lab.timeline_seconds().max(0.001);
+    let time = lab.time().min(horizon);
+    let emitters = &lab.asset().emitters;
+    let width = ui.available_width();
+    let (area, _) = ui.allocate_exact_size(vec2(width, LANE_HEIGHT * emitters.len() as f32), egui::Sense::hover());
+    let painter = ui.painter_at(area);
+    let track = Rect::from_min_max(pos2(area.left() + LANE_LABEL_WIDTH, area.top()), area.right_bottom());
+    let at = |seconds: f64| track.left() + (track.width() * (seconds / horizon).clamp(0.0, 1.0) as f32);
+    for (index, emitter) in emitters.iter().enumerate() {
+        let row = Rect::from_min_size(
+            pos2(area.left(), area.top() + (LANE_HEIGHT * index as f32)),
+            vec2(area.width(), LANE_HEIGHT),
+        );
+        let lane = Rect::from_min_max(pos2(track.left(), row.top() + 4.0), pos2(track.right(), row.bottom() - 4.0));
+        let color = if emitter.enabled { colors::accent() } else { colors::muted() };
+        painter.text(
+            pos2(row.left(), row.center().y),
+            egui::Align2::LEFT_CENTER,
+            &emitter.id,
+            egui::FontId::proportional(layout::TYPE_SM),
+            colors::muted(),
+        );
+        painter.rect(lane, 1.0, colors::canvas(), Stroke::new(1.0, colors::line()), egui::StrokeKind::Inside);
+        if emitter.rate > 0.0 && emitter.duration > 0.0 {
+            let emitting =
+                Rect::from_min_max(pos2(at(0.0), lane.top() + 3.0), pos2(at(emitter.duration), lane.bottom() - 3.0));
+            painter.rect_filled(emitting, 0.0, color.gamma_multiply(0.75));
+            let fading = Rect::from_min_max(
+                pos2(emitting.right(), emitting.top()),
+                pos2(at(emitter.duration + emitter.lifetime), emitting.bottom()),
+            );
+            painter.rect_filled(fading, 0.0, color.gamma_multiply(0.3));
+        }
+        for burst in &emitter.bursts {
+            let center = pos2(at(burst.time), lane.center().y);
+            let tail = Rect::from_min_max(
+                pos2(center.x, lane.top() + 5.0),
+                pos2(at(burst.time + emitter.lifetime), lane.bottom() - 5.0),
+            );
+            painter.rect_filled(tail, 0.0, color.gamma_multiply(0.3));
+            let size = 4.5;
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    center + vec2(0.0, -size),
+                    center + vec2(size, 0.0),
+                    center + vec2(0.0, size),
+                    center + vec2(-size, 0.0),
+                ],
+                color,
+                Stroke::NONE,
+            ));
+        }
+    }
+    let playhead = at(time);
+    painter.line_segment([pos2(playhead, area.top()), pos2(playhead, area.bottom())], Stroke::new(1.5, colors::text()));
+}
+
 /// `1033` as `1,033`.
 fn group_thousands(value: u64) -> String {
     let digits = value.to_string();
@@ -1114,8 +1195,8 @@ fn group_thousands(value: u64) -> String {
 
 /// The Script Reference dialog's contents.
 fn reference_contents(ui: &mut Ui) {
-    let code = |text: &str| RichText::new(text).monospace().color(colors::SCRIPT_FUNCTION);
-    ui.label(RichText::new("BOUNDED PARTICLE LANGUAGE").monospace().color(colors::ACCENT).size(layout::TYPE_XS));
+    let code = |text: &str| RichText::new(text).monospace().color(colors::script_function());
+    ui.label(RichText::new("BOUNDED PARTICLE LANGUAGE").monospace().color(colors::accent()).size(layout::TYPE_XS));
     ui.heading("Script Reference");
     egui::ScrollArea::vertical().max_height(520.0).show(ui, |ui| {
         let paragraph = |ui: &mut Ui, text: &str| {
@@ -1143,11 +1224,11 @@ fn reference_contents(ui: &mut Ui) {
     });
 }
 
-/// Apply the authoring look once per context.
-pub fn apply_look(context: &egui::Context) {
+/// Apply the authoring look (the saved standalone theme) once per context.
+pub fn apply_look(context: &egui::Context, storage: Option<&Storage>) {
     let applied = context.data(|data| data.get_temp::<bool>(egui::Id::new("joyfx-editor-look"))).unwrap_or(false);
     if !applied {
-        theme::apply_editor(context);
+        editor_shell::restore_theme(context, storage);
         context.data_mut(|data| data.insert_temp(egui::Id::new("joyfx-editor-look"), true));
     }
 }

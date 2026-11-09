@@ -281,7 +281,7 @@ impl ReferenceDialog {
                 ui.vertical(|ui| {
                     ui.label(
                         RichText::new(page.title().to_uppercase())
-                            .color(colors::ACCENT)
+                            .color(colors::accent())
                             .size(layout::TYPE_LG)
                             .text_style(egui::TextStyle::Button),
                     );
@@ -328,11 +328,11 @@ fn script_reference_page(ui: &mut Ui) {
         match kind {
             ReferenceBlock::Heading => {
                 ui.add_space(layout::SPACE_SM);
-                ui.label(RichText::new(*text).color(colors::ACCENT).strong());
+                ui.label(RichText::new(*text).color(colors::accent()).strong());
             }
             ReferenceBlock::Paragraph => paragraph(ui, text),
             ReferenceBlock::Code => {
-                egui::Frame::new().fill(colors::SCRIPT).inner_margin(6).show(ui, |ui| {
+                egui::Frame::new().fill(colors::script()).inner_margin(6).show(ui, |ui| {
                     ui.label(RichText::new(*text).monospace().size(layout::TYPE_SM));
                 });
             }
@@ -379,14 +379,14 @@ fn recipes_page(ui: &mut Ui, search: &mut String) -> Option<usize> {
 fn paragraph(ui: &mut Ui, text: &str) {
     let mut job = egui::text::LayoutJob::default();
     let body = egui::TextFormat {
-        color: colors::TEXT,
+        color: colors::text(),
         font_id: egui::FontId::proportional(layout::TYPE_MD),
         ..Default::default()
     };
     let code = egui::TextFormat {
-        color: colors::SCRIPT_FUNCTION,
+        color: colors::script_function(),
         font_id: egui::FontId::monospace(layout::TYPE_SM),
-        background: colors::SCRIPT,
+        background: colors::script(),
         ..Default::default()
     };
     for (index, part) in text.split('`').enumerate() {

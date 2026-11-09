@@ -5,7 +5,7 @@
 //! engine interprets.
 //!
 //! Projects may author any component type; the engine preserves unknown records as data and interprets only the types
-//! named here. Simulation components (`physics`, `vehicle`) are read in this crate; presentation components (`render`,
+//! named here. Simulation components (`physics`) are read in this crate; presentation components (`render`,
 //! `light`, `effect`, `postProcess`) are read by `joy-scene`, next to the scenes that present them. Keeping every name
 //! here gives the format one vocabulary regardless of which crate interprets a type.
 
@@ -17,10 +17,10 @@ pub mod component_type {
     pub const LIGHT: &str = "light";
     /// Rigid body created by `LevelRuntime`.
     pub const PHYSICS: &str = "physics";
-    /// Raycast vehicle attached to the entity's physics body.
-    pub const VEHICLE: &str = "vehicle";
     /// Particle effect attached to the entity transform.
     pub const EFFECT: &str = "effect";
+    /// The level's sky, sun and moon clock, and wind (the first entity carrying one wins).
+    pub const ENVIRONMENT: &str = "environment";
     /// Post-processing settings applied inside the entity's volume, or everywhere when unbounded.
     pub const POST_PROCESS: &str = "postProcess";
     /// Game-script behavior: names the library script whose hooks drive the entity (see `ScriptSystem`).
@@ -39,10 +39,12 @@ pub mod component_preset {
     pub const PHYSICS_BOX: &str = "physics.box";
     /// A static sphere collider.
     pub const PHYSICS_SPHERE: &str = "physics.sphere";
-    /// A four-wheel raycast vehicle.
-    pub const VEHICLE_FOUR_WHEEL: &str = "vehicle.four-wheel";
     /// An unassigned looping JOYFX effect.
     pub const EFFECT_PARTICLES: &str = "effect.particles";
+    /// The engine's default sky, clock, and wind.
+    pub const ENVIRONMENT_DEFAULT: &str = "environment.default";
+    /// A low sun under scattered clouds with a steady breeze; the clock stands still.
+    pub const ENVIRONMENT_DUSK: &str = "environment.dusk";
     /// An unbounded post-processing volume: the level's overall look.
     pub const POST_PROCESS_GLOBAL: &str = "postProcess.global";
     /// A box post-processing volume.
@@ -57,7 +59,7 @@ pub mod component_category {
     pub const RENDERING: &str = "Rendering";
     /// Lights.
     pub const LIGHTING: &str = "Lighting";
-    /// Bodies and vehicles.
+    /// Rigid bodies and colliders.
     pub const PHYSICS: &str = "Physics";
     /// Particle effects.
     pub const EFFECTS: &str = "Effects";

@@ -2,13 +2,14 @@
 // Licensed under the MIT License.
 
 //! Joy Engine UI: the egui layer drawn over the rendered scene on native windows and browser canvases, the Joy visual
-//! [`theme`], [`hud_text`] for in-game text, and the display metrics ([`Viewport`], [`display_scale`]) that layout,
+//! [`theme`], [`hud_text`] for in-game text, [`hud_paint`] for the shapes game HUDs and menus share, and the display metrics ([`Viewport`], [`display_scale`]) that layout,
 //! picking, and painting share. Browsers translate DOM input into egui events themselves, because egui-winit's pinned
 //! release does not build for WebAssembly.
 //! [`ui_layout`] connects native Taffy layout trees to measured text and stably identified, clipped egui regions.
 
 mod display;
 mod egui_layer;
+pub mod hud_paint;
 pub mod hud_text;
 mod linear_composite;
 pub mod theme;

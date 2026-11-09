@@ -64,14 +64,15 @@ const KEYCAP_MINIMUM_WIDTH: f32 = 16.0;
 /// outlined badge. Returns the area both occupy.
 pub fn app_title(ui: &mut Ui, product: &str, version: &str) -> egui::Response {
     let display = style_font(ui, &text_styles::display(), layout::TYPE_DISPLAY);
-    let title = spaced(&product.to_uppercase(), FontId::new(TITLE_SIZE, display.family), colors::ACCENT, TITLE_SPACING);
+    let title =
+        spaced(&product.to_uppercase(), FontId::new(TITLE_SIZE, display.family), colors::accent(), TITLE_SPACING);
     let title = ui.label(title);
     ui.add_space(layout::SPACE_SM);
-    let badge = ui.label(RichText::new(version).color(colors::ACCENT).text_style(text_styles::status()));
+    let badge = ui.label(RichText::new(version).color(colors::accent()).text_style(text_styles::status()));
     ui.painter().rect_stroke(
         badge.rect.expand2(vec2(4.0, 3.0)),
         0.0,
-        Stroke::new(layout::BORDER_THIN, colors::ACCENT),
+        Stroke::new(layout::BORDER_THIN, colors::accent()),
         egui::StrokeKind::Outside,
     );
     title.union(badge)
@@ -80,26 +81,26 @@ pub fn app_title(ui: &mut Ui, product: &str, version: &str) -> egui::Response {
 /// The accent rule under an application header, spanning `rect`'s full width along its bottom edge.
 pub fn header_rule(ui: &Ui, rect: Rect) {
     let rule = Rect::from_min_max(pos2(rect.left(), rect.bottom() - layout::BORDER_ACCENT), rect.right_bottom());
-    ui.painter().rect_filled(rule, 0.0, colors::ACCENT);
+    ui.painter().rect_filled(rule, 0.0, colors::accent());
 }
 
 /// The small accent square that leads a project bar.
 pub fn project_marker(ui: &mut Ui) {
     let (rect, _) = ui.allocate_exact_size(vec2(PROJECT_MARKER_SIZE, PROJECT_MARKER_SIZE), Sense::hover());
-    ui.painter().rect_filled(rect, 0.0, colors::ACCENT);
+    ui.painter().rect_filled(rect, 0.0, colors::accent());
 }
 
 /// A status bar: `left` and `right` status text on the header fill with a hairline top edge, filling the `Ui`'s width.
 pub fn status_bar(ui: &mut Ui, left: &str, right: &str) {
     let rect = ui.max_rect();
-    ui.painter().rect_filled(rect, 0.0, colors::HEADER);
-    ui.painter().hline(rect.x_range(), rect.top(), Stroke::new(layout::BORDER_THIN, colors::LINE));
+    ui.painter().rect_filled(rect, 0.0, colors::header());
+    ui.painter().hline(rect.x_range(), rect.top(), Stroke::new(layout::BORDER_THIN, colors::line()));
     ui.horizontal_centered(|ui| {
         ui.add_space(layout::SPACE_MD);
-        ui.label(spaced(&left.to_uppercase(), status_font(ui), colors::ACCENT, CAPTION_SPACING));
+        ui.label(spaced(&left.to_uppercase(), status_font(ui), colors::accent(), CAPTION_SPACING));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.add_space(layout::SPACE_MD);
-            ui.label(spaced(&right.to_uppercase(), status_font(ui), colors::MUTED, CAPTION_SPACING));
+            ui.label(spaced(&right.to_uppercase(), status_font(ui), colors::muted(), CAPTION_SPACING));
         });
     });
 }
@@ -112,15 +113,15 @@ pub fn list_row(ui: &mut Ui, selected: bool, label: &str, badge: Option<&str>) -
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
     let painter = ui.painter();
     if selected {
-        painter.rect_filled(rect, 0.0, colors::SELECTED_ROW);
+        painter.rect_filled(rect, 0.0, colors::selected_row());
         let bar = Rect::from_min_size(rect.min, vec2(ROW_ACCENT_WIDTH, rect.height()));
-        painter.rect_filled(bar, 0.0, colors::ACCENT);
+        painter.rect_filled(bar, 0.0, colors::accent());
     }
     if response.hovered() {
-        painter.rect_stroke(rect, 0.0, Stroke::new(layout::BORDER_THIN, colors::ACCENT), egui::StrokeKind::Inside);
+        painter.rect_stroke(rect, 0.0, Stroke::new(layout::BORDER_THIN, colors::accent()), egui::StrokeKind::Inside);
     }
     let body = style_font(ui, &TextStyle::Body, layout::TYPE_MD);
-    let text_color = if selected || response.hovered() { colors::CREAM } else { colors::TEXT };
+    let text_color = if selected || response.hovered() { colors::cream() } else { colors::text() };
     painter.text(
         pos2(rect.left() + layout::SPACE_MD + ROW_ACCENT_WIDTH, rect.center().y),
         egui::Align2::LEFT_CENTER,
@@ -134,7 +135,7 @@ pub fn list_row(ui: &mut Ui, selected: bool, label: &str, badge: Option<&str>) -
             egui::Align2::RIGHT_CENTER,
             badge.to_uppercase(),
             status_font(ui),
-            colors::MUTED,
+            colors::muted(),
         );
     }
     response
@@ -147,25 +148,24 @@ pub fn list_row(ui: &mut Ui, selected: bool, label: &str, badge: Option<&str>) -
 /// A panel: the panel fill with a hairline border.
 pub fn panel_frame() -> Frame {
     Frame::new()
-        .fill(colors::PANEL)
-        .stroke(Stroke::new(layout::BORDER_THIN, colors::BORDER))
+        .fill(colors::panel())
+        .stroke(Stroke::new(layout::BORDER_THIN, colors::border()))
         .inner_margin(Margin::same(layout::SPACE_MD as i8))
 }
 
 /// A toolbar or status bar strip: the panel fill with small padding.
 pub fn toolbar_frame() -> Frame {
     Frame::new()
-        .fill(colors::PANEL)
-        .stroke(Stroke::new(layout::BORDER_THIN, colors::BORDER))
+        .fill(colors::panel())
+        .stroke(Stroke::new(layout::BORDER_THIN, colors::border()))
         .inner_margin(Margin::symmetric(layout::SPACE_MD as i8, layout::SPACE_XS as i8))
 }
 
-/// A major panel heading in the tool editor style: a bold, spaced uppercase title.
+/// A major panel heading in the authoring shell's style: a bold, sentence-case title (`Emitters`, `Script`,
+/// `Effect parameters`). Section labels inside a panel use [`caption`]'s spaced capitals instead.
 pub fn panel_heading(ui: &mut Ui, title: &str) {
-    let title_font = FontId::new(layout::TYPE_LG, text_styles::strong_family());
-    let mut job = LayoutJob::default();
-    append_spaced(&mut job, &title.to_uppercase(), title_font, colors::TEXT, CAPTION_SPACING);
-    ui.label(job);
+    let title_font = FontId::new(layout::TYPE_LG + 1.0, text_styles::strong_family());
+    ui.label(RichText::new(title).font(title_font).color(colors::text()));
 }
 
 /// A standard workbench button with the explicit bold face used by the browser tool editors.
@@ -185,7 +185,7 @@ pub fn shortcut_button(ui: &mut Ui, label: &str, key: &str) -> egui::Response {
         f32::INFINITY,
         TextStyle::Button,
     );
-    let key_galley = ui.painter().layout_no_wrap(key.to_owned(), FontId::monospace(layout::TYPE_XS), colors::MUTED);
+    let key_galley = ui.painter().layout_no_wrap(key.to_owned(), FontId::monospace(layout::TYPE_XS), colors::muted());
     let keycap_size = vec2(
         (key_galley.size().x + (KEYCAP_PADDING * 2.0)).max(KEYCAP_MINIMUM_WIDTH),
         key_galley.size().y + KEYCAP_PADDING,
@@ -213,10 +213,10 @@ pub fn shortcut_button(ui: &mut Ui, label: &str, key: &str) -> egui::Response {
     painter.rect_stroke(
         keycap,
         CornerRadius::same(layout::RADIUS_SM),
-        Stroke::new(layout::BORDER_THIN, colors::BORDER),
+        Stroke::new(layout::BORDER_THIN, colors::border()),
         egui::StrokeKind::Inside,
     );
-    painter.galley(keycap.center() - (key_galley.size() * 0.5), key_galley, colors::MUTED);
+    painter.galley(keycap.center() - (key_galley.size() * 0.5), key_galley, colors::muted());
     response
 }
 
@@ -228,35 +228,35 @@ pub fn checkbox(ui: &mut Ui, value: &mut bool, text: &str) -> egui::Response {
     ui.spacing_mut().icon_width_inner = 9.0;
     let widgets = &mut ui.visuals_mut().widgets;
     for visuals in [&mut widgets.inactive, &mut widgets.hovered, &mut widgets.active] {
-        visuals.bg_fill = if *value { colors::ACCENT } else { colors::FIELD };
-        visuals.fg_stroke.color = colors::FIELD;
+        visuals.bg_fill = if *value { colors::accent() } else { colors::field() };
+        visuals.fg_stroke.color = colors::field();
         visuals.corner_radius = CornerRadius::same(layout::RADIUS_SM);
     }
-    let response = ui.checkbox(value, RichText::new(text).color(colors::MUTED).size(layout::TYPE_SM));
+    let response = ui.checkbox(value, RichText::new(text).color(colors::muted()).size(layout::TYPE_SM));
     ui.set_style(previous);
     response
 }
 
 /// A primary action button (accent fill).
 pub fn primary_button(text: impl Into<String>) -> egui::Button<'static> {
-    egui::Button::new(RichText::new(text.into()).color(colors::ON_ACCENT).text_style(TextStyle::Button))
+    egui::Button::new(RichText::new(text.into()).color(colors::on_accent()).text_style(TextStyle::Button))
         .min_size(vec2(0.0, layout::CONTROL_HEIGHT))
-        .fill(colors::ACCENT)
-        .stroke(Stroke::new(layout::BORDER_THIN, colors::ACCENT))
+        .fill(colors::accent())
+        .stroke(Stroke::new(layout::BORDER_THIN, colors::accent()))
         .corner_radius(CornerRadius::same(layout::RADIUS_SM))
 }
 
 /// A destructive action button (danger outline).
 pub fn danger_button(text: impl Into<String>) -> egui::Button<'static> {
-    egui::Button::new(RichText::new(text.into()).color(colors::DANGER))
+    egui::Button::new(RichText::new(text.into()).color(colors::danger()))
         .fill(Color32::TRANSPARENT)
-        .stroke(Stroke::new(layout::BORDER_THIN, colors::DANGER))
+        .stroke(Stroke::new(layout::BORDER_THIN, colors::danger()))
 }
 
 /// A preview mode toggle: selected actions have an orange outline and text; inactive actions stay quiet.
 pub fn toggle_button(ui: &mut Ui, selected: bool, text: impl Into<String>) -> egui::Response {
-    let fill = if selected { colors::SURFACE } else { Color32::TRANSPARENT };
-    let color = if selected { colors::ACCENT } else { colors::MUTED };
+    let fill = if selected { colors::surface() } else { Color32::TRANSPARENT };
+    let color = if selected { colors::accent() } else { colors::muted() };
     let response = ui.add(
         egui::Button::new(
             RichText::new(text.into()).color(color).size(layout::TYPE_XS).family(text_styles::strong_family()),
@@ -266,7 +266,7 @@ pub fn toggle_button(ui: &mut Ui, selected: bool, text: impl Into<String>) -> eg
         .stroke(Stroke::NONE),
     );
     if selected || response.hovered() || response.has_focus() {
-        let color = if selected || response.has_focus() { colors::ACCENT } else { colors::BORDER };
+        let color = if selected || response.has_focus() { colors::accent() } else { colors::border() };
         ui.painter().rect_stroke(response.rect, 0.0, Stroke::new(layout::BORDER_THIN, color), egui::StrokeKind::Inside);
     }
     response
@@ -274,7 +274,7 @@ pub fn toggle_button(ui: &mut Ui, selected: bool, text: impl Into<String>) -> eg
 
 /// A field title (small muted text above or beside a control).
 pub fn field_title(ui: &mut Ui, text: impl Into<String>) -> egui::Response {
-    ui.label(RichText::new(text.into()).color(colors::MUTED).size(layout::TYPE_SM))
+    ui.label(RichText::new(text.into()).color(colors::muted()).size(layout::TYPE_SM))
 }
 
 /// A spaced uppercase caption in the caption style (section labels such as `EMITTER STACK`), in `color`.
@@ -285,12 +285,12 @@ pub fn caption(ui: &mut Ui, text: &str, color: Color32) -> egui::Response {
 
 /// Guidance text (extra-small muted text that wraps).
 pub fn guidance(ui: &mut Ui, text: impl Into<String>) -> egui::Response {
-    ui.add(egui::Label::new(RichText::new(text.into()).color(colors::MUTED).size(layout::TYPE_SM)).wrap())
+    ui.add(egui::Label::new(RichText::new(text.into()).color(colors::muted()).size(layout::TYPE_SM)).wrap())
 }
 
 /// An error message in the danger color that wraps.
 pub fn error_text(ui: &mut Ui, text: impl Into<String>) -> egui::Response {
-    ui.add(egui::Label::new(RichText::new(text.into()).color(colors::DANGER).size(layout::TYPE_SM)).wrap())
+    ui.add(egui::Label::new(RichText::new(text.into()).color(colors::danger()).size(layout::TYPE_SM)).wrap())
 }
 
 /// A small uppercase status badge (`LIVE`, `PENDING CHANGES`) in `color`.

@@ -117,11 +117,10 @@
       }
     },
     {
-      "id": "kart",
-      "name": "Test kart",
-      "type": "kart",
+      "id": "mover",
+      "name": "Test mover",
+      "type": "mover",
       "tags": [
-        "vehicle",
         "player"
       ],
       "transform": {
@@ -143,7 +142,7 @@
       },
       "components": {
         "render": {
-          "asset": "assets/kart.form",
+          "asset": "assets/mover.form",
           "parameters": {
             "body": 0.4
           }
@@ -157,55 +156,6 @@
             1.1
           ],
           "linearDamping": 0.05
-        },
-        "vehicle": {
-          "wheels": [
-            {
-              "position": [
-                -0.7,
-                -0.1,
-                0.8
-              ],
-              "radius": 0.3,
-              "steering": true,
-              "brake": true
-            },
-            {
-              "position": [
-                0.7,
-                -0.1,
-                0.8
-              ],
-              "radius": 0.3,
-              "steering": true,
-              "brake": true
-            },
-            {
-              "position": [
-                -0.7,
-                -0.1,
-                -0.8
-              ],
-              "radius": 0.3,
-              "driven": true,
-              "brake": true,
-              "suspensionStiffness": 35
-            },
-            {
-              "position": [
-                0.7,
-                -0.1,
-                -0.8
-              ],
-              "radius": 0.3,
-              "driven": true,
-              "brake": true,
-              "suspensionStiffness": 35
-            }
-          ],
-          "engineForce": 600,
-          "maxSteer": 0.5,
-          "brakeForce": 25
         }
       }
     },

@@ -14,6 +14,9 @@ use joy_engine::development::{
     AuthoringTool,
     ToolDocument,
     ToolHosting,
+    ToolPreviewState,
+    components,
+    editor_shell,
 };
 use joy_engine::egui;
 use joy_engine::math::Vec2;
@@ -33,6 +36,7 @@ use crate::interface::{
     apply_look,
 };
 use crate::session::JoyfxEditor;
+use crate::session::PreviewState;
 use crate::viewport::{
     PreviewRegion,
     post_process_settings,
@@ -130,7 +134,7 @@ impl App for JoyfxEditorTool {
 
     fn ui(&mut self, context: &egui::Context, _frame: &mut Frame<'_>) {
         if self.hosting == ToolHosting::Standalone {
-            apply_look(context);
+            apply_look(context, self.interface.theme_storage());
         }
         let area = match self.hosting {
             ToolHosting::Standalone => context.content_rect(),
@@ -148,7 +152,7 @@ impl App for JoyfxEditorTool {
                 context,
                 |ui| {
                     ui.colored_label(
-                        joy_engine::runtime::theme::colors::DANGER,
+                        joy_engine::runtime::theme::colors::danger(),
                         format!("GPU preview unavailable: {message}"),
                     );
                 },
@@ -183,6 +187,26 @@ impl AuthoringTool for JoyfxEditorTool {
 
     fn mark_saved(&mut self) {
         self.session.mark_saved();
+    }
+
+    fn toolbar_actions(&mut self, ui: &mut joy_engine::egui::Ui) {
+        let apply =
+            editor_shell::quiet_button(ui, "Apply").on_hover_text("Apply the draft to the preview (Ctrl/Cmd+Enter)");
+        if apply.clicked() {
+            self.session.apply(false);
+        }
+        let mut live = self.session.live();
+        if components::checkbox(ui, &mut live, "Live").on_hover_text("Apply edits as you type").changed() {
+            self.session.set_live(live);
+        }
+    }
+
+    fn preview_state(&self) -> Option<ToolPreviewState> {
+        Some(match (self.session.preview_state(), self.session.error().is_some()) {
+            (_, true) => ToolPreviewState::Failed,
+            (PreviewState::Pending, false) => ToolPreviewState::Pending,
+            (PreviewState::Live, false) => ToolPreviewState::Current,
+        })
     }
 
     fn set_hosting(&mut self, hosting: ToolHosting) {

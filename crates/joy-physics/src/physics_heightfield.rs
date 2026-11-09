@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Static heightfield bodies: a grid of heights that boxes, spheres, vehicle wheels, raycasts, and SDF bodies all
+//! Static heightfield bodies: a grid of heights that boxes, spheres, raycasts, and SDF bodies all
 //! collide with.
 //!
 //! Every cell splits along its (-X, -Z) to (+X, +Z) diagonal, the same split the terrain renderer and terrain sampling

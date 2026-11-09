@@ -33,6 +33,27 @@
         }
       }
     },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command"],
+      "description": "How tools such as Joy Editor's Run Project start the project's game, in the project folder.",
+      "properties": {
+        "command": {
+          "$ref": "#/definitions/text",
+          "description": "Program to start, for example cargo."
+        },
+        "arguments": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Arguments in order."
+        },
+        "directory": {
+          "$ref": "#/definitions/relativePath",
+          "description": "Folder to run in, relative to the project folder."
+        }
+      }
+    },
     "capabilities": {
       "type": "array",
       "description": "Project editor capabilities. IDs must be unique within this array.",

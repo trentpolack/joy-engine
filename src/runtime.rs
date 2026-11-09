@@ -54,6 +54,7 @@ pub use joy_app::{
     HeadlessShell,
     region_mean_color,
 };
+pub use joy_audio::synth;
 pub use joy_audio::{
     AudioBank,
     AudioBankOptions,
@@ -104,6 +105,7 @@ pub use joy_storage::{
 };
 pub use joy_ui::{
     Viewport,
+    hud_paint,
     hud_text,
     theme,
     ui_layout,

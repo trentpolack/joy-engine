@@ -3,9 +3,9 @@
 
 //! Play: run the open project's game in its own window from the native editor.
 //!
-//! Joy Editor never embeds a game. Play starts the project's development command in the project folder: its npm `dev`
-//! script when its `package.json` defines one (a hosting workspace's convention), otherwise `cargo run` for a project
-//! that is a Cargo package. Either way the game runs its native development build, so the game opens in a separate window with its own
+//! Joy Editor never embeds a game. Play starts the project's development command in the project folder: the `run`
+//! command its `project.joyproject` declares, otherwise its npm `dev` script when its `package.json` defines one (a
+//! hosting workspace's convention), otherwise `cargo run` for a project that is a Cargo package. Either way the game runs its native development build, so the game opens in a separate window with its own
 //! input and development tools. Games built on `GameAssets` hot reload the assets the editor saves, so editing a FORM
 //! asset, effect, or level here updates the running game without restarting it.
 //!
@@ -13,6 +13,8 @@
 //! it. Browser builds cannot start processes, so Play reports that it needs the native editor.
 
 use std::path::Path;
+
+use joy_engine::project::ProjectRunCommand;
 
 /// The project manifest that must define the development command.
 const PACKAGE_MANIFEST: &str = "package.json";
@@ -24,8 +26,10 @@ const DEV_SCRIPT: &str = "dev";
 const CARGO_MANIFEST: &str = "Cargo.toml";
 
 /// How Play starts a project's game.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum LaunchCommand {
+    /// The manifest's declared command.
+    Declared(ProjectRunCommand),
     /// `npm run dev`.
     NpmDev,
     /// `cargo run`.
@@ -93,12 +97,15 @@ impl PlaySession {
         }
     }
 
-    /// Start `project`'s game from its folder, ending any game already running. Fails when the folder has neither a
+    /// Start `project`'s game from its folder, ending any game already running: `declared` when the manifest names a
+    /// run command, otherwise an inferred one. Fails when nothing is declared and the folder has neither a
     /// `package.json` with a `dev` script nor a `Cargo.toml`, or the command cannot start.
-    pub fn start(&mut self, project: &str, folder: &Path) -> Result<(), String> {
+    pub fn start(&mut self, project: &str, folder: &Path, declared: Option<&ProjectRunCommand>) -> Result<(), String> {
         self.stop();
         let package = std::fs::read_to_string(folder.join(PACKAGE_MANIFEST)).ok();
-        let command = if package.as_deref().is_some_and(defines_dev_script) {
+        let command = if let Some(declared) = declared {
+            LaunchCommand::Declared(declared.clone())
+        } else if package.as_deref().is_some_and(defines_dev_script) {
             LaunchCommand::NpmDev
         } else if folder.join(CARGO_MANIFEST).is_file() {
             LaunchCommand::CargoRun
@@ -141,7 +148,17 @@ impl PlaySession {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn spawn(&mut self, project: &str, folder: &Path, command: LaunchCommand) -> Result<(), String> {
+        let mut directory = folder.to_path_buf();
         let mut process = match command {
+            LaunchCommand::Declared(declared) => {
+                if let Some(relative) = &declared.directory {
+                    directory = folder.join(relative);
+                }
+                // A bare program name resolves on PATH; Windows batch launchers need their `.cmd` name spelled out.
+                let mut process = std::process::Command::new(&declared.command);
+                process.args(&declared.arguments);
+                process
+            }
             LaunchCommand::NpmDev => {
                 // npm is a batch script on Windows, which `Command` runs only through its `.cmd` name.
                 let mut process = std::process::Command::new(if cfg!(windows) { "npm.cmd" } else { "npm" });
@@ -155,7 +172,7 @@ impl PlaySession {
             }
         };
         let child = process
-            .current_dir(folder)
+            .current_dir(&directory)
             .stdin(std::process::Stdio::null())
             .spawn()
             .map_err(|error| format!("Could not start {project}: {error}"))?;

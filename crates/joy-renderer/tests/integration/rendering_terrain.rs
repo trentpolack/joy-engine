@@ -557,3 +557,56 @@ fn streamed_surfaces_refine_and_upload_only_changed_tiles() {
     assert!(edited.uploaded_tiles > 0 && edited.uploaded_tiles < edited.drawn_patches, "{edited:?}");
     assert!(difference(&first, &cratered) > 0.05, "the crater shows in the frame");
 }
+
+#[test]
+fn buffer_overview_shows_every_frame_buffer_in_its_tile() {
+    let Some(gpu) = gpu(BackendPreference::Auto) else {
+        return;
+    };
+    let asset = dragon_pit();
+    let (scene, _terrain, focus) = scene(&asset);
+    let effects = SceneEffectsOptions {
+        taa: Some(Default::default()),
+        ..Default::default()
+    };
+    let mut renderer = scene_renderer(&gpu, Some(effects));
+    renderer.set_buffer_overview(true);
+    let overview = render_scene(&gpu, &mut renderer, &scene, focus, 3).expect("overview renders");
+    save("buffer-overview", &overview);
+    assert_eq!(renderer.debug_view(), DebugView::Lit, "the overview restores the selected debug view");
+
+    // Each tile's mean color, sampled inside its cell.
+    let mean = |index: usize| -> [f32; 3] {
+        let [x, y, width, height] = joy_renderer::buffer_overview_tile_rect(
+            index,
+            WIDTH as f32,
+            HEIGHT as f32,
+            joy_renderer::BUFFER_OVERVIEW_GAP,
+        );
+        let mut sum = [0.0_f32; 3];
+        let mut count = 0.0;
+        for row in (y as u32 + 2)..((y + height) as u32 - 2) {
+            for column in (x as u32 + 2)..((x + width) as u32 - 2) {
+                let offset = ((row * WIDTH + column) * 4) as usize;
+                for channel in 0..3 {
+                    sum[channel] += f32::from(overview[offset + channel]);
+                }
+                count += 1.0;
+            }
+        }
+        sum.map(|value| value / count)
+    };
+    let tiles = joy_renderer::BUFFER_OVERVIEW_TILES;
+    let index_of = |tile| tiles.iter().position(|candidate| *candidate == tile).expect("tile present");
+    let lit = mean(index_of(joy_renderer::OverviewTile::View(DebugView::Lit)));
+    let normals = mean(index_of(joy_renderer::OverviewTile::View(DebugView::Normals)));
+    let depth = mean(index_of(joy_renderer::OverviewTile::Depth));
+    assert!(lit.iter().sum::<f32>() > 30.0, "the final color tile shows the lit frame: {lit:?}");
+    assert!(normals[1] > normals[0], "the normals tile shows upward-facing terrain: {normals:?}");
+    assert!(depth[0] > 5.0 && (depth[0] - depth[1]).abs() < 2.0, "the depth tile is a gray ramp: {depth:?}");
+
+    // Turning the overview off returns to the single frame.
+    renderer.set_buffer_overview(false);
+    let single = render_scene(&gpu, &mut renderer, &scene, focus, 1).expect("frame renders");
+    assert!(difference(&single, &overview) > 5.0);
+}

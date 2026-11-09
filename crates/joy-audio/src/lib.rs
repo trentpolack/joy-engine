@@ -8,11 +8,13 @@
 //! Native builds mix voices onto the system output through cpal and play immediately. Browsers play through Web Audio,
 //! which stays suspended until the page receives a gesture: the bank resumes itself on the next pointer, touch, or key
 //! press, games may call [`AudioBank::resume`] from input too, and [`AudioBank::play`] returns false until audio runs.
-//! A machine without an audio device gets a silent bank whose `play` returns false.
+//! A machine without an audio device gets a silent bank whose `play` returns false. [`synth`] renders procedural cues
+//! into the PCM banks take.
 
 mod decode;
 #[cfg(not(target_arch = "wasm32"))]
 mod native;
+pub mod synth;
 #[cfg(target_arch = "wasm32")]
 mod web;
 

@@ -13,7 +13,6 @@ use std::collections::HashMap;
 
 use joy_engine::development::editor_shell::{
     StatusTone,
-    call_to_action,
     chip_button,
     chip_menu_button,
     overflow_button,
@@ -121,8 +120,6 @@ use crate::interaction::widgets::{
 const SNAP_CHOICES: [f32; 6] = [0.0, 0.25, 0.5, 1.0, 2.0, 5.0];
 /// Width of the viewport's View settings popover.
 const VIEW_SETTINGS_WIDTH: f32 = 250.0;
-/// Width of the empty-scene card.
-const EMPTY_CARD_WIDTH: f32 = 520.0;
 /// Height of one outliner row.
 const OUTLINER_ROW_HEIGHT: f32 = 40.0;
 /// Height of one inspector row of controls.
@@ -221,7 +218,7 @@ impl LevelUi {
                 };
                 joy_engine::runtime::ui_layout::show_region(ui, "viewport-pane", center, |ui| {
                     self.viewport(ui, center, level, controls);
-                    self.viewport_overlay(ui, center, level, access, controls);
+                    self.viewport_overlay(ui, center, level, controls);
                 });
             }
             if let Some(left) = panes.left {
@@ -336,7 +333,7 @@ impl LevelUi {
                     self.dialog = Some(LevelDialog::SaveObject(level.suggested_object_path()));
                 }
                 let delete =
-                    ui.add_enabled(has_selection, egui::Button::new(RichText::new("Delete").color(colors::DANGER)));
+                    ui.add_enabled(has_selection, egui::Button::new(RichText::new("Delete").color(colors::danger())));
                 if controls.mark("delete", delete).clicked() {
                     level.remove_selected();
                 }
@@ -376,7 +373,8 @@ impl LevelUi {
             ui.set_min_width(220.0);
             if objects.is_empty() {
                 ui.label(
-                    RichText::new("No reusable objects yet. Save a selection as an object first.").color(colors::MUTED),
+                    RichText::new("No reusable objects yet. Save a selection as an object first.")
+                        .color(colors::muted()),
                 );
             }
             for path in &objects {
@@ -397,7 +395,7 @@ impl LevelUi {
     // -----------------------------------------------------------------------------------------------------------------
 
     fn outliner(&mut self, ui: &mut Ui, rect: Rect, level: &mut LevelEditor, controls: &mut ControlMap) {
-        ui.painter().rect_filled(rect, 0.0, colors::PANEL);
+        ui.painter().rect_filled(rect, 0.0, colors::panel());
         widgets::edge(ui, rect.right_top(), rect.right_bottom());
         let total = level.document().level().entities.len();
         let filtered = level.filtered_entities().len();
@@ -415,7 +413,7 @@ impl LevelUi {
             |ui| {
                 panel_title(ui, "Scene");
                 ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                    let label = ui.label(RichText::new(&count).size(layout::TYPE_MD).color(colors::MUTED));
+                    let label = ui.label(RichText::new(&count).size(layout::TYPE_MD).color(colors::muted()));
                     controls.mark("entity-count", label);
                 });
             },
@@ -450,15 +448,19 @@ impl LevelUi {
                         ui.allocate_exact_size(vec2(ui.available_width(), OUTLINER_ROW_HEIGHT), Sense::click());
                     let painter = ui.painter();
                     if active {
-                        painter.rect_filled(row, 0.0, colors::SURFACE);
-                        painter.rect_filled(Rect::from_min_size(row.min, vec2(3.0, row.height())), 0.0, colors::ACCENT);
+                        painter.rect_filled(row, 0.0, colors::surface());
+                        painter.rect_filled(
+                            Rect::from_min_size(row.min, vec2(3.0, row.height())),
+                            0.0,
+                            colors::accent(),
+                        );
                     } else if response.hovered() {
-                        painter.rect_filled(row, 0.0, colors::SURFACE.gamma_multiply(0.6));
+                        painter.rect_filled(row, 0.0, colors::surface().gamma_multiply(0.6));
                     }
                     let marker = Rect::from_center_size(pos2(row.min.x + 20.0, row.center().y), vec2(8.0, 8.0));
                     painter.add(egui::Shape::convex_polygon(
                         vec![marker.center_top(), marker.right_center(), marker.center_bottom(), marker.left_center()],
-                        colors::MUTED.gamma_multiply(0.7),
+                        colors::muted().gamma_multiply(0.7),
                         Stroke::NONE,
                     ));
                     // The type sits at the right edge when the name leaves room for it; the name truncates otherwise.
@@ -466,14 +468,14 @@ impl LevelUi {
                     let kind_galley = painter.layout_no_wrap(
                         kind.clone(),
                         egui::FontId::proportional(layout::TYPE_SM),
-                        colors::MUTED,
+                        colors::muted(),
                     );
                     let name_left = row.min.x + 36.0;
                     let kind_space = if name.is_empty() { 0.0 } else { kind_galley.size().x + 16.0 };
                     let mut job = egui::text::LayoutJob::simple_singleline(
                         label,
                         egui::FontId::proportional(layout::TYPE_MD + 1.0),
-                        colors::TEXT,
+                        colors::text(),
                     );
                     job.wrap = egui::text::TextWrapping::truncate_at_width(
                         (row.max.x - 10.0 - kind_space - name_left).max(24.0),
@@ -483,14 +485,14 @@ impl LevelUi {
                     painter.galley(
                         pos2(name_left, row.center().y - (name_galley.size().y / 2.0)),
                         name_galley,
-                        colors::TEXT,
+                        colors::text(),
                     );
                     if !name.is_empty() && name_left + name_width + 16.0 + kind_galley.size().x <= row.max.x - 10.0 {
                         let kind_position = pos2(
                             row.max.x - 10.0 - kind_galley.size().x,
                             row.center().y - (kind_galley.size().y / 2.0),
                         );
-                        painter.galley(kind_position, kind_galley, colors::MUTED);
+                        painter.galley(kind_position, kind_galley, colors::muted());
                     }
                     controls.mark(format!("entity:{id}"), response.clone());
                     if response.clicked() {
@@ -507,7 +509,7 @@ impl LevelUi {
             } else {
                 "Select an entity to edit its transform and components."
             };
-            ui.label(RichText::new(hint).size(layout::TYPE_MD).color(colors::MUTED));
+            ui.label(RichText::new(hint).size(layout::TYPE_MD).color(colors::muted()));
         });
     }
 
@@ -545,7 +547,7 @@ impl LevelUi {
             }
         }
         if actions.response.has_focus() {
-            let outline = Stroke::new(1.0, colors::ACCENT.gamma_multiply(0.6));
+            let outline = Stroke::new(1.0, colors::accent().gamma_multiply(0.6));
             ui.painter().rect_stroke(rect.shrink(1.0), 0.0, outline, egui::StrokeKind::Inside);
         }
         self.gizmo(ui, level, controls);
@@ -561,7 +563,7 @@ impl LevelUi {
                 GizmoHandle::X => Color32::from_rgb(0xe8, 0x5a, 0x4f),
                 GizmoHandle::Y => Color32::from_rgb(0x8f, 0xd1, 0x6a),
                 GizmoHandle::Z => Color32::from_rgb(0x5a, 0x9b, 0xe8),
-                GizmoHandle::Plane => colors::ACCENT,
+                GizmoHandle::Plane => colors::accent(),
             };
             let mut grips = Vec::new();
             if line.handle == GizmoHandle::Plane {
@@ -601,14 +603,7 @@ impl LevelUi {
         }
     }
 
-    fn viewport_overlay(
-        &mut self,
-        ui: &mut Ui,
-        rect: Rect,
-        level: &mut LevelEditor,
-        access: &mut dyn AssetAccess,
-        controls: &mut ControlMap,
-    ) {
+    fn viewport_overlay(&mut self, ui: &mut Ui, rect: Rect, level: &mut LevelEditor, controls: &mut ControlMap) {
         // Top chips: Frame on the left, View settings on the right.
         let bar = rect.shrink2(vec2(20.0, 20.0));
         let bar = Rect::from_min_size(bar.min, vec2(bar.width().max(0.0), 36.0));
@@ -637,10 +632,6 @@ impl LevelUi {
             self.view_settings(ui, rect, anchor, level, controls);
         }
 
-        if level.viewport.instance_count() == 0 && !level.object_mode() {
-            self.empty_scene(ui, rect, level, access, controls);
-        }
-
         // Bottom hints: camera gestures on the left, the world axes on the right.
         let corner =
             Rect::from_min_size(pos2(rect.min.x + 20.0, rect.max.y - 34.0), vec2((rect.width() - 40.0).max(0.0), 24.0));
@@ -649,12 +640,14 @@ impl LevelUi {
             |ui| {
                 let hint = egui::FontId::monospace(layout::TYPE_SM + 1.0);
                 ui.label(
-                    RichText::new("Drag orbit · Shift drag pan · Scroll zoom").font(hint.clone()).color(colors::MUTED),
+                    RichText::new("Drag orbit · Shift drag pan · Scroll zoom")
+                        .font(hint.clone())
+                        .color(colors::muted()),
                 );
                 ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 18.0;
                     for axis in ["Z ↙", "X →", "Y ↑"] {
-                        ui.label(RichText::new(axis).font(hint.clone()).color(colors::SLIDER_EDGE));
+                        ui.label(RichText::new(axis).font(hint.clone()).color(colors::slider_edge()));
                     }
                 });
             },
@@ -675,8 +668,8 @@ impl LevelUi {
             Rect::from_min_size(top_left, vec2(VIEW_SETTINGS_WIDTH, (viewport.max.y - top_left.y - 50.0).max(0.0)));
         ui.scope_builder(egui::UiBuilder::new().max_rect(area).layout(egui::Layout::top_down(Align::LEFT)), |ui| {
             let frame = egui::Frame::new()
-                .fill(colors::HEADER)
-                .stroke(Stroke::new(1.0, colors::LINE))
+                .fill(colors::header())
+                .stroke(Stroke::new(1.0, colors::line()))
                 .corner_radius(layout::RADIUS_SM)
                 .inner_margin(12.0);
             let shown = frame.show(ui, |ui| {
@@ -701,56 +694,6 @@ impl LevelUi {
         });
     }
 
-    /// The empty-scene card: what the level holds so far and the two ways to start building it.
-    fn empty_scene(
-        &mut self,
-        ui: &mut Ui,
-        viewport: Rect,
-        level: &mut LevelEditor,
-        access: &mut dyn AssetAccess,
-        controls: &mut ControlMap,
-    ) {
-        let width = EMPTY_CARD_WIDTH.min(viewport.width() - 40.0).max(0.0);
-        let card = Rect::from_center_size(viewport.center(), vec2(width, 300.0));
-        ui.painter().rect(
-            card,
-            layout::RADIUS_SM,
-            colors::HEADER,
-            Stroke::new(1.0, colors::LINE),
-            egui::StrokeKind::Inside,
-        );
-        let mark = Rect::from_center_size(pos2(card.center().x, card.min.y + 64.0), vec2(30.0, 30.0));
-        ui.painter().add(egui::Shape::closed_line(
-            vec![mark.center_top(), mark.right_center(), mark.center_bottom(), mark.left_center()],
-            Stroke::new(1.6, colors::ACCENT),
-        ));
-        let inner = Rect::from_min_max(pos2(card.min.x + 24.0, mark.max.y + 22.0), card.max - vec2(24.0, 24.0));
-        ui.scope_builder(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::top_down(Align::Center)), |ui| {
-            ui.label(
-                RichText::new("Start building the scene")
-                    .font(egui::FontId::new(layout::TYPE_LG + 10.0, text_styles::strong_family()))
-                    .color(colors::TEXT),
-            );
-            ui.add_space(8.0);
-            let detail = if level.document().level().entities.is_empty() {
-                "Your level has no objects yet."
-            } else {
-                "Your level has scene settings and no visible objects yet."
-            };
-            ui.label(RichText::new(detail).size(layout::TYPE_LG).color(colors::MUTED));
-            ui.add_space(18.0);
-            ui.horizontal(|ui| {
-                let buttons = 170.0 + 150.0;
-                ui.add_space(((ui.available_width() - buttons) / 2.0).max(0.0));
-                let add = call_to_action(ui, "+ Add Primitive");
-                if controls.mark("empty-add-primitive", add).clicked() {
-                    level.add_primitive(false);
-                }
-                self.place_asset_menu(ui, level, access, controls);
-            });
-        });
-    }
-
     // -----------------------------------------------------------------------------------------------------------------
     // Inspector
     // -----------------------------------------------------------------------------------------------------------------
@@ -763,7 +706,7 @@ impl LevelUi {
         access: &mut dyn AssetAccess,
         controls: &mut ControlMap,
     ) {
-        ui.painter().rect_filled(rect, 0.0, colors::PANEL);
+        ui.painter().rect_filled(rect, 0.0, colors::panel());
         widgets::edge(ui, rect.left_top(), rect.left_bottom());
         let heading_rect = Rect::from_min_size(rect.min, vec2(rect.width(), PANEL_HEADING_HEIGHT));
         widgets::edge(ui, heading_rect.left_bottom(), heading_rect.right_bottom());
@@ -789,7 +732,7 @@ impl LevelUi {
                     (FieldKey::EntityType, "TYPE", resolved.kind.clone(), ""),
                     (FieldKey::EntityTags, "TAGS", resolved.tags.join(", "), "comma, separated"),
                 ] {
-                    caption(ui, label, colors::MUTED);
+                    caption(ui, label, colors::muted());
                     let draft = level.drafts().get(&key).cloned();
                     let name = format!("{key:?}");
                     let (response, event) =
@@ -800,15 +743,15 @@ impl LevelUi {
 
                 if let Some(template) = &selected.template {
                     ui.add_space(4.0);
-                    egui::Frame::new().fill(colors::SURFACE).inner_margin(8.0).show(ui, |ui| {
+                    egui::Frame::new().fill(colors::surface()).inner_margin(8.0).show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
-                        caption(ui, "LINKED OBJECT", colors::ACCENT);
+                        caption(ui, "LINKED OBJECT", colors::accent());
                         ui.label(RichText::new(template).monospace().size(layout::TYPE_XS));
                         let groups = selected.overrides.as_ref().map_or(0, |overrides| overrides.len());
                         ui.label(
                             RichText::new(format!("{groups} override groups"))
                                 .size(layout::TYPE_XS)
-                                .color(colors::MUTED),
+                                .color(colors::muted()),
                         );
                         ui.horizontal_wrapped(|ui| {
                             if controls.mark("edit-object", button(ui, "EDIT SOURCE ↗")).clicked() {
@@ -827,14 +770,14 @@ impl LevelUi {
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     heading(ui, "TRANSFORM");
-                    caption(ui, "WORLD SPACE", colors::MUTED);
+                    caption(ui, "WORLD SPACE", colors::muted());
                 });
                 for field in TransformField::ALL {
-                    caption(ui, field.label(), colors::MUTED);
+                    caption(ui, field.label(), colors::muted());
                     ui.horizontal(|ui| {
                         let channel_width = ((width / 3.0) - 6.0).max(40.0);
                         for (axis, axis_label) in ["X", "Y", "Z"].iter().enumerate() {
-                            ui.label(RichText::new(*axis_label).size(layout::TYPE_XS).color(colors::MUTED));
+                            ui.label(RichText::new(*axis_label).size(layout::TYPE_XS).color(colors::muted()));
                             let key = FieldKey::Transform(field, axis);
                             let current = level.transform_value(field, axis).map(f64::from).unwrap_or(0.0);
                             let draft = level.drafts().get(&key).cloned();
@@ -866,7 +809,7 @@ impl LevelUi {
                         ui.label(
                             RichText::new("Optional component source and repair view.")
                                 .size(layout::TYPE_XS)
-                                .color(colors::MUTED),
+                                .color(colors::muted()),
                         );
                         let editor = ui
                             .allocate_ui(vec2(ui.available_width(), 220.0), |ui| {
@@ -889,7 +832,7 @@ impl LevelUi {
     /// The inspector with nothing selected: the level document, its scene, and viewport-only previews.
     fn level_settings(&mut self, ui: &mut Ui, level: &mut LevelEditor, controls: &mut ControlMap) {
         section_label(ui, "DOCUMENT");
-        ui.label(RichText::new("Level name").size(layout::TYPE_MD + 1.0).color(colors::TEXT));
+        ui.label(RichText::new("Level name").size(layout::TYPE_MD + 1.0).color(colors::text()));
         let name = level.document().level().name.clone();
         let key = FieldKey::LevelName;
         let draft = level.drafts().get(&key).cloned();
@@ -897,7 +840,7 @@ impl LevelUi {
             draft_field(ui, Id::new("level-name"), &name, draft.as_ref(), ui.available_width(), false, "");
         controls.mark("level-name", response);
         apply_text_event(level, key, event);
-        ui.label(RichText::new("Y-up · World units in meters").size(layout::TYPE_MD).color(colors::MUTED));
+        ui.label(RichText::new("Y-up · World units in meters").size(layout::TYPE_MD).color(colors::muted()));
         ui.add_space(10.0);
         ui.separator();
 
@@ -909,7 +852,7 @@ impl LevelUi {
                 entity_count_label(entities)
             ))
             .size(layout::TYPE_MD)
-            .color(colors::MUTED),
+            .color(colors::muted()),
         );
         ui.add_space(10.0);
         ui.separator();
@@ -920,7 +863,7 @@ impl LevelUi {
         ui.label(
             RichText::new("Preview enablement does not change the saved scene.")
                 .size(layout::TYPE_MD)
-                .color(colors::MUTED),
+                .color(colors::muted()),
         );
     }
 
@@ -949,7 +892,7 @@ impl LevelUi {
                     for schema in level.schemas().list() {
                         if schema.category != category {
                             category = schema.category.clone();
-                            ui.label(RichText::new(&category).size(layout::TYPE_XS).color(colors::MUTED));
+                            ui.label(RichText::new(&category).size(layout::TYPE_XS).color(colors::muted()));
                         }
                         for preset in &schema.presets {
                             let selected = choice == ComponentChoice::Preset(preset.id.clone());
@@ -961,7 +904,7 @@ impl LevelUi {
                             }
                         }
                     }
-                    ui.label(RichText::new("Custom").size(layout::TYPE_XS).color(colors::MUTED));
+                    ui.label(RichText::new("Custom").size(layout::TYPE_XS).color(colors::muted()));
                     if ui.selectable_label(choice == ComponentChoice::Custom, "  Custom Properties").clicked() {
                         choice = ComponentChoice::Custom;
                     }
@@ -1030,7 +973,7 @@ impl LevelUi {
     ) {
         match node {
             PropertyNode::Note(text) => {
-                ui.label(RichText::new(text).size(layout::TYPE_XS).color(colors::MUTED));
+                ui.label(RichText::new(text).size(layout::TYPE_XS).color(colors::muted()));
             }
             PropertyNode::Group(group) => self.group(ui, group, level, components, actions, controls),
             PropertyNode::Field(field) => {
@@ -1039,7 +982,7 @@ impl LevelUi {
                     if field.inactive.is_some() {
                         ui.multiply_opacity(0.45);
                     }
-                    let label_color = if field.issue.is_some() { colors::DANGER } else { colors::MUTED };
+                    let label_color = if field.issue.is_some() { colors::danger() } else { colors::muted() };
                     let tooltip =
                         field.issue.clone().or_else(|| field.inactive.clone()).or_else(|| field.description.clone());
                     let label =
@@ -1192,7 +1135,7 @@ impl LevelUi {
                     if vector.inactive.is_some() {
                         ui.multiply_opacity(0.45);
                     }
-                    let color = if vector.issue.is_some() { colors::DANGER } else { colors::MUTED };
+                    let color = if vector.issue.is_some() { colors::danger() } else { colors::muted() };
                     let label = ui.label(RichText::new(&vector.label).size(layout::TYPE_XS).color(color));
                     if let Some(tooltip) =
                         vector.issue.clone().or_else(|| vector.inactive.clone()).or_else(|| vector.description.clone())
@@ -1203,7 +1146,7 @@ impl LevelUi {
                         let count = vector.values.len().max(1) as f32;
                         let channel_width = ((ui.available_width() / count) - 20.0).max(30.0);
                         for (index, channel) in vector.channels.iter().enumerate() {
-                            ui.label(RichText::new(*channel).size(layout::TYPE_XS).color(colors::MUTED));
+                            ui.label(RichText::new(*channel).size(layout::TYPE_XS).color(colors::muted()));
                             let draft_key = FieldKey::PropertyChannel(vector.path.clone(), index);
                             let draft = level.drafts().get(&draft_key).cloned();
                             let value = vector.values[index];
@@ -1240,23 +1183,23 @@ impl LevelUi {
         let key = group.path.join(".");
         let mut title = RichText::new(group.label.to_uppercase()).size(layout::TYPE_SM).strong();
         if !group.issues.is_empty() {
-            title = title.color(colors::DANGER);
+            title = title.color(colors::danger());
         }
-        let fill = if group.component { colors::HEADER } else { Color32::TRANSPARENT };
-        let stroke = Stroke::new(if group.component { 1.0 } else { 0.0 }, colors::LINE);
+        let fill = if group.component { colors::header() } else { Color32::TRANSPARENT };
+        let stroke = Stroke::new(if group.component { 1.0 } else { 0.0 }, colors::line());
         let frame = egui::Frame::new().fill(fill).stroke(stroke).inner_margin(if group.component { 8.0 } else { 2.0 });
         frame.show(ui, |ui| {
             let header =
                 egui::CollapsingHeader::new(title).id_salt(("group", &key)).default_open(group.open).show(ui, |ui| {
                     if let Some(type_name) = &group.type_name {
-                        ui.label(RichText::new(type_name).size(layout::TYPE_XS).color(colors::MUTED));
+                        ui.label(RichText::new(type_name).size(layout::TYPE_XS).color(colors::muted()));
                     }
                     if let Some(description) = &group.description {
-                        ui.label(RichText::new(description).size(layout::TYPE_XS).color(colors::MUTED));
+                        ui.label(RichText::new(description).size(layout::TYPE_XS).color(colors::muted()));
                     }
                     for issue in &group.issues {
                         let label =
-                            ui.label(RichText::new(format!("• {issue}")).size(layout::TYPE_XS).color(colors::DANGER));
+                            ui.label(RichText::new(format!("• {issue}")).size(layout::TYPE_XS).color(colors::danger()));
                         controls.mark(format!("issue:{key}:{issue}"), label);
                     }
                     for child in &group.children {
@@ -1508,14 +1451,14 @@ fn panel_title(ui: &mut Ui, text: &str) {
     ui.label(
         RichText::new(text)
             .font(egui::FontId::new(layout::TYPE_LG + 1.0, text_styles::strong_family()))
-            .color(colors::TEXT),
+            .color(colors::text()),
     );
 }
 
 /// A small spaced capital section label (`DOCUMENT`, `VIEWPORT ONLY`).
 fn section_label(ui: &mut Ui, text: &str) {
     ui.add_space(4.0);
-    caption(ui, text, colors::MUTED);
+    caption(ui, text, colors::muted());
 }
 
 /// `1 entity` or `N entities`.
@@ -1531,7 +1474,7 @@ fn quiet_toggle(ui: &mut Ui, label: &str, selected: bool) -> egui::Response {
             pos2(response.rect.min.x + 10.0, response.rect.max.y - 2.0),
             pos2(response.rect.max.x - 10.0, response.rect.max.y),
         );
-        ui.painter().rect_filled(underline, 0.0, colors::ACCENT);
+        ui.painter().rect_filled(underline, 0.0, colors::accent());
     }
     response
 }

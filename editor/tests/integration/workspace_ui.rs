@@ -318,3 +318,31 @@ fn level_name(driver: &Driver) -> String {
         _ => panic!("level tab"),
     }
 }
+
+#[test]
+fn every_bundled_palette_restyles_the_whole_editor() {
+    use joy_engine::runtime::theme::{
+        palettes,
+        set_palette,
+    };
+    let Some(shell) = ui_shell() else {
+        return;
+    };
+    let workspace = sample_workspace();
+    let mut driver = Driver::start(shell, editor(&workspace.root, None, ToolRegistry::new(), Some("demo")));
+    assert!(driver.has("theme-menu"), "the header offers the theme menu");
+
+    // Light palettes switch egui's base visuals too, so stock widgets match the palette.
+    set_palette(&driver.ui().clone(), palettes::NEUTRAL_LIGHT);
+    driver.frames(4);
+    assert!(!driver.ui().global_style().visuals.dark_mode);
+    driver.capture("workspace-theme-neutral-light");
+
+    set_palette(&driver.ui().clone(), palettes::NEUTRAL_DARK);
+    driver.frames(4);
+    assert!(driver.ui().global_style().visuals.dark_mode);
+    driver.capture("workspace-theme-neutral-dark");
+
+    // The palette is per thread; restore the default for later tests on this thread.
+    set_palette(&driver.ui().clone(), palettes::JOY);
+}

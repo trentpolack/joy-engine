@@ -53,8 +53,8 @@ pub fn resource_group(
     let mut color_response: Option<ControlResponse> = None;
     let (mut color, metallic, roughness) = material_factors(&parameter.value);
     ui.horizontal(|ui| {
-        ui.label(RichText::new(parameter.kind.badge()).color(colors::MUTED).size(layout::TYPE_SM));
-        let title_label = ui.label(RichText::new(title).color(colors::TEXT).strong());
+        ui.label(RichText::new(parameter.kind.badge()).color(colors::muted()).size(layout::TYPE_SM));
+        let title_label = ui.label(RichText::new(title).color(colors::text()).strong());
         if let Some(info) = &parameter.text.info {
             title_label.on_hover_text(info.as_str());
         }

@@ -6,7 +6,7 @@
 //!
 //! Lifecycle and control contracts:
 //! - Spawning registers the entity, attaches runtime components for authored types the [`ComponentRegistry`] knows or
-//!   the engine provides (`physics` and `vehicle`, which create the entity's body; a registered factory replaces them),
+//!   the engine provides (`physics`, which creates the entity's body; a registered factory replaces them),
 //!   in authored order, and then runs the behavior's `on_spawn`. Any failure removes the entity again, running the same
 //!   teardown as [`EntityWorld::remove`], before the error is returned. A successful spawn sends
 //!   [`EntitySpawned`](super::EntitySpawned) and a removal sends [`EntityRemoved`](super::EntityRemoved).
@@ -174,7 +174,7 @@ impl EntityWorld {
     ///
     /// Ownership is detached first, then possession is released (clearing intent and calling `reset_control`), then
     /// `on_destroy` runs, then runtime components detach in reverse attachment order (each `on_detach`, then drop), and
-    /// finally the body the context lists for the entity (with any vehicle it carries) is removed from physics and the
+    /// finally the body the context lists for the entity is removed from physics and the
     /// entity's timers are cancelled.
     pub fn remove(&mut self, id: &EntityId, context: &mut SimulationContext<'_>) -> bool {
         let Some(mut entity) = self.entities.shift_remove(id) else {
@@ -194,7 +194,7 @@ impl EntityWorld {
             component.on_detach(&mut entity.state, context);
         }
 
-        // The body listed for the entity (and the vehicle a chassis carries) is entity-owned.
+        // The body listed for the entity is entity-owned.
         if let Some(body) = context.body(id) {
             context.detach_body(id, body);
         }

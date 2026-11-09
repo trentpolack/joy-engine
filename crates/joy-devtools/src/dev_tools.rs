@@ -25,6 +25,8 @@ use crate::{
     dock::DockTool,
 };
 use joy_renderer::{
+    BUFFER_OVERVIEW_GAP,
+    BUFFER_OVERVIEW_TILES,
     DebugView,
     FrameProfile,
     Renderer,
@@ -166,6 +168,7 @@ impl DevTools {
             return;
         }
         self.stat_overlays(context, profile);
+        self.buffer_overview_labels(context);
         self.console.ui(context);
         if std::mem::take(&mut self.toggle_requested) {
             let open = dock::open_tool(context) == Some(DockTool::Stats);
@@ -317,6 +320,10 @@ impl DevTools {
         if selected != current {
             let _ = variables.set(render_variables::DEBUG_VIEW, selected.name());
         }
+        let mut overview = variables.bool(render_variables::BUFFER_OVERVIEW).unwrap_or(false);
+        if ui.checkbox(&mut overview, "Buffer overview").on_hover_text("Every frame buffer in one grid").changed() {
+            let _ = variables.set(render_variables::BUFFER_OVERVIEW, if overview { "1" } else { "0" });
+        }
         let mut profiling = variables.bool(render_variables::PROFILE).unwrap_or(false);
         if ui.checkbox(&mut profiling, "Profile frame phases").changed() {
             let _ = variables.set(render_variables::PROFILE, if profiling { "1" } else { "0" });
@@ -324,6 +331,26 @@ impl DevTools {
         let mut deferred = variables.bool(render_variables::DEFERRED).unwrap_or(true);
         if ui.checkbox(&mut deferred, "Deferred lighting (where supported)").changed() {
             let _ = variables.set(render_variables::DEFERRED, if deferred { "1" } else { "0" });
+        }
+    }
+
+    /// Each Buffer Overview tile's name in its top-left corner, while the overview shows.
+    fn buffer_overview_labels(&mut self, context: &egui::Context) {
+        if !self.console.variables_mut().bool(render_variables::BUFFER_OVERVIEW).unwrap_or(false) {
+            return;
+        }
+        let screen = context.content_rect();
+        let painter =
+            context.layer_painter(egui::LayerId::new(egui::Order::Background, egui::Id::new("buffer-overview")));
+        let font = egui::FontId::new(12.0, joy_ui::theme::text_styles::code_family());
+        for (index, tile) in BUFFER_OVERVIEW_TILES.iter().enumerate() {
+            let [x, y, _, _] =
+                joy_renderer::buffer_overview_tile_rect(index, screen.width(), screen.height(), BUFFER_OVERVIEW_GAP);
+            let anchor = screen.min + egui::vec2(x + 6.0, y + 4.0);
+            let text = painter.layout_no_wrap(tile.label().to_owned(), font.clone(), egui::Color32::WHITE);
+            let backing = egui::Rect::from_min_size(anchor, text.size()).expand2(egui::vec2(5.0, 2.0));
+            painter.rect_filled(backing, 2.0, egui::Color32::from_black_alpha(170));
+            painter.galley(anchor, text, egui::Color32::WHITE);
         }
     }
 

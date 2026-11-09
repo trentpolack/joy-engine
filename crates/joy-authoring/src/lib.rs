@@ -32,6 +32,7 @@ pub use authoring_tool::{
     ToolDocument,
     ToolFileReader,
     ToolHosting,
+    ToolPreviewState,
 };
 pub use choice_controls::{
     choice_control,

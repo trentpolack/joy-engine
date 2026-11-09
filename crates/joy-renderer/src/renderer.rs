@@ -59,6 +59,12 @@ use joy_render_types::{
 use wgpu::util::DeviceExt;
 
 use crate::RenderError;
+use crate::buffer_overview::{
+    BUFFER_OVERVIEW_GAP,
+    BUFFER_OVERVIEW_TILES,
+    BufferOverview,
+    OverviewTile,
+};
 use crate::camera::{
     Camera,
     CameraFrame,
@@ -485,6 +491,9 @@ pub struct Renderer {
     shadow_planner: ShadowPlanner,
     scratch: FrameScratch,
     diagnostics: RendererDiagnostics,
+    // Buffer Overview: whether frames draw as the buffer grid, and its resources once first used.
+    overview_enabled: bool,
+    overview: Option<BufferOverview>,
 }
 
 impl Renderer {
@@ -633,6 +642,8 @@ impl Renderer {
             shadow_planner: ShadowPlanner::default(),
             scratch: FrameScratch::default(),
             diagnostics,
+            overview_enabled: false,
+            overview: None,
         };
         if let Err(error) = renderer.set_scene_effects(options.scene_effects) {
             log::error!("Scene effects are disabled: {error}");
@@ -928,6 +939,20 @@ impl Renderer {
         self.resources.debug_view
     }
 
+    /// Whether frames draw as the Buffer Overview grid ([`BUFFER_OVERVIEW_TILES`](crate::BUFFER_OVERVIEW_TILES)).
+    pub fn buffer_overview(&self) -> bool {
+        self.overview_enabled
+    }
+
+    /// Draw every frame as the Buffer Overview grid from the next frame, or return to the single view. The overview
+    /// redraws the frame once per tile, so it is for development inspection only.
+    pub fn set_buffer_overview(&mut self, enabled: bool) {
+        self.overview_enabled = enabled;
+        if !enabled {
+            self.overview = None;
+        }
+    }
+
     /// Draw mesh and terrain surfaces as `view` from the next frame ([`DebugView::Lit`] restores the lit scene).
     pub fn set_debug_view(&mut self, view: DebugView) {
         self.resources.debug_view = view;
@@ -1005,6 +1030,10 @@ impl Renderer {
         validate_frame(inputs)?;
 
         let camera_frame = self.camera_frame(camera);
+        if self.overview_enabled {
+            // The overview submits its own work per tile, ahead of whatever the host appends to `encoder`.
+            return self.encode_buffer_overview(scene, inputs, output, camera_frame);
+        }
         self.profiler.begin_frame(self.resources.gpu.device());
         self.profiler.mark(encoder, FramePhase::Prepare);
         let result = self.encode_frame(encoder, scene, inputs, output, camera_frame);
@@ -1013,6 +1042,108 @@ impl Renderer {
             // The planner already counted this frame's shadow maps as rendered; render them all on the next frame.
             Err(_) => self.shadow_planner.invalidate(),
         }
+        result
+    }
+
+    /// Draw the Buffer Overview into `output`: the lit frame (with scene effects) and its depth and motion targets
+    /// first, then every other tile's debug view with scene effects suspended, each submitted before the next renders
+    /// into the shared offscreen frame. Restores the debug view and effects afterwards, even on failure.
+    fn encode_buffer_overview(
+        &mut self,
+        scene: &RenderScene,
+        inputs: &FrameInputs<'_>,
+        output: &wgpu::TextureView,
+        camera_frame: CameraFrame,
+    ) -> Result<(), RenderError> {
+        let device = self.resources.gpu.device().clone();
+        let queue = self.resources.gpu.queue().clone();
+        let size = self.resources.physical_size;
+        let gap = (BUFFER_OVERVIEW_GAP * self.resources.scale_factor).round();
+        let near_far = (camera_frame.near, camera_frame.far);
+        let mut overview =
+            self.overview.take().unwrap_or_else(|| BufferOverview::new(&device, self.resources.output_format, size));
+        let frame_view = overview.frame(&device, size).clone();
+        let saved_view = self.resources.debug_view;
+
+        // The lit frame, profiled like an ordinary frame, then its own targets into the color, depth, and motion tiles.
+        self.resources.debug_view = DebugView::Lit;
+        let mut lit = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("buffer overview lit frame"),
+        });
+        self.profiler.begin_frame(&device);
+        self.profiler.mark(&mut lit, FramePhase::Prepare);
+        if let Err(error) = self.encode_frame(&mut lit, scene, inputs, &frame_view, camera_frame) {
+            self.shadow_planner.invalidate();
+            self.resources.debug_view = saved_view;
+            self.overview = Some(overview);
+            return Err(error);
+        }
+        self.profiler.end_frame(&mut lit);
+        let depth = self.resources.post.depth_sample_view().clone();
+        let motion = self
+            .effects
+            .as_ref()
+            .and_then(|state| state.attachments.as_ref())
+            .map(|attachments| attachments.motion().clone());
+        for (index, tile) in BUFFER_OVERVIEW_TILES.iter().copied().enumerate() {
+            if matches!(tile, OverviewTile::View(DebugView::Lit) | OverviewTile::Depth | OverviewTile::Motion) {
+                overview.draw_tile(
+                    &device,
+                    &queue,
+                    &mut lit,
+                    tile,
+                    index,
+                    output,
+                    size,
+                    gap,
+                    &depth,
+                    motion.as_ref(),
+                    near_far,
+                    index == 0,
+                );
+            }
+        }
+        queue.submit([lit.finish()]);
+
+        // Every other view, with effects set aside so temporal history and exposure see only the lit frames.
+        let effects = self.effects.take();
+        let mut result = Ok(());
+        for (index, tile) in BUFFER_OVERVIEW_TILES.iter().copied().enumerate() {
+            let OverviewTile::View(view) = tile else {
+                continue;
+            };
+            if view == DebugView::Lit {
+                continue;
+            }
+            self.resources.debug_view = view;
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("buffer overview tile"),
+            });
+            if let Err(error) = self.encode_frame(&mut encoder, scene, inputs, &frame_view, camera_frame) {
+                self.shadow_planner.invalidate();
+                result = Err(error);
+                break;
+            }
+            let depth = self.resources.post.depth_sample_view().clone();
+            overview.draw_tile(
+                &device,
+                &queue,
+                &mut encoder,
+                tile,
+                index,
+                output,
+                size,
+                gap,
+                &depth,
+                None,
+                near_far,
+                false,
+            );
+            queue.submit([encoder.finish()]);
+        }
+        self.effects = effects;
+        self.resources.debug_view = saved_view;
+        self.overview = Some(overview);
         result
     }
 
@@ -1034,6 +1165,7 @@ impl Renderer {
             shadow_planner,
             scratch,
             diagnostics,
+            ..
         } = self;
         let mut effects = effects.as_mut();
         let device = resources.gpu.device().clone();

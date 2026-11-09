@@ -171,7 +171,7 @@ impl ScriptEditor {
             document_symbols: None,
             items: Vec::new(),
             read_only: false,
-            background: colors::SCRIPT,
+            background: colors::script(),
             diagnostics: Vec::new(),
             completion: None,
             pending_line: None,
@@ -189,7 +189,7 @@ impl ScriptEditor {
     /// Read-only presentation: selectable text with highlighting, no language tools, on the surface fill (JSON views).
     pub fn read_only(mut self) -> Self {
         self.read_only = true;
-        self.background = colors::SURFACE;
+        self.background = colors::surface();
         self
     }
 
@@ -438,7 +438,7 @@ impl ScriptEditor {
         }
         let scrolling = ui.input(|input| input.is_scrolling());
 
-        let frame = egui::Frame::new().fill(self.background).stroke(Stroke::new(layout::BORDER_THIN, colors::LINE));
+        let frame = egui::Frame::new().fill(self.background).stroke(Stroke::new(layout::BORDER_THIN, colors::line()));
         let scroll_id = self.id.with("scroll");
         let mut drawn = None;
         frame.show(ui, |ui| {
@@ -487,7 +487,8 @@ impl ScriptEditor {
                 pos2(response.rect.left(), galley_pos.y + row_rect.top()),
                 pos2(response.rect.right().max(galley_pos.x + galley.size().x), galley_pos.y + row_rect.bottom()),
             );
-            painter.set(active_line, Shape::rect_filled(rect, CornerRadius::ZERO, colors::SURFACE.gamma_multiply(0.4)));
+            painter
+                .set(active_line, Shape::rect_filled(rect, CornerRadius::ZERO, colors::surface().gamma_multiply(0.4)));
         }
         let gutter_right = galley_pos.x - layout::SPACE_SM - 4.0;
         for (index, (_, row_rect)) in rows.iter().enumerate() {
@@ -498,9 +499,9 @@ impl ScriptEditor {
                 pos2(gutter_right + 4.0, top + row_rect.height()),
             );
             if number == line {
-                painter.rect_filled(row, CornerRadius::ZERO, colors::SURFACE);
+                painter.rect_filled(row, CornerRadius::ZERO, colors::surface());
             }
-            let color = if number == line { colors::ACCENT } else { colors::SCRIPT_GUTTER };
+            let color = if number == line { colors::accent() } else { colors::script_gutter() };
             painter.text(
                 pos2(gutter_right, top + (row_rect.height() * 0.5)),
                 Align2::RIGHT_CENTER,
@@ -578,9 +579,9 @@ impl ScriptEditor {
                     ui.label(
                         egui::RichText::new(script_language_tools::symbol_heading(&symbol))
                             .monospace()
-                            .color(colors::SCRIPT_FUNCTION),
+                            .color(colors::script_function()),
                     );
-                    ui.label(egui::RichText::new(kind_label(symbol.kind)).color(colors::MUTED).size(layout::TYPE_XS));
+                    ui.label(egui::RichText::new(kind_label(symbol.kind)).color(colors::muted()).size(layout::TYPE_XS));
                     ui.label(&symbol.documentation);
                 });
             }
@@ -647,8 +648,8 @@ impl ScriptEditor {
         let mut clicked = None;
         egui::Area::new(self.id.with("completion")).order(Order::Foreground).fixed_pos(position).show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style())
-                .fill(colors::PANEL)
-                .stroke(Stroke::new(layout::BORDER_THIN, colors::BORDER))
+                .fill(colors::panel())
+                .stroke(Stroke::new(layout::BORDER_THIN, colors::border()))
                 .show(ui, |ui| {
                     ui.set_min_width(260.0);
                     let row_height = 20.0;
@@ -659,7 +660,7 @@ impl ScriptEditor {
                             let (rect, response) = ui
                                 .allocate_exact_size(vec2(ui.available_width().max(260.0), row_height), Sense::click());
                             if selected {
-                                ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::SELECTION);
+                                ui.painter().rect_filled(rect, CornerRadius::ZERO, colors::selection());
                                 response.scroll_to_me(None);
                             }
                             let painter = ui.painter_at(rect);
@@ -675,14 +676,14 @@ impl ScriptEditor {
                                 Align2::LEFT_CENTER,
                                 &item.label,
                                 FontId::monospace(12.0),
-                                colors::TEXT,
+                                colors::text(),
                             );
                             painter.text(
                                 rect.right_center() - vec2(6.0, 0.0),
                                 Align2::RIGHT_CENTER,
                                 &item.detail,
                                 FontId::proportional(layout::TYPE_XS),
-                                colors::MUTED,
+                                colors::muted(),
                             );
                             if response.clicked() {
                                 clicked = Some(*index);
@@ -692,7 +693,7 @@ impl ScriptEditor {
                     if let Some(item) = completion.matches.get(completion.selected).map(|index| &self.items[*index]) {
                         ui.separator();
                         ui.set_max_width(320.0);
-                        ui.label(egui::RichText::new(&item.documentation).color(colors::MUTED).size(layout::TYPE_SM));
+                        ui.label(egui::RichText::new(&item.documentation).color(colors::muted()).size(layout::TYPE_SM));
                     }
                 });
         });
@@ -715,8 +716,8 @@ impl ScriptEditor {
         let mut hovered = None;
         for diagnostic in &self.diagnostics {
             let color = match diagnostic.severity {
-                DiagnosticSeverity::Error => colors::DANGER,
-                DiagnosticSeverity::Warning => colors::ACCENT_HOVER,
+                DiagnosticSeverity::Error => colors::danger(),
+                DiagnosticSeverity::Warning => colors::accent_hover(),
             };
             let range = diagnostic.character_range(text);
             let start = galley.pos_from_cursor(CCursor::new(range.start)).translate(galley_pos.to_vec2());
@@ -825,7 +826,7 @@ fn highlight_job(syntax: &ScriptSyntax, source: &str, font: &FontId) -> LayoutJo
             format: TextFormat {
                 font_id: font.clone(),
                 line_height: Some(SCRIPT_LINE_HEIGHT),
-                color: colors::TEXT,
+                color: colors::text(),
                 ..Default::default()
             },
         });
@@ -836,14 +837,14 @@ fn highlight_job(syntax: &ScriptSyntax, source: &str, font: &FontId) -> LayoutJo
 /// The script editor's highlight color for a token kind.
 pub fn token_color(kind: TokenKind) -> Color32 {
     match kind {
-        TokenKind::Comment => colors::SCRIPT_COMMENT,
-        TokenKind::String | TokenKind::Function => colors::SCRIPT_FUNCTION,
-        TokenKind::Number => colors::SCRIPT_NUMBER,
-        TokenKind::Keyword | TokenKind::Boolean => colors::SCRIPT_KEYWORD,
-        TokenKind::Parameter => colors::SCRIPT_PARAMETER,
-        TokenKind::Operator => colors::SCRIPT_OPERATOR,
-        TokenKind::Invalid => colors::DANGER,
-        TokenKind::Whitespace | TokenKind::Property | TokenKind::Variable => colors::TEXT,
+        TokenKind::Comment => colors::script_comment(),
+        TokenKind::String | TokenKind::Function => colors::script_function(),
+        TokenKind::Number => colors::script_number(),
+        TokenKind::Keyword | TokenKind::Boolean => colors::script_keyword(),
+        TokenKind::Parameter => colors::script_parameter(),
+        TokenKind::Operator => colors::script_operator(),
+        TokenKind::Invalid => colors::danger(),
+        TokenKind::Whitespace | TokenKind::Property | TokenKind::Variable => colors::text(),
     }
 }
 
@@ -867,10 +868,10 @@ fn kind_label(kind: ScriptSymbolKind) -> &'static str {
 
 fn kind_color(kind: ScriptSymbolKind) -> Color32 {
     match kind {
-        ScriptSymbolKind::Keyword => colors::SCRIPT_KEYWORD,
-        ScriptSymbolKind::Function => colors::SCRIPT_FUNCTION,
-        ScriptSymbolKind::Variable => colors::SCRIPT_PARAMETER,
-        ScriptSymbolKind::Property => colors::SCRIPT_NUMBER,
+        ScriptSymbolKind::Keyword => colors::script_keyword(),
+        ScriptSymbolKind::Function => colors::script_function(),
+        ScriptSymbolKind::Variable => colors::script_parameter(),
+        ScriptSymbolKind::Property => colors::script_number(),
     }
 }
 

@@ -26,7 +26,7 @@ fn the_lab_starts_with_the_first_example_live() {
     assert!(lab.time() > 0.3, "playback runs: {}", lab.time());
     assert!(harness.find("tint A value").is_some(), "parameter fields have accessible names: {:?}", harness.names());
     // Opaque Joy panels surround the open preview, which shows the slate editor background behind the particles.
-    let panel = joy_engine::runtime::theme::colors::PANEL;
+    let panel = joy_engine::runtime::theme::colors::panel();
     assert!(close(harness.pixel(640, 20), [panel.r(), panel.g(), panel.b()]), "header {:?}", harness.pixel(640, 20));
     let region = harness.tool.interface_mut().region().unwrap();
     assert!(region.size.x > 500.0 && region.size.y > 150.0, "{region:?}");
@@ -251,6 +251,7 @@ fn hosted_tabs_hide_their_file_chrome() {
     });
     harness.idle(4);
     assert!(harness.find("Open").is_none() && harness.find("Save .joyfx ↗").is_none(), "{:?}", harness.names());
-    assert!(harness.find("Apply").is_some());
+    // Apply and Live move to the host toolbar through `AuthoringTool::toolbar_actions`.
+    assert!(harness.find("Apply").is_none(), "{:?}", harness.names());
     harness.capture("joyfx-editor-hosted");
 }

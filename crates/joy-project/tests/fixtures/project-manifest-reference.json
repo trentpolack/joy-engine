@@ -53,7 +53,15 @@
         "proceduralWorld": true
        }
       }
-     ]
+     ],
+     "run": {
+      "command": "cargo",
+      "arguments": [
+       "run",
+       "--manifest-path",
+       "Cargo.toml"
+      ]
+     }
     }
    }
   },
@@ -96,7 +104,15 @@
         "proceduralWorld": true
        }
       }
-     ]
+     ],
+     "run": {
+      "command": "cargo",
+      "arguments": [
+       "run",
+       "--manifest-path",
+       "Cargo.toml"
+      ]
+     }
     }
    }
   },
@@ -153,7 +169,15 @@
         "proceduralWorld": true
        }
       }
-     ]
+     ],
+     "run": {
+      "command": "cargo",
+      "arguments": [
+       "run",
+       "--manifest-path",
+       "Cargo.toml"
+      ]
+     }
     }
    }
   }
@@ -831,6 +855,86 @@
       }
      ]
     }
+   }
+  },
+  {
+   "name": "runCommand",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [],
+    "run": {
+     "command": " cargo ",
+     "arguments": [
+      "run",
+      "--release"
+     ],
+     "directory": "game\\native"
+    }
+   },
+   "result": {
+    "ok": {
+     "schemaVersion": 1,
+     "name": "Test",
+     "preview": {
+      "root": "dist",
+      "entry": "index.html"
+     },
+     "capabilities": [],
+     "run": {
+      "command": "cargo",
+      "arguments": [
+       "run",
+       "--release"
+      ],
+      "directory": "game/native"
+     }
+    }
+   }
+  },
+  {
+   "name": "runCommandBlank",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [],
+    "run": {
+     "command": "  ",
+     "arguments": []
+    }
+   },
+   "result": {
+    "error": "Joy project manifest run must be an object with a non-empty command and string arguments."
+   }
+  },
+  {
+   "name": "runArgumentsType",
+   "value": {
+    "schemaVersion": 1,
+    "name": "Test",
+    "preview": {
+     "root": "dist",
+     "entry": "index.html"
+    },
+    "capabilities": [],
+    "run": {
+     "command": "cargo",
+     "arguments": [
+      "run",
+      3
+     ]
+    }
+   },
+   "result": {
+    "error": "Joy project manifest run must be an object with a non-empty command and string arguments."
    }
   }
  ]

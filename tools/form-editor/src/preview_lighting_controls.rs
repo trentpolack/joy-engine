@@ -141,7 +141,7 @@ impl PreviewLightingControls {
 fn setting_title(ui: &mut Ui, title: &str) {
     ui.add(
         egui::Label::new(
-            RichText::new(title).color(colors::TEXT).text_style(egui::TextStyle::Button).size(layout::TYPE_SM),
+            RichText::new(title).color(colors::text()).text_style(egui::TextStyle::Button).size(layout::TYPE_SM),
         )
         .wrap(),
     );

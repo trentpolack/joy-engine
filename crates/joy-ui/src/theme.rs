@@ -5,12 +5,36 @@
 //!
 //! Edit `assets/ui/theme-default.json` for game/editor palettes, syntax colors, and font choices. Edit
 //! `assets/ui/layout.json` for shared dimensions: type sizes, spacing, corners, borders, and control heights.
-//! Cargo generates the constants below from those assets for every build; there is no runtime JSON loading or
-//! theme switching. Games use [`apply`]; Joy Editor and both tool editors use [`apply_editor`], [`colors`], [`layout`], and
-//! [`text_styles`]. Screen composition and persisted pane sizes remain owned by each tool.
+//! Cargo generates the constants below from those assets for every build; there is no runtime JSON loading. Editor
+//! colors come in [`palettes`] (Joy, the default, plus neutral dark and light from `theme-neutral-*.json`): [`colors`]
+//! reads the active palette, and [`set_palette`] switches it for the UI thread and re-applies the editor look. Games
+//! use [`apply`]; Joy Editor and both tool editors use [`apply_editor`], [`colors`], [`layout`], and [`text_styles`].
+//! Screen composition and persisted pane sizes remain owned by each tool.
 
 // Cargo regenerates these values when either UI asset changes. No JSON parser ships in the UI runtime.
 include!(concat!(env!("OUT_DIR"), "/ui_theme.rs"));
+
+thread_local! {
+    // The editor palette egui contexts on this thread draw with. UI runs on one thread per window, so a thread-local
+    // keeps independent editors in tests from sharing a choice; it holds presentation state only, never gameplay.
+    static ACTIVE_PALETTE: std::cell::Cell<Palette> = const { std::cell::Cell::new(palettes::JOY) };
+}
+
+/// The editor palette [`colors`] reads on this thread.
+pub fn active_palette() -> Palette {
+    ACTIVE_PALETTE.with(std::cell::Cell::get)
+}
+
+/// Draw editors on this thread with `palette`, re-applying the editor look to `context` so widgets change at once.
+pub fn set_palette(context: &egui::Context, palette: Palette) {
+    ACTIVE_PALETTE.with(|active| active.set(palette));
+    apply_editor(context);
+}
+
+/// The bundled palette named `name` (ignoring case), for restoring a saved choice.
+pub fn palette_named(name: &str) -> Option<Palette> {
+    palettes::ALL.into_iter().find(|palette| palette.name.eq_ignore_ascii_case(name))
+}
 
 /// Apply the Joy visuals and register shared font families before an egui context's first pass.
 pub fn apply(context: &egui::Context) {
@@ -52,6 +76,8 @@ pub mod text_styles {
     pub const FAMILY_DISPLAY: &str = "joy-display";
     /// Stable family ID bound to the theme's emphasized font for the active preset.
     pub const FAMILY_STRONG: &str = "joy-strong";
+    /// Stable family ID bound to the theme's code font in every preset.
+    pub const FAMILY_CODE: &str = "joy-code";
 
     /// Style name for application titles.
     pub const DISPLAY: &str = "joy-display";
@@ -91,6 +117,11 @@ pub mod text_styles {
     pub fn strong_family() -> FontFamily {
         FontFamily::Name(FAMILY_STRONG.into())
     }
+
+    /// The code font family (registered by both presets, unlike `Monospace`, which games leave at egui's default).
+    pub fn code_family() -> FontFamily {
+        FontFamily::Name(FAMILY_CODE.into())
+    }
 }
 
 // Archivo and Archivo Black, the HTML tools' type, under the SIL Open Font License 1.1 (see the
@@ -101,9 +132,9 @@ const ARCHIVO_SEMIBOLD: &[u8] = include_bytes!("../fonts/Archivo-SemiBold.ttf");
 const ARCHIVO_MEDIUM: &[u8] = include_bytes!("../fonts/Archivo-Medium.ttf");
 const ARCHIVO_BOLD: &[u8] = include_bytes!("../fonts/Archivo-Bold.ttf");
 const ARCHIVO_BLACK: &[u8] = include_bytes!("../fonts/ArchivoBlack-Regular.ttf");
-// Unmodified Meslo LG S from https://github.com/andreberg/Meslo-Font; license and attribution in `fonts/Meslo-LICENSE.txt`.
-// The small line-gap variant keeps the Menlo-like metrics compact; script editors specify their own leading.
-const MESLO_REGULAR: &[u8] = include_bytes!("../fonts/MesloLGS-Regular.ttf");
+// Unmodified JetBrains Mono Regular (https://github.com/JetBrains/JetBrainsMono) under the SIL Open Font License 1.1
+// (`fonts/JetBrainsMono-OFL.txt`): a tall-x-height code face that stays legible at the console's and editors' small sizes.
+const JETBRAINS_MONO_REGULAR: &[u8] = include_bytes!("../fonts/JetBrainsMono-Regular.ttf");
 
 // Font data names registered with egui.
 const FONT_ARCHIVO: &str = "Archivo";
@@ -111,7 +142,7 @@ const FONT_ARCHIVO_SEMIBOLD: &str = "Archivo SemiBold";
 const FONT_ARCHIVO_MEDIUM: &str = "Archivo Medium";
 const FONT_ARCHIVO_BOLD: &str = "Archivo Bold";
 const FONT_ARCHIVO_BLACK: &str = "Archivo Black";
-const FONT_MESLO: &str = "Meslo LG S";
+const FONT_JETBRAINS_MONO: &str = "JetBrains Mono";
 
 /// Bind the asset's font selections to stable UI family IDs, preserving egui's symbol fallbacks. Only the editor
 /// preset replaces the default body and monospace faces; game UI keeps egui's defaults.
@@ -131,7 +162,7 @@ fn install_editor_fonts(context: &egui::Context, use_editor_body: bool) {
     fonts.font_data.insert(FONT_ARCHIVO_MEDIUM.into(), Arc::new(FontData::from_static(ARCHIVO_MEDIUM)));
     fonts.font_data.insert(FONT_ARCHIVO_BOLD.into(), Arc::new(FontData::from_static(ARCHIVO_BOLD)));
     fonts.font_data.insert(FONT_ARCHIVO_BLACK.into(), Arc::new(FontData::from_static(ARCHIVO_BLACK)));
-    fonts.font_data.insert(FONT_MESLO.into(), Arc::new(FontData::from_static(MESLO_REGULAR)));
+    fonts.font_data.insert(FONT_JETBRAINS_MONO.into(), Arc::new(FontData::from_static(JETBRAINS_MONO_REGULAR)));
 
     let family = |lead: &str| -> Vec<String> {
         let mut names = vec![lead.to_owned()];
@@ -143,6 +174,11 @@ fn install_editor_fonts(context: &egui::Context, use_editor_body: bool) {
         // Retain egui's monospace/symbol fallbacks for glyphs outside the bundled code font.
         fonts.families.entry(FontFamily::Monospace).or_default().insert(0, font_faces::CODE.to_owned());
     }
+    // Every preset gets the code family, so development text (the console, its input line, and overlays) reads in one
+    // face whether a game or an editor owns the context.
+    let mut code = vec![font_faces::CODE.to_owned()];
+    code.extend(fonts.families.get(&FontFamily::Monospace).cloned().unwrap_or_default());
+    fonts.families.insert(text_styles::code_family(), code);
     let strong = if use_editor_body { font_faces::STRONG } else { font_faces::GAME_STRONG };
     fonts.families.insert(text_styles::strong_family(), family(strong));
     fonts.families.insert(text_styles::display_family(), family(font_faces::DISPLAY));
@@ -164,53 +200,53 @@ pub fn apply_editor(context: &egui::Context) {
 
     let square = CornerRadius::same(layout::RADIUS_NONE);
     let rounded = CornerRadius::same(layout::RADIUS_SM);
-    let mut visuals = egui::Visuals::dark();
+    let mut visuals = if active_palette().dark { egui::Visuals::dark() } else { egui::Visuals::light() };
     visuals.override_text_color = None;
-    visuals.panel_fill = colors::PANEL;
-    visuals.window_fill = colors::PANEL;
-    visuals.window_stroke = Stroke::new(layout::BORDER_THIN, colors::BORDER);
+    visuals.panel_fill = colors::panel();
+    visuals.window_fill = colors::panel();
+    visuals.window_stroke = Stroke::new(layout::BORDER_THIN, colors::border());
     visuals.window_corner_radius = rounded;
     visuals.menu_corner_radius = rounded;
-    visuals.extreme_bg_color = colors::FIELD;
-    visuals.text_edit_bg_color = Some(colors::FIELD);
-    visuals.code_bg_color = colors::SCRIPT;
-    visuals.faint_bg_color = colors::SURFACE;
-    visuals.hyperlink_color = colors::ACCENT;
-    visuals.warn_fg_color = colors::ACCENT_HOVER;
-    visuals.error_fg_color = colors::DANGER;
-    visuals.selection.bg_fill = colors::SELECTION;
-    visuals.selection.stroke = Stroke::new(layout::BORDER_THIN, colors::CREAM);
-    visuals.text_cursor.stroke = Stroke::new(layout::BORDER_FOCUS, colors::CREAM);
+    visuals.extreme_bg_color = colors::field();
+    visuals.text_edit_bg_color = Some(colors::field());
+    visuals.code_bg_color = colors::script();
+    visuals.faint_bg_color = colors::surface();
+    visuals.hyperlink_color = colors::accent();
+    visuals.warn_fg_color = colors::accent_hover();
+    visuals.error_fg_color = colors::danger();
+    visuals.selection.bg_fill = colors::selection();
+    visuals.selection.stroke = Stroke::new(layout::BORDER_THIN, colors::cream());
+    visuals.text_cursor.stroke = Stroke::new(layout::BORDER_FOCUS, colors::cream());
     visuals.slider_trailing_fill = true;
 
     let widgets = &mut visuals.widgets;
-    widgets.noninteractive.bg_fill = colors::PANEL;
-    widgets.noninteractive.weak_bg_fill = colors::PANEL;
-    widgets.noninteractive.bg_stroke = Stroke::new(layout::BORDER_THIN, colors::BORDER);
-    widgets.noninteractive.fg_stroke = Stroke::new(layout::BORDER_THIN, colors::TEXT);
+    widgets.noninteractive.bg_fill = colors::panel();
+    widgets.noninteractive.weak_bg_fill = colors::panel();
+    widgets.noninteractive.bg_stroke = Stroke::new(layout::BORDER_THIN, colors::border());
+    widgets.noninteractive.fg_stroke = Stroke::new(layout::BORDER_THIN, colors::text());
     widgets.noninteractive.corner_radius = square;
     // Fields stay dark; buttons use the browser workbench's blue fill and visible one-pixel edges.
-    widgets.inactive.bg_fill = colors::FIELD;
-    widgets.inactive.weak_bg_fill = colors::BUTTON;
-    widgets.inactive.bg_stroke = Stroke::new(layout::BORDER_THIN, colors::BORDER);
-    widgets.inactive.fg_stroke = Stroke::new(layout::BORDER_THIN, colors::TEXT);
+    widgets.inactive.bg_fill = colors::field();
+    widgets.inactive.weak_bg_fill = colors::button();
+    widgets.inactive.bg_stroke = Stroke::new(layout::BORDER_THIN, colors::border());
+    widgets.inactive.fg_stroke = Stroke::new(layout::BORDER_THIN, colors::text());
     widgets.inactive.corner_radius = square;
-    widgets.hovered.bg_fill = colors::SURFACE;
-    widgets.hovered.weak_bg_fill = colors::SURFACE;
-    widgets.hovered.bg_stroke = Stroke::new(layout::BORDER_THIN, colors::ACCENT);
-    widgets.hovered.fg_stroke = Stroke::new(layout::BORDER_THIN, colors::CREAM);
+    widgets.hovered.bg_fill = colors::surface();
+    widgets.hovered.weak_bg_fill = colors::surface();
+    widgets.hovered.bg_stroke = Stroke::new(layout::BORDER_THIN, colors::accent());
+    widgets.hovered.fg_stroke = Stroke::new(layout::BORDER_THIN, colors::cream());
     widgets.hovered.corner_radius = square;
     widgets.hovered.expansion = 0.0;
-    widgets.active.bg_fill = colors::SURFACE;
-    widgets.active.weak_bg_fill = colors::SURFACE;
-    widgets.active.bg_stroke = Stroke::new(layout::BORDER_FOCUS, colors::ACCENT);
-    widgets.active.fg_stroke = Stroke::new(layout::BORDER_THIN, colors::CREAM);
+    widgets.active.bg_fill = colors::surface();
+    widgets.active.weak_bg_fill = colors::surface();
+    widgets.active.bg_stroke = Stroke::new(layout::BORDER_FOCUS, colors::accent());
+    widgets.active.fg_stroke = Stroke::new(layout::BORDER_THIN, colors::cream());
     widgets.active.corner_radius = square;
     widgets.active.expansion = 0.0;
-    widgets.open.bg_fill = colors::SURFACE;
-    widgets.open.weak_bg_fill = colors::SURFACE;
-    widgets.open.bg_stroke = Stroke::new(layout::BORDER_THIN, colors::ACCENT);
-    widgets.open.fg_stroke = Stroke::new(layout::BORDER_THIN, colors::TEXT);
+    widgets.open.bg_fill = colors::surface();
+    widgets.open.weak_bg_fill = colors::surface();
+    widgets.open.bg_stroke = Stroke::new(layout::BORDER_THIN, colors::accent());
+    widgets.open.fg_stroke = Stroke::new(layout::BORDER_THIN, colors::text());
     widgets.open.corner_radius = square;
     context.set_visuals(visuals);
 

@@ -27,6 +27,8 @@ use crate::console_variables::{
 pub const SCREEN_PERCENTAGE: &str = "r.ScreenPercentage";
 /// What surfaces (meshes and terrain) draw as ([`DebugView::name`]).
 pub const DEBUG_VIEW: &str = "r.DebugView";
+/// The Buffer Overview grid of frame buffers ([`Renderer::set_buffer_overview`]).
+pub const BUFFER_OVERVIEW: &str = "r.BufferOverview";
 /// Frame profiling ([`Renderer::set_profiling`]).
 pub const PROFILE: &str = "r.Profile";
 /// Deferred lighting where the device supports it ([`Renderer::set_deferred`]).
@@ -66,6 +68,11 @@ pub(crate) fn register(variables: &mut ConsoleVariables) {
             "What surfaces draw as: the lit scene or one surface attribute.",
             &views,
             DebugView::Lit.name(),
+        ),
+        VariableDefinition::bool(
+            BUFFER_OVERVIEW,
+            "Show the frame's buffers (final color, base color, normals, depth, motion, and more) in one grid.",
+            false,
         ),
         VariableDefinition::bool(
             PROFILE,
@@ -119,6 +126,7 @@ impl RenderVariables {
             (DEBUG_VIEW, VariableValue::Text(view)) => {
                 renderer.set_debug_view(DebugView::from_name(view).unwrap_or_default());
             }
+            (BUFFER_OVERVIEW, VariableValue::Bool(enabled)) => renderer.set_buffer_overview(*enabled),
             (PROFILE, VariableValue::Bool(enabled)) => renderer.set_profiling(*enabled),
             (DEFERRED, VariableValue::Bool(enabled)) => renderer.set_deferred(*enabled),
             (ATMOSPHERE, VariableValue::Bool(enabled)) => renderer.set_atmosphere(*enabled),
@@ -169,6 +177,7 @@ fn mirror(variables: &mut ConsoleVariables, renderer: &Renderer) {
     let percent = (f64::from(renderer.render_scale()) * PERCENT).round();
     variables.mirror(SCREEN_PERCENTAGE, VariableValue::Float(percent));
     variables.mirror(DEBUG_VIEW, VariableValue::Text(renderer.debug_view().name().to_owned()));
+    variables.mirror(BUFFER_OVERVIEW, VariableValue::Bool(renderer.buffer_overview()));
     variables.mirror(PROFILE, VariableValue::Bool(renderer.profiling()));
     variables.mirror(DEFERRED, VariableValue::Bool(renderer.deferred()));
     variables.mirror(ATMOSPHERE, VariableValue::Bool(renderer.atmosphere()));

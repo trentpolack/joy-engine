@@ -1,13 +1,13 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Instantiates an authored level: every entity, with a rigid body for each `physics` record (a raycast vehicle chassis
-//! when the entity also has a `vehicle` record), owned by a [`World`] that advances them in its fixed order.
+//! Instantiates an authored level: every entity, with a rigid body for each `physics` record, owned by a [`World`] that
+//! advances them in its fixed order.
 //!
-//! - Bodies come from the engine's built-in `physics` and `vehicle` runtime components (see the `physics_component`
+//! - Bodies come from the engine's built-in `physics` runtime component (see the `physics_component`
 //!   contract in `docs/rust-simulation.md`), so entities spawned later by the game or requested by behaviors through
 //!   `SimulationContext::request_spawn` receive the same physics setup as authored ones.
-//! - Every failure rolls back: a failed spawn removes the entity (physics validates a body and its vehicle together, so
+//! - Every failure rolls back: a failed spawn removes the entity (physics validates a body before creating it, so
 //!   no partial body is left behind), and a failed level setup removes every entity created so far.
 
 use super::entity::EntityId;
@@ -94,10 +94,7 @@ impl LevelRuntime {
         Ok(())
     }
 
-    /// The live body owned by an entity, if both are live.
-    ///
-    /// For a vehicle entity this is the chassis: vehicle operations (`physics().wheel_transforms(body)` for rendering,
-    /// `vehicle_speed`, `set_vehicle_input`) take it directly.
+    /// The live body owned by an entity, if both are live; physics operations take it directly.
     pub fn body(&self, id: &EntityId) -> Option<BodyHandle> {
         if !self.world.entities.contains(id) {
             return None;
@@ -135,7 +132,7 @@ impl LevelRuntime {
         &self.world.physics
     }
 
-    /// The physics simulation, mutably (for vehicle input, impulses, or raycasts).
+    /// The physics simulation, mutably (for impulses, forces, or raycasts).
     pub fn physics_mut(&mut self) -> &mut PhysicsSimulation {
         &mut self.world.physics
     }

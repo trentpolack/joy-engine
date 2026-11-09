@@ -22,8 +22,10 @@ use joy_engine::development::{
     ToolDocument,
     ToolFileReader,
     ToolHosting,
+    ToolPreviewState,
     ViewportGesture,
     ViewportShortcut,
+    editor_shell,
     viewport_input,
 };
 use joy_engine::egui::{
@@ -213,6 +215,8 @@ pub struct FormEditor {
     // The native folder the current document's reader reads from, when it was opened from disk.
     disk_root: Option<std::path::PathBuf>,
     themed: bool,
+    // Where the standalone theme choice persists (also used when hosted, where the host owns the theme).
+    theme_storage: Option<Storage>,
     // Where the main controls were drawn last frame, for hosts and interface tests.
     targets: std::collections::HashMap<&'static str, egui::Rect>,
     panes: joy_engine::development::PanelRects,
@@ -251,7 +255,7 @@ impl FormEditor {
             inspection: OutputInspection::new(),
             assets,
             editor: create_editor(),
-            layout: create_panel_layout(storage),
+            layout: create_panel_layout(storage.clone()),
             drafts: NumericDrafts::default(),
             tab: InspectorTab::Parameters,
             parameters: ParameterControls::default(),
@@ -276,6 +280,7 @@ impl FormEditor {
             host_files: None,
             disk_root: None,
             themed: false,
+            theme_storage: storage,
             targets: std::collections::HashMap::new(),
             panes: joy_engine::development::PanelRects::default(),
         }
@@ -727,7 +732,12 @@ impl FormEditor {
     /// Draw the whole tool inside `area` (logical points).
     pub fn draw(&mut self, context: &egui::Context, area: egui::Rect) {
         if !self.themed {
-            joy_engine::runtime::theme::apply_editor(context);
+            // A hosting editor owns the theme; standalone, the saved choice applies.
+            if self.hosting == ToolHosting::Standalone {
+                editor_shell::restore_theme(context, self.theme_storage.as_ref());
+            } else {
+                joy_engine::runtime::theme::apply_editor(context);
+            }
             self.themed = true;
         }
         let standalone = self.hosting == ToolHosting::Standalone;
@@ -752,11 +762,11 @@ impl FormEditor {
                 ui.scope_builder(UiBuilder::new().max_rect(area), |ui| {
                     egui::Panel::top("form-editor-header")
                         .exact_size(if standalone { 58.0 } else { 44.0 })
-                        .frame(egui::Frame::new().fill(colors::PANEL).inner_margin(egui::Margin::symmetric(16, 8)))
+                        .frame(egui::Frame::new().fill(colors::panel()).inner_margin(egui::Margin::symmetric(16, 8)))
                         .show(ui, |ui| self.header(ui, standalone));
                     egui::Panel::top("form-editor-project")
                         .exact_size(46.0)
-                        .frame(egui::Frame::new().fill(colors::SURFACE).inner_margin(egui::Margin::symmetric(16, 6)))
+                        .frame(egui::Frame::new().fill(colors::surface()).inner_margin(egui::Margin::symmetric(16, 6)))
                         .show(ui, |ui| self.project_bar(ui, standalone));
                     let workbench = ui.available_rect_before_wrap();
                     let panes = self.layout.panes(workbench);
@@ -784,7 +794,7 @@ impl FormEditor {
                         ui.painter().rect_stroke(
                             rect,
                             0.0,
-                            egui::Stroke::new(1.0, colors::BORDER),
+                            egui::Stroke::new(1.0, colors::border()),
                             egui::StrokeKind::Inside,
                         );
                     }
@@ -803,6 +813,10 @@ impl FormEditor {
             let view = view_menu(ui, &mut self.layout);
             self.track("view", view);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if standalone {
+                    let theme = editor_shell::theme_menu(ui, self.theme_storage.as_ref());
+                    self.track("theme-menu", theme);
+                }
                 // Documentation: the language reference and the recipes are separate pages.
                 let reference = ui.add(components::button("REFERENCE")).on_hover_text("FORM SCRIPT language reference");
                 if self.track("script-reference", reference).clicked() {
@@ -847,7 +861,7 @@ impl FormEditor {
             egui::pos2(rect.left() - 16.0, rect.bottom() + 6.0),
             egui::pos2(rect.right() + 16.0, rect.bottom() + 8.0),
         );
-        ui.painter().rect_filled(line, 0.0, colors::ACCENT);
+        ui.painter().rect_filled(line, 0.0, colors::accent());
     }
 
     /// The open document's file name, or an untitled `.form` name from the study's display name.
@@ -881,7 +895,7 @@ impl FormEditor {
             components::project_marker(ui);
             let file_name = self.document_file_name();
             let label = RichText::new(&file_name)
-                .color(colors::TEXT)
+                .color(colors::text())
                 .size(layout::TYPE_MD)
                 .family(joy_engine::runtime::theme::text_styles::strong_family());
             let path = self.session.document_path();
@@ -891,12 +905,12 @@ impl FormEditor {
             if self.session.has_edits() {
                 // An unsaved-edits dot, as editor tabs show it.
                 let (dot, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-                ui.painter().circle_filled(dot.center(), 3.0, colors::ACCENT);
+                ui.painter().circle_filled(dot.center(), 3.0, colors::accent());
             }
-            ui.label(RichText::new(document_kind(&file_name)).color(colors::MUTED).size(layout::TYPE_XS));
+            ui.label(RichText::new(document_kind(&file_name)).color(colors::muted()).size(layout::TYPE_XS));
             ui.add_space(layout::SPACE_MD);
             if standalone && let Some((text, title)) = self.session.save_state() {
-                let label = ui.label(RichText::new(text).color(colors::MUTED).size(layout::TYPE_SM));
+                let label = ui.label(RichText::new(text).color(colors::muted()).size(layout::TYPE_SM));
                 if !title.is_empty() {
                     label.on_hover_text(title);
                 }
@@ -911,7 +925,7 @@ impl FormEditor {
                         for asset in &self.assets {
                             if asset.folder != folder {
                                 folder = &asset.folder;
-                                ui.label(RichText::new(folder).color(colors::MUTED).size(layout::TYPE_XS));
+                                ui.label(RichText::new(folder).color(colors::muted()).size(layout::TYPE_XS));
                             }
                             if ui.selectable_label(false, &asset.filename).on_hover_text(&asset.path).clicked() {
                                 chosen = Some(asset.path.clone());
@@ -919,7 +933,7 @@ impl FormEditor {
                         }
                     });
                 self.targets.insert("examples", examples.response.rect);
-                ui.label(RichText::new("EXAMPLES").color(colors::TEXT).size(layout::TYPE_SM));
+                ui.label(RichText::new("EXAMPLES").color(colors::text()).size(layout::TYPE_SM));
                 if let Some(path) = chosen
                     && let Err(error) = self.open_example(&path)
                 {
@@ -932,10 +946,14 @@ impl FormEditor {
     fn script_pane(&mut self, ui: &mut Ui) {
         egui::Panel::top("script-heading")
             .exact_size(48.0)
-            .frame(components::panel_frame().fill(colors::SURFACE).inner_margin(egui::Margin::symmetric(12, 8)))
+            .frame(components::panel_frame().fill(colors::surface()).inner_margin(egui::Margin::symmetric(12, 8)))
             .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {
-                    components::panel_heading(ui, "SCRIPT");
+                    components::panel_heading(ui, "Script");
+                    // A hosting editor shows Run and Live in its toolbar (`AuthoringTool::toolbar_actions`).
+                    if self.hosting != ToolHosting::Standalone {
+                        return;
+                    }
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if self
                             .track(
@@ -958,9 +976,9 @@ impl FormEditor {
         egui::Panel::bottom("script-status").frame(components::toolbar_frame()).show(ui, |ui| {
             let status = self.session.status().clone();
             let color = match status.state {
-                StatusState::Ready => colors::SUCCESS,
-                StatusState::Busy => colors::ACCENT_HOVER,
-                StatusState::Error => colors::DANGER,
+                StatusState::Ready => colors::success(),
+                StatusState::Busy => colors::accent_hover(),
+                StatusState::Error => colors::danger(),
             };
             // One interaction row high, like a line of the preview's statistics bar, so the two bars line up.
             let row = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
@@ -969,7 +987,7 @@ impl FormEditor {
             ui.allocate_ui_with_layout(row, egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.label(
                     RichText::new(format!("Ln {}, Col {}", self.cursor.0, self.cursor.1))
-                        .color(colors::MUTED)
+                        .color(colors::muted())
                         .size(layout::TYPE_XS)
                         .monospace(),
                 );
@@ -990,7 +1008,7 @@ impl FormEditor {
                 });
             });
         });
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(colors::SCRIPT)).show(ui, |ui| {
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(colors::script())).show(ui, |ui| {
             let response = self.editor.show(ui, &mut self.session.source);
             self.cursor = (response.line, response.column);
             if response.changed {
@@ -1006,7 +1024,7 @@ impl FormEditor {
         let compact = ui.available_width() < COMPACT_PREVIEW_WIDTH;
         egui::Panel::top("preview-heading")
             .min_size(if compact { 78.0 } else { 48.0 })
-            .frame(components::panel_frame().fill(colors::SURFACE).inner_margin(egui::Margin::symmetric(12, 8)))
+            .frame(components::panel_frame().fill(colors::surface()).inner_margin(egui::Margin::symmetric(12, 8)))
             .show(ui, |ui| {
                 if compact {
                     self.preview_heading(ui);
@@ -1031,13 +1049,13 @@ impl FormEditor {
             .frame(components::toolbar_frame())
             .show(ui, |ui| self.generation_summary(ui));
         egui::Panel::bottom("preview-attributes")
-            .frame(egui::Frame::new().fill(colors::PANEL).inner_margin(egui::Margin::symmetric(10, 4)))
+            .frame(egui::Frame::new().fill(colors::panel()).inner_margin(egui::Margin::symmetric(10, 4)))
             .show(ui, |ui| {
                 let reveal = std::mem::take(&mut self.reveal_attributes);
                 attribute_panel(ui, &mut self.inspection, &mut self.viewport, reveal);
             });
         egui::Panel::bottom("preview-bottom")
-            .frame(egui::Frame::new().fill(colors::PANEL).inner_margin(egui::Margin::symmetric(10, 6)))
+            .frame(egui::Frame::new().fill(colors::panel()).inner_margin(egui::Margin::symmetric(10, 6)))
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     components::checkbox(ui, &mut self.project_info, "Project info");
@@ -1048,9 +1066,9 @@ impl FormEditor {
                     ui.spacing_mut().slider_width = 60.0;
                     ui.spacing_mut().slider_rail_height = 7.0;
                     ui.spacing_mut().interact_size.y = 16.0;
-                    ui.visuals_mut().selection.bg_fill = colors::ACCENT;
-                    ui.visuals_mut().widgets.inactive.bg_fill = colors::BUTTON;
-                    ui.visuals_mut().widgets.inactive.fg_stroke = egui::Stroke::new(2.0, colors::SLIDER_EDGE);
+                    ui.visuals_mut().selection.bg_fill = colors::accent();
+                    ui.visuals_mut().widgets.inactive.bg_fill = colors::button();
+                    ui.visuals_mut().widgets.inactive.fg_stroke = egui::Stroke::new(2.0, colors::slider_edge());
                     ui.add(
                         egui::Slider::new(&mut self.viewport.point_size, 1.0..=6.0)
                             .show_value(false)
@@ -1061,7 +1079,7 @@ impl FormEditor {
                     .labelled_by(point_size_label.id)
                     .on_hover_text("Point size");
                     ui.set_style(previous_style);
-                    ui.label(RichText::new(&self.backend).color(colors::SUCCESS).size(layout::TYPE_XS).monospace());
+                    ui.label(RichText::new(&self.backend).color(colors::success()).size(layout::TYPE_XS).monospace());
                 });
             });
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(ui, |ui| {
@@ -1124,7 +1142,7 @@ impl FormEditor {
                 .show(ui.ctx(), |ui| {
                     egui::Frame::new()
                         .fill(Color32::from_rgba_unmultiplied(16, 23, 34, 200))
-                        .stroke(egui::Stroke::new(1.0, colors::ACCENT))
+                        .stroke(egui::Stroke::new(1.0, colors::accent()))
                         .inner_margin(egui::Margin::symmetric(10, 6))
                         .show(ui, |ui| {
                             let response = ui
@@ -1133,9 +1151,9 @@ impl FormEditor {
                                     let arrow = ui
                                         .scope(|ui| {
                                             let widgets = &mut ui.visuals_mut().widgets;
-                                            widgets.inactive.fg_stroke.color = colors::ACCENT;
-                                            widgets.hovered.fg_stroke.color = colors::ACCENT_HOVER;
-                                            widgets.active.fg_stroke.color = colors::ACCENT;
+                                            widgets.inactive.fg_stroke.color = colors::accent();
+                                            widgets.hovered.fg_stroke.color = colors::accent_hover();
+                                            widgets.active.fg_stroke.color = colors::accent();
                                             let response =
                                                 ui.allocate_response(egui::vec2(12.0, 12.0), egui::Sense::click());
                                             egui::collapsing_header::paint_default_icon(
@@ -1148,7 +1166,7 @@ impl FormEditor {
                                         .inner;
                                     let label = ui.add(
                                         egui::Label::new(
-                                            RichText::new(title.replace('\n', " ")).color(colors::ACCENT).strong(),
+                                            RichText::new(title.replace('\n', " ")).color(colors::accent()).strong(),
                                         )
                                         .wrap_mode(egui::TextWrapMode::Extend)
                                         .sense(egui::Sense::click()),
@@ -1160,7 +1178,7 @@ impl FormEditor {
                                 self.title_open = !self.title_open;
                             }
                             if self.title_open {
-                                ui.label(RichText::new(info).color(colors::MUTED).size(layout::TYPE_XS));
+                                ui.label(RichText::new(info).color(colors::muted()).size(layout::TYPE_XS));
                             }
                         });
                 });
@@ -1172,7 +1190,7 @@ impl FormEditor {
             egui::Align2::CENTER_CENTER,
             "Y ↑",
             mono.clone(),
-            colors::SUCCESS,
+            colors::success(),
         );
         painter.text(
             rect.right_top() + egui::vec2(-46.0, 40.0),
@@ -1186,7 +1204,7 @@ impl FormEditor {
             egui::Align2::CENTER_CENTER,
             "X →",
             mono.clone(),
-            colors::ACCENT,
+            colors::accent(),
         );
         painter.text(
             rect.center_bottom() + egui::vec2(0.0, -22.0),
@@ -1197,7 +1215,7 @@ impl FormEditor {
                 "DRAG TO ORBIT  ·  SHIFT + DRAG TO PAN  ·  SCROLL TO ZOOM  ·  CLICK TO INSPECT"
             },
             mono,
-            colors::MUTED,
+            colors::muted(),
         );
         if let Some(error) = &self.gpu_error {
             let error_rect = egui::Rect::from_min_size(
@@ -1210,17 +1228,17 @@ impl FormEditor {
                 egui::Align2::LEFT_CENTER,
                 error,
                 egui::FontId::proportional(layout::TYPE_SM),
-                colors::DANGER,
+                colors::danger(),
             );
         }
     }
 
     fn preview_heading(&self, ui: &mut Ui) {
-        components::panel_heading(ui, "PREVIEW");
+        components::panel_heading(ui, "Preview");
         let color = match self.session.preview_state() {
-            PreviewState::Accepted => colors::SUCCESS,
-            PreviewState::Pending => colors::MUTED,
-            PreviewState::Failed => colors::DANGER,
+            PreviewState::Accepted => colors::success(),
+            PreviewState::Pending => colors::muted(),
+            PreviewState::Failed => colors::danger(),
         };
         ui.label(RichText::new(self.session.preview_text()).color(color).size(layout::TYPE_XS));
     }
@@ -1249,7 +1267,7 @@ impl FormEditor {
         let has_data = self.session.data().is_some();
         let value = |text: String| if has_data { text } else { "—".to_owned() };
         ui.horizontal_wrapped(|ui| {
-            let mono = |text: String| RichText::new(text).color(colors::MUTED).size(layout::TYPE_XS).monospace();
+            let mono = |text: String| RichText::new(text).color(colors::muted()).size(layout::TYPE_XS).monospace();
             ui.label(mono(format!("Generation Time: {}", value(format!("{:.1} ms", statistics.milliseconds)))));
             ui.label(mono(format!(
                 "Data Size: {}",
@@ -1270,10 +1288,10 @@ impl FormEditor {
     fn inspector_pane(&mut self, ui: &mut Ui) {
         egui::Panel::top("inspector-heading")
             .exact_size(48.0)
-            .frame(components::panel_frame().fill(colors::SURFACE).inner_margin(egui::Margin::symmetric(12, 8)))
+            .frame(components::panel_frame().fill(colors::surface()).inner_margin(egui::Margin::symmetric(12, 8)))
             .show(ui, |ui| {
                 ui.horizontal_centered(|ui| {
-                    components::panel_heading(ui, "INSPECTOR");
+                    components::panel_heading(ui, "Inspector");
                     if self.tab != InspectorTab::Parameters {
                         return;
                     }
@@ -1289,10 +1307,10 @@ impl FormEditor {
                 });
             });
         egui::Panel::top("inspector-tabs")
-            .frame(egui::Frame::new().fill(colors::PANEL).inner_margin(egui::Margin::symmetric(6, 6)))
+            .frame(egui::Frame::new().fill(colors::panel()).inner_margin(egui::Margin::symmetric(6, 6)))
             .show(ui, |ui| inspector_tabs(ui, &mut self.tab));
         egui::CentralPanel::default()
-            .frame(components::panel_frame().fill(colors::SURFACE).inner_margin(egui::Margin::same(12)))
+            .frame(components::panel_frame().fill(colors::surface()).inner_margin(egui::Margin::same(12)))
             .show(ui, |ui| {
                 egui::ScrollArea::vertical().id_salt(("inspector", self.tab.label())).show(ui, |ui| {
                     ui.set_width(ui.available_width());
@@ -1628,6 +1646,25 @@ impl AuthoringTool for FormEditor {
         // The host writes an edited referenced script with the instance (see `save_dependencies`).
         self.session.mark_saved();
         self.session.mark_script_saved();
+    }
+
+    fn toolbar_actions(&mut self, ui: &mut egui::Ui) {
+        let run = editor_shell::quiet_button(ui, "Run").on_hover_text("Build now (Ctrl/Command+Enter)");
+        if self.track("run", run).clicked() {
+            self.session.compile();
+        }
+        let mut live = self.session.live();
+        if components::checkbox(ui, &mut live, "Live").on_hover_text("Rebuild as you type").changed() {
+            self.session.set_live(live);
+        }
+    }
+
+    fn preview_state(&self) -> Option<ToolPreviewState> {
+        Some(match self.session.preview_state() {
+            PreviewState::Accepted => ToolPreviewState::Current,
+            PreviewState::Pending => ToolPreviewState::Pending,
+            PreviewState::Failed => ToolPreviewState::Failed,
+        })
     }
 
     fn set_hosting(&mut self, hosting: ToolHosting) {

@@ -226,7 +226,9 @@ impl Console {
                             .auto_shrink([false; 2])
                             .show(ui, |ui| {
                                 for line in &self.output {
-                                    ui.label(RichText::new(&line.text).monospace().color(line_color(line.kind)));
+                                    ui.label(
+                                        RichText::new(&line.text).font(console_font()).color(line_color(line.kind)),
+                                    );
                                 }
                             });
                         self.line_ui(ui);
@@ -239,9 +241,10 @@ impl Console {
     fn line_ui(&mut self, ui: &mut egui::Ui) {
         let response = ui.add(
             egui::TextEdit::singleline(&mut self.input)
-                .font(egui::TextStyle::Monospace)
+                .font(console_font())
                 .desired_width(f32::INFINITY)
-                .hint_text("Type help for commands")
+                .margin(egui::vec2(8.0, 6.0))
+                .hint_text(RichText::new("Type help for commands").font(console_font()).color(dock::MUTED))
                 .text_color(dock::TEXT),
         );
         self.input.retain(|character| character != TOGGLE_CHARACTER);
@@ -406,6 +409,14 @@ fn line_color(kind: LineKind) -> Color32 {
         LineKind::Info => dock::TEXT,
         LineKind::Error => dock::ERROR,
     }
+}
+
+/// Size of the console's text, in logical points.
+const CONSOLE_TEXT_SIZE: f32 = 13.0;
+
+/// The console's one face for its log, input line, and hint: the theme's code family at the console size.
+fn console_font() -> egui::FontId {
+    egui::FontId::new(CONSOLE_TEXT_SIZE, joy_ui::theme::text_styles::code_family())
 }
 
 #[cfg(test)]

@@ -3,6 +3,31 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 11-09-2026
+### Authoring Tools
+- Added a host toolbar hook for authoring tools (`AuthoringTool::toolbar_actions` and `preview_state` with `ToolPreviewState`). Hosted FORM EDITOR puts Run and Live there, and hosted JOYFX EDITOR puts Apply and Live there; Joy Editor shows them beside the tool's preview status and Focus viewport. JOYFX EDITOR gained an emitter timeline lane above the scrubber, and both tools use sentence-case panel headings from the mockups.
+- Added editor themes: the Joy palette (blue and orange) stays the default, with Neutral dark and Neutral light palettes in `assets/ui/`. Joy Editor and the standalone FORM EDITOR and JOYFX EDITOR offer a Theme menu, and the choice persists (`joy.editor.theme`). Hosted tools follow the host. Breaking: `theme::colors` constants became functions (`colors::panel()`) that read the active palette.
+- `.joyproject` manifests can declare `run` (`command`, `arguments`, `directory`), and Joy Editor's Run Project uses it before falling back to npm `dev` or `cargo run`.
+- The development console's log, input, and hint now share one monospace face. JetBrains Mono replaces Meslo as the bundled code font.
+
+### Rendering
+- Added the Buffer Overview debug view (`r.BufferOverview`, a CONFIG checkbox): a 4×3 grid of the frame's buffers: final color, base color, normals, scene depth, motion vectors, roughness, metallic, emissive, ambient occlusion, lighting only, specular color, and shading model. Each tile renders as its own pass, and only the lit tile keeps temporal history.
+
+### Levels
+- Levels can author their sky, sun, clock, and wind with an `environment` component (`EnvironmentComponent`, with `default` and `dusk` presets) instead of games hard-coding them. FRAMEBREAK's battlefield reads its atmosphere from `main.joylevel`.
+
+### Audio and HUD Kits
+- Added `audio::synth`: oscillators, noise, filters, envelopes, and voice mixing for procedural sound effects. FRAMEBREAK's and VECTORS TO VICTORY's sound synthesis moved onto it.
+- Added `runtime::hud_paint`: gradients, radial discs, drop shadows, edge rules, meters, glows, dashes, check marks, and slider value math for game HUDs. All three games' interface code moved onto it and dropped their copies.
+
+### Game Scripts
+- Added `ScriptSources`, which holds a game's shipped Lua sources and their project paths for `GameAssets` hot reload. It accepts an edit only after the host validates the whole candidate set. Added `library_from` and `intern` (shared `'static` text for data records). FRAMEBREAK's script assets, hot reload, and interning moved onto them. SPACE SCUFFLES now reads its weapon profiles from Lua, and VECTORS TO VICTORY scores its tactical AI in Lua; both games' golden recordings replay unchanged.
+
+### Physics
+- Breaking: removed raycast vehicles (`VehicleTuning`, `VehicleInput`, the `vehicle` component, and their tests and recorded cases). Only the deleted Vehicle Playground used them.
+
+### Tests
+- Renamed particle fixtures that were still named after removed games (`lightning-arc.joyfx`, `cultivation-burst.joyfx`, and "Campfire").
+
 ### Shared Gameplay Systems
 - Added `gameplay::ai`: `BestChoice` (stable, bounded argmin/argmax with lazily evaluated acceptance tests such as line of sight), `nearest` and `SightCone` perception queries over 2D or 3D positions, and turn-limited steering (`turn_heading_toward`, `steer_velocity_toward`, `rotate_direction_toward`, `home_direction`). SPACE SCUFFLES' weapon, missile, carrier, and patrol targeting, FRAMEBREAK's lock-on and missile homing, and VECTORS TO VICTORY's heal and attack scoring now use them; every game's golden simulation recordings replay unchanged.
 - Added `physics::DebrisWorld`: one debris simulation holding per-structure colliders, the budgeted rigid pool, and kinetic-energy strikes against upright-cylinder targets with per-piece exemptions. FRAMEBREAK's battle debris and the form-destruction example moved onto it and dropped their hand-assembled worlds, collider sets, and strike tracking.

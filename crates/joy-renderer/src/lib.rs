@@ -25,6 +25,7 @@
 //! join the scene pass's transparency queue through [`FrameInputs::particles`]. Paged continuous-LOD terrain ([`terrain`]) draws `joy_terrain` surfaces through
 //! [`TerrainInstance`]s in the same scene.
 
+mod buffer_overview;
 mod camera;
 mod capture;
 mod culling;
@@ -60,6 +61,14 @@ mod texture;
 mod texture_mips;
 mod transparency;
 
+pub use buffer_overview::{
+    BUFFER_OVERVIEW_COLUMNS,
+    BUFFER_OVERVIEW_GAP,
+    BUFFER_OVERVIEW_ROWS,
+    BUFFER_OVERVIEW_TILES,
+    OverviewTile,
+    buffer_overview_tile_rect,
+};
 pub use camera::{
     Camera,
     CameraBasis,

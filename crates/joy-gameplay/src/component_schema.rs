@@ -168,7 +168,7 @@ pub struct ComponentSchema {
 
 /// One advisory validation result.
 ///
-/// `field` is a dotted path inside the component record (`wheels.2.radius`), or `None` (serialized `null`) for
+/// `field` is a dotted path inside the component record (`points.2.radius`), or `None` (serialized `null`) for
 /// whole-component problems.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComponentIssue {
@@ -280,7 +280,7 @@ impl ComponentSchemaCatalog {
 
     /// Resolve the field schema for a path inside a component record, descending through list items.
     ///
-    /// `path` names fields and list item indices, for example `["wheels", "0", "radius"]`. Returns `None` for unknown
+    /// `path` names fields and list item indices, for example `["points", "0", "radius"]`. Returns `None` for unknown
     /// types and fields, free-form records, and paths ending on a list item (an item is a record, not a field).
     pub fn field(&self, kind: &str, path: &[&str]) -> Option<&ComponentFieldSchema> {
         let mut fields: Option<&[ComponentFieldSchema]> = self.schemas.get(kind).map(|schema| schema.fields.as_slice());

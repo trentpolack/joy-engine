@@ -335,12 +335,12 @@ impl MaterialControls {
                             .on_hover_text(format!("{field} texture preview"));
                     }
                     None => {
-                        ui.label(RichText::new("Unreadable").color(colors::DANGER).size(layout::TYPE_XS));
+                        ui.label(RichText::new("Unreadable").color(colors::danger()).size(layout::TYPE_XS));
                     }
                 }
             }
             None => {
-                ui.label(RichText::new("Not Set").color(colors::MUTED).size(layout::TYPE_XS));
+                ui.label(RichText::new("Not Set").color(colors::muted()).size(layout::TYPE_XS));
             }
         }
     }
@@ -349,7 +349,7 @@ impl MaterialControls {
 /// A material property heading.
 fn section(ui: &mut Ui, title: &str) {
     ui.add_space(layout::SPACE_XS);
-    ui.label(RichText::new(title).color(colors::MUTED).size(layout::TYPE_SM).strong());
+    ui.label(RichText::new(title).color(colors::muted()).size(layout::TYPE_SM).strong());
 }
 
 /// Decode an embedded map into a small UI texture.

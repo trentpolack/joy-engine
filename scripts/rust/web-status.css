@@ -35,7 +35,7 @@
   --joy-status-shadow: 15px;
   --joy-status-display: "Archivo Black", "Arial Black", sans-serif;
   --joy-status-body: "Archivo", Arial, sans-serif;
-  --joy-status-mono: "Meslo LG S", ui-monospace, Menlo, Consolas, monospace;
+  --joy-status-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 
 /* Full-page screen ------------------------------------------------------------------------------------------------- */

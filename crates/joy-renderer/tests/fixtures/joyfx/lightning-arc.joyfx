@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "LUNA / lightning",
+  "name": "Lightning arc",
   "maxParticles": 64,
   "parameters": {},
   "emitters": [

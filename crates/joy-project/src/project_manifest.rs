@@ -35,6 +35,22 @@ pub struct ProjectPreview {
     pub entry: String,
 }
 
+/// How tools start a project's game: a program and its arguments, run in the project folder (or `directory` inside it).
+///
+/// Joy Editor's Run Project uses it, so a project chooses its own launcher (`cargo run -p my-game`, a script, or a host
+/// workspace's npm command) instead of the editor guessing from `package.json` or `Cargo.toml`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectRunCommand {
+    /// The program to start, found on `PATH` or relative to the run directory, for example `cargo`.
+    pub command: String,
+    /// Arguments in order, for example `["run", "--release"]`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub arguments: Vec<String>,
+    /// Folder to run in, relative to the project folder; `None` runs in the project folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub directory: Option<String>,
+}
+
 /// One editor capability: which asset files a project authors and which renderer previews them.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -68,6 +84,9 @@ pub struct ProjectManifest {
     pub preview: ProjectPreview,
     /// Editor capabilities in authored order.
     pub capabilities: Vec<ProjectCapability>,
+    /// The command that runs the project's game, when the project declares one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run: Option<ProjectRunCommand>,
 }
 
 /// A manifest failed validation. Messages are stable diagnostics.
@@ -105,6 +124,9 @@ pub enum ProjectManifestError {
         /// The normalized (lowercase) extension.
         extension: String,
     },
+    /// `run` was not an object with a non-empty `command`, string `arguments`, and an optional string `directory`.
+    #[error("Joy project manifest run must be an object with a non-empty command and string arguments.")]
+    InvalidRun,
     /// A path was absolute, used a drive letter, or contained a `..` segment.
     #[error("Project path must stay inside the selected folder: {0}")]
     UnsafePath(String),
@@ -145,12 +167,46 @@ pub fn parse_project_manifest(value: &Value) -> Result<ProjectManifest, ProjectM
         capabilities.push(capability);
     }
 
+    let run = record.get("run").map(parse_run).transpose()?;
     Ok(ProjectManifest {
         schema,
         schema_version: PROJECT_SCHEMA_VERSION,
         name,
         preview,
         capabilities,
+        run,
+    })
+}
+
+/// Validate the optional run command.
+fn parse_run(value: &Value) -> Result<ProjectRunCommand, ProjectManifestError> {
+    let Value::Object(record) = value else {
+        return Err(ProjectManifestError::InvalidRun);
+    };
+    let command = record
+        .get("command")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|command| !command.is_empty())
+        .ok_or(ProjectManifestError::InvalidRun)?
+        .to_owned();
+    let arguments = match record.get("arguments") {
+        None => Vec::new(),
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| item.as_str().map(str::to_owned).ok_or(ProjectManifestError::InvalidRun))
+            .collect::<Result<_, _>>()?,
+        Some(_) => return Err(ProjectManifestError::InvalidRun),
+    };
+    let directory = match record.get("directory") {
+        None => None,
+        Some(Value::String(directory)) => Some(safe_relative_path(directory)?),
+        Some(_) => return Err(ProjectManifestError::InvalidRun),
+    };
+    Ok(ProjectRunCommand {
+        command,
+        arguments,
+        directory,
     })
 }
 

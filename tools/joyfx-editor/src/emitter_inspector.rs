@@ -220,7 +220,7 @@ impl EmitterInspector {
                     ui.push_id(("burst", burst_index), |ui| {
                         ui.horizontal(|ui| {
                             edits.control(&NumberField::new("time", &mut burst.time).minimum(0.0).step(0.01).width(72.0).label("Burst time").show(ui, drafts));
-                            ui.label(RichText::new("s").color(colors::MUTED));
+                            ui.label(RichText::new("s").color(colors::muted()));
                             edits.control(&integer_field(ui, "count", &mut burst.count, 72.0, drafts));
                             if ui.small_button("×").on_hover_text("Delete burst").clicked() {
                                 delete_burst = Some(burst_index);
@@ -344,7 +344,7 @@ fn field(ui: &mut Ui, width: f32, label: &str, contents: impl FnOnce(&mut Ui)) {
 /// A small section title.
 fn section(ui: &mut Ui, title: &str) {
     ui.add_space(layout::SPACE_MD);
-    ui.label(RichText::new(title).strong().color(colors::TEXT).size(layout::TYPE_SM));
+    ui.label(RichText::new(title).strong().color(colors::text()).size(layout::TYPE_SM));
 }
 
 /// A whole-number field of at least one for a `u32` document value.

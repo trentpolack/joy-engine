@@ -18,6 +18,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+joy-core.workspace = true
 thiserror.workspace = true
 hound.workspace = true
 log.workspace = true

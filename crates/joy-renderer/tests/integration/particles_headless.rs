@@ -518,7 +518,7 @@ fn arcade_frames_place_particles_between_their_layers_in_the_games_color_convent
     if std::env::var("JOY_RENDER_CAPTURE_DIR").is_ok() {
         let (width, height) = (960_u32, 480_u32);
         particles.clear();
-        let blast = arcade_effect("blast-garden-blast.joyfx", 240.0, 240.0, 9);
+        let blast = arcade_effect("cultivation-burst.joyfx", 240.0, 240.0, 9);
         let explosion = arcade_effect("space-scuffles-explosion.joyfx", 720.0, 240.0, 14);
         let display = ParticleDrawOptions {
             display_colors: true,

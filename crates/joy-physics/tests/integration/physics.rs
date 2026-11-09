@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Physics behavior worth protecting: resting contact, sleeping and waking, bounded fixed stepping, ownership, raycast
-//! vehicles, transform conventions, contact and sensor events, filtered queries, and determinism, plus signed distance
+//! Physics behavior worth protecting: resting contact, sleeping and waking, bounded fixed stepping, ownership, transform
+//! conventions, contact and sensor events, filtered queries, and determinism, plus signed distance
 //! field colliders.
 
 use joy_core::math::Vec3;
@@ -23,10 +23,6 @@ use joy_physics::{
     SdfCollisionStatistics,
     SdfPrimitive,
     SdfShape,
-    VehicleInput,
-    VehicleOptions,
-    VehicleTuning,
-    WheelOptions,
 };
 
 /// Advance in 60 Hz frames for a number of seconds.
@@ -59,40 +55,6 @@ fn ground(world: &mut PhysicsSimulation) -> BodyHandle {
             ..BodyOptions::new(PrimitiveShape::Box)
         })
         .unwrap()
-}
-
-/// The test chassis: a 180 kg box one meter above the ground.
-fn chassis_options() -> BodyOptions {
-    BodyOptions {
-        mass: 180.0,
-        half_extents: Vec3::new(0.8, 0.25, 1.25),
-        position: Vec3::new(0.0, 1.0, 0.0),
-        ..BodyOptions::new(PrimitiveShape::Box)
-    }
-}
-
-/// The four-wheel test vehicle: front wheels steer, every wheel drives and brakes.
-fn make_vehicle(world: &mut PhysicsSimulation) -> BodyHandle {
-    let mut wheels = Vec::new();
-    for z in [1.0, -1.0] {
-        for x in [-0.8, 0.8] {
-            wheels.push(WheelOptions {
-                radius: 0.35,
-                steering: z > 0.0,
-                driven: true,
-                brake: true,
-                ..WheelOptions::new(Vec3::new(x, 0.0, z))
-            });
-        }
-    }
-    let options = VehicleOptions {
-        wheels,
-        engine_force: 400.0,
-        max_steer: 0.4,
-        brake_force: 20.0,
-        ..Default::default()
-    };
-    world.create_vehicle(chassis_options(), options).unwrap()
 }
 
 /// An axis-aligned box mesh of `half` extents centered on the origin, optionally without its top face (an open crate).
@@ -263,224 +225,7 @@ fn forces_apply_for_exactly_one_fixed_step() {
 }
 
 #[test]
-fn vehicles_are_bodies_that_validate_atomically_and_leave_with_their_chassis() {
-    let mut first = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
-    let mut second = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
-    let vehicle = make_vehicle(&mut first);
-    let floor = ground(&mut first);
-    let wheels = vec![WheelOptions::new(Vec3::ZERO)];
-    let one_wheel = VehicleOptions {
-        wheels: wheels.clone(),
-        ..Default::default()
-    };
-
-    // A vehicle is a body: body queries apply to it, and only vehicle bodies answer vehicle queries.
-    assert!(first.is_vehicle(vehicle) && !first.is_vehicle(floor));
-    assert!(first.body_transform(vehicle).is_some());
-    assert_eq!(first.wheel_transforms(vehicle).len(), 4);
-    assert!(first.wheel_transforms(floor).is_empty());
-    assert_eq!(first.set_vehicle_input(floor, VehicleInput::default()), Err(PhysicsError::NotAVehicle));
-
-    // Foreign handles never alias; static chassis and invalid wheels are rejected without creating a body.
-    assert!(!second.is_vehicle(vehicle));
-    assert!(second.body_transform(vehicle).is_none());
-    let bodies = first.body_count();
-    let invalid = [
-        (
-            chassis_options(),
-            VehicleOptions {
-                wheels: vec![WheelOptions {
-                    radius: f32::NAN,
-                    ..WheelOptions::new(Vec3::ZERO)
-                }],
-                ..Default::default()
-            },
-        ),
-        (
-            chassis_options(),
-            VehicleOptions {
-                wheels: vec![WheelOptions {
-                    suspension_stiffness: f32::INFINITY,
-                    ..WheelOptions::new(Vec3::ZERO)
-                }],
-                ..Default::default()
-            },
-        ),
-        (
-            chassis_options(),
-            VehicleOptions {
-                wheels: wheels.clone(),
-                engine_force: f32::INFINITY,
-                ..Default::default()
-            },
-        ),
-        (
-            chassis_options(),
-            VehicleOptions {
-                wheels: Vec::new(),
-                ..Default::default()
-            },
-        ),
-    ];
-    for (chassis, options) in invalid {
-        assert!(first.create_vehicle(chassis, options).is_err());
-        assert_eq!(first.body_count(), bodies);
-        assert_eq!(first.vehicle_count(), 1);
-    }
-    assert_eq!(
-        first.create_vehicle(
-            BodyOptions {
-                mass: 0.0,
-                ..chassis_options()
-            },
-            one_wheel.clone()
-        ),
-        Err(PhysicsError::InvalidChassis)
-    );
-
-    // Drive limits retune live within the creation bounds; invalid values change nothing.
-    let replacement = first.create_vehicle(chassis_options(), one_wheel).unwrap();
-    let tuning = first.vehicle_tuning(replacement).unwrap();
-    let retuned = VehicleTuning {
-        engine_force: 900.0,
-        ..tuning
-    };
-    first.set_vehicle_tuning(replacement, retuned).unwrap();
-    assert_eq!(first.vehicle_tuning(replacement), Some(retuned));
-    for invalid in [
-        VehicleTuning {
-            max_steer: 2.0,
-            ..tuning
-        },
-        VehicleTuning {
-            brake_force: -1.0,
-            ..tuning
-        },
-        VehicleTuning {
-            engine_force: f32::NAN,
-            ..tuning
-        },
-    ] {
-        assert!(matches!(first.set_vehicle_tuning(replacement, invalid), Err(PhysicsError::OutOfRange { .. })));
-    }
-    assert_eq!(first.vehicle_tuning(replacement), Some(retuned));
-    assert_eq!(second.set_vehicle_tuning(replacement, tuning), Err(PhysicsError::UnknownBody));
-
-    // Removing the chassis body removes its vehicle.
-    assert!(first.remove_body(replacement));
-    assert!(!first.is_vehicle(replacement));
-    assert_eq!(
-        first.set_vehicle_input(
-            replacement,
-            VehicleInput {
-                throttle: 1.0,
-                ..Default::default()
-            }
-        ),
-        Err(PhysicsError::UnknownBody)
-    );
-    assert_eq!(first.vehicle_count(), 1);
-    assert!(first.wheel_transforms(replacement).is_empty());
-}
-
-#[test]
-fn raycast_wheels_provide_traction_steering_and_braking() {
-    // Straight-line drive along +Z, then braking.
-    let mut straight_world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
-    ground(&mut straight_world);
-    let vehicle = make_vehicle(&mut straight_world);
-    simulate(&mut straight_world, 1.0);
-    assert_eq!(straight_world.grounded_wheel_count(vehicle), 4, "every wheel rests on the ground");
-    let resting = straight_world.body_transform(vehicle).unwrap().position;
-
-    straight_world
-        .set_vehicle_input(
-            vehicle,
-            VehicleInput {
-                throttle: 1.0,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    simulate(&mut straight_world, 2.0);
-    let driven = straight_world.body_transform(vehicle).unwrap().position;
-    assert!(driven.z - resting.z > 2.0, "positive throttle drives local +Z: {driven}");
-    assert!(driven.x.abs() < 0.25, "straight drive does not drift: {driven}");
-    let unbraked_speed = straight_world.vehicle_speed(vehicle);
-    straight_world
-        .set_vehicle_input(
-            vehicle,
-            VehicleInput {
-                brake: 1.0,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    simulate(&mut straight_world, 1.0);
-    assert!(straight_world.vehicle_speed(vehicle) < unbraked_speed * 0.5);
-
-    // Positive steer turns toward local +X: the chassis yaws positive and drifts to +X.
-    let mut turning_world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
-    ground(&mut turning_world);
-    let vehicle = make_vehicle(&mut turning_world);
-    simulate(&mut turning_world, 1.0);
-    turning_world
-        .set_vehicle_input(
-            vehicle,
-            VehicleInput {
-                throttle: 1.0,
-                steer: 1.0,
-                brake: 0.0,
-            },
-        )
-        .unwrap();
-    simulate(&mut turning_world, 2.0);
-    let turned = turning_world.body_transform(vehicle).unwrap();
-    assert!(turned.position.x > 0.5, "{turned:?}");
-    assert!(turned.rotation.y > 0.1, "heading turns toward +X: {turned:?}");
-    assert!(
-        turning_world
-            .set_vehicle_input(
-                vehicle,
-                VehicleInput {
-                    throttle: f32::NAN,
-                    ..Default::default()
-                }
-            )
-            .is_err()
-    );
-
-    // Wheels without driven or steering flags ignore input.
-    let mut passive_world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
-    ground(&mut passive_world);
-    let wheels =
-        [-1.0, 1.0].into_iter().flat_map(|z| [-0.8, 0.8].map(|x| WheelOptions::new(Vec3::new(x, 0.0, z)))).collect();
-    let passive = passive_world
-        .create_vehicle(
-            chassis_options(),
-            VehicleOptions {
-                wheels,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-    simulate(&mut passive_world, 1.0);
-    passive_world
-        .set_vehicle_input(
-            passive,
-            VehicleInput {
-                throttle: 1.0,
-                steer: 1.0,
-                brake: 0.0,
-            },
-        )
-        .unwrap();
-    simulate(&mut passive_world, 1.0);
-    assert!(passive_world.body_transform(passive).unwrap().position.z.abs() < 0.01);
-}
-
-#[test]
-fn colliders_and_wheels_follow_the_x_then_y_then_z_rotation_convention() {
+fn colliders_and_bodies_follow_the_x_then_y_then_z_rotation_convention() {
     let mut world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     let rotations = [
         Vec3::new(std::f32::consts::FRAC_PI_4, std::f32::consts::FRAC_PI_4, 0.0),
@@ -495,23 +240,17 @@ fn colliders_and_wheels_follow_the_x_then_y_then_z_rotation_convention() {
             ..BodyOptions::new(PrimitiveShape::Plane)
         })
         .unwrap();
-    let chassis = world
-        .create_vehicle(
-            BodyOptions {
-                mass: 180.0,
-                position: Vec3::new(100.0, 0.0, 0.0),
-                ..BodyOptions::new(PrimitiveShape::Box)
-            },
-            VehicleOptions {
-                wheels: vec![WheelOptions::new(Vec3::ZERO)],
-                ..Default::default()
-            },
-        )
+    let body = world
+        .create_body(BodyOptions {
+            mass: 180.0,
+            position: Vec3::new(100.0, 0.0, 0.0),
+            ..BodyOptions::new(PrimitiveShape::Box)
+        })
         .unwrap();
 
     for rotation in rotations {
         world.set_body_transform(plane, None, Some(rotation)).unwrap();
-        world.set_body_transform(chassis, None, Some(rotation)).unwrap();
+        world.set_body_transform(body, None, Some(rotation)).unwrap();
         let visual = quat_from_euler(rotation);
         let normal = visual * Vec3::Y;
 
@@ -521,8 +260,7 @@ fn colliders_and_wheels_follow_the_x_then_y_then_z_rotation_convention() {
         assert!((hit.normal - normal).abs().max_element() < 1e-5, "normal for {rotation}");
 
         // Returned orientations reproduce the same rotation matrix as the renderer's convention.
-        let wheel = world.wheel_transforms(chassis)[0];
-        for result in [world.body_transform(plane).unwrap().rotation, wheel.rotation] {
+        for result in [world.body_transform(plane).unwrap().rotation, world.body_transform(body).unwrap().rotation] {
             let round_trip = quat_from_euler(result);
             let expected = joy_core::math::Mat3::from_quat(visual);
             let actual = joy_core::math::Mat3::from_quat(round_trip);
@@ -673,7 +411,15 @@ fn identical_worlds_produce_bit_identical_results() {
     let run = || {
         let mut world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
         ground(&mut world);
-        let vehicle = make_vehicle(&mut world);
+        // A driven body pushed and turned by forces every frame, so steady input still exercises contacts and friction.
+        let driven = world
+            .create_body(BodyOptions {
+                mass: 180.0,
+                half_extents: Vec3::new(0.8, 0.25, 1.25),
+                position: Vec3::new(0.0, 1.0, 0.0),
+                ..BodyOptions::new(PrimitiveShape::Box)
+            })
+            .unwrap();
         let crate_box = world
             .create_body(BodyOptions {
                 mass: 5.0,
@@ -724,20 +470,13 @@ fn identical_worlds_produce_bit_identical_results() {
         ];
         let mut trace = Vec::new();
         for frame in 0..240 {
-            let input = VehicleInput {
-                throttle: 1.0,
-                steer: if frame > 90 { 0.6 } else { 0.0 },
-                brake: 0.0,
-            };
-            world.set_vehicle_input(vehicle, input).unwrap();
+            let turn = if frame > 90 { 0.6 } else { 0.0 };
+            world.apply_force(driven, Vec3::new(turn * 400.0, 0.0, 900.0), None).unwrap();
             world.step(1.0 / 60.0).unwrap();
-            for body in [vehicle, crate_box, tumbling[0], tumbling[1]] {
+            for body in [driven, crate_box, tumbling[0], tumbling[1]] {
                 let transform = world.body_transform(body).unwrap();
                 trace.extend(transform.position.to_array().map(f32::to_bits));
                 trace.extend(transform.rotation.to_array().map(f32::to_bits));
-            }
-            for wheel in world.wheel_transforms(vehicle) {
-                trace.extend(wheel.position.to_array().map(f32::to_bits));
             }
         }
         trace

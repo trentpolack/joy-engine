@@ -151,23 +151,23 @@ fn preset_records_round_trip_and_run_in_the_engine_runtimes() {
         }
     }
 
-    // A collider and vehicle kart survives a document round trip and spawns.
+    // A preset collider survives a document round trip and spawns its body.
     let data = |preset: &str| Value::Object(catalog.create_component(preset).unwrap().data);
     let mut physics = data(component_preset::PHYSICS_BOX);
     physics["mass"] = json!(120);
-    let kart = EntityDefinition::from_json(&json!({
-        "id": "kart",
+    let crate_entity = EntityDefinition::from_json(&json!({
+        "id": "crate",
         "transform": {"position": [0, 1, 0]},
-        "components": {"physics": physics, "vehicle": data(component_preset::VEHICLE_FOUR_WHEEL)}
+        "components": {"physics": physics}
     }))
     .unwrap();
     let level = LevelData {
-        entities: vec![kart],
+        entities: vec![crate_entity],
         ..LevelData::new("Presets")
     };
     let level = parse_level(&serialize_level(&level)).unwrap();
     assert!(level.entities.iter().all(|entity| catalog.validate_entity(entity).is_empty()));
     let runtime = LevelRuntime::new(&level, EntityRegistry::new()).unwrap();
-    assert!(runtime.body(&EntityId::from("kart")).is_some_and(|body| runtime.physics().is_vehicle(body)));
-    assert!(level.entities[0].components.contains_key(component_type::VEHICLE));
+    assert!(runtime.body(&EntityId::from("crate")).is_some());
+    assert!(level.entities[0].components.contains_key(component_type::PHYSICS));
 }

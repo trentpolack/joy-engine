@@ -38,6 +38,6 @@ The embedded version 1 asset uses a square power-of-two-plus-one grid, power-of-
 Synthesized detail uses `TERRAIN_CONFIG.streaming.detail`: three levels below the authored spacing (down to half a world unit), four octaves, and amplitudes of 0.35 (ground), 1.0 ridged (rock), and 0.15 (snow) world units; the streamer keeps at most 1,536 tiles and synthesizes 12 per update. Gameplay height and colliders read level -2. Craters are 7 units across with a 3.5-unit bowl. Props are SDF crates (exercising SDF contacts against terrain) and solver spheres; colliders follow the focus and every prop within a 48-unit radius.
 
 ## Boundaries and Validation
-This example does not create vehicle collision, roads, or authored terrain editing in Joy Editor. Prop scatter uses its own seeded stream and never changes terrain data.
+This example does not create roads, or authored terrain editing in Joy Editor. Prop scatter uses its own seeded stream and never changes terrain data.
 
 Engine Rust tests cover pyramid measurement, quadtree selection, streaming, detail, craters, collision, and headless rendering. `tests/integration/example_terrain.rs` drives the lab through key input (streaming into detail, a crater under the pointer, and props landing on the terrain) and streams a written package through the platform fetcher. `npm run capture --workspace @joy-engine/example-terrain -- --built` adds browser startup/image evidence. Inspect visuals and camera interaction on target hardware; timings and software captures are not a GPU performance benchmark.

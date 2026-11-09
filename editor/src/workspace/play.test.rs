@@ -13,7 +13,7 @@ fn play_requires_a_dev_script_and_starts_idle() {
     let mut session = PlaySession::new();
     assert_eq!(session.state(), PlayState::Idle);
     let missing = std::env::temp_dir().join("joy-editor-play-missing-project");
-    assert!(session.start("Missing", &missing).unwrap_err().contains("package.json"));
+    assert!(session.start("Missing", &missing, None).unwrap_err().contains("package.json"));
     assert_eq!(session.state(), PlayState::Idle);
     assert!(session.poll().is_none());
 }

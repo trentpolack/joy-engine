@@ -271,7 +271,7 @@ pub(crate) enum EntityCommand {
 /// Borrowed simulation services available to behaviors and systems.
 ///
 /// Gives mutable access to the physics simulation, the entity-to-body map, the world's events, and its timers, all owned by
-/// the composition root ([`World`](super::World)). A body listed for an entity (vehicle chassis included) is owned by
+/// the composition root ([`World`](super::World)). A body listed for an entity is owned by
 /// that entity: removing the entity removes it from physics. Structural changes (spawning and removing entities) are
 /// requested here and applied by the world: immediately after the requesting behavior or system returns during an
 /// update, or at the start of the next update when requested from a spawn or destroy hook.
@@ -304,7 +304,7 @@ impl<'a> SimulationContext<'a> {
         }
     }
 
-    /// The live body owned by an entity, if any. Vehicle operations take a vehicle entity's body.
+    /// The live body owned by an entity, if any.
     pub fn body(&self, id: &EntityId) -> Option<BodyHandle> {
         self.bodies.get(id).copied().filter(|handle| self.physics.contains_body(*handle))
     }

@@ -1,16 +1,17 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Presentation components: the authored `render`, `light`, `effect`, and `postProcess` records that scenes interpret,
+//! Presentation components: the authored `render`, `light`, `effect`, `environment`, and `postProcess` records that scenes interpret,
 //! with their defaults, typed readers, and authoring schemas.
 //!
-//! Simulation components (`physics`, `vehicle`) belong to `joy-gameplay`, which also owns the shared vocabulary of
+//! Simulation components (`physics`) belong to `joy-gameplay`, which also owns the shared vocabulary of
 //! component type names, presets, and categories so a level format has one set of names. Presentation components are
 //! defined here, next to the scenes that present them, so the gameplay crate never depends on rendering. Each schema's
 //! field defaults come from the same constants its reader uses, so the inspector shows what the scene assumes for an
 //! omitted field.
 
 mod effect;
+mod environment;
 mod light;
 mod post_process;
 mod render;
@@ -19,6 +20,7 @@ pub use effect::{
     EFFECT_COMPONENT_DEFAULTS,
     EffectComponentDefaults,
 };
+pub use environment::EnvironmentComponent;
 pub use light::{
     LIGHT_COMPONENT_DEFAULTS,
     LightComponent,
@@ -77,13 +79,26 @@ pub enum ComponentError {
     /// A post-process volume's setting override was invalid or unknown.
     #[error(transparent)]
     PostProcess(#[from] PostProcessError),
+    /// An environment record's clock or wind was invalid.
+    #[error("Environment: {0}")]
+    Environment(#[from] joy_environment::EnvironmentError),
+    /// An environment record's sky was invalid.
+    #[error("Environment sky: {0}")]
+    Sky(#[from] joy_renderer::SkyOptionsError),
 }
 
-/// The presentation components' schemas in authoring display order: render, light, effect, then post-process.
+/// The presentation components' schemas in authoring display order: render, light, effect, environment, then
+/// post-process.
 ///
 /// Each call returns fresh, caller-owned schemas.
 pub fn presentation_component_schemas() -> Vec<ComponentSchema> {
-    vec![render::render_schema(), light::light_schema(), effect::effect_schema(), post_process::post_process_schema()]
+    vec![
+        render::render_schema(),
+        light::light_schema(),
+        effect::effect_schema(),
+        environment::environment_schema(),
+        post_process::post_process_schema(),
+    ]
 }
 
 /// A catalog of every component the engine interprets: presentation components first, then the simulation

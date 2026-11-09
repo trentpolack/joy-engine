@@ -14,7 +14,7 @@
 //! | Layer | Modules (crates) | Owns |
 //! | --- | --- | --- |
 //! | foundation | [`core`] (`joy-core`), [`scripting`] (`joy-core`), [`render_types`] (`joy-render-types`) | Math, transforms, colors, seeded random, primitive shapes, script language information; GPU-free meshes, materials, and lights |
-//! | simulation | [`environment`] (`joy-environment`), [`terrain`] (`joy-terrain`), [`physics`] (`joy-physics`), [`gameplay`] (`joy-gameplay`), `game_script` (`joy-game-script`) | Solar time and wind, terrain heightfields, tile pyramids, streaming, detail, and craters, rigid bodies and vehicles, entities, controllers, levels, sandboxed Lua game scripts (`game-script` feature) |
+//! | simulation | [`environment`] (`joy-environment`), [`terrain`] (`joy-terrain`), [`physics`] (`joy-physics`), [`gameplay`] (`joy-gameplay`), `game_script` (`joy-game-script`) | Solar time and wind, terrain heightfields, tile pyramids, streaming, detail, and craters, rigid bodies, entities, controllers, levels, sandboxed Lua game scripts (`game-script` feature) |
 //! | content | [`dcc`] (`joy-dcc-gltf`), [`form`] (`joy-form`), [`particles`] (`joy-fx`), [`project`] (`joy-project`) | GLB and glTF mesh import, the FORM procedural modeling language (renderer-free geometry), `.joyfx` particle documents, scripts, and simulation, project manifests |
 //! | rendering | [`rendering`] (`joy-renderer`, `joy-scene`) | The wgpu renderer every game, tool, and preview draws with, including particle drawing, and the scene presentation of levels, FORM meshes, and effects |
 //! | platform | [`runtime`] (`joy-app`, `joy-input`, `joy-audio`, `joy-storage`, `joy-ui`), [`development`] (`joy-devtools`, `joy-authoring`) | The game shell, frame phases, embedded game assets, input and gamepads, audio, storage, egui UI and theme, dev tools, the authoring kit, browser glue |
@@ -34,7 +34,7 @@
 //! of evaluating FORM, while native development builds evaluate live and hot reload ([`game_assets!`]).
 //!
 //! Conventions shared by every module:
-//! - World space is Y-up and right-handed, measured in meters; vehicles drive along local +Z.
+//! - World space is Y-up and right-handed, measured in meters; +Z is an object's local forward.
 //! - Rotations are XYZ Euler radians applied X, then Y, then Z ([`core::quat_from_euler`]).
 //! - Time is in seconds. Environment clocks use `f64`; physics and entity updates use `f32`.
 //! - Owners hand out copyable handles and ids (`BodyHandle`, `EntityId`, `MeshInstanceId`) instead of long-lived
@@ -265,8 +265,6 @@ pub mod prelude {
         PhysicsSimulation,
         PhysicsSimulationOptions,
         QueryOptions,
-        VehicleInput,
-        VehicleTuning,
     };
     pub use crate::rendering::{
         AssetScene,

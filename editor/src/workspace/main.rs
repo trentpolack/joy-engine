@@ -319,7 +319,8 @@ impl Workspace {
         let Some(project) = self.project_summary().cloned() else {
             return;
         };
-        match self.play.start(&project.name, std::path::Path::new(&project.location)) {
+        let folder = std::path::Path::new(&project.location);
+        match self.play.start(&project.name, folder, project.manifest.run.as_ref()) {
             Ok(()) => self.set_status(format!("Playing {} in its own window; saved assets reload live.", project.name)),
             Err(message) => self.set_status(message),
         }

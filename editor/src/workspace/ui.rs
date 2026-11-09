@@ -44,10 +44,12 @@ use joy_engine::development::editor_shell::{
     document_tab,
     document_tool_name,
     quiet_button,
+    restore_theme,
     rule,
     run_button,
     status_label,
     status_text,
+    theme_menu,
     tool_badge,
 };
 use joy_engine::development::{
@@ -57,6 +59,7 @@ use joy_engine::development::{
     OpenRequest,
     ScriptEditor,
     ScriptSyntax,
+    ToolPreviewState,
 };
 use joy_engine::runtime::Storage;
 use joy_engine::runtime::hud_text::{
@@ -158,6 +161,8 @@ pub struct WorkspaceView {
     commands: ViewCommands,
     // The shell's retained row layout (header, tabs, toolbar, body, status).
     shell: ShellLayout,
+    // Where the chosen theme persists.
+    storage: Option<Storage>,
 }
 
 impl WorkspaceView {
@@ -165,7 +170,7 @@ impl WorkspaceView {
     pub fn new(storage: Option<Storage>) -> Self {
         Self {
             controls: ControlMap::default(),
-            level: LevelUi::new(storage),
+            level: LevelUi::new(storage.clone()),
             document_rect: Rect::NOTHING,
             file_dialogs: FileDialogs::new(),
             source_editors: HashMap::new(),
@@ -176,7 +181,13 @@ impl WorkspaceView {
             focus_search: false,
             commands: ViewCommands::default(),
             shell: ShellLayout::new(),
+            storage,
         }
+    }
+
+    /// Apply the saved editor theme; call during the first UI pass.
+    pub fn restore_theme(&self, context: &egui::Context) {
+        restore_theme(context, self.storage.as_ref());
     }
 
     /// Ask the author to confirm quitting with unsaved edits.
@@ -339,7 +350,7 @@ impl WorkspaceView {
     /// The header: the wordmark, Open… (projects, recent folders, and Open Folder), Run Project, the active file's state,
     /// and Save.
     fn header(&mut self, context: &egui::Context, rect: Rect, workspace: &mut Workspace) {
-        region(context, "joy-editor-header", rect, colors::HEADER, Order::Middle, |ui| {
+        region(context, "joy-editor-header", rect, colors::header(), Order::Middle, |ui| {
             widgets::edge(ui, rect.left_bottom(), rect.right_bottom());
             let inner = rect.shrink2(vec2(24.0, 10.0));
             ui.scope_builder(
@@ -350,7 +361,7 @@ impl WorkspaceView {
                     rule(ui);
                     self.open_menu(ui, workspace);
                     let project = workspace.project_summary().map(|project| project.name.clone()).unwrap_or_default();
-                    let name = ui.label(RichText::new(project).size(layout::TYPE_MD + 1.0).color(colors::MUTED));
+                    let name = ui.label(RichText::new(project).size(layout::TYPE_MD + 1.0).color(colors::muted()));
                     self.controls.mark("project", name);
 
                     ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
@@ -383,6 +394,8 @@ impl WorkspaceView {
                         self.controls.mark("document-state", label);
                         rule(ui);
                         self.play_button(ui, workspace);
+                        let theme = theme_menu(ui, self.storage.as_ref());
+                        self.controls.mark("theme-menu", theme);
                     });
                 },
             );
@@ -406,7 +419,7 @@ impl WorkspaceView {
                 ui.separator();
             }
             let current = workspace.project().to_owned();
-            caption(ui, "PROJECTS", colors::MUTED);
+            caption(ui, "PROJECTS", colors::muted());
             for project in workspace.projects() {
                 let selected = project.id == current;
                 let item = ui.selectable_label(selected, &project.name);
@@ -417,7 +430,7 @@ impl WorkspaceView {
             let recent = workspace.recent_folders().to_vec();
             if !recent.is_empty() {
                 ui.separator();
-                caption(ui, "RECENT FOLDERS", colors::MUTED);
+                caption(ui, "RECENT FOLDERS", colors::muted());
                 for path in recent {
                     if ui.button(&path).clicked() {
                         folder = Some(path);
@@ -447,7 +460,7 @@ impl WorkspaceView {
         };
         let is_level = matches!(workspace.tab(&path).map(|tab| &tab.content), Some(TabContent::Level(_)));
         let is_tool = matches!(workspace.tab(&path).map(|tab| &tab.content), Some(TabContent::Tool(_)));
-        region(context, "joy-editor-toolbar", rect, colors::PANEL, Order::Middle, |ui| {
+        region(context, "joy-editor-toolbar", rect, colors::panel(), Order::Middle, |ui| {
             widgets::edge(ui, rect.left_bottom(), rect.right_bottom());
             let inner = rect.shrink2(vec2(20.0, 8.0));
             ui.scope_builder(
@@ -484,13 +497,32 @@ impl WorkspaceView {
                             workspace.refresh_files();
                         }
                     } else if is_tool {
-                        ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                            let label = if workspace.maximized { "Restore layout" } else { "Focus viewport" };
-                            let focus = quiet_button(ui, label).on_hover_text("Give the tool the whole document area");
-                            if self.controls.mark("lab-maximize", focus).clicked() {
-                                workspace.maximized = !workspace.maximized;
-                            }
-                        });
+                        let maximized = workspace.maximized;
+                        let mut toggle_focus = false;
+                        if let Some(TabContent::Tool(tool)) = workspace.active_tab_mut().map(|tab| &mut tab.content) {
+                            rule(ui);
+                            tool.toolbar_actions(ui);
+                            let preview = tool.preview_state();
+                            ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                                ui.spacing_mut().item_spacing.x = 14.0;
+                                let label = if maximized { "Restore layout" } else { "Focus viewport" };
+                                let focus =
+                                    quiet_button(ui, label).on_hover_text("Give the tool the whole document area");
+                                toggle_focus = self.controls.mark("lab-maximize", focus).clicked();
+                                if let Some(preview) = preview {
+                                    let tone = match preview {
+                                        ToolPreviewState::Current => StatusTone::Good,
+                                        ToolPreviewState::Pending => StatusTone::Pending,
+                                        ToolPreviewState::Failed => StatusTone::Problem,
+                                    };
+                                    let label = status_label(ui, preview.label(), tone);
+                                    self.controls.mark("tool-preview-state", label);
+                                }
+                            });
+                        }
+                        if toggle_focus {
+                            workspace.maximized = !workspace.maximized;
+                        }
                     }
                 },
             );
@@ -506,7 +538,7 @@ impl WorkspaceView {
         };
         let level_context = workspace.active_level().map(|(level, _)| self.level.status_context(level));
         let right = level_context.unwrap_or_else(|| format!("{} assets · Joy Engine", workspace.files().len()));
-        region(context, "joy-editor-footer", rect, colors::HEADER, Order::Middle, |ui| {
+        region(context, "joy-editor-footer", rect, colors::header(), Order::Middle, |ui| {
             widgets::edge(ui, rect.left_top(), rect.right_top());
             let status = status_text(ui, rect, &left, &right);
             self.controls.mark("status", status);
@@ -519,16 +551,16 @@ impl WorkspaceView {
     // -----------------------------------------------------------------------------------------------------------------
 
     fn content_browser(&mut self, context: &egui::Context, rect: Rect, workspace: &mut Workspace) {
-        region(context, "joy-editor-browser", rect, colors::PANEL, Order::Middle, |ui| {
+        region(context, "joy-editor-browser", rect, colors::panel(), Order::Middle, |ui| {
             let inner = rect.shrink2(vec2(12.0, 10.0));
             ui.scope_builder(
                 egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::top_down(Align::LEFT)),
                 |ui| {
                     ui.spacing_mut().item_spacing.y = 8.0;
                     ui.horizontal(|ui| {
-                        caption(ui, "CONTENT BROWSER", colors::MUTED);
+                        caption(ui, "CONTENT BROWSER", colors::muted());
                         ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                            let refresh = icon_button(ui, Icon::Refresh, 26.0, colors::MUTED, false)
+                            let refresh = icon_button(ui, Icon::Refresh, 26.0, colors::muted(), false)
                                 .on_hover_text("Refresh content");
                             if self.controls.mark("refresh", refresh).clicked() {
                                 workspace.refresh_files();
@@ -543,7 +575,7 @@ impl WorkspaceView {
                         let width = (ui.available_width() - filter_width - 8.0).max(60.0);
                         let search = ui
                             .scope(|ui| {
-                                ui.visuals_mut().extreme_bg_color = colors::FIELD;
+                                ui.visuals_mut().extreme_bg_color = colors::field();
                                 TextEdit::singleline(&mut workspace.search)
                                     .id(Id::new("search"))
                                     .hint_text("Find an asset…")
@@ -559,7 +591,7 @@ impl WorkspaceView {
                         }
                         self.controls.mark("search", search);
                         let restricted = !workspace.filters().is_empty();
-                        let filter = icon_button(ui, Icon::Filter, filter_width, colors::MUTED, restricted)
+                        let filter = icon_button(ui, Icon::Filter, filter_width, colors::muted(), restricted)
                             .on_hover_text(if restricted {
                                 format!("Filter assets, {} types selected", workspace.filters().len())
                             } else {
@@ -569,7 +601,7 @@ impl WorkspaceView {
                             let count = hud_text::single(
                                 ui.painter(),
                                 &workspace.filters().len().to_string(),
-                                Style::new(9.0, colors::ACCENT).bold(),
+                                Style::new(9.0, colors::accent()).bold(),
                             );
                             count.paint(ui.painter(), filter.rect.right_top() + vec2(-8.0, 1.0));
                         }
@@ -587,10 +619,10 @@ impl WorkspaceView {
                                 ui.add_sized(
                                     [half, 28.0],
                                     egui::Button::new(
-                                        RichText::new("+ New").size(layout::TYPE_MD).color(colors::ACCENT),
+                                        RichText::new("+ New").size(layout::TYPE_MD).color(colors::accent()),
                                     )
-                                    .fill(colors::PANEL)
-                                    .stroke(Stroke::new(1.0, colors::ACCENT))
+                                    .fill(colors::panel())
+                                    .stroke(Stroke::new(1.0, colors::accent()))
                                     .corner_radius(0.0),
                                 )
                             })
@@ -607,10 +639,10 @@ impl WorkspaceView {
                                 ui.add_sized(
                                     [half, 28.0],
                                     egui::Button::new(
-                                        RichText::new("Import").size(layout::TYPE_MD).color(colors::ACCENT),
+                                        RichText::new("Import").size(layout::TYPE_MD).color(colors::accent()),
                                     )
-                                    .fill(colors::PANEL)
-                                    .stroke(Stroke::new(1.0, colors::ACCENT))
+                                    .fill(colors::panel())
+                                    .stroke(Stroke::new(1.0, colors::accent()))
                                     .corner_radius(0.0),
                                 )
                             })
@@ -625,7 +657,7 @@ impl WorkspaceView {
                     ui.label(
                         RichText::new("Import .form, .forminst, .joyfx, .joylevel or .joyobject files.")
                             .size(layout::TYPE_XS)
-                            .color(colors::MUTED),
+                            .color(colors::muted()),
                     );
 
                     // Reserve the measured action panel before giving the remaining space to the asset list.
@@ -633,7 +665,7 @@ impl WorkspaceView {
                     egui::Panel::bottom("joy-editor-browser-actions")
                         .frame(egui::Frame::NONE)
                         .show(ui, |ui| self.browser_actions(ui, workspace, details_height));
-                    caption(ui, "ASSETS", colors::MUTED);
+                    caption(ui, "ASSETS", colors::muted());
                     ScrollArea::vertical().id_salt("files").auto_shrink([false, false]).show(ui, |ui| {
                         self.file_rows(ui, workspace);
                     });
@@ -645,21 +677,21 @@ impl WorkspaceView {
     /// The browser's bottom controls size themselves; long project details scroll above Documentation.
     fn browser_actions(&mut self, ui: &mut Ui, workspace: &Workspace, details_height: f32) {
         let details =
-            egui::CollapsingHeader::new(RichText::new("Project Details").size(layout::TYPE_MD).color(colors::ACCENT))
+            egui::CollapsingHeader::new(RichText::new("Project Details").size(layout::TYPE_MD).color(colors::accent()))
                 .id_salt("project-details")
                 .default_open(false)
                 .show(ui, |ui| {
                     ScrollArea::vertical().id_salt("project-details-content").max_height(details_height).show(
                         ui,
                         |ui| {
-                            caption(ui, "LOCAL PROJECT", colors::MUTED);
+                            caption(ui, "LOCAL PROJECT", colors::muted());
                             if let Some(project) = workspace.project_summary() {
                                 ui.label(RichText::new(&project.name).size(layout::TYPE_MD).strong());
                                 ui.label(
                                     RichText::new(&project.location)
                                         .size(layout::TYPE_XS)
                                         .monospace()
-                                        .color(colors::MUTED),
+                                        .color(colors::muted()),
                                 );
                                 for capability in &project.manifest.capabilities {
                                     let features: Vec<&str> = capability
@@ -672,14 +704,14 @@ impl WorkspaceView {
                                     ui.label(
                                         RichText::new(capability.extensions.join(", "))
                                             .size(layout::TYPE_XS)
-                                            .color(colors::MUTED),
+                                            .color(colors::muted()),
                                     );
                                     let features = if features.is_empty() {
                                         "No optional renderer features".to_owned()
                                     } else {
                                         features.join(" · ")
                                     };
-                                    ui.label(RichText::new(features).size(layout::TYPE_XS).color(colors::MUTED));
+                                    ui.label(RichText::new(features).size(layout::TYPE_XS).color(colors::muted()));
                                 }
                             }
                         },
@@ -689,8 +721,8 @@ impl WorkspaceView {
         let documentation = ui.add_sized(
             [ui.available_width(), layout::CONTROL_HEIGHT],
             egui::Button::new(RichText::new("Documentation ↗").size(layout::TYPE_MD))
-                .fill(colors::SURFACE)
-                .stroke(Stroke::new(1.0, colors::LINE))
+                .fill(colors::surface())
+                .stroke(Stroke::new(1.0, colors::line()))
                 .corner_radius(0.0),
         );
         if self.controls.mark("workspace-help-open", documentation).clicked() {
@@ -704,8 +736,8 @@ impl WorkspaceView {
         };
         let mut create = false;
         let mut cancel = false;
-        egui::Frame::new().fill(colors::SURFACE).inner_margin(8.0).show(ui, |ui| {
-            caption(ui, "TYPE", colors::MUTED);
+        egui::Frame::new().fill(colors::surface()).inner_margin(8.0).show(ui, |ui| {
+            caption(ui, "TYPE", colors::muted());
             let label = NEW_ASSET_KINDS.iter().find(|(kind, _)| *kind == form.kind).map_or("", |(_, label)| *label);
             let combo = egui::ComboBox::from_id_salt("new-asset-type")
                 .selected_text(label)
@@ -716,10 +748,10 @@ impl WorkspaceView {
                     }
                 });
             self.controls.mark("new-asset-type", combo.response);
-            caption(ui, "NAME", colors::MUTED);
+            caption(ui, "NAME", colors::muted());
             let name = ui
                 .scope(|ui| {
-                    ui.visuals_mut().extreme_bg_color = colors::FIELD;
+                    ui.visuals_mut().extreme_bg_color = colors::field();
                     TextEdit::singleline(&mut form.name)
                         .id(Id::new("new-asset-name"))
                         .hint_text("asset-name")
@@ -736,7 +768,7 @@ impl WorkspaceView {
                 create = true;
             }
             self.controls.mark("new-asset-name", name);
-            ui.label(RichText::new(new_asset_hint(&form.kind)).size(layout::TYPE_XS).color(colors::MUTED));
+            ui.label(RichText::new(new_asset_hint(&form.kind)).size(layout::TYPE_XS).color(colors::muted()));
             ui.horizontal(|ui| {
                 let submit = primary_button(ui, "Create");
                 if self.controls.mark("new-asset-create", submit).clicked() {
@@ -766,7 +798,7 @@ impl WorkspaceView {
             if file.folder() != folder {
                 folder = file.folder().to_owned();
                 ui.add_space(4.0);
-                ui.label(RichText::new(folder.to_uppercase()).size(layout::TYPE_XS).color(colors::MUTED));
+                ui.label(RichText::new(folder.to_uppercase()).size(layout::TYPE_XS).color(colors::muted()));
             }
             let selected = workspace.selected_asset() == Some(file.path.as_str());
             let width = ui.available_width();
@@ -775,13 +807,13 @@ impl WorkspaceView {
             let hovered = response.hovered() || response.has_focus();
             let painter = ui.painter();
             if selected || hovered {
-                painter.rect_filled(rect, 0.0, if selected { colors::SELECTED_ROW } else { colors::SURFACE });
+                painter.rect_filled(rect, 0.0, if selected { colors::selected_row() } else { colors::surface() });
             }
             if selected {
-                painter.rect_filled(Rect::from_min_size(rect.min, vec2(2.0, rect.height())), 0.0, colors::ACCENT);
+                painter.rect_filled(Rect::from_min_size(rect.min, vec2(2.0, rect.height())), 0.0, colors::accent());
             }
             if response.has_focus() {
-                painter.rect_stroke(rect, 0.0, Stroke::new(1.0, colors::ACCENT), StrokeKind::Inside);
+                painter.rect_stroke(rect, 0.0, Stroke::new(1.0, colors::accent()), StrokeKind::Inside);
             }
             let (mark, fill, color) = match file.kind.as_str() {
                 "joyfx" => ("FX", Color32::from_rgb(0x34, 0x30, 0x47), Color32::from_rgb(0xc8, 0xb7, 0xeb)),
@@ -790,7 +822,7 @@ impl WorkspaceView {
                 _ => ("F", Color32::from_rgb(0x24, 0x37, 0x4b), Color32::from_rgb(0x8a, 0xa9, 0xc6)),
             };
             badge(painter, Rect::from_min_size(rect.min + vec2(10.0, 6.0), vec2(20.0, 20.0)), mark, fill, color);
-            let name = hud_text::single(painter, file.file_name(), Style::new(12.0, colors::TEXT));
+            let name = hud_text::single(painter, file.file_name(), Style::new(12.0, colors::text()));
             name.paint(painter, pos2(rect.min.x + 38.0, rect.center().y - (name.size().y / 2.0)));
             self.controls.mark(format!("row:{}", file.path), response.clone());
             if response.clicked() {
@@ -809,12 +841,13 @@ impl WorkspaceView {
                 // Row actions sit at the right edge: the actions menu and delete.
                 let trash = Rect::from_min_size(pos2(rect.right() - 30.0, rect.top() + 4.0), vec2(24.0, 24.0));
                 let more = Rect::from_min_size(pos2(rect.right() - 58.0, rect.top() + 4.0), vec2(24.0, 24.0));
-                let more_response = ui.put(more, |ui: &mut Ui| icon_button(ui, Icon::More, 24.0, colors::MUTED, false));
+                let more_response =
+                    ui.put(more, |ui: &mut Ui| icon_button(ui, Icon::More, 24.0, colors::muted(), false));
                 if self.controls.mark(format!("more:{}", file.path), more_response.clone()).clicked() {
                     self.asset_menu = Some((file.path.clone(), more_response.rect.left_bottom()));
                 }
                 let trash_response = ui
-                    .put(trash, |ui: &mut Ui| icon_button(ui, Icon::Trash, 24.0, colors::DANGER, false))
+                    .put(trash, |ui: &mut Ui| icon_button(ui, Icon::Trash, 24.0, colors::danger(), false))
                     .on_hover_text("Delete asset");
                 if self.controls.mark(format!("delete:{}", file.path), trash_response).clicked() {
                     delete = Some(file.path.clone());
@@ -822,7 +855,7 @@ impl WorkspaceView {
             }
         }
         if files.is_empty() {
-            ui.label(RichText::new("No matching assets.").size(layout::TYPE_SM).color(colors::MUTED));
+            ui.label(RichText::new("No matching assets.").size(layout::TYPE_SM).color(colors::muted()));
         }
         if let Some(path) = open {
             let _ = workspace.open(&path);
@@ -886,7 +919,7 @@ impl WorkspaceView {
     }
 
     fn tab_strip(&mut self, context: &egui::Context, rect: Rect, workspace: &mut Workspace) {
-        region(context, "joy-editor-tabs", rect, colors::TABS, Order::Middle, |ui| {
+        region(context, "joy-editor-tabs", rect, colors::tabs(), Order::Middle, |ui| {
             widgets::edge(ui, rect.left_bottom(), rect.right_bottom());
             let mut activate = None;
             let mut close = None;
@@ -928,7 +961,7 @@ impl WorkspaceView {
     }
 
     fn document_bar(&mut self, context: &egui::Context, rect: Rect, workspace: &mut Workspace, conflict: bool) {
-        region(context, "joy-editor-document-bar", rect, colors::PANEL, Order::Middle, |ui| {
+        region(context, "joy-editor-document-bar", rect, colors::panel(), Order::Middle, |ui| {
             widgets::edge(ui, rect.left_bottom(), rect.right_bottom());
             ui.scope_builder(
                 egui::UiBuilder::new()
@@ -946,7 +979,7 @@ impl WorkspaceView {
                         ui.label(
                             RichText::new("This file changed on disk. Your edits are still here.")
                                 .size(layout::TYPE_MD)
-                                .color(colors::DANGER),
+                                .color(colors::danger()),
                         );
                         let reload = danger_button(ui, "Use Disk Version");
                         if self.controls.mark("reload-disk", reload).clicked() {
@@ -964,18 +997,18 @@ impl WorkspaceView {
     }
 
     fn empty_state(&mut self, context: &egui::Context, rect: Rect, workspace: &mut Workspace) {
-        region(context, "joy-editor-empty", rect, colors::CANVAS, Order::Middle, |ui| {
+        region(context, "joy-editor-empty", rect, colors::canvas(), Order::Middle, |ui| {
             let center = rect.center();
             let mark = Rect::from_center_size(center - vec2(0.0, 110.0), vec2(48.0, 52.0));
-            ui.painter().rect_filled(mark, 0.0, colors::ACCENT);
-            hud_text::single(ui.painter(), "J", Style::new(38.0, colors::ON_ACCENT).heavy()).paint_in(
+            ui.painter().rect_filled(mark, 0.0, colors::accent());
+            hud_text::single(ui.painter(), "J", Style::new(38.0, colors::on_accent()).heavy()).paint_in(
                 ui.painter(),
                 mark,
                 Align::Center,
                 Align::Center,
             );
             let title =
-                hud_text::single(ui.painter(), "A place for your next idea.", Style::new(26.0, colors::TEXT).bold());
+                hud_text::single(ui.painter(), "A place for your next idea.", Style::new(26.0, colors::text()).bold());
             title.paint_in(
                 ui.painter(),
                 Rect::from_center_size(center - vec2(0.0, 50.0), vec2(rect.width(), 40.0)),
@@ -985,7 +1018,7 @@ impl WorkspaceView {
             let body = hud_text::wrapped(
                 ui.painter(),
                 "Open a FORM, particle or level asset from the project.\nEdit it here. See it in the game.",
-                Style::new(13.0, colors::MUTED).line_height(1.6),
+                Style::new(13.0, colors::muted()).line_height(1.6),
                 rect.width() - 40.0,
                 Align::Center,
             );
@@ -1002,7 +1035,7 @@ impl WorkspaceView {
             {
                 let _ = workspace.open(&first);
             }
-            let note = hud_text::single(ui.painter(), "Same files. One workspace.", Style::new(11.0, colors::MUTED));
+            let note = hud_text::single(ui.painter(), "Same files. One workspace.", Style::new(11.0, colors::muted()));
             note.paint_in(
                 ui.painter(),
                 Rect::from_center_size(center + vec2(0.0, 100.0), vec2(rect.width(), 20.0)),
@@ -1013,7 +1046,7 @@ impl WorkspaceView {
     }
 
     fn source_view(&mut self, context: &egui::Context, rect: Rect, workspace: &mut Workspace, path: &str) {
-        region(context, "joy-editor-source", rect, colors::CANVAS, Order::Middle, |ui| {
+        region(context, "joy-editor-source", rect, colors::canvas(), Order::Middle, |ui| {
             let Some(tab) = workspace.tab_mut(path) else {
                 return;
             };
@@ -1036,9 +1069,9 @@ impl WorkspaceView {
                         None => "Source view. Save File writes this text to the project.".to_owned(),
                     };
                     ui.label(RichText::new(heading).size(layout::TYPE_MD).color(if message.is_some() {
-                        colors::DANGER
+                        colors::danger()
                     } else {
-                        colors::MUTED
+                        colors::muted()
                     }));
                     let editor = self.source_editors.entry(path.to_owned()).or_insert_with(|| source_editor(path));
                     let response = editor.show(ui, text);
@@ -1068,7 +1101,7 @@ impl WorkspaceView {
                         ui.set_min_width(150.0);
                         let all = ui.add_sized(
                             [150.0, 26.0],
-                            egui::Button::new("All types").fill(colors::SURFACE).corner_radius(0.0),
+                            egui::Button::new("All types").fill(colors::surface()).corner_radius(0.0),
                         );
                         if self.controls.mark("filter-all", all).clicked() {
                             workspace.clear_filters();
@@ -1098,7 +1131,7 @@ impl WorkspaceView {
                     dialog_frame().inner_margin(6.0).show(ui, |ui| {
                         let rename = ui.add_sized(
                             [140.0, 28.0],
-                            egui::Button::new("Rename   F2").fill(colors::SURFACE).corner_radius(0.0),
+                            egui::Button::new("Rename   F2").fill(colors::surface()).corner_radius(0.0),
                         );
                         if self.controls.mark("rename-asset", rename).clicked() {
                             self.begin_rename(workspace, &path);
@@ -1223,7 +1256,7 @@ impl WorkspaceView {
                             ui.label(
                                 RichText::new("Joy Editor Documentation")
                                     .text_style(text_styles::display())
-                                    .color(colors::ACCENT),
+                                    .color(colors::accent()),
                             );
                             ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                                 if self.controls.mark("workspace-help-close", button(ui, "Close")).clicked() {
@@ -1234,7 +1267,7 @@ impl WorkspaceView {
                         ScrollArea::vertical().max_height(560.0).show(ui, |ui| {
                             for (title, body) in super::documentation::SECTIONS {
                                 ui.separator();
-                                ui.label(RichText::new(title).size(layout::TYPE_LG).color(colors::ACCENT));
+                                ui.label(RichText::new(title).size(layout::TYPE_LG).color(colors::accent()));
                                 for paragraph in body {
                                     ui.label(RichText::new(*paragraph).size(layout::TYPE_MD));
                                     ui.add_space(4.0);

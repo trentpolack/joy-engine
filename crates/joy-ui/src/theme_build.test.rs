@@ -14,7 +14,7 @@ fn invalid_assets_fail_before_they_can_ship_a_broken_ui() {
     ] {
         let mut invalid = theme.clone();
         *invalid.pointer_mut(pointer).unwrap() = value;
-        let error = generate(&invalid.to_string(), &layout.to_string()).unwrap_err();
+        let error = generate(&invalid.to_string(), &layout.to_string(), &[]).unwrap_err();
         assert!(error.contains(field), "{error}");
     }
     for (pointer, value) in
@@ -22,9 +22,9 @@ fn invalid_assets_fail_before_they_can_ship_a_broken_ui() {
     {
         let mut invalid = layout.clone();
         *invalid.pointer_mut(pointer).unwrap() = value;
-        assert!(generate(&theme.to_string(), &invalid.to_string()).is_err(), "accepted {pointer}");
+        assert!(generate(&theme.to_string(), &invalid.to_string(), &[]).is_err(), "accepted {pointer}");
     }
     let mut invalid = theme.clone();
     invalid.as_object_mut().unwrap().remove("fonts");
-    assert!(generate(&invalid.to_string(), &layout.to_string()).unwrap_err().contains("theme-default.json.fonts"));
+    assert!(generate(&invalid.to_string(), &layout.to_string(), &[]).unwrap_err().contains("theme-default.json.fonts"));
 }

@@ -346,6 +346,8 @@ fn joyfx_editor_opens_effects_as_a_hosted_tab_beside_form_editor() {
         assert!(tool.started() && tool.area() == Some(document), "JOYFX EDITOR draws in the tab area");
         assert!(!tab.dirty(), "opening an effect leaves it clean");
     }
+    // The tool's Apply/Live controls and preview state sit in the host toolbar.
+    assert!(driver.editor.control("tool-preview-state").is_some(), "JOYFX EDITOR reports its preview state");
     driver.capture("joyfx-editor-tab");
 
     // Both tool editors keep their own tabs; switching suspends one and resumes the other.
