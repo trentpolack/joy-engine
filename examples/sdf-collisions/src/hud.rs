@@ -5,7 +5,6 @@
 //! costs, the benchmark result, and DROP MORE, PAUSE, and RESET. Drawing returns the requested changes instead of
 //! mutating the demo.
 
-use joy_engine::development::dock;
 use joy_engine::egui::{
     Align2,
     Color32,
@@ -17,6 +16,7 @@ use joy_engine::egui::{
     Vec2 as UiVec2,
 };
 use joy_engine::prelude::*;
+use joy_engine::runtime::development_dock_height;
 
 use super::config::sdf_collisions_config::PRESENTATION;
 use super::pile_arena::ArenaSnapshot;
@@ -74,7 +74,7 @@ pub fn draw(context: &egui::Context, view: &HudView<'_>) -> Vec<HudCommand> {
     let screen = context.content_rect();
     let width = sidebar_width(screen.width());
     let margin: i8 = if width == SIDEBAR_WIDTH { 20 } else { 12 };
-    let reserved = dock::reserved_height(context);
+    let reserved = development_dock_height(context);
     egui::Area::new(Id::new("sdf-collisions-sidebar")).anchor(Align2::RIGHT_TOP, UiVec2::ZERO).constrain(false).show(
         context,
         |ui| {

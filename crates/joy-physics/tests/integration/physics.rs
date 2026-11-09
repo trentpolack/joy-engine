@@ -16,8 +16,8 @@ use joy_physics::{
     CollisionGroups,
     ContactPhase,
     PhysicsError,
-    PhysicsWorld,
-    PhysicsWorldOptions,
+    PhysicsSimulation,
+    PhysicsSimulationOptions,
     QueryOptions,
     SdfBakeOptions,
     SdfCollisionStatistics,
@@ -30,7 +30,7 @@ use joy_physics::{
 };
 
 /// Advance in 60 Hz frames for a number of seconds.
-fn simulate(world: &mut PhysicsWorld, seconds: f32) {
+fn simulate(world: &mut PhysicsSimulation, seconds: f32) {
     let frames = (seconds * 60.0).round() as usize;
     for _ in 0..frames {
         world.step(1.0 / 60.0).unwrap();
@@ -38,7 +38,7 @@ fn simulate(world: &mut PhysicsWorld, seconds: f32) {
 }
 
 /// Step at 60 Hz for `seconds` and return the largest SDF pair and contact counts any step reported.
-fn simulate_tracking_sdf(world: &mut PhysicsWorld, seconds: f32) -> SdfCollisionStatistics {
+fn simulate_tracking_sdf(world: &mut PhysicsSimulation, seconds: f32) -> SdfCollisionStatistics {
     let mut peak = SdfCollisionStatistics::default();
     for _ in 0..(seconds * 60.0).round() as usize {
         world.step(1.0 / 60.0).unwrap();
@@ -50,7 +50,7 @@ fn simulate_tracking_sdf(world: &mut PhysicsWorld, seconds: f32) -> SdfCollision
 }
 
 /// A large static ground box whose top face is at y = 0.
-fn ground(world: &mut PhysicsWorld) -> BodyHandle {
+fn ground(world: &mut PhysicsSimulation) -> BodyHandle {
     world
         .create_body(BodyOptions {
             half_extents: Vec3::new(50.0, 0.5, 50.0),
@@ -72,7 +72,7 @@ fn chassis_options() -> BodyOptions {
 }
 
 /// The four-wheel test vehicle: front wheels steer, every wheel drives and brakes.
-fn make_vehicle(world: &mut PhysicsWorld) -> BodyHandle {
+fn make_vehicle(world: &mut PhysicsSimulation) -> BodyHandle {
     let mut wheels = Vec::new();
     for z in [1.0, -1.0] {
         for x in [-0.8, 0.8] {
@@ -116,7 +116,7 @@ fn box_mesh(half: Vec3, open_top: bool) -> (Vec<Vec3>, Vec<u32>) {
 
 #[test]
 fn dynamic_box_rests_on_static_ground_and_queries_copy_state() {
-    let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let mut world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     let floor = ground(&mut world);
     let crate_box = world
         .create_body(BodyOptions {
@@ -161,12 +161,12 @@ fn dynamic_box_rests_on_static_ground_and_queries_copy_state() {
 
 #[test]
 fn fixed_stepping_bounds_catch_up_and_rejects_invalid_configuration() {
-    let options = PhysicsWorldOptions {
+    let options = PhysicsSimulationOptions {
         gravity: Vec3::ZERO,
         fixed_step: 1.0 / 60.0,
         max_sub_steps: 3,
     };
-    let mut world = PhysicsWorld::new(options).unwrap();
+    let mut world = PhysicsSimulation::new(options).unwrap();
     let body = world
         .create_body(BodyOptions {
             radius: 1.0,
@@ -222,14 +222,14 @@ fn fixed_stepping_bounds_catch_up_and_rejects_invalid_configuration() {
     };
     assert_eq!(world.create_body(heavy_plane), Err(PhysicsError::DynamicPlane));
     assert!(
-        PhysicsWorld::new(PhysicsWorldOptions {
+        PhysicsSimulation::new(PhysicsSimulationOptions {
             fixed_step: 0.0,
             ..Default::default()
         })
         .is_err()
     );
     assert!(
-        PhysicsWorld::new(PhysicsWorldOptions {
+        PhysicsSimulation::new(PhysicsSimulationOptions {
             max_sub_steps: 1_000_000,
             ..Default::default()
         })
@@ -242,11 +242,11 @@ fn fixed_stepping_bounds_catch_up_and_rejects_invalid_configuration() {
 
 #[test]
 fn forces_apply_for_exactly_one_fixed_step() {
-    let options = PhysicsWorldOptions {
+    let options = PhysicsSimulationOptions {
         gravity: Vec3::ZERO,
         ..Default::default()
     };
-    let mut world = PhysicsWorld::new(options).unwrap();
+    let mut world = PhysicsSimulation::new(options).unwrap();
     let body = world
         .create_body(BodyOptions {
             mass: 1.0,
@@ -264,8 +264,8 @@ fn forces_apply_for_exactly_one_fixed_step() {
 
 #[test]
 fn vehicles_are_bodies_that_validate_atomically_and_leave_with_their_chassis() {
-    let mut first = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
-    let mut second = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let mut first = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
+    let mut second = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     let vehicle = make_vehicle(&mut first);
     let floor = ground(&mut first);
     let wheels = vec![WheelOptions::new(Vec3::ZERO)];
@@ -386,7 +386,7 @@ fn vehicles_are_bodies_that_validate_atomically_and_leave_with_their_chassis() {
 #[test]
 fn raycast_wheels_provide_traction_steering_and_braking() {
     // Straight-line drive along +Z, then braking.
-    let mut straight_world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let mut straight_world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     ground(&mut straight_world);
     let vehicle = make_vehicle(&mut straight_world);
     simulate(&mut straight_world, 1.0);
@@ -420,7 +420,7 @@ fn raycast_wheels_provide_traction_steering_and_braking() {
     assert!(straight_world.vehicle_speed(vehicle) < unbraked_speed * 0.5);
 
     // Positive steer turns toward local +X: the chassis yaws positive and drifts to +X.
-    let mut turning_world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let mut turning_world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     ground(&mut turning_world);
     let vehicle = make_vehicle(&mut turning_world);
     simulate(&mut turning_world, 1.0);
@@ -451,7 +451,7 @@ fn raycast_wheels_provide_traction_steering_and_braking() {
     );
 
     // Wheels without driven or steering flags ignore input.
-    let mut passive_world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let mut passive_world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     ground(&mut passive_world);
     let wheels =
         [-1.0, 1.0].into_iter().flat_map(|z| [-0.8, 0.8].map(|x| WheelOptions::new(Vec3::new(x, 0.0, z)))).collect();
@@ -481,7 +481,7 @@ fn raycast_wheels_provide_traction_steering_and_braking() {
 
 #[test]
 fn colliders_and_wheels_follow_the_x_then_y_then_z_rotation_convention() {
-    let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let mut world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     let rotations = [
         Vec3::new(std::f32::consts::FRAC_PI_4, std::f32::consts::FRAC_PI_4, 0.0),
         Vec3::new(0.8, -0.7, 2.4),
@@ -536,7 +536,7 @@ fn colliders_and_wheels_follow_the_x_then_y_then_z_rotation_convention() {
 
 #[test]
 fn sdf_bodies_rest_stack_and_answer_raycasts() {
-    let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let mut world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     ground(&mut world);
     let crate_shape = SdfShape::primitive(SdfPrimitive::Box {
         half_extents: Vec3::splat(0.5),
@@ -671,7 +671,7 @@ fn sdf_shapes_validate_input_and_bake_open_meshes() {
 #[test]
 fn identical_worlds_produce_bit_identical_results() {
     let run = || {
-        let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+        let mut world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
         ground(&mut world);
         let vehicle = make_vehicle(&mut world);
         let crate_box = world
@@ -747,7 +747,7 @@ fn identical_worlds_produce_bit_identical_results() {
 
 #[test]
 fn resting_bodies_sleep_and_wake_when_their_support_is_removed() {
-    let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let mut world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     let support = world
         .create_body(BodyOptions {
             half_extents: Vec3::new(1.0, 0.25, 1.0),
@@ -778,7 +778,7 @@ fn resting_bodies_sleep_and_wake_when_their_support_is_removed() {
 fn sensors_report_overlaps_and_queries_respect_collision_groups() {
     const PLAYER: u32 = 1 << 0;
     const PICKUP: u32 = 1 << 1;
-    let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let mut world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     let pickup = world
         .create_body(BodyOptions {
             radius: 0.5,

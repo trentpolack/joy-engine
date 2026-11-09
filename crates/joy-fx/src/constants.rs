@@ -102,6 +102,38 @@ impl ParticleBlend {
     }
 }
 
+/// How an emitter's particles respond to the scene's lights (the emitter `lighting` field; omitted means
+/// [`ParticleLighting::Unlit`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum ParticleLighting {
+    /// The particle shows its color as authored, whatever lights the scene (the default and the original look): suits
+    /// fire, sparks, and anything that emits light.
+    #[default]
+    Unlit,
+    /// The particle's color is lit by the frame's ambient, skylight, directional, and point lights with a cheap
+    /// camera-facing half-Lambert model, without shadows: suits smoke, dust, and debris that should sit in the scene's
+    /// lighting.
+    Lit,
+}
+
+impl ParticleLighting {
+    /// Every lighting mode, in its stable declaration order.
+    pub const ALL: [Self; 2] = [Self::Unlit, Self::Lit];
+
+    /// The serialized spelling (`"unlit"` or `"lit"`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Unlit => "unlit",
+            Self::Lit => "lit",
+        }
+    }
+
+    /// Parse a serialized spelling; matching is exact and case-sensitive.
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|lighting| lighting.as_str() == text)
+    }
+}
+
 /// Serialized effect parameter types (the parameter `type` field; omitted means scalar).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ParticleParameterType {

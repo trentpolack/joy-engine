@@ -2,18 +2,27 @@
 // Licensed under the MIT License.
 
 //! Fixed top-down orthographic camera for arcade games.
+//!
+//! Arcade games lay out a flat world in logical pixels (one world unit per CSS pixel, +Y down the screen) and give
+//! geometry a height in Z that only decides depth: which surface hides which, and where translucent layers and particle
+//! batches fall in the renderer's back-to-front order. [`TopDownView`] is the [`Camera`] that draws such a world
+//! through the scene renderer, so arcade frames share its depth, transparency queue, instanced particles, and display
+//! processing with every other game. Display density is deliberately absent, so a sharper display never changes how
+//! much of the world is framed.
 
 use joy_core::math::{
     Mat4,
     Vec2,
 };
 
-use crate::{
-    ColorVertex,
-    RenderError,
+use crate::RenderError;
+use crate::camera::{
+    Camera,
+    CameraFrame,
+    orthographic,
 };
 
-/// Camera placement for [`top_down_orthographic`]: the camera sits at world `height` on +Z looking down -Z.
+/// Camera placement for [`TopDownView`]: the camera sits at world `height` on +Z looking down -Z.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TopDownCamera {
     /// Camera Z in world units.
@@ -24,60 +33,74 @@ pub struct TopDownCamera {
     pub far: f32,
 }
 
-/// Column-major orthographic view-projection for a camera looking down -Z at `center`.
+/// A top-down orthographic view of a `size` logical region centered on `center`, looking down -Z.
 ///
-/// X and Y use the caller's logical world units (one per CSS pixel in the arcade games), +Y is down the screen, and
-/// display density is deliberately absent so it never changes framing. Depth maps `near..far` in front of the camera to
-/// zero-to-one clip depth on every backend. Fails for an empty viewport or a non-positive depth range.
-pub fn top_down_orthographic(
-    width: f32,
-    height: f32,
+/// X and Y use the caller's logical world units (one per CSS pixel in the arcade games) and +Y is down the screen.
+/// Depth maps `near..far` in front of the camera to zero-to-one clip depth on every backend, so raising geometry along
+/// +Z brings it toward the viewer. The view's axes are the world's own (right +X, up +Y, backward +Z), which is how
+/// camera-facing particles orient their rolls; the projection, not the view, flips Y onto the screen.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TopDownView {
+    size: Vec2,
     center: Vec2,
     camera: TopDownCamera,
-) -> Result<Mat4, RenderError> {
-    if width <= 0.0 || height <= 0.0 {
-        return Err(RenderError::InvalidFrame("logical viewport dimensions must be positive".into()));
-    }
-    let depth_range = camera.far - camera.near;
-    if depth_range <= 0.0 {
-        return Err(RenderError::InvalidFrame("camera far distance must exceed its near distance".into()));
-    }
-    Ok(Mat4::from_cols_array(&[
-        2.0 / width,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        -2.0 / height,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        -1.0 / depth_range,
-        0.0,
-        (-center.x * 2.0) / width,
-        (center.y * 2.0) / height,
-        (camera.height - camera.near) / depth_range,
-        1.0,
-    ]))
 }
 
-/// Copy triangles ordered back to front for a top-down camera: smaller centroid Z is farther away.
-///
-/// Equal depths keep authored order; trailing vertices that do not complete a triangle are dropped. Centroid ordering
-/// suits parallel effect planes, not intersecting transparent meshes.
-pub fn sort_top_down_transparent_triangles(vertices: &[ColorVertex]) -> Vec<ColorVertex> {
-    let mut triangles: Vec<(f32, usize)> = vertices
-        .as_chunks::<3>()
-        .0
-        .iter()
-        .enumerate()
-        .map(|(index, triangle)| {
-            ((triangle[0].position[2] + triangle[1].position[2] + triangle[2].position[2]) / 3.0, index)
+impl TopDownView {
+    /// Frame the `size` logical region around `center` from `camera`. Fails for an empty region or a non-positive
+    /// depth range.
+    pub fn new(size: Vec2, center: Vec2, camera: TopDownCamera) -> Result<Self, RenderError> {
+        if size.x <= 0.0 || size.y <= 0.0 {
+            return Err(RenderError::InvalidFrame("logical viewport dimensions must be positive".into()));
+        }
+        if camera.far - camera.near <= 0.0 {
+            return Err(RenderError::InvalidFrame("camera far distance must exceed its near distance".into()));
+        }
+        Ok(Self {
+            size,
+            center,
+            camera,
         })
-        .collect();
-    triangles.sort_by(|left, right| left.0.total_cmp(&right.0));
-    triangles.into_iter().flat_map(|(_, index)| vertices[index * 3..(index * 3) + 3].iter().copied()).collect()
+    }
+
+    /// The framed region's logical size.
+    pub fn size(&self) -> Vec2 {
+        self.size
+    }
+
+    /// The framed region's center in world units.
+    pub fn center(&self) -> Vec2 {
+        self.center
+    }
+
+    /// The camera placement.
+    pub fn camera(&self) -> TopDownCamera {
+        self.camera
+    }
+
+    /// The column-major world-to-clip matrix the renderer draws with.
+    pub fn view_projection(&self) -> Mat4 {
+        self.camera_frame(self.size.x / self.size.y).view_projection()
+    }
+}
+
+impl Camera for TopDownView {
+    /// The view frames exactly its region whatever `aspect` the viewport has; arcade games size the region to the
+    /// logical viewport, so the two agree.
+    fn camera_frame(&self, _aspect: f32) -> CameraFrame {
+        let eye = self.center.extend(self.camera.height);
+        let half = self.size * 0.5;
+        // Swapping the bottom and top edges maps +Y down the screen.
+        let projection = orthographic(-half.x, half.x, half.y, -half.y, self.camera.near, self.camera.far);
+        CameraFrame {
+            view: Mat4::from_translation(-eye),
+            projection,
+            eye,
+            focus: self.center.extend(0.0),
+            near: self.camera.near,
+            far: self.camera.far,
+        }
+    }
 }
 
 #[cfg(test)]

@@ -6,10 +6,11 @@
 // analytically: soft discs fade linearly to zero alpha at the edge, circles and rings get an antialiased edge, billows
 // overlap two feathered lobes, streaks draw a ribbon under a head glow, and sprites sample one atlas cell.
 //
-// This file declares no bindings. An entry file (particle-scene.wgsl or particle-triangles.wgsl) follows it and defines
-// the texture bindings, `particleSourceColor` (its color convention), and the entry points. Shapes return
-// premultiplied color, so straight-alpha and premultiplied emitters share one source-over pipeline and additive
-// emitters a one-one pipeline. Units are world units and radians; colors are linear HDR.
+// This file declares no bindings. particle-depth.wgsl (or particle-depth-none.wgsl) and particle-scene.wgsl follow it
+// with the scene depth and sprite bindings and the entry points. Shapes return premultiplied color, so straight-alpha
+// and premultiplied emitters share one source-over pipeline and additive emitters a one-one pipeline. Units are world
+// units and radians; colors are linear HDR, or display-encoded values decoded per shape layer when the instance says
+// so.
 
 // Shape ids; must match `ParticleShape` in particles/instance.rs.
 const PARTICLE_SHAPE_SOFT: u32 = 0u;
@@ -20,8 +21,16 @@ const PARTICLE_SHAPE_CIRCLE: u32 = 4u;
 const PARTICLE_SHAPE_SQUARE: u32 = 5u;
 const PARTICLE_SHAPE_SPRITE: u32 = 6u;
 
-// Flag bit above the shape byte: the instance color is premultiplied (alpha zero still glows).
+// Flag bits above the shape byte (`*_FLAG` in particles/instance.rs): the instance color is premultiplied (alpha zero
+// still glows); the frame's lights shade the instance; its RGB holds display-encoded (sRGB) values.
+const PARTICLE_SHAPE_MASK: u32 = 255u;
 const PARTICLE_PREMULTIPLIED: u32 = 256u;
+const PARTICLE_LIT: u32 = 512u;
+const PARTICLE_DISPLAY_COLOR: u32 = 1024u;
+
+// How far a lit particle's normal leans from facing the camera toward its quad's corners, so a cheap camera-facing
+// light still reads as a rounded volume rather than a flat card.
+const PARTICLE_NORMAL_BEND: f32 = 0.6;
 
 // A streak's head glow radius and ribbon half width, in multiples of its size.
 const STREAK_GLOW: f32 = 1.7;
@@ -55,6 +64,8 @@ struct ParticleInstance {
   @location(3) uvRect: vec4f,
   // Shape id in the low byte, flags above.
   @location(4) shape: u32,
+  // Soft-particle distance in world units; zero is hard.
+  @location(5) softness: f32,
 };
 
 struct ParticleVarying {
@@ -66,9 +77,11 @@ struct ParticleVarying {
   @location(1) uv: vec2f,
   @location(2) worldPosition: vec3f,
   @location(3) @interpolate(flat) color: vec4f,
-  // X size, Y roll, Z a streak's projected trail length, W unused.
+  // X size, Y roll, Z a streak's projected trail length, W soft-particle distance.
   @location(4) @interpolate(flat) parameters: vec4f,
   @location(5) @interpolate(flat) shape: u32,
+  // The camera-facing normal lit particles shade with, leaning toward the quad's corners; normalize per fragment.
+  @location(6) normal: vec3f,
 };
 
 /**
@@ -103,7 +116,7 @@ fn expandParticle(
   let center = instance.positionSize.xyz;
   let size = instance.positionSize.w;
   let rotation = instance.trailRotation.w;
-  let shape = instance.shape & 255u;
+  let shape = instance.shape & PARTICLE_SHAPE_MASK;
 
   var axisX = right;
   var axisY = up;
@@ -146,20 +159,43 @@ fn expandParticle(
   output.uv = uv;
   output.worldPosition = world;
   output.color = instance.color;
-  output.parameters = vec4f(size, rotation, trailLength, 0.0);
+  output.parameters = vec4f(size, rotation, trailLength, instance.softness);
   output.shape = instance.shape;
+  output.normal = backward + (((corner.x*axisX) + (corner.y*axisY))*PARTICLE_NORMAL_BEND);
   return output;
 }
 
 /**
- * One premultiplied layer: `color` with its RGB scaled by `rgbScale` and alpha by `alphaScale`, covering `coverage`
- * of the fragment. Straight colors weight RGB by alpha; premultiplied colors already carry it.
+ * Decode a display (sRGB) color channel triple to linear light, continuing the curve past one for HDR values and
+ * mirroring it below zero (`srgb_to_linear` in joy-core).
  */
-fn particleLayer(color: vec4f, rgbScale: f32, alphaScale: f32, coverage: f32, premultiplied: bool) -> vec4f {
+fn decodeDisplayColor(encoded: vec3f) -> vec3f {
+  let magnitude = abs(encoded);
+  let curve = pow((magnitude + vec3f(0.055))/1.055, vec3f(2.4));
+  let segment = magnitude/12.92;
+  return sign(encoded)*select(curve, segment, magnitude <= vec3f(0.04045));
+}
+
+/**
+ * One shape layer's linear RGB: display-encoded instances decode here, after the layer scales the authored value, as a
+ * display-color pipeline would.
+ */
+fn particleSourceColor(rgb: vec3f, flags: u32) -> vec3f {
+  if((flags & PARTICLE_DISPLAY_COLOR) != 0u) {
+    return decodeDisplayColor(rgb);
+  }
+  return rgb;
+}
+
+/**
+ * One premultiplied layer: `color` with its RGB scaled by `rgbScale` and alpha by `alphaScale`, covering `coverage`
+ * of the fragment. Straight colors weight RGB by alpha; premultiplied colors (in `flags`) already carry it.
+ */
+fn particleLayer(color: vec4f, rgbScale: f32, alphaScale: f32, coverage: f32, flags: u32) -> vec4f {
   let covered = clamp(coverage, 0.0, 1.0);
-  let rgb = particleSourceColor(color.rgb*rgbScale);
+  let rgb = particleSourceColor(color.rgb*rgbScale, flags);
   let alpha = color.a*alphaScale*covered;
-  if(premultiplied) {
+  if((flags & PARTICLE_PREMULTIPLIED) != 0u) {
     return vec4f(rgb*(alphaScale*covered), alpha);
   }
   return vec4f(rgb*alpha, alpha);
@@ -199,8 +235,8 @@ fn particleEdge(inside: f32, pixel: f32) -> f32 {
  * control flow) and `pixel` the world size of one pixel in the particle's plane.
  */
 fn shadeParticle(input: ParticleVarying, texel: vec4f, pixel: f32) -> vec4f {
-  let shape = input.shape & 255u;
-  let premultiplied = (input.shape & PARTICLE_PREMULTIPLIED) != 0u;
+  let shape = input.shape & PARTICLE_SHAPE_MASK;
+  let flags = input.shape;
   let color = input.color;
   let size = max(input.parameters.x, 1e-6);
   let rotation = input.parameters.y;
@@ -208,7 +244,7 @@ fn shadeParticle(input: ParticleVarying, texel: vec4f, pixel: f32) -> vec4f {
   let radius = length(point);
 
   if(shape == PARTICLE_SHAPE_CIRCLE) {
-    return particleLayer(color, 1.0, 1.0, particleEdge(size - radius, pixel), premultiplied);
+    return particleLayer(color, 1.0, 1.0, particleEdge(size - radius, pixel), flags);
   }
   if(shape == PARTICLE_SHAPE_RING) {
     let halfWidth = ringHalfWidth(size);
@@ -217,18 +253,18 @@ fn shadeParticle(input: ParticleVarying, texel: vec4f, pixel: f32) -> vec4f {
     if(inner > 0.0) {
       coverage *= particleEdge(radius - inner, pixel);
     }
-    return particleLayer(color, 1.0, 1.0, coverage, premultiplied);
+    return particleLayer(color, 1.0, 1.0, coverage, flags);
   }
   if(shape == PARTICLE_SHAPE_BILLOW) {
     // The outer lobe fades from its center to the lobed outline; the smaller, brighter lobe sits off center (its
     // offset ignores roll), turned further, and fades toward the outer lobe's color.
     let outerRadius = size*billowOutline(particleAngle(point) - rotation);
-    let outer = particleLayer(color, 1.0, 1.0, 1.0 - (radius/outerRadius), premultiplied);
+    let outer = particleLayer(color, 1.0, 1.0, 1.0 - (radius/outerRadius), flags);
     let lobe = point - (BILLOW_INNER_OFFSET*size);
     let lobeAngle = particleAngle(lobe) - (rotation + BILLOW_INNER_ROTATION);
     let lobeFraction = length(lobe)/((size*BILLOW_INNER_RADIUS)*billowOutline(lobeAngle));
     let boost = BILLOW_INNER_BOOST - ((BILLOW_INNER_BOOST - 1.0)*min(lobeFraction, 1.0));
-    let inner = particleLayer(color, boost, BILLOW_INNER_ALPHA, 1.0 - lobeFraction, premultiplied);
+    let inner = particleLayer(color, boost, BILLOW_INNER_ALPHA, 1.0 - lobeFraction, flags);
     return particleOver(inner, outer);
   }
   if(shape == PARTICLE_SHAPE_STREAK) {
@@ -236,17 +272,17 @@ fn shadeParticle(input: ParticleVarying, texel: vec4f, pixel: f32) -> vec4f {
     let trailLength = input.parameters.z;
     let along = select(0.0, 1.0, (point.x >= 0.0) && (point.x <= trailLength));
     let across = particleEdge((size*STREAK_HALF_WIDTH) - abs(point.y), pixel);
-    let ribbon = particleLayer(color, 1.0, 1.0, along*across, premultiplied);
-    let glow = particleLayer(color, 1.0, 1.0, 1.0 - (radius/(size*STREAK_GLOW)), premultiplied);
+    let ribbon = particleLayer(color, 1.0, 1.0, along*across, flags);
+    let glow = particleLayer(color, 1.0, 1.0, 1.0 - (radius/(size*STREAK_GLOW)), flags);
     return particleOver(glow, ribbon);
   }
   if(shape == PARTICLE_SHAPE_SQUARE) {
-    return particleLayer(color, 1.0, 1.0, 1.0, premultiplied);
+    return particleLayer(color, 1.0, 1.0, 1.0, flags);
   }
   if(shape == PARTICLE_SHAPE_SPRITE) {
     let tinted = vec4f(color.rgb*texel.rgb, color.a);
-    return particleLayer(tinted, 1.0, 1.0, texel.a, premultiplied);
+    return particleLayer(tinted, 1.0, 1.0, texel.a, flags);
   }
   // Soft: the center color fading linearly to zero alpha at the edge.
-  return particleLayer(color, 1.0, 1.0, 1.0 - (radius/size), premultiplied);
+  return particleLayer(color, 1.0, 1.0, 1.0 - (radius/size), flags);
 }

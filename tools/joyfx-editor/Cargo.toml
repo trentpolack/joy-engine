@@ -31,7 +31,8 @@ default = ["web-entry"]
 web-entry = []
 
 [dependencies]
-joy-engine.workspace = true
+# The authoring kit (lab controls, script editor, and file dialogs) through the engine facade.
+joy-engine = { workspace = true, features = ["authoring"] }
 
 [lints]
 workspace = true

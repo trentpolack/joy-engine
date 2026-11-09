@@ -145,12 +145,15 @@ pub struct FrameInputs<'a> {
     /// Transparent triangles (three vertices each), unlit, blended with straight alpha. Every transparent element of a
     /// frame (these triangles, blended scene meshes, and [`particles`](Self::particles)) is sorted back to front
     /// together, by view depth: a triangle by its centroid, a mesh by the center of its bounds, and a particle batch by
-    /// the center of its bounds. Equal depths keep the order meshes, triangles, then particle batches were supplied.
+    /// its sort point (the center of its bounds unless the frame names one; see `ParticleDrawOptions::sort_point`).
+    /// Equal depths keep the order meshes, triangles, then particle batches were supplied.
     pub transparent_triangles: &'a [ColorVertex],
     /// Instanced particles; `None` draws none. Batches whose bounds lie outside the view are culled; each remaining
     /// batch takes one place in the transparency order above (so a particle effect behind a glass mesh draws before
     /// it), and the particles inside straight and premultiplied batches draw back to front. Particles test depth
-    /// against opaque geometry without writing it and blend as their emitters author (`ParticleBlend`).
+    /// against opaque geometry without writing it, blend as their emitters author (`ParticleBlend`), fade near opaque
+    /// geometry within their emitter's softness (hard on WebGL 2), and lit emitters (`ParticleLighting::Lit`) shade by
+    /// this frame's ambient, directional, and point lights.
     pub particles: Option<&'a ParticleFrame>,
     /// Image-based lighting for PBR surfaces; `None` leaves them lit by direct, ambient, and skylight only.
     pub image_lighting: Option<ImageLighting<'a>>,

@@ -8,7 +8,7 @@
 //! [`HeadlessShell::step_with_ui`] runs it with synthetic egui input (pointer, keys, text) and paints the UI over the
 //! capture, so tools can be driven and screenshotted through their real interface. Native only.
 
-use joy_devtools::DevTools;
+use crate::development::DevTools;
 use joy_input::{
     InputManager,
     InputMap,
@@ -232,7 +232,7 @@ impl HeadlessShell {
         if let Some(ui) = &self.ui {
             self.input.set_typing(ui.context.egui_wants_keyboard_input());
         }
-        self.input.update();
+        self.input.update(f64::from(time.elapsed_seconds));
         let viewport = self.viewport();
         let mut frame = Frame {
             time,

@@ -307,7 +307,7 @@ pub enum GameplayError {
     /// A level was invalid.
     #[error(transparent)]
     Level(#[from] LevelError),
-    /// The physics world rejected an operation.
+    /// The physics simulation rejected an operation.
     #[error(transparent)]
     Physics(#[from] PhysicsError),
 }

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 //! Persistent rigid debris for released chunks: the ground (a craterable heightfield patch inside flat apron slabs) and
-//! the engine's structure colliders and debris pool in one physics world, plus one mesh per debris piece.
+//! the engine's structure colliders and debris pool in one physics simulation, plus one mesh per debris piece.
 //!
 //! Directly fractured chunks shatter into Voronoi shards; support failures and overloads leave whole. Surviving chunks
 //! keep static colliders, so falling pieces land on what stands, and the pool freezes settled pieces into static rubble
@@ -22,8 +22,8 @@ use joy_engine::physics::{
     DebrisRelease,
     DestructibleChunkDefinition,
     PhysicsError,
-    PhysicsWorld,
-    PhysicsWorldOptions,
+    PhysicsSimulation,
+    PhysicsSimulationOptions,
     StructureColliderOptions,
     StructureColliders,
     create_chunk_mesh_data,
@@ -73,10 +73,10 @@ pub struct DebrisSnapshot {
     pub pieces: Vec<DebrisPieceSnapshot>,
 }
 
-/// Owns the physics world, the ground mesh and colliders, the structure's colliders, the debris pool, and the debris
+/// Owns the physics simulation, the ground mesh and colliders, the structure's colliders, the debris pool, and the debris
 /// meshes.
 pub struct DestructionDebris {
-    world: PhysicsWorld,
+    world: PhysicsSimulation,
     ground_mesh: MeshInstanceId,
     // The craterable patch's collider; replaced whenever the ground changes.
     ground_patch: BodyHandle,
@@ -89,7 +89,7 @@ pub struct DestructionDebris {
 impl DestructionDebris {
     /// Create the world and flat, uncratered ground (colliders and mesh, sharing dimensions) in `scene`.
     pub fn new(scene: &mut RenderScene) -> AppResult<Self> {
-        let mut world = PhysicsWorld::new(PhysicsWorldOptions {
+        let mut world = PhysicsSimulation::new(PhysicsSimulationOptions {
             gravity: Vec3::new(0.0, -DESTRUCTION.debris_gravity, 0.0),
             fixed_step: DESTRUCTION.physics_step_seconds,
             max_sub_steps: DESTRUCTION.maximum_physics_substeps,

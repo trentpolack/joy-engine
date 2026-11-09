@@ -73,9 +73,11 @@ pub const ORBIT_ACTION: &str = "orbit";
 const SIDEBAR_WIDTH: f32 = 310.0;
 const SIDEBAR_WIDTH_MEDIUM: f32 = 260.0;
 const MEDIUM_VIEWPORT: f32 = 850.0;
+
 /// Viewports narrower than this stack the controls in a bottom sheet of [`SHEET_FRACTION`] of the height.
 const NARROW_VIEWPORT: f32 = 600.0;
 const SHEET_FRACTION: f32 = 0.4;
+
 /// Overlay text inset from the viewport edges.
 const OVERLAY_MARGIN: UiVec2 = UiVec2::new(30.0, 24.0);
 

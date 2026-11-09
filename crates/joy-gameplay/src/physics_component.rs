@@ -27,7 +27,7 @@ use joy_physics::{
     BodyHandle,
     BodyOptions,
     CollisionGroups,
-    PhysicsWorld,
+    PhysicsSimulation,
     VEHICLE_DEFAULTS,
     VehicleOptions,
     WHEEL_DEFAULTS,
@@ -165,7 +165,7 @@ pub(crate) fn built_in_component(kind: &str) -> Option<Box<dyn EntityComponent>>
 /// a `physics` record.
 fn create_entity_body(
     entity: &EntityState,
-    physics: &mut PhysicsWorld,
+    physics: &mut PhysicsSimulation,
 ) -> Result<Option<BodyHandle>, PhysicsComponentError> {
     let collider = entity.components.get(component_type::PHYSICS);
     let vehicle = entity.components.get(component_type::VEHICLE);
@@ -322,7 +322,7 @@ fn present<'a>(record: &'a JsonRecord, key: &str) -> Option<&'a Value> {
     record.get(key).filter(|value| !value.is_null())
 }
 
-/// Read an optional numeric field; range checks happen in the physics world.
+/// Read an optional numeric field; range checks happen in the physics simulation.
 fn number_field(record: &JsonRecord, key: &'static str, fallback: f32) -> Result<f32, PhysicsComponentError> {
     match present(record, key) {
         None => Ok(fallback),

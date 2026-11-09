@@ -5,7 +5,7 @@
 //!
 //! Gameplay-visible mutation batches complete before [`PhysicsBackend::query`], avoiding asynchronous readback on aim
 //! and character collision paths. GPU backends may retain simulation state on-device and publish only compact event and
-//! readback records; CPU implementations remain the required fallback. [`PhysicsWorld`] is the engine's CPU backend:
+//! readback records; CPU implementations remain the required fallback. [`PhysicsSimulation`] is the engine's CPU backend:
 //! resident shapes become static rapier boxes that dynamic bodies (for example debris) collide with.
 //!
 //! Backends apply mutations and step synchronously. Owned resources are released through `Drop`.
@@ -20,7 +20,7 @@ use serde::{
 use super::{
     BodyOptions,
     PhysicsError,
-    PhysicsWorld,
+    PhysicsSimulation,
 };
 use joy_core::PrimitiveShape;
 use joy_core::math::DVec3;
@@ -116,7 +116,7 @@ pub fn create_removal_mutation_batch(
     })
 }
 
-impl PhysicsBackend for PhysicsWorld {
+impl PhysicsBackend for PhysicsSimulation {
     fn residency(&self) -> PhysicsResidency {
         PhysicsResidency::Cpu
     }
@@ -175,11 +175,11 @@ impl PhysicsBackend for PhysicsWorld {
     }
 
     fn step(&mut self, elapsed_seconds: f64) -> Result<(), PhysicsError> {
-        PhysicsWorld::step(self, elapsed_seconds as f32).map(|_| ())
+        PhysicsSimulation::step(self, elapsed_seconds as f32).map(|_| ())
     }
 
     /// Cast against resident shapes only. The direction is normalized; shapes containing the origin are skipped, like
-    /// [`PhysicsWorld::raycast`]. Non-finite input, a zero direction, or a non-positive distance returns `None`.
+    /// [`PhysicsSimulation::raycast`]. Non-finite input, a zero direction, or a non-positive distance returns `None`.
     fn query(&self, origin: DVec3, direction: DVec3, maximum_distance: f64) -> Option<PhysicsQueryHit> {
         let from = origin.as_vec3();
         let direction = direction.as_vec3().normalize_or_zero();
@@ -200,13 +200,13 @@ impl PhysicsBackend for PhysicsWorld {
     }
 }
 
-impl PhysicsWorld {
+impl PhysicsSimulation {
     /// Ids of the shapes currently resident through [`PhysicsBackend::apply_mutations`], in insertion order.
     pub fn resident_shape_ids(&self) -> impl Iterator<Item = &str> {
         self.resident_shapes.iter().filter(|(_, body)| self.contains_body(**body)).map(|(id, _)| id.as_str())
     }
 
-    /// Forget resident shapes whose bodies were removed through [`PhysicsWorld::remove_body`].
+    /// Forget resident shapes whose bodies were removed through [`PhysicsSimulation::remove_body`].
     fn prune_resident_shapes(&mut self) {
         let stale: Vec<String> = self
             .resident_shapes

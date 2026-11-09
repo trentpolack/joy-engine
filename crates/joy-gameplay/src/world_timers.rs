@@ -14,10 +14,9 @@ use std::fmt;
 use indexmap::IndexMap;
 
 use super::entity::EntityId;
-use super::world_events::{
-    TimerFired,
-    WorldEvents,
-};
+use joy_core::EventChannel;
+
+use super::world_events::TimerFired;
 
 /// Shortest accepted timer period in seconds; shorter periods would fire a repeating timer without bound.
 pub const MINIMUM_TIMER_SECONDS: f64 = 1.0e-3;
@@ -112,7 +111,7 @@ impl WorldTimers {
 
     /// Advance every timer by `elapsed_seconds` (the update's own elapsed time; the world calls this at the start of an
     /// update, so timers started during an update first count the next one), firing due ones into `events`.
-    pub(crate) fn advance(&mut self, elapsed_seconds: f64, events: &mut WorldEvents) {
+    pub(crate) fn advance(&mut self, elapsed_seconds: f64, events: &mut EventChannel) {
         let elapsed = if elapsed_seconds.is_finite() { elapsed_seconds.max(0.0) } else { 0.0 };
 
         // Collect firings as (time into this update, start order) so simultaneous timers fire in a stable order.

@@ -19,6 +19,12 @@
 //   --release                Optimize for size with the `web-release` profile.
 //   --dev                    Use the fast `dev` profile even when --release is given (development servers pass it so a
 //                            workspace's build script keeps its title and canvas but builds quickly).
+//   --no-default-features    Leave out the crate's default features in --release builds. Games make the engine's
+//                            development tools a default feature, so production pages ship without them while --dev
+//                            builds (and builds without --release) keep them.
+//
+// Games that cook FORM meshes do so in their Cargo build scripts (`joy-cook`); every browser build cooks, so this
+// wrapper needs no extra step.
 //   --title <text>           Page title (default: the artifact name).
 //   --canvas <id>            Canvas element ID the game looks up (default: joy-canvas).
 //
@@ -63,6 +69,7 @@ const {values: options} = parseArgs({
     out: {type: 'string'},
     release: {type: 'boolean', default: false},
     dev: {type: 'boolean', default: false},
+    'no-default-features': {type: 'boolean', default: false},
     title: {type: 'string'},
     canvas: {type: 'string', default: 'joy-canvas'}
   }
@@ -82,6 +89,11 @@ const cargoEnvironment = usesGameScripts() ? luaWasmEnvironment() : process.env;
 
 const profile = options.release && !options.dev ? 'web-release' : 'dev';
 const cargoArguments = ['rustc', '--manifest-path', manifestPath, '--target', WASM_TARGET, '--package', options.package, '--profile', profile];
+// Production pages drop default features (a game's development tools); development builds keep them.
+const dropDefaultFeatures = options['no-default-features'] && profile === 'web-release';
+if(dropDefaultFeatures) {
+  cargoArguments.push('--no-default-features');
+}
 if(options.example) {
   cargoArguments.push('--example', options.example);
 } else if(options.bin) {
@@ -124,7 +136,8 @@ writeFileSync(resolve(outputDirectory, 'index.html'), pageHtml(options.title ?? 
 copyStatusFonts(outputDirectory);
 copyFileSync(resolve(engineRoot, 'LICENSE'), resolve(outputDirectory, 'LICENSE'));
 writeFileSync(resolve(outputDirectory, 'THIRD-PARTY-NOTICES.txt'), thirdPartyNotices() + luaNotices);
-console.log(`Web build ready: ${relative(process.cwd(), outputDirectory) || '.'} (${basename(wasmFile)}, ${profile}).`);
+const featureNote = dropDefaultFeatures ? ', without default features' : '';
+console.log(`Web build ready: ${relative(process.cwd(), outputDirectory) || '.'} (${basename(wasmFile)}, ${profile}${featureNote}).`);
 
 /**
  * The page hosting the canvas: the template with its loading screen styles inlined, the title split into the loading

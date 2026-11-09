@@ -14,8 +14,10 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use joy_devtools::DevTools;
-use joy_devtools::dock;
+use crate::development::{
+    DevTools,
+    dock,
+};
 use joy_input::GamepadPoller;
 use joy_input::{
     InputManager,
@@ -79,7 +81,8 @@ const DISPLAY_POLL_SECONDS: f64 = 1.0;
 pub struct ShellOptions {
     /// Window title and development overlay label.
     pub title: String,
-    /// Enables the development overlay and console (backquote toggles the console). Disable for production builds.
+    /// Enables the development overlay and console (backquote toggles the console). Disable for production builds;
+    /// builds without the `devtools` feature have neither, whatever this says.
     pub development: bool,
     /// Renderer settings (shadows, sky, display processing, render scale).
     pub renderer: RendererOptions,
@@ -532,7 +535,7 @@ impl<A: App> WindowedShell<A> {
         input.set_gamepads(gamepads.poll());
         let lock_held = *pointer_lock && pointer_lock_held(window);
         input.set_pointer_locked(lock_held);
-        input.update();
+        input.update(f64::from(time.elapsed_seconds));
         let viewport = Viewport {
             logical_size: renderer.logical_size(),
             scale_factor: display_scale(window),

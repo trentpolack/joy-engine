@@ -19,8 +19,8 @@ use super::level_document::LevelData;
 use super::world::World;
 use joy_physics::{
     BodyHandle,
-    PhysicsWorld,
-    PhysicsWorldOptions,
+    PhysicsSimulation,
+    PhysicsSimulationOptions,
 };
 
 /// Caller name used in delta-time errors.
@@ -38,18 +38,18 @@ pub struct LevelRuntime {
 impl LevelRuntime {
     /// Instantiate a level with default physics options. See [`LevelRuntime::with_physics_options`].
     pub fn new(level: &LevelData, registry: EntityRegistry) -> Result<Self, GameplayError> {
-        Self::with_physics_options(level, registry, PhysicsWorldOptions::default())
+        Self::with_physics_options(level, registry, PhysicsSimulationOptions::default())
     }
 
     /// Validate and copy a level, then spawn every entity in authored order with its physics.
     ///
     /// Fails if the level is invalid, still links object templates (resolve them with `resolve_level_objects` first),
     /// or any entity fails to spawn; on failure every entity created so far is removed (running `on_destroy`) and the
-    /// physics world is released.
+    /// physics simulation is released.
     pub fn with_physics_options(
         level: &LevelData,
         registry: EntityRegistry,
-        physics: PhysicsWorldOptions,
+        physics: PhysicsSimulationOptions,
     ) -> Result<Self, GameplayError> {
         level.validate()?;
         if let Some(linked) = level.entities.iter().find(|entity| entity.template.is_some()) {
@@ -130,13 +130,13 @@ impl LevelRuntime {
         &mut self.world.entities
     }
 
-    /// The physics world.
-    pub fn physics(&self) -> &PhysicsWorld {
+    /// The physics simulation.
+    pub fn physics(&self) -> &PhysicsSimulation {
         &self.world.physics
     }
 
-    /// The physics world, mutably (for vehicle input, impulses, or raycasts).
-    pub fn physics_mut(&mut self) -> &mut PhysicsWorld {
+    /// The physics simulation, mutably (for vehicle input, impulses, or raycasts).
+    pub fn physics_mut(&mut self) -> &mut PhysicsSimulation {
         &mut self.world.physics
     }
 }

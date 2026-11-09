@@ -44,23 +44,9 @@ impl SceneAttachments {
         self.size
     }
 
-    /// The attachment slots after a scene pass's color target. The first pass of a frame clears them (uncovered pixels,
-    /// such as the sky, keep zero coverage); a later pass over the same frame loads what earlier passes wrote.
-    pub(crate) fn color_attachments(&self, clear: bool) -> [Option<wgpu::RenderPassColorAttachment<'_>>; 1] {
-        let load = if clear { wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT) } else { wgpu::LoadOp::Load };
-        [Some(wgpu::RenderPassColorAttachment {
-            view: &self.motion,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load,
-                store: wgpu::StoreOp::Store,
-            },
-            depth_slice: None,
-        })]
-    }
-
     /// RG screen-space motion in UV units from the previous frame's position to this one's (without jitter), B view
-    /// depth, A coverage.
+    /// depth, A coverage. The first scene pass of a frame clears it (uncovered pixels, such as the sky, keep zero
+    /// coverage) and later ones load it (see `frame_plan.rs`).
     pub(crate) fn motion(&self) -> &wgpu::TextureView {
         &self.motion
     }

@@ -13,8 +13,8 @@ use joy_physics::{
     BodyOptions,
     HeightfieldOptions,
     PhysicsError,
-    PhysicsWorld,
-    PhysicsWorldOptions,
+    PhysicsSimulation,
+    PhysicsSimulationOptions,
     SdfCollisionStatistics,
     SdfPrimitive,
     SdfShape,
@@ -34,14 +34,14 @@ use joy_terrain::{
 };
 
 /// Advance in 60 Hz frames for a number of seconds.
-fn simulate(world: &mut PhysicsWorld, seconds: f32) {
+fn simulate(world: &mut PhysicsSimulation, seconds: f32) {
     for _ in 0..(seconds * 60.0).round() as usize {
         world.step(1.0 / 60.0).unwrap();
     }
 }
 
 /// Step at 60 Hz for `seconds` and return the largest SDF pair and contact counts any step reported.
-fn simulate_tracking_sdf(world: &mut PhysicsWorld, seconds: f32) -> SdfCollisionStatistics {
+fn simulate_tracking_sdf(world: &mut PhysicsSimulation, seconds: f32) -> SdfCollisionStatistics {
     let mut peak = SdfCollisionStatistics::default();
     for _ in 0..(seconds * 60.0).round() as usize {
         world.step(1.0 / 60.0).unwrap();
@@ -76,7 +76,7 @@ fn hills() -> (TerrainLayout, Vec<TerrainTile>) {
 
 #[test]
 fn heightfields_split_cells_on_the_terrain_diagonal() {
-    let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let mut world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     let corners = [0.0, 4.0, 1.0, 2.0];
     world
         .create_heightfield_body(&HeightfieldOptions {
@@ -117,7 +117,7 @@ fn primitive_and_sdf_bodies_rest_where_gameplay_samples_the_ground() {
     let run = || {
         let (layout, tiles) = hills();
         let surface = TerrainSurface::from_tiles(layout, tiles, Default::default()).unwrap();
-        let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+        let mut world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
         let mut colliders = TerrainColliders::new(TerrainColliderOptions {
             radius: 12.0,
             ..Default::default()
@@ -191,7 +191,7 @@ fn craters_rebuild_only_the_colliders_they_reach() {
     for _ in 0..4 {
         streamer.update(&[region]).unwrap();
     }
-    let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let mut world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     let mut colliders = TerrainColliders::new(TerrainColliderOptions {
         radius: 20.0,
         ..Default::default()

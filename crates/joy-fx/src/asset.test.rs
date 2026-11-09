@@ -32,6 +32,19 @@ fn documents_normalize_defaults_and_sort_bursts() {
     let saved = additive.asset().to_json();
     assert_eq!(saved["emitters"][0][PARTICLE_EMITTER_BLEND], json!("additive"));
     assert_eq!(compile_particle_effect(&saved).unwrap().asset(), additive.asset());
+
+    // Soft and lit particles follow the same rule: hard, unlit emitters save exactly as before, and the authored
+    // distance and mode round trip.
+    assert_eq!((emitter.softness, emitter.lighting), (0.0, ParticleLighting::Unlit));
+    let saved = compiled.asset().to_json();
+    assert!(saved["emitters"][0].get(PARTICLE_EMITTER_SOFTNESS).is_none());
+    assert!(saved["emitters"][0].get(PARTICLE_EMITTER_LIGHTING).is_none());
+    let soft = compile_particle_effect(&document(json!({"softness": 1.5, "lighting": "lit"}))).unwrap();
+    assert_eq!((soft.asset().emitters[0].softness, soft.asset().emitters[0].lighting), (1.5, ParticleLighting::Lit));
+    let saved = soft.asset().to_json();
+    assert_eq!(saved["emitters"][0][PARTICLE_EMITTER_SOFTNESS], json!(1.5));
+    assert_eq!(saved["emitters"][0][PARTICLE_EMITTER_LIGHTING], json!("lit"));
+    assert_eq!(compile_particle_effect(&saved).unwrap().asset(), soft.asset());
 }
 
 #[test]
@@ -43,6 +56,8 @@ fn invalid_documents_report_reference_messages() {
     );
     assert_eq!(message(document(json!({"renderer": "flipbook"}))), "main: flipbook requires a texture.");
     assert_eq!(message(document(json!({"blend": "screen"}))), "main: unknown particle blend mode.");
+    assert_eq!(message(document(json!({"softness": -1}))), "main.softness must be a number from 0 to 10000.");
+    assert_eq!(message(document(json!({"lighting": "phong"}))), "main: unknown particle lighting mode.");
     assert_eq!(
         message(document(json!({"death": {"emitter": "missing", "count": 1}}))),
         "Emitter 'main' references missing child 'missing'."

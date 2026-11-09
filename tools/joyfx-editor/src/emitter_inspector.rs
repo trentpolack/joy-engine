@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The EMITTER tab of the compose panel:
-//! identity, renderer, blend mode, timing, the sprite texture for textured renderers, particle light emission, bursts,
-//! and child emission. Numeric fields are kit number fields, so they share drafts, keyboard steps, and property undo with the
-//! parameter panel; switches and menus are structural edits.
+//! The EMITTER tab of the compose panel: identity, renderer, blend and lighting modes, softness, timing, the sprite
+//! texture for textured renderers, particle light emission, bursts, and child emission. Numeric fields are kit number
+//! fields, so they share drafts, keyboard steps, and property undo with the parameter panel; switches and menus are
+//! structural edits.
 
 use joy_engine::development::{
     ControlResponse,
@@ -18,7 +18,9 @@ use joy_engine::egui::{
     Ui,
 };
 use joy_engine::particles::{
+    MAXIMUM_PARTICLE_SOFTNESS,
     ParticleBlend,
+    ParticleLighting,
     ParticleRenderer,
 };
 use joy_engine::runtime::theme::{
@@ -127,7 +129,23 @@ impl EmitterInspector {
                             }
                         });
                     });
+                    field(ui, column, "Lighting", |ui| {
+                        egui::ComboBox::from_id_salt("lighting").width(column - 8.0).selected_text(emitter.lighting.as_str()).show_ui(ui, |ui| {
+                            for lighting in ParticleLighting::ALL {
+                                if ui.selectable_label(lighting == emitter.lighting, lighting.as_str()).on_hover_text(lighting_help(lighting)).clicked() && lighting != emitter.lighting {
+                                    emitter.lighting = lighting;
+                                    edits.structural = true;
+                                }
+                            }
+                        });
+                    });
                 });
+                ui.horizontal_top(|ui| {
+                    field(ui, column, "Softness", |ui| {
+                        edits.control(&NumberField::new("softness", &mut emitter.softness).range(0.0, MAXIMUM_PARTICLE_SOFTNESS).step(0.1).width(column).show(ui, drafts));
+                    });
+                });
+                components::guidance(ui, "Softness fades particles within this many world units of opaque geometry; 0 keeps hard edges. WebGL 2 always draws hard edges.");
                 ui.horizontal_top(|ui| {
                     field(ui, column, "Duration (s)", |ui| {
                         edits.control(&NumberField::new("duration", &mut emitter.duration).range(0.0, 30.0).step(0.01).width(column).show(ui, drafts));
@@ -299,6 +317,14 @@ fn blend_help(blend: ParticleBlend) -> &'static str {
         ParticleBlend::Alpha => "Straight alpha: the color covers what is behind by its alpha.",
         ParticleBlend::Additive => "Additive: color times alpha adds light and never darkens; drawn unsorted.",
         ParticleBlend::Premultiplied => "Premultiplied: alpha sets how much is hidden, color how much light is added.",
+    }
+}
+
+/// What a lighting mode does, for its menu entry.
+fn lighting_help(lighting: ParticleLighting) -> &'static str {
+    match lighting {
+        ParticleLighting::Unlit => "Unlit: the color shows as authored, for fire, sparks, and other light sources.",
+        ParticleLighting::Lit => "Lit: ambient, sun, and point lights shade the color, for smoke, dust, and debris.",
     }
 }
 

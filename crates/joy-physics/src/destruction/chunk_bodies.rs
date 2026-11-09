@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Destructible structures in a physics world: static colliders for the chunks still standing and a pool of rigid
+//! Destructible structures in a physics simulation: static colliders for the chunks still standing and a pool of rigid
 //! debris for the chunks that leave, both in the same world as everything else, so falling pieces land on what survives,
 //! block bodies and queries, and stay solid where they come to rest.
 //!
@@ -30,7 +30,7 @@ use crate::{
     BodyOptions,
     CollisionGroups,
     PhysicsError,
-    PhysicsWorld,
+    PhysicsSimulation,
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -79,7 +79,7 @@ impl StructureColliders {
     /// become a collider; colliders already matched stay.
     pub fn sync<'a>(
         &mut self,
-        world: &mut PhysicsWorld,
+        world: &mut PhysicsSimulation,
         chunks: impl IntoIterator<Item = &'a DestructibleChunkDefinition>,
     ) -> Result<(), PhysicsError> {
         let chunks: Vec<&DestructibleChunkDefinition> = chunks.into_iter().collect();
@@ -129,7 +129,7 @@ impl StructureColliders {
     }
 
     /// Remove every collider from `world`.
-    pub fn clear(&mut self, world: &mut PhysicsWorld) {
+    pub fn clear(&mut self, world: &mut PhysicsSimulation) {
         for (_, body) in self.bodies.drain(..) {
             world.remove_body(body);
         }
@@ -261,7 +261,7 @@ impl DebrisPool {
     /// cannot become a collider.
     pub fn release(
         &mut self,
-        world: &mut PhysicsWorld,
+        world: &mut PhysicsSimulation,
         chunk: &DestructibleChunkDefinition,
         release: DebrisRelease,
     ) -> Result<Option<BodyHandle>, PhysicsError> {
@@ -303,7 +303,7 @@ impl DebrisPool {
     /// Keep the pool within its budget after a physics step of `elapsed_seconds`: freeze pieces moving longer than
     /// `maximum_moving_seconds`, then the oldest sleeping pieces while more than `maximum_moving` still simulate, then
     /// remove the oldest pieces while more than `maximum_pieces` remain. Pieces whose body disappeared are forgotten.
-    pub fn settle(&mut self, world: &mut PhysicsWorld, elapsed_seconds: f64) -> DebrisSettlement {
+    pub fn settle(&mut self, world: &mut PhysicsSimulation, elapsed_seconds: f64) -> DebrisSettlement {
         let mut report = DebrisSettlement::default();
         self.pieces.retain(|_, piece| world.contains_body(piece.body));
         let elapsed = if elapsed_seconds.is_finite() { elapsed_seconds.max(0.0) } else { 0.0 };
@@ -369,7 +369,7 @@ impl DebrisPool {
     }
 
     /// Remove every piece from `world`.
-    pub fn clear(&mut self, world: &mut PhysicsWorld) {
+    pub fn clear(&mut self, world: &mut PhysicsSimulation) {
         for (_, piece) in self.pieces.drain(..) {
             world.remove_body(piece.body);
         }
@@ -387,7 +387,7 @@ pub(crate) fn body_origin(chunk: &DestructibleChunkDefinition) -> DVec3 {
 
 /// A body at the chunk's [`body_origin`] with the chunk's shape (its hull, or its box) scaled by `scale` about it.
 fn create_chunk_body(
-    world: &mut PhysicsWorld,
+    world: &mut PhysicsSimulation,
     chunk: &DestructibleChunkDefinition,
     scale: f64,
     options: BodyOptions,

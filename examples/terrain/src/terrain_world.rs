@@ -2,11 +2,11 @@
 // Licensed under the MIT License.
 
 //! The example's terrain systems: a streamer paging Dragon Pit (from the embedded asset or a package), synthesized
-//! detail, crater edits, and a physics world whose terrain colliders hold up dropped props.
+//! detail, crater edits, and a physics simulation whose terrain colliders hold up dropped props.
 //!
 //! One frame, in order: the camera view and a collision region around the focus and every prop drive the streamer;
 //! a newly published surface snapshot replaces the drawn one and resyncs the colliders around the same anchors; then
-//! physics steps. Craters and props are gameplay edits, so they always go through the streamer and the physics world,
+//! physics steps. Craters and props are gameplay edits, so they always go through the streamer and the physics simulation,
 //! never straight into rendered data. The terrain's local space is the world (the instance is untransformed).
 
 use joy_engine::core::{
@@ -18,9 +18,9 @@ use joy_engine::math::Vec3;
 use joy_engine::physics::{
     BodyHandle,
     BodyOptions,
+    PhysicsSimulation,
+    PhysicsSimulationOptions,
     PhysicsTransform,
-    PhysicsWorld,
-    PhysicsWorldOptions,
     SdfPrimitive,
     SdfShape,
     TerrainColliderOptions,
@@ -132,7 +132,7 @@ pub struct TerrainWorld {
     streaming: TerrainStreamingReport,
 
     // Physics: terrain colliders and the props they hold up.
-    physics: PhysicsWorld,
+    physics: PhysicsSimulation,
     colliders: TerrainColliders,
     collider_report: TerrainColliderReport,
     crate_shape: SdfShape,
@@ -170,7 +170,7 @@ impl TerrainWorld {
             streamer,
             surface: None,
             streaming: TerrainStreamingReport::default(),
-            physics: PhysicsWorld::new(PhysicsWorldOptions::default())?,
+            physics: PhysicsSimulation::new(PhysicsSimulationOptions::default())?,
             colliders: TerrainColliders::new(TerrainColliderOptions {
                 radius: TERRAIN_CONFIG.streaming.collision_radius as f32,
                 ..Default::default()

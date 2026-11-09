@@ -29,8 +29,8 @@ default = ["web-entry"]
 web-entry = []
 
 [dependencies]
-# Tools depend on the engine alone, like games.
-joy-engine.workspace = true
+# Tools depend on the engine alone, like games, with the authoring kit (lab controls, script editor, and file dialogs).
+joy-engine = { workspace = true, features = ["authoring"] }
 
 [lints]
 workspace = true

@@ -13,7 +13,11 @@ use std::borrow::Borrow;
 use std::fmt;
 
 use indexmap::IndexMap;
-use joy_core::JsonRecord;
+use joy_core::{
+    EventChannel,
+    EventQueue,
+    JsonRecord,
+};
 
 use super::character::ControlIntent;
 use super::component::{
@@ -26,10 +30,6 @@ use super::entity_definition::{
     EntityTransform,
 };
 use super::error::GameplayError;
-use super::world_events::{
-    EventQueue,
-    WorldEvents,
-};
 use super::world_timers::{
     TimerId,
     TimerRepeat,
@@ -37,7 +37,7 @@ use super::world_timers::{
 };
 use joy_physics::{
     BodyHandle,
-    PhysicsWorld,
+    PhysicsSimulation,
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -270,19 +270,19 @@ pub(crate) enum EntityCommand {
 
 /// Borrowed simulation services available to behaviors and systems.
 ///
-/// Gives mutable access to the physics world, the entity-to-body map, the world's events, and its timers, all owned by
+/// Gives mutable access to the physics simulation, the entity-to-body map, the world's events, and its timers, all owned by
 /// the composition root ([`World`](super::World)). A body listed for an entity (vehicle chassis included) is owned by
 /// that entity: removing the entity removes it from physics. Structural changes (spawning and removing entities) are
 /// requested here and applied by the world: immediately after the requesting behavior or system returns during an
 /// update, or at the start of the next update when requested from a spawn or destroy hook.
 ///
-/// Events read here are those the previous update produced (see [`WorldEvents`]); events sent here are produced by the
-/// current update.
+/// Events read here are those the previous update produced ([`EventChannel::delivered`]); events sent here are produced
+/// by the current update.
 pub struct SimulationContext<'a> {
-    /// The physics world.
-    pub physics: &'a mut PhysicsWorld,
+    /// The physics simulation.
+    pub physics: &'a mut PhysicsSimulation,
     bodies: &'a mut IndexMap<EntityId, BodyHandle>,
-    events: &'a mut WorldEvents,
+    events: &'a mut EventChannel,
     timers: &'a mut WorldTimers,
     commands: Vec<EntityCommand>,
 }
@@ -290,9 +290,9 @@ pub struct SimulationContext<'a> {
 impl<'a> SimulationContext<'a> {
     /// Borrow simulation services for one call.
     pub fn new(
-        physics: &'a mut PhysicsWorld,
+        physics: &'a mut PhysicsSimulation,
         bodies: &'a mut IndexMap<EntityId, BodyHandle>,
-        events: &'a mut WorldEvents,
+        events: &'a mut EventChannel,
         timers: &'a mut WorldTimers,
     ) -> Self {
         Self {
@@ -335,7 +335,7 @@ impl<'a> SimulationContext<'a> {
     }
 
     /// Send an event; the game reads it after this update and behaviors read it during the next one.
-    pub fn send_event<T: 'static>(&mut self, event: T) {
+    pub fn send_event<T: Clone + 'static>(&mut self, event: T) {
         self.events.send(event);
     }
 

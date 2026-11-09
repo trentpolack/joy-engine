@@ -4,8 +4,9 @@
 //! Joy Engine development tools: the development dock games and tools share (the standard CONFIG and JOY-EDITOR
 //! menus), the runtime statistics overlay and console ([`DevTools`], [`Console`], and [`ConsoleVariables`]), config
 //! panels and [`LiveTuning`], the [`PostProcessEditor`] for post-process volumes, and [`SceneEffectsControls`].
-//! [`GameAssets`] embeds a game's text assets and hot reloads them from its project folder in native development builds.
-//! Production builds disable the overlay and console through the shell's development option and do not create editors.
+//! Development builds that turn the overlay off use the shell's development option; release and browser production
+//! builds leave this crate out entirely (the facade's `devtools` feature), and the shell hands games an inert
+//! `DevTools` instead.
 
 #[cfg(not(target_arch = "wasm32"))]
 mod config_file;
@@ -18,7 +19,6 @@ mod dev_tools;
 pub mod dock;
 #[cfg(not(target_arch = "wasm32"))]
 mod files;
-mod game_assets;
 mod live_tuning;
 mod post_process_editor;
 mod post_process_session;
@@ -59,12 +59,6 @@ pub use dev_editors::{
     development_file,
 };
 pub use dev_tools::DevTools;
-pub use game_assets::{
-    ASSET_POLL_SECONDS,
-    AssetReadError,
-    EmbeddedAsset,
-    GameAssets,
-};
 pub use live_tuning::{
     LiveTuning,
     TuningError,

@@ -1,18 +1,27 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The instanced particle pass shared by the scene renderer and the arcade triangle renderer.
+//! The scene renderer's instanced particle pass.
 //!
 //! Each frame [`ParticlePass::prepare`] reads a [`ParticleFrame`]: it culls whole batches whose bounds lie outside the
 //! view, orders the instances of every source-over batch back to front (one key per particle; additive batches add
-//! light in any order and are not sorted), gives each batch one view depth for the owner's transparency order, uploads
-//! the images batches sample, and writes the surviving instances into one growing instance buffer. A batch then draws
-//! as one instanced call of a six-vertex quad. Scratch buffers and the instance buffer persist between frames.
+//! light in any order and are not sorted), gives each batch the view depth of its sort point for the renderer's
+//! transparency order, uploads the images batches sample, and fills one growing instance buffer with the surviving
+//! instances in drawing order. A batch then draws as one instanced call of a six-vertex quad. Scratch buffers and the
+//! instance buffer persist between frames.
+//!
+//! Ordering runs on the GPU where compute shaders do ([`ParticleSorter`]): the instances upload unsorted and a compute
+//! pass recorded into the frame's encoder sorts them into the instance buffer before any render pass reads it. WebGL 2
+//! and adapters without compute sort on the CPU before uploading. Both produce the same order for the same depths.
 //!
 //! Two pipelines cover the blend modes: source-over with premultiplied blending (straight-alpha emitters are
 //! premultiplied in the shader, so they share it with premultiplied emitters) and one-one additive. Both test depth
-//! less-or-equal without writing it. Images upload with mip chains (sRGB, sampled trilinearly with anisotropic
-//! filtering and clamped edges) on first use and release once their [`TextureAsset`] is dropped everywhere.
+//! less-or-equal without writing it. Batches with soft particles draw with a second pair that also reads the scene
+//! depth (group 3) to fade near opaque geometry, while transparency draws in its own pass over a read-only depth
+//! attachment; WebGL 2 cannot read the depth buffer it tests against, so it has only the hard pair and draws soft
+//! particles hard. Lit particles read the frame's lights from group 0, which every particle pipeline binds. Images
+//! upload with mip chains (sRGB, sampled trilinearly with anisotropic filtering and clamped edges) on first use and
+//! release once their [`TextureAsset`] is dropped everywhere.
 
 use std::collections::HashMap;
 use std::ops::Range;
@@ -25,7 +34,10 @@ use joy_core::math::{
 
 use crate::RenderError;
 use crate::culling::bounds_outside_view;
-use crate::gpu::GpuContext;
+use crate::gpu::{
+    GpuBackend,
+    GpuContext,
+};
 use crate::particles::{
     ParticleFrame,
     ParticleInstance,
@@ -36,31 +48,39 @@ use crate::texture_mips::{
     mipmapped_sampler,
 };
 
+use super::particle_sort::{
+    ParticleSorter,
+    UNSORTED_SEGMENT,
+};
 use super::{
     DEPTH_FORMAT,
     sampler_entry,
     texture_entry,
 };
 
-/// The shared shape library every particle entry file follows.
+/// The shape library every particle module composes after the scene contract.
 pub(crate) const PARTICLE_SHAPES_SOURCE: &str = include_str!("../shaders/particle-shapes.wgsl");
 
-/// The scene renderer's particle entry points (composed after the scene contract and the shape library).
-pub(crate) const PARTICLE_SCENE_SOURCE: &str = include_str!("../shaders/particle-scene.wgsl");
+/// The soft fade for pipelines that read the scene depth (group 3).
+pub(crate) const PARTICLE_DEPTH_SOURCE: &str = include_str!("../shaders/particle-depth.wgsl");
 
-/// The triangle renderer's particle entry points (composed after the shape library).
-pub(crate) const PARTICLE_TRIANGLES_SOURCE: &str = include_str!("../shaders/particle-triangles.wgsl");
+/// The hard stand-in for the soft fade, without a depth binding.
+pub(crate) const PARTICLE_DEPTH_NONE_SOURCE: &str = include_str!("../shaders/particle-depth-none.wgsl");
+
+/// The scene renderer's particle entry points.
+pub(crate) const PARTICLE_SCENE_SOURCE: &str = include_str!("../shaders/particle-scene.wgsl");
 
 /// Vertices of the shared quad: two triangles, generated from the vertex index.
 const QUAD_VERTICES: Range<u32> = 0..6;
 
-/// Instance attributes of [`ParticleInstance`] at locations 0 through 4 (five of WebGL 2's sixteen).
-const INSTANCE_ATTRIBUTES: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![
+/// Instance attributes of [`ParticleInstance`] at locations 0 through 5 (six of WebGL 2's sixteen).
+const INSTANCE_ATTRIBUTES: [wgpu::VertexAttribute; 6] = wgpu::vertex_attr_array![
     0 => Float32x4,
     1 => Float32x4,
     2 => Float32x4,
     3 => Unorm16x4,
     4 => Uint32,
+    5 => Float32,
 ];
 
 /// Initial instance capacity; grows geometrically.
@@ -106,12 +126,16 @@ impl ParticleView {
 pub(crate) struct PreparedBatch {
     /// Instances in the pass's instance buffer, back to front for source-over batches.
     pub instances: Range<u32>,
-    /// View depth of the batch's bounds center, its place in the owner's transparency order.
+    /// View depth of the batch's sort point, its place in the owner's transparency order.
     pub depth: f32,
+    /// View depth of the batch's bounds center, which orders batches that share a sort point among themselves.
+    pub bounds_depth: f32,
     /// Whether the batch draws with additive blending.
     pub additive: bool,
     /// The sampled image's [`TextureAsset::id`], for textured batches.
     pub texture: Option<u64>,
+    /// Whether the batch fades against the scene depth.
+    pub soft: bool,
 }
 
 /// Counts from one [`ParticlePass::prepare`].
@@ -132,93 +156,124 @@ struct GpuTexture {
     asset: Weak<dyn std::any::Any + Send + Sync>,
 }
 
-/// Owned particle pipelines, images, and instance buffer. Borrows the device per call and the open pass per draw.
+/// The source-over and additive pipelines of one particle module.
+struct BlendPipelines {
+    over: wgpu::RenderPipeline,
+    additive: wgpu::RenderPipeline,
+}
+
+/// The soft pipelines and the scene-depth layout they read, on devices that can sample depth during transparency.
+struct SoftPipelines {
+    pipelines: BlendPipelines,
+    depth_layout: wgpu::BindGroupLayout,
+}
+
+/// Owned particle pipelines, images, sorter, and instance buffer. Borrows the device per call, the frame's encoder
+/// while preparing, and the open pass per draw.
 pub(crate) struct ParticlePass {
-    // Pipelines, the sprite group they read, and its sampler.
-    over_pipeline: wgpu::RenderPipeline,
-    additive_pipeline: wgpu::RenderPipeline,
+    // Pipelines: hard, and soft where depth can be read; the sprite group they read, and its sampler.
+    hard: BlendPipelines,
+    soft: Option<SoftPipelines>,
     texture_layout: wgpu::BindGroupLayout,
     texture_group: u32,
     sampler: wgpu::Sampler,
+    // This frame's scene-depth group for soft batches, while transparency draws over a read-only depth attachment.
+    scene_depth: Option<wgpu::BindGroup>,
 
     // Uploaded images keyed by asset identity, and the white texel untextured batches bind (with its asset, which keeps
     // the upload alive).
     textures: HashMap<u64, GpuTexture>,
     white: TextureAsset,
 
-    // The instance buffer and this frame's layout of it.
+    // The instance buffer, the GPU sort that fills it where compute runs, and this frame's layout of it.
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
+    sorter: Option<ParticleSorter>,
     prepared: Vec<PreparedBatch>,
 
-    // Scratch kept between frames: instances in upload order and one sort key per instance.
+    // Scratch kept between frames: instances in upload order, their batches for the GPU sort, and one CPU sort key per
+    // instance.
     upload: Vec<ParticleInstance>,
+    segments: Vec<u32>,
     order: Vec<(f32, u32)>,
 }
 
 impl ParticlePass {
-    /// Compile both pipelines from `source` (the shape library plus an entry file) for `scene_format`. The pipeline
-    /// layout is `leading_layouts` followed by the sprite texture group.
+    /// Compile the particle pipelines for `scene_format` from `common` (the scene contract and shadow receivers the
+    /// renderer composes for this device). The pipeline layout is `leading_layouts` followed by the sprite texture
+    /// group, and for soft pipelines the scene-depth group after it. Devices with compute shaders also get the GPU
+    /// sort.
     pub fn new(
         gpu: &GpuContext,
         mipmaps: &mut MipmapGenerator,
         leading_layouts: &[&wgpu::BindGroupLayout],
-        source: String,
+        common: &str,
         scene_format: wgpu::TextureFormat,
     ) -> Self {
         let device = gpu.device();
+        let capabilities = gpu.capabilities();
         let texture_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("particle sprite"),
             entries: &[texture_entry(0), sampler_entry(1)],
         });
-        let mut layouts: Vec<Option<&wgpu::BindGroupLayout>> = leading_layouts.iter().copied().map(Some).collect();
-        layouts.push(Some(&texture_layout));
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("particles"),
-            bind_group_layouts: &layouts,
-            immediate_size: 0,
+        let mut layouts: Vec<&wgpu::BindGroupLayout> = leading_layouts.to_vec();
+        layouts.push(&texture_layout);
+        let hard = blend_pipelines(device, &layouts, &particle_module_source(common, false), scene_format);
+
+        // WebGL 2 shaders cannot read the depth buffer their pass tests against, so soft particles draw hard there.
+        let soft = (capabilities.backend != GpuBackend::Gl).then(|| {
+            let depth_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("particle scene depth"),
+                entries: &[scene_depth_entry(0)],
+            });
+            let mut soft_layouts = layouts.clone();
+            soft_layouts.push(&depth_layout);
+            SoftPipelines {
+                pipelines: blend_pipelines(device, &soft_layouts, &particle_module_source(common, true), scene_format),
+                depth_layout,
+            }
         });
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("particles"),
-            source: wgpu::ShaderSource::Wgsl(source.into()),
-        });
-        let pipeline = |entry_point: &str, blend: wgpu::BlendState| {
-            particle_pipeline(device, &layout, &module, entry_point, blend, scene_format)
-        };
-        let over_pipeline = pipeline("fragmentOver", wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING);
-        let additive_pipeline = pipeline("fragmentAdditive", ADDITIVE_BLENDING);
+        let sorter = capabilities.compute.then(|| ParticleSorter::new(gpu));
 
         let white = TextureAsset::from_rgba8(1, 1, vec![255; 4]).expect("one white texel is a valid image");
+        let storage = sorter.is_some();
         let mut pass = Self {
-            over_pipeline,
-            additive_pipeline,
+            hard,
+            soft,
             texture_layout,
             texture_group: leading_layouts.len() as u32,
             sampler: mipmapped_sampler(device, "particle sprite", wgpu::AddressMode::ClampToEdge),
+            scene_depth: None,
             textures: HashMap::new(),
             white: white.clone(),
-            instance_buffer: instance_buffer(device, INITIAL_INSTANCE_CAPACITY),
+            instance_buffer: instance_buffer(device, INITIAL_INSTANCE_CAPACITY, storage),
             instance_capacity: INITIAL_INSTANCE_CAPACITY,
+            sorter,
             prepared: Vec::new(),
             upload: Vec::new(),
+            segments: Vec::new(),
             order: Vec::new(),
         };
         pass.upload_texture(gpu, mipmaps, &white);
         pass
     }
 
-    /// Cull, order, and upload `frame` for `view`, replacing the previous frame's batches; `None` draws nothing.
+    /// Cull, order, and upload `frame` for `view`, replacing the previous frame's batches; `None` draws nothing. On
+    /// devices with compute shaders the ordering is recorded into `encoder`, ahead of the passes that draw.
     ///
     /// Fails before uploading anything when an image exceeds the device's largest 2D texture.
     pub fn prepare(
         &mut self,
         gpu: &GpuContext,
         mipmaps: &mut MipmapGenerator,
+        encoder: &mut wgpu::CommandEncoder,
         frame: Option<&ParticleFrame>,
         view: &ParticleView,
     ) -> Result<PreparedCounts, RenderError> {
         self.prepared.clear();
         self.upload.clear();
+        self.segments.clear();
+        self.scene_depth = None;
         let Some(frame) = frame else {
             return Ok(PreparedCounts::default());
         };
@@ -233,6 +288,10 @@ impl ParticlePass {
             )));
         }
 
+        // Lay out the surviving batches. The GPU sort takes them unsorted, each instance tagged with its batch; without
+        // it, source-over batches sort here.
+        let gpu_sort = self.sorter.is_some();
+        let mut needs_gpu_sort = false;
         let mut counts = PreparedCounts::default();
         for batch in frame.batches() {
             if bounds_outside_view(batch.bounds(), view.view_projection) {
@@ -242,19 +301,15 @@ impl ParticlePass {
             let range = batch.instances();
             let instances = &frame.instances()[range.start as usize..range.end as usize];
             let start = self.upload.len() as u32;
-            if batch.is_additive() {
+            if batch.is_additive() || gpu_sort {
                 self.upload.extend_from_slice(instances);
             } else {
-                // Farthest first; equal depths keep generation order, so the order is deterministic.
-                self.order.clear();
-                self.order.extend(
-                    instances
-                        .iter()
-                        .enumerate()
-                        .map(|(index, instance)| (view.depth(instance.position()), index as u32)),
-                );
-                self.order.sort_unstable_by(|left, right| right.0.total_cmp(&left.0).then(left.1.cmp(&right.1)));
-                self.upload.extend(self.order.iter().map(|(_, index)| instances[*index as usize]));
+                order_back_to_front(instances, view, &mut self.order, &mut self.upload);
+            }
+            if gpu_sort {
+                let segment = (self.prepared.len() as u32) | if batch.is_additive() { UNSORTED_SEGMENT } else { 0 };
+                self.segments.extend(std::iter::repeat_n(segment, instances.len()));
+                needs_gpu_sort |= !batch.is_additive() && instances.len() > 1;
             }
 
             let texture = batch.texture().map(|slot| {
@@ -264,13 +319,30 @@ impl ParticlePass {
             });
             self.prepared.push(PreparedBatch {
                 instances: start..(self.upload.len() as u32),
-                depth: view.depth(batch.bounds().center()),
+                depth: view.depth(batch.sort_point()),
+                bounds_depth: view.depth(batch.bounds().center()),
                 additive: batch.is_additive(),
                 texture,
+                soft: batch.is_soft(),
             });
         }
         counts.instances = self.upload.len();
-        self.write_instances(gpu);
+
+        // The owner's queue keeps equal depths in batch order, so batches sharing a sort point (a presentation's layer)
+        // are put back to front among themselves by their bounds here, as batches without one already are. The sort is
+        // stable and moves only the batch list, never the instances it points into.
+        self.prepared.sort_by(|left, right| {
+            right.depth.total_cmp(&left.depth).then(right.bounds_depth.total_cmp(&left.bounds_depth))
+        });
+
+        // Fill the instance buffer: sorted on the GPU when some batch needs it, otherwise uploaded as laid out.
+        self.ensure_instance_capacity(gpu);
+        match &mut self.sorter {
+            Some(sorter) if needs_gpu_sort => {
+                sorter.encode(gpu, encoder, &self.upload, &self.segments, view, &self.instance_buffer);
+            }
+            _ => self.write_instances(gpu),
+        }
         Ok(counts)
     }
 
@@ -279,8 +351,31 @@ impl ParticlePass {
         &self.prepared
     }
 
+    /// Whether this frame has soft batches and the device can fade them against the scene depth, so transparency must
+    /// draw in its own pass over a read-only depth attachment ([`bind_scene_depth`](Self::bind_scene_depth)).
+    pub fn reads_scene_depth(&self) -> bool {
+        self.soft.is_some() && self.prepared.iter().any(|batch| batch.soft)
+    }
+
+    /// Bind `depth` (the opaque scene depth, attached read-only while transparency draws) for this frame's soft
+    /// batches, or `None` to draw them hard. Call after [`prepare`](Self::prepare) and before the transparency pass.
+    pub fn bind_scene_depth(&mut self, device: &wgpu::Device, depth: Option<&wgpu::TextureView>) {
+        self.scene_depth = match (&self.soft, depth) {
+            (Some(soft), Some(view)) => Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("particle scene depth"),
+                layout: &soft.depth_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(view),
+                }],
+            })),
+            _ => None,
+        };
+    }
+
     /// Record prepared batch `index` into the open pass, which must already bind the groups before the sprite group.
-    /// Returns the instances drawn (zero for a missing batch or image).
+    /// Soft batches fade against the scene depth when it is bound this frame and draw hard otherwise. Returns the
+    /// instances drawn (zero for a missing batch or image).
     pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, index: usize) -> u32 {
         let Some(batch) = self.prepared.get(index) else {
             return 0;
@@ -295,8 +390,16 @@ impl ParticlePass {
                 None => return 0,
             },
         };
-        pass.set_pipeline(if batch.additive { &self.additive_pipeline } else { &self.over_pipeline });
+        let soft = match (&self.soft, &self.scene_depth) {
+            (Some(soft), Some(depth)) if batch.soft => Some((&soft.pipelines, depth)),
+            _ => None,
+        };
+        let pipelines = soft.map_or(&self.hard, |(pipelines, _)| pipelines);
+        pass.set_pipeline(if batch.additive { &pipelines.additive } else { &pipelines.over });
         pass.set_bind_group(self.texture_group, group, &[]);
+        if let Some((_, depth)) = soft {
+            pass.set_bind_group(self.texture_group + 1, depth, &[]);
+        }
         pass.set_vertex_buffer(0, self.instance_buffer.slice(..));
         pass.draw(QUAD_VERTICES, batch.instances.clone());
         batch.instances.len() as u32
@@ -340,16 +443,85 @@ impl ParticlePass {
         );
     }
 
-    /// Upload this frame's instances in drawing order, growing the buffer geometrically.
-    fn write_instances(&mut self, gpu: &GpuContext) {
-        if self.upload.is_empty() {
-            return;
-        }
+    /// Grow the instance buffer geometrically to hold this frame's instances.
+    fn ensure_instance_capacity(&mut self, gpu: &GpuContext) {
         if self.upload.len() > self.instance_capacity {
             self.instance_capacity = self.upload.len().next_power_of_two();
-            self.instance_buffer = instance_buffer(gpu.device(), self.instance_capacity);
+            self.instance_buffer = instance_buffer(gpu.device(), self.instance_capacity, self.sorter.is_some());
         }
-        gpu.queue().write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(&self.upload));
+    }
+
+    /// Upload this frame's instances as laid out, already in drawing order.
+    fn write_instances(&self, gpu: &GpuContext) {
+        if !self.upload.is_empty() {
+            gpu.queue().write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(&self.upload));
+        }
+    }
+}
+
+/// Append `instances` to `output` back to front for `view`: farthest first, equal depths in generation order, so the
+/// order is deterministic. `order` is scratch (one key per instance). The GPU sort reproduces this order exactly for
+/// the same depths.
+pub(super) fn order_back_to_front(
+    instances: &[ParticleInstance],
+    view: &ParticleView,
+    order: &mut Vec<(f32, u32)>,
+    output: &mut Vec<ParticleInstance>,
+) {
+    order.clear();
+    order.extend(instances.iter().enumerate().map(|(index, instance)| (view.depth(instance.position()), index as u32)));
+    order.sort_unstable_by(|left, right| right.0.total_cmp(&left.0).then(left.1.cmp(&right.1)));
+    output.extend(order.iter().map(|(_, index)| instances[*index as usize]));
+}
+
+/// The particle module for one pipeline family: the scene contract, the shape library, the soft fade (reading the scene
+/// depth when `soft`) or its hard stand-in, and the scene entry points.
+pub(crate) fn particle_module_source(common: &str, soft: bool) -> String {
+    let fade = if soft { PARTICLE_DEPTH_SOURCE } else { PARTICLE_DEPTH_NONE_SOURCE };
+    format!("{common}\n{PARTICLE_SHAPES_SOURCE}\n{fade}\n{PARTICLE_SCENE_SOURCE}")
+}
+
+/// Compile `source`'s source-over and additive pipelines with `layouts`.
+fn blend_pipelines(
+    device: &wgpu::Device,
+    layouts: &[&wgpu::BindGroupLayout],
+    source: &str,
+    scene_format: wgpu::TextureFormat,
+) -> BlendPipelines {
+    let layouts: Vec<Option<&wgpu::BindGroupLayout>> = layouts.iter().copied().map(Some).collect();
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("particles"),
+        bind_group_layouts: &layouts,
+        immediate_size: 0,
+    });
+    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("particles"),
+        source: wgpu::ShaderSource::Wgsl(source.into()),
+    });
+    BlendPipelines {
+        over: particle_pipeline(
+            device,
+            &layout,
+            &module,
+            "fragmentOver",
+            wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING,
+            scene_format,
+        ),
+        additive: particle_pipeline(device, &layout, &module, "fragmentAdditive", ADDITIVE_BLENDING, scene_format),
+    }
+}
+
+/// The scene depth soft particles read: a depth texture for the fragment stage, loaded without a sampler.
+fn scene_depth_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::FRAGMENT,
+        ty: wgpu::BindingType::Texture {
+            sample_type: wgpu::TextureSampleType::Depth,
+            view_dimension: wgpu::TextureViewDimension::D2,
+            multisampled: false,
+        },
+        count: None,
     }
 }
 
@@ -402,11 +574,16 @@ fn particle_pipeline(
     })
 }
 
-fn instance_buffer(device: &wgpu::Device, capacity: usize) -> wgpu::Buffer {
+/// The instance buffer for `capacity` instances; `storage` lets the GPU sort write it.
+fn instance_buffer(device: &wgpu::Device, capacity: usize, storage: bool) -> wgpu::Buffer {
+    let mut usage = wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST;
+    if storage {
+        usage |= wgpu::BufferUsages::STORAGE;
+    }
     device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("particle instances"),
         size: (capacity * std::mem::size_of::<ParticleInstance>()) as u64,
-        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        usage,
         mapped_at_creation: false,
     })
 }

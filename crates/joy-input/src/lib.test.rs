@@ -5,6 +5,9 @@
 
 use super::*;
 
+/// One display frame at 60 Hz, in seconds.
+const FRAME_SECONDS: f64 = 1.0 / 60.0;
+
 fn manager() -> InputManager {
     InputManager::new(
         InputMap::new()
@@ -33,22 +36,22 @@ fn pad(axes: [f32; 4], south: f32) -> GamepadState {
 fn edges_and_axes_follow_held_controls() {
     let mut input = manager();
     input.handle_key(key::KEY_W, true);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(input.action("forward").pressed && input.action("forward").down);
     assert_eq!(input.axis("throttle"), 1.0);
 
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(!input.action("forward").pressed && input.action("forward").down);
 
     input.handle_key(key::KEY_W, false);
     input.handle_key(key::KEY_S, true);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(input.action("forward").released);
     assert_eq!(input.axis("throttle"), -1.0);
 
     // Opposing digital directions cancel.
     input.handle_key(key::KEY_W, true);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert_eq!(input.axis("throttle"), 0.0);
 }
 
@@ -57,11 +60,11 @@ fn taps_between_frames_still_press() {
     let mut input = manager();
     input.handle_key(key::ESCAPE, true);
     input.handle_key(key::ESCAPE, false);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(input.pressed("pause"));
     assert!(input.action("pause").released);
     assert!(!input.action("pause").down);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(!input.pressed("pause"));
 }
 
@@ -73,7 +76,7 @@ fn virtual_buttons_touches_and_clear() {
     input.handle_touch(1, Some(Vec2::new(10.0, 20.0)));
     input.handle_touch(2, Some(Vec2::new(300.0, 20.0)));
     input.handle_touch(1, Some(Vec2::new(12.0, 22.0)));
-    input.update();
+    input.update(FRAME_SECONDS);
     assert_eq!(input.axis("throttle"), 0.5);
     assert_eq!(input.touches().collect::<Vec<_>>(), [Vec2::new(12.0, 22.0), Vec2::new(300.0, 20.0)]);
     assert_eq!(
@@ -89,7 +92,7 @@ fn virtual_buttons_touches_and_clear() {
 
     // Focus loss and pauses release everything, including fingers still down.
     input.clear();
-    input.update();
+    input.update(FRAME_SECONDS);
     assert_eq!(input.axis("throttle"), 0.0);
     assert!(!input.action("forward").down);
     assert!(!input.action("fire").down);
@@ -100,11 +103,11 @@ fn virtual_buttons_touches_and_clear() {
 fn values_at_the_press_threshold_do_not_hold() {
     let mut input = manager();
     input.set_virtual("forward", PRESS_THRESHOLD);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(!input.action("forward").down && !input.pressed("forward"));
     assert_eq!(input.action("forward").value, PRESS_THRESHOLD);
     input.set_virtual("forward", 0.2);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(input.pressed("forward"));
 }
 
@@ -113,7 +116,7 @@ fn gamepads_rescale_dead_zones_and_wait_for_neutral_after_release() {
     let mut input = manager();
     // Analog: 0.575 with the default 0.15 dead zone rescales to 0.5; buttons count from any pad.
     input.set_gamepads(&[pad([0.575, 0.0, 0.0, 0.0], 1.0), GamepadState::default()]);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!((input.axis("steer") - 0.5).abs() < 1e-6);
     assert!(input.pressed("brake"));
     // Sticks inside the dead zone read zero; disconnected pads contribute nothing.
@@ -124,22 +127,22 @@ fn gamepads_rescale_dead_zones_and_wait_for_neutral_after_release() {
             ..pad([1.0; 4], 1.0)
         },
     ]);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert_eq!(input.axis("steer"), 0.0);
     assert!(input.action("brake").released);
 
     // After a release, a pad still held stays blocked until it returns to neutral.
     input.set_gamepads(&[pad([0.0; 4], 1.0)]);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(input.action("brake").down);
     input.clear();
     input.set_gamepads(&[pad([0.0; 4], 1.0)]);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(!input.action("brake").down);
     input.set_gamepads(&[pad([0.0; 4], 0.0)]);
-    input.update();
+    input.update(FRAME_SECONDS);
     input.set_gamepads(&[pad([0.0; 4], 1.0)]);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(input.pressed("brake"));
 }
 
@@ -148,20 +151,20 @@ fn contexts_gate_actions_axes_and_bound_keys() {
     let mut input = manager();
     assert!(input.binds_key(key::SPACE) && !input.binds_key(key::ENTER));
     input.handle_key(key::ENTER, true);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(!input.action("menu").down);
 
     input.set_contexts(["menu"]);
     assert!(input.binds_key(key::ENTER) && !input.binds_key(key::SPACE));
     input.handle_key(key::ENTER, true);
     input.handle_key(key::KEY_W, true);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(input.pressed("menu"));
     assert!(!input.action("forward").down);
     assert_eq!(input.axis("throttle"), 0.0);
 
     input.set_contexts([]);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(!input.action("menu").down);
 }
 
@@ -170,10 +173,10 @@ fn rebind_replaces_bindings_and_rejects_unknown_actions() {
     let mut input = manager();
     input.handle_key(key::ESCAPE, true);
     input.rebind("pause", [InputBinding::key(key::KEY_P)]).unwrap();
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(!input.action("pause").down, "rebinding releases holds");
     input.handle_key(key::KEY_P, true);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(input.pressed("pause"));
     assert_eq!(input.rebind("missing", []), Err(InputError::UnknownAction("missing".to_owned())));
 }
@@ -185,21 +188,21 @@ fn suspension_ignores_presses_but_applies_releases() {
     input.handle_key(key::KEY_W, true);
     input.set_virtual("forward", 1.0);
     input.set_gamepads(&[pad([1.0, 0.0, 0.0, 0.0], 1.0)]);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(!input.action("forward").down && !input.action("brake").down);
     assert_eq!(input.axis("steer"), 0.0);
 
     input.set_focused(true);
     input.handle_key(key::KEY_W, true);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(input.action("forward").down);
     input.set_typing(true);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(input.action("forward").released, "starting to type releases holds");
     input.set_typing(false);
     input.set_visible(false);
     input.handle_key(key::KEY_W, true);
-    input.update();
+    input.update(FRAME_SECONDS);
     assert!(!input.action("forward").down);
 }
 
@@ -209,22 +212,22 @@ fn pointer_motion_accumulates_per_frame_and_stops_while_suspended() {
     input.handle_pointer_motion(Vec2::new(3.0, -1.0));
     input.handle_pointer_motion(Vec2::new(2.0, 4.0));
     assert_eq!(input.pointer_motion(), Vec2::ZERO, "motion reads after the next update");
-    input.update();
+    input.update(FRAME_SECONDS);
     assert_eq!(input.pointer_motion(), Vec2::new(5.0, 3.0));
-    input.update();
+    input.update(FRAME_SECONDS);
     assert_eq!(input.pointer_motion(), Vec2::ZERO, "one frame consumes its motion");
 
     input.handle_pointer_motion(Vec2::new(1.0, 1.0));
     input.clear();
-    input.update();
+    input.update(FRAME_SECONDS);
     assert_eq!(input.pointer_motion(), Vec2::ZERO, "clearing drops pending motion");
     input.set_focused(false);
     input.handle_pointer_motion(Vec2::new(1.0, 1.0));
-    input.update();
+    input.update(FRAME_SECONDS);
     assert_eq!(input.pointer_motion(), Vec2::ZERO, "suspended input ignores motion");
     input.set_focused(true);
     input.handle_pointer_motion(Vec2::new(f32::NAN, 1.0));
-    input.update();
+    input.update(FRAME_SECONDS);
     assert_eq!(input.pointer_motion(), Vec2::ZERO, "non-finite motion is rejected");
 
     assert!(!input.pointer_locked());
@@ -242,4 +245,50 @@ fn winit_key_names_match_dom_codes() {
     assert_eq!(key_code_name(KeyCode::Backquote), key::BACKQUOTE);
     assert_eq!(key_code_name(KeyCode::Digit1), key::DIGIT1);
     assert_eq!(key_code_name(KeyCode::ShiftLeft), key::SHIFT_LEFT);
+}
+
+#[test]
+fn repeating_actions_fire_on_the_press_then_steadily_and_reset_wherever_holds_release() {
+    // Binary-exact times (1/16 second frames, a half-second delay, and an eighth-second interval) keep counts exact.
+    const FRAME: f64 = 0.0625;
+    let repeating = InputAction::new([InputBinding::key(key::ARROW_UP)]).repeat(0.5, 0.125);
+    let map = InputMap::new().action_with("up", repeating).action("forward", [InputBinding::key(key::KEY_W)]);
+    let mut input = InputManager::new(map);
+    let fires = |input: &mut InputManager, frames: usize| -> u32 {
+        (0..frames)
+            .map(|_| {
+                input.update(FRAME);
+                input.action("up").repeats
+            })
+            .sum()
+    };
+
+    // The press fires once, the delay is quiet, then the action fires once per interval held past it.
+    input.handle_key(key::ARROW_UP, true);
+    assert_eq!(fires(&mut input, 1), 1);
+    assert_eq!(fires(&mut input, 7), 0);
+    assert_eq!(fires(&mut input, 8), 4);
+
+    // A tap released before the frame still fires once; actions without repeat never report repeats.
+    input.handle_key(key::ARROW_UP, false);
+    assert_eq!(fires(&mut input, 1), 0);
+    input.handle_key(key::ARROW_UP, true);
+    input.handle_key(key::ARROW_UP, false);
+    assert_eq!(fires(&mut input, 1), 1);
+    input.handle_key(key::KEY_W, true);
+    input.update(FRAME);
+    assert!(input.action("forward").down && input.action("forward").repeats == 0);
+
+    // Losing focus releases the hold, so holding again after focus returns starts a new press and delay.
+    input.handle_key(key::ARROW_UP, true);
+    assert_eq!(fires(&mut input, 16), 5);
+    input.set_focused(false);
+    input.set_focused(true);
+    input.handle_key(key::ARROW_UP, true);
+    assert_eq!(fires(&mut input, 8), 1);
+
+    // Changing contexts releases holds the same way.
+    input.set_contexts([GAMEPLAY_CONTEXT, "menu"]);
+    input.handle_key(key::ARROW_UP, true);
+    assert_eq!(fires(&mut input, 8), 1);
 }

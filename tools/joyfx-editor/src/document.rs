@@ -12,8 +12,11 @@
 
 use joy_engine::particles::{
     DEFAULT_PARTICLE_TEXTURE,
+    MAXIMUM_PARTICLE_SOFTNESS,
     PARTICLE_EFFECT_VERSION,
     PARTICLE_EMITTER_BLEND,
+    PARTICLE_EMITTER_LIGHTING,
+    PARTICLE_EMITTER_SOFTNESS,
     PARTICLE_LIGHT_CASTS_SHADOW,
     ParticleBlend,
     ParticleBurst,
@@ -21,6 +24,7 @@ use joy_engine::particles::{
     ParticleEffectAsset,
     ParticleEmitterAsset,
     ParticleLight,
+    ParticleLighting,
     ParticleParameter,
     ParticleRenderer,
     ParticleTexture,
@@ -641,6 +645,13 @@ fn lenient_emitter(record: &Map<String, Value>, index: usize) -> ParticleEmitter
         .and_then(Value::as_str)
         .and_then(ParticleBlend::parse)
         .unwrap_or(template.blend);
+    // Out-of-range softness clamps like other lenient numbers; an unknown lighting mode keeps the unlit default.
+    let softness = number(PARTICLE_EMITTER_SOFTNESS, template.softness).clamp(0.0, MAXIMUM_PARTICLE_SOFTNESS);
+    let lighting = record
+        .get(PARTICLE_EMITTER_LIGHTING)
+        .and_then(Value::as_str)
+        .and_then(ParticleLighting::parse)
+        .unwrap_or(template.lighting);
     let texture = record.get("texture").and_then(Value::as_object).map(|texture| ParticleTexture {
         source: texture.get("source").and_then(Value::as_str).unwrap_or(DEFAULT_PARTICLE_TEXTURE).into(),
         columns: count(texture.get("columns")).min(64),
@@ -677,6 +688,8 @@ fn lenient_emitter(record: &Map<String, Value>, index: usize) -> ParticleEmitter
         lifetime: number("lifetime", template.lifetime),
         renderer,
         blend,
+        softness,
+        lighting,
         texture,
         light,
         spawn: text("spawn", ""),

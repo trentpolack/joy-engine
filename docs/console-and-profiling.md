@@ -1,5 +1,5 @@
 # Console and Profiling
-Development builds open the console with the backquote key: a drop-down command line over the game, after Unreal Engine's. Production builds (the shell's `development` option off) never open it and never apply console variables.
+Development builds open the console with the backquote key: a drop-down command line over the game, after Unreal Engine's. Builds with the shell's `development` option off never open it and never apply console variables, and production builds without the facade's `devtools` feature compile no console at all (`Frame::dev_tools` is then an inert `DevTools` with no console variables).
 
 ## Console Variables
 Console variables are named, typed settings (`development::ConsoleVariables`): on/off, whole numbers or numbers within a range, one of a set of choices, or text. Names compare without regard to case. Type a variable's name to print its value, what it accepts, and its help; follow it with a value to set it. Values outside a variable's kind or range are refused and leave it unchanged.

@@ -6,12 +6,12 @@
 //! both.
 //!
 //! [`collect_particle_lights`] turns particles into point lights. [`ParticleFrame`] is the one way to submit particles
-//! for drawing: add every effect each frame, then pass the frame as
-//! [`FrameInputs::particles`](crate::FrameInputs::particles) (or
-//! [`TriangleFrame::particles`](crate::TriangleFrame::particles) for arcade triangle frames). Each particle becomes one
-//! compact [`ParticleInstance`]; the shaders expand it to face the camera and draw its shape analytically, and the
-//! renderer culls whole batches, sorts source-over batches back to front, and blends each emitter with its authored
-//! [`ParticleBlend`](joy_fx::ParticleBlend).
+//! for drawing: add every effect each frame (or caller-styled [`StyledParticle`]s), then pass the frame as
+//! [`FrameInputs::particles`](crate::FrameInputs::particles). Each particle becomes one compact [`ParticleInstance`];
+//! the shaders expand it to face the camera and draw its shape analytically, and the renderer culls whole batches,
+//! sorts source-over batches back to front (on the GPU where compute shaders run, on the CPU otherwise), blends each
+//! emitter with its authored [`ParticleBlend`](joy_fx::ParticleBlend), and applies its soft-particle distance and
+//! [`ParticleLighting`](joy_fx::ParticleLighting).
 //!
 //! ```
 //! use joy_fx::{ParticleEffect, ParticleEffectOptions, compile_particle_effect};
@@ -45,10 +45,14 @@ mod texture_set;
 
 pub use frame::{
     ParticleBatch,
+    ParticleDrawOptions,
     ParticleFrame,
     ParticleRenderError,
 };
-pub use instance::ParticleInstance;
+pub use instance::{
+    ParticleInstance,
+    StyledParticle,
+};
 pub use lights::{
     ParticleLightSelection,
     ParticlePointLight,

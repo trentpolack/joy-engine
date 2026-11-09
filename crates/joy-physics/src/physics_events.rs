@@ -5,7 +5,7 @@
 //!
 //! Bodies opt into events: sensors always report, and solid bodies report when created with
 //! [`BodyOptions::report_contacts`](super::BodyOptions::report_contacts). A pair reports when either body opts in.
-//! Events are collected across every fixed step of one [`PhysicsWorld::step`](super::PhysicsWorld::step) call, in the
+//! Events are collected across every fixed step of one [`PhysicsSimulation::step`](super::PhysicsSimulation::step) call, in the
 //! solver's deterministic order, and replaced by the next call.
 
 use std::sync::Mutex;
@@ -91,7 +91,7 @@ pub enum ContactPhase {
     Ended,
 }
 
-/// One change in contact between two bodies during a [`PhysicsWorld::step`](super::PhysicsWorld::step) call.
+/// One change in contact between two bodies during a [`PhysicsSimulation::step`](super::PhysicsSimulation::step) call.
 ///
 /// `first` and `second` follow the solver's pair order; neither is privileged. A handle may name a body removed since
 /// the contact began, so consumers mapping handles to their own records should tolerate unknown ones.

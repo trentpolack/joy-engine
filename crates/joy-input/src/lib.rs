@@ -12,6 +12,10 @@
 //! between two frames still reports `pressed`. Every action and axis belongs to one or more contexts (by default
 //! [`GAMEPLAY_CONTEXT`]); only actions in an active context respond. Focus loss, hidden windows, and UI text entry
 //! suspend every device, and gamepads must return to neutral after any release before they count again.
+//!
+//! An action can repeat while held ([`InputAction::repeat`]), for menus and grid movement: [`ActionState::repeats`]
+//! counts how many times it fires each frame (one on the press, then one per interval past the delay), so games react
+//! to `repeats` instead of keeping their own timers. Repeat timing resets wherever holds release.
 
 use std::collections::{
     HashMap,
@@ -20,19 +24,16 @@ use std::collections::{
 
 use joy_core::math::Vec2;
 
+mod action_repeat;
 mod gamepads;
-mod key_repeat;
 #[cfg(target_arch = "wasm32")]
 mod web_gamepad;
 
 // Polled by the application shell once per frame; an engine contract rather than game-facing API.
 #[doc(hidden)]
 pub use gamepads::GamepadPoller;
-pub use key_repeat::{
-    DEFAULT_REPEAT_DELAY_SECONDS,
-    DEFAULT_REPEAT_INTERVAL_SECONDS,
-    KeyRepeat,
-};
+
+use action_repeat::RepeatTimer;
 
 /// The default input context.
 pub const GAMEPLAY_CONTEXT: &str = "gameplay";
@@ -42,6 +43,15 @@ pub const PRESS_THRESHOLD: f32 = 0.15;
 
 /// Default analog dead zone, rescaled so values leave it at zero.
 pub const DEFAULT_DEAD_ZONE: f32 = 0.15;
+
+/// Seconds a repeating action must be held before it starts repeating (menu and text-cursor feel).
+pub const DEFAULT_REPEAT_DELAY_SECONDS: f64 = 0.5;
+
+/// Seconds between repeats once a held action is repeating.
+pub const DEFAULT_REPEAT_INTERVAL_SECONDS: f64 = 1.0 / 30.0;
+
+/// Rescaled stick deflection (past [`DEFAULT_DEAD_ZONE`]) a [`InputBinding::StickDirection`] needs to hold.
+pub const STICK_DIRECTION_THRESHOLD: f32 = 0.5;
 
 /// Common key codes, spelled as DOM `KeyboardEvent.code` names.
 pub mod key {
@@ -219,6 +229,37 @@ pub enum InputBinding {
     GamepadButton(u16),
     /// A named on-screen button driven by the game's UI.
     Virtual(String),
+    /// A standard-mapping analog stick pushed one of four ways, from any connected pad: held when the stick's dominant
+    /// axis points `direction` past [`STICK_DIRECTION_THRESHOLD`], so a stick navigates menus and grids like a d-pad
+    /// (diagonals resolve to their stronger axis).
+    StickDirection {
+        /// Which stick.
+        stick: GamepadStick,
+        /// Which of its four directions.
+        direction: StickDirection,
+    },
+}
+
+/// A standard-mapping analog stick.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum GamepadStick {
+    /// Axes [`gamepad::AXIS_LEFT_X`] and [`gamepad::AXIS_LEFT_Y`].
+    Left,
+    /// Axes [`gamepad::AXIS_RIGHT_X`] and [`gamepad::AXIS_RIGHT_Y`].
+    Right,
+}
+
+/// One of a stick's four directions; up is negative Y in the standard mapping.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum StickDirection {
+    /// Negative X.
+    Left,
+    /// Positive X.
+    Right,
+    /// Negative Y.
+    Up,
+    /// Positive Y.
+    Down,
 }
 
 impl InputBinding {
@@ -241,15 +282,61 @@ impl InputBinding {
     pub fn virtual_button(name: &str) -> Self {
         Self::Virtual(name.to_owned())
     }
+
+    /// A four-way stick-direction binding.
+    pub fn stick_direction(stick: GamepadStick, direction: StickDirection) -> Self {
+        Self::StickDirection {
+            stick,
+            direction,
+        }
+    }
 }
 
-/// An action's bindings and the contexts it responds in.
+/// How a held action repeats: it fires on the press, waits `delay_seconds`, then fires every `interval_seconds`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ActionRepeat {
+    /// Seconds held before the first repeat; non-finite or negative values use [`DEFAULT_REPEAT_DELAY_SECONDS`].
+    pub delay_seconds: f64,
+    /// Seconds between repeats; at least a millisecond.
+    pub interval_seconds: f64,
+}
+
+/// An action's bindings, the contexts it responds in, and how it repeats while held.
 #[derive(Clone, Debug, PartialEq)]
 pub struct InputAction {
     /// Ways to trigger the action; the strongest wins.
     pub bindings: Vec<InputBinding>,
     /// Contexts the action responds in.
     pub contexts: Vec<String>,
+    /// Auto-repeat while held; `None` leaves [`ActionState::repeats`] at zero.
+    pub repeat: Option<ActionRepeat>,
+}
+
+impl InputAction {
+    /// An action with these bindings in the gameplay context, without repeat.
+    pub fn new(bindings: impl IntoIterator<Item = InputBinding>) -> Self {
+        Self {
+            bindings: bindings.into_iter().collect(),
+            contexts: vec![GAMEPLAY_CONTEXT.to_owned()],
+            repeat: None,
+        }
+    }
+
+    /// Replace the contexts the action responds in.
+    pub fn contexts<'a>(mut self, contexts: impl IntoIterator<Item = &'a str>) -> Self {
+        self.contexts = contexts.into_iter().map(str::to_owned).collect();
+        self
+    }
+
+    /// Repeat while held: fire on the press, then every `interval_seconds` once held for `delay_seconds`
+    /// ([`DEFAULT_REPEAT_DELAY_SECONDS`] and [`DEFAULT_REPEAT_INTERVAL_SECONDS`] suit menus and grid movement).
+    pub fn repeat(mut self, delay_seconds: f64, interval_seconds: f64) -> Self {
+        self.repeat = Some(ActionRepeat {
+            delay_seconds,
+            interval_seconds,
+        });
+        self
+    }
 }
 
 /// An axis from two actions and an optional analog stick axis.
@@ -331,16 +418,17 @@ impl InputMap {
 
     /// Add (or replace) an action that responds in the given contexts.
     pub fn action_in<'a>(
-        mut self,
+        self,
         name: &str,
         bindings: impl IntoIterator<Item = InputBinding>,
         contexts: impl IntoIterator<Item = &'a str>,
     ) -> Self {
+        self.action_with(name, InputAction::new(bindings).contexts(contexts))
+    }
+
+    /// Add (or replace) an action with full options, such as repeat while held.
+    pub fn action_with(mut self, name: &str, action: InputAction) -> Self {
         self.actions.retain(|(existing, _)| existing != name);
-        let action = InputAction {
-            bindings: bindings.into_iter().collect(),
-            contexts: contexts.into_iter().map(str::to_owned).collect(),
-        };
         self.actions.push((name.to_owned(), action));
         self
     }
@@ -369,6 +457,9 @@ pub struct ActionState {
     pub released: bool,
     /// Strongest binding value in `[0, 1]`.
     pub value: f32,
+    /// Times a repeating action fires this frame: one on the press, then one per elapsed interval once held past its
+    /// delay. Always zero for actions without [`InputAction::repeat`].
+    pub repeats: u32,
 }
 
 /// Pointer position in logical viewport pixels (top-left origin).
@@ -430,6 +521,9 @@ pub struct InputManager {
     live: HashMap<String, ActionState>,
     states: HashMap<String, ActionState>,
     axis_values: HashMap<String, f32>,
+
+    // Repeat timing for each action that declares a repeat; reset wherever holds release.
+    repeat_timers: HashMap<String, RepeatTimer>,
 }
 
 impl InputManager {
@@ -438,6 +532,16 @@ impl InputManager {
         let live: HashMap<String, ActionState> =
             map.actions.iter().map(|(name, _)| (name.clone(), ActionState::default())).collect();
         let axis_values = map.axes.iter().map(|(name, _)| (name.clone(), 0.0)).collect();
+        let repeat_timers = map
+            .actions
+            .iter()
+            .filter_map(|(name, action)| {
+                let repeat = action.repeat?;
+                let timer =
+                    RepeatTimer::new(repeat.delay_seconds, repeat.interval_seconds, DEFAULT_REPEAT_DELAY_SECONDS);
+                Some((name.clone(), timer))
+            })
+            .collect();
         Self {
             actions: map.actions,
             axes: map.axes,
@@ -459,6 +563,7 @@ impl InputManager {
             states: live.clone(),
             live,
             axis_values,
+            repeat_timers,
         }
     }
 
@@ -640,12 +745,15 @@ impl InputManager {
         self.motion_live = Vec2::ZERO;
         self.gamepads.clear();
         self.block_gamepads = true;
+        for timer in self.repeat_timers.values_mut() {
+            timer.reset();
+        }
         self.refresh();
     }
 
-    /// Advance one frame: poll gamepads, snapshot action states and axes, and consume edges. Call once per frame before
-    /// reading.
-    pub fn update(&mut self) {
+    /// Advance one frame of `elapsed_seconds` (the frame's real time, which repeat timing counts): poll gamepads,
+    /// snapshot action states, repeats, and axes, and consume edges. Call once per frame before reading.
+    pub fn update(&mut self, elapsed_seconds: f64) {
         let pads = std::mem::take(&mut self.polled_gamepads);
         if self.block_gamepads && !pads.iter().any(gamepad_active) {
             self.block_gamepads = false;
@@ -660,6 +768,11 @@ impl InputManager {
         for state in self.live.values_mut() {
             state.pressed = false;
             state.released = false;
+        }
+        for (name, timer) in &mut self.repeat_timers {
+            if let Some(state) = self.states.get_mut(name) {
+                state.repeats = timer.update(state.down, state.pressed, elapsed_seconds);
+            }
         }
 
         for (name, axis) in &self.axes {
@@ -733,6 +846,12 @@ impl InputManager {
                 .filter(|pad| pad.connected)
                 .filter_map(|pad| pad.buttons.get(usize::from(*button)).copied())
                 .fold(0.0, f32::max),
+            InputBinding::StickDirection {
+                stick,
+                direction,
+            } => {
+                held(self.gamepads.iter().filter(|pad| pad.connected).any(|pad| stick_points(pad, *stick, *direction)))
+            }
         }
     }
 
@@ -760,6 +879,27 @@ impl InputManager {
             state.down = down;
             state.value = value;
         }
+    }
+}
+
+/// Whether `pad`'s stick points `direction`: its dominant axis, rescaled past the default dead zone, exceeds
+/// [`STICK_DIRECTION_THRESHOLD`] that way.
+fn stick_points(pad: &GamepadState, stick: GamepadStick, direction: StickDirection) -> bool {
+    let (x_axis, y_axis) = match stick {
+        GamepadStick::Left => (gamepad::AXIS_LEFT_X, gamepad::AXIS_LEFT_Y),
+        GamepadStick::Right => (gamepad::AXIS_RIGHT_X, gamepad::AXIS_RIGHT_Y),
+    };
+    let rescaled = |axis: usize| {
+        let raw = pad.axes.get(axis).copied().unwrap_or(0.0);
+        raw.signum() * ((raw.abs() - DEFAULT_DEAD_ZONE) / (1.0 - DEFAULT_DEAD_ZONE)).max(0.0)
+    };
+    let (x, y) = (rescaled(x_axis), rescaled(y_axis));
+    let dominant_x = x.abs() >= y.abs();
+    match direction {
+        StickDirection::Left => dominant_x && x < -STICK_DIRECTION_THRESHOLD,
+        StickDirection::Right => dominant_x && x > STICK_DIRECTION_THRESHOLD,
+        StickDirection::Up => !dominant_x && y < -STICK_DIRECTION_THRESHOLD,
+        StickDirection::Down => !dominant_x && y > STICK_DIRECTION_THRESHOLD,
     }
 }
 

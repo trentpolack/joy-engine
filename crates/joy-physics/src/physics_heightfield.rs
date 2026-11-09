@@ -31,7 +31,7 @@ use super::physics_body::{
 use super::{
     BodyHandle,
     PhysicsError,
-    PhysicsWorld,
+    PhysicsSimulation,
 };
 
 /// A static heightfield collider. World coordinates are meters, Y up.
@@ -53,7 +53,7 @@ pub struct HeightfieldOptions {
     pub restitution: f32,
 }
 
-impl PhysicsWorld {
+impl PhysicsSimulation {
     /// Create a static heightfield body and return its handle.
     ///
     /// Validates the grid before changing the world. The body never moves; replace a heightfield after an edit by

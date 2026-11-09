@@ -3,7 +3,7 @@
 
 //! Raycast vehicles: data-defined wheel arrays with ray suspension, drive, steering, and brakes.
 //!
-//! A vehicle is a kind of physics body rather than a separate object: [`PhysicsWorld::create_vehicle`] creates a
+//! A vehicle is a kind of physics body rather than a separate object: [`PhysicsSimulation::create_vehicle`] creates a
 //! dynamic chassis body that carries the wheel controller, every vehicle operation takes that body's [`BodyHandle`],
 //! and removing the body removes the vehicle with it.
 //!
@@ -44,13 +44,13 @@ use super::physics_body::{
     ValidatedBody,
     create_shape,
 };
-use super::physics_world::VehicleRecord;
+use super::physics_simulation::VehicleRecord;
 use super::{
     BodyHandle,
     BodyOptions,
     PhysicsError,
+    PhysicsSimulation,
     PhysicsTransform,
-    PhysicsWorld,
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -205,7 +205,7 @@ pub struct VehicleInput {
 // Operations
 // ---------------------------------------------------------------------------------------------------------------------
 
-impl PhysicsWorld {
+impl PhysicsSimulation {
     /// Create a dynamic chassis body that carries a raycast vehicle, and return the body's handle.
     ///
     /// A vehicle is a kind of body: every body operation (pose, velocity, impulses, removal) applies to the chassis, and

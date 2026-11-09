@@ -4,10 +4,10 @@
 //! Immediate triangle builders for arcade and effect geometry.
 //!
 //! Each function appends non-indexed triangles to a caller-owned [`ColorVertex`] list in the caller's logical world
-//! units, with straight-alpha linear RGBA colors. Angles are radians. The lists feed [`TriangleRenderer`] frames or
-//! the scene renderer's transient triangles. Math runs in `f64` and rounds once per vertex.
-//!
-//! [`TriangleRenderer`]: crate::TriangleRenderer
+//! units, with straight-alpha RGBA colors. Angles are radians. The lists feed the scene renderer's transient triangles
+//! ([`FrameInputs`](crate::FrameInputs)), which expect linear light; presentations that author palettes and baked face
+//! shading in display (sRGB) values build in those values and decode the finished list with
+//! [`decode_display_colors`]. Math runs in `f64` and rounds once per vertex.
 
 use std::f64::consts::{
     PI,
@@ -21,6 +21,7 @@ use serde::{
 
 use crate::ColorVertex;
 use joy_core::LinearColor;
+use joy_core::color::srgb_to_linear;
 use joy_core::math::{
     DVec3,
     deterministic,
@@ -55,6 +56,29 @@ fn push(vertices: &mut Vec<ColorVertex>, x: f64, y: f64, z: f64, color: LinearCo
         position: [x as f32, y as f32, z as f32],
         color: color.to_array(),
     });
+}
+
+/// Decode every vertex color of `vertices` from display (sRGB-encoded) values to the linear light the renderer blends,
+/// in place; alpha is unchanged.
+///
+/// RGB follows the exact sRGB curve, continued past one and mirrored below zero, so shading multipliers that brighten a
+/// face beyond its palette color keep their effect. Decode the finished list rather than each palette entry: arcade
+/// palettes and the shades [`add_shaded_shape`] bakes are display-space multiplications, and decoding afterwards keeps
+/// them as authored. Consecutive vertices usually share a color (a triangle, a fan), so each distinct run decodes once.
+pub fn decode_display_colors(vertices: &mut [ColorVertex]) {
+    let mut previous: Option<([f32; 3], [f32; 3])> = None;
+    for vertex in vertices {
+        let display = [vertex.color[0], vertex.color[1], vertex.color[2]];
+        let linear = match previous {
+            Some((encoded, decoded)) if encoded == display => decoded,
+            _ => {
+                let decoded = display.map(|channel| srgb_to_linear(f64::from(channel)) as f32);
+                previous = Some((display, decoded));
+                decoded
+            }
+        };
+        vertex.color[..3].copy_from_slice(&linear);
+    }
 }
 
 /// Append an equilateral triangle whose corners lie `radius` from its center.

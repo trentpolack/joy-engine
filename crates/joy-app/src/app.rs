@@ -13,7 +13,7 @@
 //! by [`FrameTime::fixed_interpolation`]. Sample edge-triggered input (presses) in [`App::input`] into intent that the
 //! next fixed update consumes, because a frame may run zero or several ticks.
 
-use joy_devtools::DevTools;
+use crate::development::DevTools;
 use joy_input::InputManager;
 use joy_renderer::{
     Camera,
@@ -22,8 +22,6 @@ use joy_renderer::{
     RenderError,
     RenderScene,
     Renderer,
-    TriangleFrame,
-    TriangleRenderer,
 };
 use joy_ui::Viewport;
 
@@ -117,29 +115,6 @@ impl RenderTarget<'_> {
     /// The renderer, for display settings, picking, and diagnostics.
     pub fn renderer(&mut self) -> &mut Renderer {
         self.renderer
-    }
-
-    /// Draw a frame with a app-owned [`TriangleRenderer`] (create it in [`App::start`] from
-    /// `context.renderer.gpu()` and `context.renderer.output_format()`). The triangle renderer is resized to this target
-    /// and given the shell's presentation clock first. Use either this or [`draw`](Self::draw) once per frame.
-    pub fn draw_triangles(
-        &mut self,
-        triangles: &mut TriangleRenderer,
-        frame: &TriangleFrame<'_>,
-    ) -> Result<(), RenderError> {
-        let (width, height) = self.renderer.physical_size();
-        let logical = self.renderer.logical_size();
-        if triangles.physical_size() != (width, height) || triangles.logical_size() != logical {
-            let scale = if logical.x > 0.0 { width as f32 / logical.x } else { 1.0 };
-            triangles.resize(width, height, scale);
-        }
-        triangles.set_presentation_time(self.renderer.presentation_time());
-        if triangles.display_output() != self.renderer.display_output() {
-            triangles.set_display_output(self.renderer.display_output());
-        }
-        triangles.encode(self.encoder, self.output, frame)?;
-        self.drawn = true;
-        Ok(())
     }
 }
 

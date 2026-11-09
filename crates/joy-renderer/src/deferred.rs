@@ -43,20 +43,7 @@ impl GBuffer {
         self.size
     }
 
-    /// The G-buffer attachment, cleared at the start of the G-buffer pass.
-    pub(crate) fn color_attachment(&self) -> Option<wgpu::RenderPassColorAttachment<'_>> {
-        Some(wgpu::RenderPassColorAttachment {
-            view: &self.view,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                store: wgpu::StoreOp::Store,
-            },
-            depth_slice: None,
-        })
-    }
-
-    /// The view the lighting passes read.
+    /// The view the G-buffer pass writes (cleared first; see `frame_plan.rs`) and the lighting passes read.
     pub(crate) fn view(&self) -> &wgpu::TextureView {
         &self.view
     }

@@ -2,7 +2,8 @@
 # Licensed under the MIT License.
 
 # Joy Engine application shell: the native window or browser canvas, GPU and renderer startup, the frame loop and
-# clocks that run a game's phases, the headless runner, and the browser page glue.
+# clocks that run a game's phases, the headless runner, the browser page glue, and `GameAssets`, the embedded asset
+# table with development hot reload.
 #
 #   cargo test -p joy-app
 
@@ -19,7 +20,8 @@ publish = false
 
 [dependencies]
 joy-core.workspace = true
-joy-devtools.workspace = true
+# The development overlay, console, and dock; release and browser production builds leave them out (see `devtools`).
+joy-devtools = { workspace = true, optional = true }
 joy-input.workspace = true
 joy-renderer.workspace = true
 joy-terrain.workspace = true
@@ -32,6 +34,9 @@ winit.workspace = true
 egui.workspace = true
 
 [features]
+# The development overlay, console, and dock (`joy-devtools`). Without it the shell compiles no development UI and
+# `DevTools` is an inert stand-in; the facade's `devtools` feature turns it on.
+devtools = ["dep:joy-devtools"]
 # Lua's WASI C runtime and browser Rust allocations share one heap.
 lua = ["dep:libc_alloc"]
 

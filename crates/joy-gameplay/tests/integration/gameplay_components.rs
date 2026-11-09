@@ -26,8 +26,8 @@ use joy_gameplay::{
     World,
 };
 use joy_physics::{
-    PhysicsWorld,
-    PhysicsWorldOptions,
+    PhysicsSimulation,
+    PhysicsSimulationOptions,
 };
 use serde_json::{
     Value,
@@ -42,7 +42,7 @@ fn log(events: &Events, event: impl Into<String>) {
 }
 
 fn world(entities: EntityWorld) -> World {
-    World::from_parts(entities, PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap())
+    World::from_parts(entities, PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap())
 }
 
 fn definition(value: Value) -> EntityDefinition {

@@ -1,16 +1,19 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Development tooling (platform layer): the development dock and its tools: the runtime statistics overlay, the
-//! post-processing editor, scene effect preview controls, config panels, and live tuning (`joy-devtools`). Production
-//! builds disable the overlay through `ShellOptions::development` and do not create editors.
+//! Development tooling (platform layer, `devtools` feature): the development dock and its tools: the runtime statistics
+//! overlay, the post-processing editor, scene effect preview controls, config panels, and live tuning (`joy-devtools`).
+//! Release and browser production builds leave the feature off, so this module does not exist there; games attach
+//! their editors under `#[cfg(feature = "devtools")]`, while [`DevTools`] and the game asset table stay in
+//! [`runtime`](crate::runtime) for every build.
 //!
-//! The authoring kit shared by FORM EDITOR, JOYFX EDITOR, and Joy Editor lives here too (`joy-authoring`): lab controls
-//! ([`NumberField`], [`ScalarControl`], [`ComponentGroup`], [`ColorControl`]) with [`NumericDrafts`],
-//! [`PropertyHistory`], [`PanelLayout`], the [`ScriptEditor`], and the shared Joy look in [`components`] (see
-//! `docs/rust-authoring.md`). [`AuthoringTool`] is the contract that lets authoring tools such as FORM EDITOR run
+//! With the `authoring` feature, the authoring kit shared by FORM EDITOR, JOYFX EDITOR, and Joy Editor lives here too
+//! (`joy-authoring`): lab controls (`NumberField`, `ScalarControl`, `ComponentGroup`, `ColorControl`) with
+//! `NumericDrafts`, `PropertyHistory`, `PanelLayout`, the `ScriptEditor`, and the shared Joy look in `components` (see
+//! `docs/rust-authoring.md`). `AuthoringTool` is the contract that lets authoring tools such as FORM EDITOR run
 //! standalone and as Joy Editor tabs.
 
+#[cfg(feature = "authoring")]
 pub use joy_authoring::{
     AuthoringTool,
     COLOR_SWATCH_SIZE,
@@ -75,8 +78,6 @@ pub use joy_authoring::{
     viewport_input,
 };
 pub use joy_devtools::{
-    ASSET_POLL_SECONDS,
-    AssetReadError,
     ConfigChangeAdapter,
     ConfigEditor,
     ConfigEditorOptions,
@@ -95,8 +96,6 @@ pub use joy_devtools::{
     EffectPreset,
     EffectQuality,
     EffectTuning,
-    EmbeddedAsset,
-    GameAssets,
     LineKind,
     LiveTuning,
     PostProcessConflict,
