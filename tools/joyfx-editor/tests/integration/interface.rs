@@ -200,9 +200,16 @@ fn a_slider_drag_is_one_property_undo_and_emitters_are_added_and_selected() {
         } => *value,
         _ => unreachable!(),
     };
-    assert!(power(&harness) > 1.2, "{}", power(&harness));
+    let dragged_power = power(&harness);
+    assert!(dragged_power > 1.2, "{dragged_power}");
     harness.click_named("Undo property");
     assert_eq!(power(&harness), 1.0, "the whole drag undoes at once");
+    assert!(!harness.tool.session().can_undo());
+    harness.click_named("Redo property");
+    assert_eq!(power(&harness), dragged_power, "redo restores the whole drag");
+    assert!(!harness.tool.session().can_redo());
+    harness.click_named("Undo property");
+    assert_eq!(power(&harness), 1.0);
     assert!(!harness.tool.session().can_undo());
 
     // The exact fields beside parameter sliders share the hundredth step for scalar, vector, and color edits.

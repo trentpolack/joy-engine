@@ -3,6 +3,9 @@
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
 ## 11-06-2026
+### JOYFX EDITOR
+- Restored descriptive accessible names for the compact UNDO and REDO property buttons, retaining their disabled states and verifying that a slider drag undoes and redoes as one edit.
+
 ### Example Tooling
 - Added FORM Viewer's npm workspace with native development, browser build/preview/capture, check, and FORM test commands, so all six examples have consistent npm entry points.
 

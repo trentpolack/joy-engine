@@ -905,10 +905,10 @@ impl Interface {
         //  TODO (trent, 11/5/26): This layout needs a significant polish pass.
         egui::ScrollArea::vertical().id_salt("parameters").auto_shrink([false, false]).show(ui, |ui| {
             ui.horizontal(|ui| {
-                if ui.add_enabled(lab.can_undo(), egui::Button::new("UNDO")).clicked() {
+                if named(ui.add_enabled(lab.can_undo(), egui::Button::new("UNDO")), "Undo property").clicked() {
                     lab.undo();
                 }
-                if ui.add_enabled(lab.can_redo(), egui::Button::new("REDO")).clicked() {
+                if named(ui.add_enabled(lab.can_redo(), egui::Button::new("REDO")), "Redo property").clicked() {
                     lab.redo();
                 }
             });
@@ -962,9 +962,9 @@ impl Interface {
     }
 }
 
-/// Give a widget an accessible name other than its visible text (two buttons both read `+ Add`).
+/// Give a button a descriptive accessible name while preserving its enabled state and compact visible text.
 fn named(response: egui::Response, name: &str) -> egui::Response {
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, name));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, response.enabled(), name));
     response
 }
 
