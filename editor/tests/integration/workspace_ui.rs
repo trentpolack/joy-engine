@@ -154,6 +154,7 @@ fn saves_conflicts_external_reloads_and_repair_views() {
     assert!(driver.has("save"));
 
     // An edit makes the tab dirty; Ctrl/Cmd+S writes the existing file.
+    driver.click("add-primitive");
     driver.click("add-box");
     driver.frames(2);
     assert!(driver.editor.workspace().active_tab().unwrap().dirty());
@@ -174,6 +175,7 @@ fn saves_conflicts_external_reloads_and_repair_views() {
     assert_eq!(level_name(&driver), "External track");
 
     // A dirty tab keeps its edits and offers the disk version.
+    driver.click("add-primitive");
     driver.click("add-sphere");
     driver.frames(2);
     external.name = "Second external".to_owned();
@@ -191,6 +193,7 @@ fn saves_conflicts_external_reloads_and_repair_views() {
     assert!(!driver.has("reload-disk"));
 
     // Keep My Edits acknowledges the disk version; Save then replaces it.
+    driver.click("add-primitive");
     driver.click("add-sphere");
     driver.frames(2);
     workspace
@@ -230,6 +233,7 @@ fn unsaved_work_prompts_before_closing_switching_projects_or_quitting() {
     let workspace = sample_workspace();
     let mut driver = Driver::start(shell, editor(&workspace.root, None, ToolRegistry::new(), Some("demo")));
     driver.click("row:assets/levels/track.joylevel");
+    driver.click("add-primitive");
     driver.click("add-box");
     driver.frames(2);
 

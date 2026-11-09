@@ -8,7 +8,7 @@
 // self-contained and can be served by any static host (the site, GitHub Pages, `npx serve`).
 //
 //   node scripts/rust/build-web.mjs --example form-viewer [--release]
-//   node joy-engine/scripts/rust/build-web.mjs --manifest-path Cargo.toml --package vehicle-playground --release
+//   node joy-engine/scripts/rust/build-web.mjs --manifest-path Cargo.toml --package my-game --release
 //
 // Options:
 //   --package <crate>        Crate to build (default: joy-engine, the engine crate).
@@ -55,7 +55,7 @@ const STATUS_FONTS = [
   'crates/joy-ui/fonts/ArchivoBlack-Regular.ttf',
   'crates/joy-ui/fonts/Archivo-Bold.ttf'
 ];
-// Separates a page title's name from its subtitle ("LUNA · The Hollow Observatory").
+// Separates a page title's name from its subtitle ("MY GAME · The First Level").
 const TITLE_SEPARATOR = ' \u00b7 ';
 // The loading screen's kicker above every title; a subtitle that repeats it ("JOYFX EDITOR · Joy Engine") is dropped.
 const LOADING_KICKER = 'Joy Engine';

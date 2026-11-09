@@ -34,6 +34,22 @@ use joy_engine::theme::{
 };
 use std::collections::HashMap;
 
+use joy_engine::development::editor_shell::{
+    ShellLayout,
+    StatusTone,
+    TabMarker,
+    brand,
+    chip_button,
+    document_glyph,
+    document_tab,
+    document_tool_name,
+    quiet_button,
+    rule,
+    run_button,
+    status_label,
+    status_text,
+    tool_badge,
+};
 use joy_engine::development::{
     FileDialogEvent,
     FileDialogs,
@@ -41,7 +57,6 @@ use joy_engine::development::{
     OpenRequest,
     ScriptEditor,
     ScriptSyntax,
-    components,
 };
 use joy_engine::runtime::Storage;
 use joy_engine::runtime::hud_text::{
@@ -79,23 +94,16 @@ use crate::interaction::widgets::{
     icon_button,
     primary_button,
     region,
-    toggle_button,
 };
 use crate::level::ui::LevelUi;
 
-/// Header height in logical points.
-const HEADER_HEIGHT: f32 = 52.0;
 /// Product name in the header.
 const PRODUCT_NAME: &str = "JOY EDITOR";
 /// Keys that, with Alt, switch to the first nine document tabs.
 const TAB_KEYS: [Key; 9] =
     [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
-/// Footer height.
-const FOOTER_HEIGHT: f32 = 28.0;
 /// Keep expanded project metadata scrollable so the asset list and Documentation remain reachable.
 const PROJECT_DETAILS_HEIGHT_FRACTION: f32 = 0.5;
-/// Tab strip height.
-const TABS_HEIGHT: f32 = 36.0;
 /// Return and conflict bar height.
 const BAR_HEIGHT: f32 = 34.0;
 
@@ -148,6 +156,8 @@ pub struct WorkspaceView {
     asset_menu: Option<(String, egui::Pos2)>,
     focus_search: bool,
     commands: ViewCommands,
+    // The shell's retained row layout (header, tabs, toolbar, body, status).
+    shell: ShellLayout,
 }
 
 impl WorkspaceView {
@@ -165,6 +175,7 @@ impl WorkspaceView {
             asset_menu: None,
             focus_search: false,
             commands: ViewCommands::default(),
+            shell: ShellLayout::new(),
         }
     }
 
@@ -190,9 +201,9 @@ impl WorkspaceView {
         self.shortcuts(context, workspace);
 
         let screen = context.content_rect();
+        let has_tabs = !workspace.tabs().is_empty();
+        let rows = self.shell.rows(screen, has_tabs, workspace.active_path().is_some());
         let mut layout = workspace.layout();
-        let header = Rect::from_min_max(screen.min, pos2(screen.max.x, screen.min.y + HEADER_HEIGHT));
-        let footer = Rect::from_min_max(pos2(screen.min.x, screen.max.y - FOOTER_HEIGHT), screen.max);
         let browser_visible = !layout.content_browser_collapsed && !workspace.maximized;
         let browser_width = if browser_visible {
             layout
@@ -202,11 +213,17 @@ impl WorkspaceView {
         } else {
             0.0
         };
+        // The Content Browser drawer runs from under the tabs to the status bar, beside the toolbar and document.
+        let drawer_top = rows.tabs.map_or(rows.header.max.y, |tabs| tabs.max.y);
         let browser =
-            Rect::from_min_max(pos2(screen.min.x, header.max.y), pos2(screen.min.x + browser_width, footer.min.y));
-        let document = Rect::from_min_max(pos2(browser.max.x, header.max.y), pos2(screen.max.x, footer.min.y));
+            Rect::from_min_max(pos2(screen.min.x, drawer_top), pos2(screen.min.x + browser_width, rows.status.min.y));
+        let toolbar = rows.toolbar.map(|toolbar| Rect::from_min_max(pos2(browser.max.x, toolbar.min.y), toolbar.max));
+        let document = Rect::from_min_max(pos2(browser.max.x, rows.body.min.y), rows.body.max);
 
-        self.header(context, header, workspace, browser_visible);
+        self.header(context, rows.header, workspace);
+        if let Some(tabs) = rows.tabs {
+            self.tab_strip(context, tabs, workspace);
+        }
         if browser_visible {
             self.content_browser(context, browser, workspace);
             let handle = Rect::from_center_size(browser.right_center(), vec2(6.0, browser.height()));
@@ -223,8 +240,11 @@ impl WorkspaceView {
                 workspace.set_layout(layout);
             }
         }
+        if let Some(toolbar) = toolbar {
+            self.toolbar(context, toolbar, workspace, browser_visible);
+        }
         self.document_area(context, document, workspace);
-        self.footer(context, footer, workspace);
+        self.footer(context, rows.status, workspace);
         self.popovers(context, workspace);
         self.dialogs(context, workspace);
     }
@@ -287,8 +307,8 @@ impl WorkspaceView {
     // Header and footer
     // -----------------------------------------------------------------------------------------------------------------
 
-    /// Play or Stop the selected project's game in its own window; hidden where games cannot start (browser builds and
-    /// read-only examples).
+    /// Run Project or Stop for the selected project's game in its own window; hidden where games cannot start (browser
+    /// builds and read-only examples).
     fn play_button(&mut self, ui: &mut Ui, workspace: &mut Workspace) {
         if !workspace.can_play() {
             return;
@@ -297,7 +317,7 @@ impl WorkspaceView {
             PlayState::Running {
                 project,
             } => {
-                let stop = button(ui, "■ Stop").on_hover_text(format!("Stop {project}"));
+                let stop = quiet_button(ui, "■  Stop").on_hover_text(format!("Stop {project}"));
                 if self.controls.mark("play", stop).clicked() {
                     workspace.stop_play();
                 }
@@ -306,128 +326,191 @@ impl WorkspaceView {
             | PlayState::Ended {
                 ..
             } => {
-                let play = primary_button(ui, "▶ Play")
+                let play = run_button(ui, "Run Project")
                     .on_hover_text("Run this project's game in its own window; saved assets reload live");
                 if self.controls.mark("play", play).clicked() {
                     workspace.play();
                 }
             }
         }
+        rule(ui);
     }
 
-    fn header(&mut self, context: &egui::Context, rect: Rect, workspace: &mut Workspace, browser_visible: bool) {
+    /// The header: the wordmark, Open… (projects, recent folders, and Open Folder), Run Project, the active file's state,
+    /// and Save.
+    fn header(&mut self, context: &egui::Context, rect: Rect, workspace: &mut Workspace) {
         region(context, "joy-editor-header", rect, colors::HEADER, Order::Middle, |ui| {
             widgets::edge(ui, rect.left_bottom(), rect.right_bottom());
-            let inner = rect.shrink2(vec2(16.0, 10.0));
+            let inner = rect.shrink2(vec2(24.0, 10.0));
             ui.scope_builder(
                 egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::left_to_right(Align::Center)),
                 |ui| {
-                    ui.spacing_mut().item_spacing.x = 12.0;
-                    // Brand.
-                    components::app_title(ui, PRODUCT_NAME, env!("CARGO_PKG_VERSION"));
-                    let (line, _) = ui.allocate_exact_size(vec2(1.0, 24.0), Sense::hover());
-                    ui.painter().rect_filled(line, 0.0, colors::LINE);
-
-                    // Project picker.
-                    caption(ui, "PROJECT", colors::MUTED);
-                    let current = workspace.project_summary().map(|project| project.name.clone()).unwrap_or_default();
-                    let mut chosen = None;
-                    let combo = egui::ComboBox::from_id_salt("project")
-                        .selected_text(RichText::new(current).size(layout::TYPE_MD))
-                        .width(200.0)
-                        .show_ui(ui, |ui| {
-                            for project in workspace.projects() {
-                                let selected = project.id == workspace.project();
-                                if ui.selectable_label(selected, &project.name).clicked() && !selected {
-                                    chosen = Some(project.id.clone());
-                                }
-                            }
-                        });
-                    self.controls.mark("project", combo.response);
-                    if let Some(id) = chosen {
-                        let outcome = workspace.select_project(&id, false);
-                        self.handle(outcome);
-                    }
-                    if cfg!(not(target_arch = "wasm32")) {
-                        let open = button(ui, "Open Folder");
-                        if self.controls.mark("open-folder", open).clicked() {
-                            self.dialog = Some(Dialog::OpenFolder {
-                                text: String::new(),
-                            });
-                        }
-                    }
+                    ui.spacing_mut().item_spacing.x = 16.0;
+                    brand(ui, PRODUCT_NAME, env!("CARGO_PKG_VERSION"));
+                    rule(ui);
+                    self.open_menu(ui, workspace);
+                    let project = workspace.project_summary().map(|project| project.name.clone()).unwrap_or_default();
+                    let name = ui.label(RichText::new(project).size(layout::TYPE_MD + 1.0).color(colors::MUTED));
+                    self.controls.mark("project", name);
 
                     ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                        ui.spacing_mut().item_spacing.x = 16.0;
                         let tab = workspace.active_tab();
                         let dirty = tab.is_some_and(|tab| tab.dirty());
                         let saving = tab.is_some_and(|tab| tab.document.saving);
                         let conflict = tab.is_some_and(|tab| tab.document.conflict.is_some());
-                        let state = match tab {
-                            None => {
-                                if workspace.writable() {
-                                    "LOCAL FILES"
-                                } else {
-                                    "READ-ONLY EXAMPLES"
-                                }
-                            }
-                            Some(_) if saving => "SAVING…",
-                            Some(_) if conflict => "DISK CONFLICT",
-                            Some(_) if dirty => "UNSAVED CHANGES",
-                            Some(_) if !workspace.writable() => "BUNDLED EXAMPLE",
-                            Some(_) => "SAVED TO PROJECT",
+                        let (state, tone) = match tab {
+                            None if workspace.writable() => ("Local files", StatusTone::Quiet),
+                            None => ("Read-only examples", StatusTone::Quiet),
+                            Some(_) if saving => ("File: Saving…", StatusTone::Pending),
+                            Some(_) if conflict => ("File: Disk conflict", StatusTone::Problem),
+                            Some(_) if dirty => ("File: Unsaved", StatusTone::Pending),
+                            Some(_) if !workspace.writable() => ("File: Bundled example", StatusTone::Quiet),
+                            Some(_) => ("File: Saved", StatusTone::Good),
                         };
                         let enabled = dirty && !saving && !conflict && workspace.writable();
-                        let save = ui.add_enabled_ui(enabled, |ui| primary_button(ui, "Save File  ⌘ S")).inner;
+                        let save = ui.add_enabled_ui(enabled, |ui| chip_button(ui, "Save  ⌘S", false)).inner;
                         if self.controls.mark("save", save).clicked() {
                             workspace.save_active();
                         }
                         if !workspace.writable() && workspace.active_tab().is_some() {
-                            let download = button(ui, "Download");
+                            let download = chip_button(ui, "Download", false);
                             if self.controls.mark("download", download).clicked() {
                                 download_active(workspace);
                             }
                         }
-                        let label = ui.label(RichText::new(state).size(layout::TYPE_XS).color(colors::MUTED));
+                        let label = status_label(ui, state, tone);
                         self.controls.mark("document-state", label);
+                        rule(ui);
                         self.play_button(ui, workspace);
-                        let toggle = toggle_button(ui, "Content Browser", browser_visible);
-                        if self.controls.mark("assets-toggle", toggle).clicked() {
-                            workspace.maximized = false;
-                            let mut layout = workspace.layout();
-                            layout.content_browser_collapsed = browser_visible;
-                            workspace.set_layout(layout);
-                        }
                     });
                 },
             );
         });
     }
 
-    fn footer(&mut self, context: &egui::Context, rect: Rect, workspace: &Workspace) {
-        region(context, "joy-editor-footer", rect, colors::HEADER, Order::Middle, |ui| {
-            widgets::edge(ui, rect.left_top(), rect.right_top());
-            let inner = rect.shrink2(vec2(14.0, 4.0));
+    /// Open…: switch between the workspace's projects and recent folders, or open another project folder.
+    fn open_menu(&mut self, ui: &mut Ui, workspace: &mut Workspace) {
+        let open = quiet_button(ui, "Open…").on_hover_text("Open a project (Ctrl/Cmd+O)");
+        self.controls.mark("open-menu", open.clone());
+        let mut chosen = None;
+        let mut folder = None;
+        let mut browse = false;
+        egui::Popup::menu(&open).show(|ui| {
+            ui.set_min_width(280.0);
+            if cfg!(not(target_arch = "wasm32")) {
+                let item = ui.button("Open project folder or .joyproject…");
+                if self.controls.mark("open-folder", item).clicked() {
+                    browse = true;
+                }
+                ui.separator();
+            }
+            let current = workspace.project().to_owned();
+            caption(ui, "PROJECTS", colors::MUTED);
+            for project in workspace.projects() {
+                let selected = project.id == current;
+                let item = ui.selectable_label(selected, &project.name);
+                if self.controls.mark(format!("project:{}", project.id), item).clicked() && !selected {
+                    chosen = Some(project.id.clone());
+                }
+            }
+            let recent = workspace.recent_folders().to_vec();
+            if !recent.is_empty() {
+                ui.separator();
+                caption(ui, "RECENT FOLDERS", colors::MUTED);
+                for path in recent {
+                    if ui.button(&path).clicked() {
+                        folder = Some(path);
+                    }
+                }
+            }
+        });
+        if browse {
+            self.dialog = Some(Dialog::OpenFolder {
+                text: String::new(),
+            });
+        }
+        if let Some(id) = chosen {
+            let outcome = workspace.select_project(&id, false);
+            self.handle(outcome);
+        }
+        if let Some(path) = folder {
+            let outcome = workspace.open_folder(&path);
+            self.handle(outcome);
+        }
+    }
+
+    /// The active document's toolbar: its tool, the Assets drawer, the tool's actions, and Focus viewport.
+    fn toolbar(&mut self, context: &egui::Context, rect: Rect, workspace: &mut Workspace, browser_visible: bool) {
+        let Some(path) = workspace.active_path().map(str::to_owned) else {
+            return;
+        };
+        let is_level = matches!(workspace.tab(&path).map(|tab| &tab.content), Some(TabContent::Level(_)));
+        let is_tool = matches!(workspace.tab(&path).map(|tab| &tab.content), Some(TabContent::Tool(_)));
+        region(context, "joy-editor-toolbar", rect, colors::PANEL, Order::Middle, |ui| {
+            widgets::edge(ui, rect.left_bottom(), rect.right_bottom());
+            let inner = rect.shrink2(vec2(20.0, 8.0));
             ui.scope_builder(
                 egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::left_to_right(Align::Center)),
                 |ui| {
-                    let (dot, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
-                    ui.painter().circle_filled(dot.center(), 3.5, colors::SUCCESS);
-                    let status = ui.add(
-                        egui::Label::new(RichText::new(workspace.status()).size(layout::TYPE_SM).color(colors::TEXT))
-                            .truncate(),
-                    );
-                    self.controls.mark("status", status);
-                    ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(RichText::new("JOY ENGINE").size(layout::TYPE_XS).color(colors::MUTED));
-                        let count = ui.label(
-                            RichText::new(format!("{} ASSETS", workspace.files().len()))
-                                .size(layout::TYPE_XS)
-                                .color(colors::MUTED),
-                        );
-                        self.controls.mark("file-count", count);
-                    });
+                    ui.spacing_mut().item_spacing.x = 14.0;
+                    let tool_name = if is_level
+                        && workspace.active_tab().is_some_and(|tab| tab.document.path.ends_with(".joyobject"))
+                    {
+                        "OBJECT"
+                    } else {
+                        document_tool_name(&path)
+                    };
+                    tool_badge(ui, tool_name);
+                    let assets =
+                        chip_button(ui, "Assets", browser_visible).on_hover_text("Show or hide the Content Browser");
+                    if self.controls.mark("assets-toggle", assets).clicked() {
+                        workspace.maximized = false;
+                        let mut layout = workspace.layout();
+                        layout.content_browser_collapsed = browser_visible;
+                        workspace.set_layout(layout);
+                    }
+                    if is_level {
+                        let mut created = false;
+                        if let Some((level, mut access)) = workspace.active_level() {
+                            self.level.toolbar_actions(ui, level, &mut access, &mut self.controls);
+                            ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                                ui.spacing_mut().item_spacing.x = 14.0;
+                                self.level.toolbar_trailing(ui, level, &mut self.controls);
+                            });
+                            created = !access.created.is_empty();
+                        }
+                        if created {
+                            workspace.refresh_files();
+                        }
+                    } else if is_tool {
+                        ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                            let label = if workspace.maximized { "Restore layout" } else { "Focus viewport" };
+                            let focus = quiet_button(ui, label).on_hover_text("Give the tool the whole document area");
+                            if self.controls.mark("lab-maximize", focus).clicked() {
+                                workspace.maximized = !workspace.maximized;
+                            }
+                        });
+                    }
                 },
             );
+        });
+    }
+
+    /// The status bar: the active file and the latest message on the left, the active editor's context on the right.
+    fn footer(&mut self, context: &egui::Context, rect: Rect, workspace: &mut Workspace) {
+        let file = workspace.active_tab().map(|tab| tab.file_name().to_owned());
+        let left = match &file {
+            Some(file) => format!("{file} · {}", workspace.status()),
+            None => workspace.status().to_owned(),
+        };
+        let level_context = workspace.active_level().map(|(level, _)| self.level.status_context(level));
+        let right = level_context.unwrap_or_else(|| format!("{} assets · Joy Engine", workspace.files().len()));
+        region(context, "joy-editor-footer", rect, colors::HEADER, Order::Middle, |ui| {
+            widgets::edge(ui, rect.left_top(), rect.right_top());
+            let status = status_text(ui, rect, &left, &right);
+            self.controls.mark("status", status);
+            self.controls.insert("file-count", rect);
         });
     }
 
@@ -769,9 +852,7 @@ impl WorkspaceView {
     // -----------------------------------------------------------------------------------------------------------------
 
     fn document_area(&mut self, context: &egui::Context, rect: Rect, workspace: &mut Workspace) {
-        let tabs_rect = Rect::from_min_size(rect.min, vec2(rect.width(), TABS_HEIGHT));
-        self.tab_strip(context, tabs_rect, workspace);
-        let mut top = tabs_rect.max.y;
+        let mut top = rect.min.y;
 
         let conflict = workspace.active_tab().is_some_and(|tab| tab.document.conflict.is_some());
         if workspace.return_path().is_some() || conflict {
@@ -805,7 +886,7 @@ impl WorkspaceView {
     }
 
     fn tab_strip(&mut self, context: &egui::Context, rect: Rect, workspace: &mut Workspace) {
-        region(context, "joy-editor-tabs", rect, colors::HEADER, Order::Middle, |ui| {
+        region(context, "joy-editor-tabs", rect, colors::TABS, Order::Middle, |ui| {
             widgets::edge(ui, rect.left_bottom(), rect.right_bottom());
             let mut activate = None;
             let mut close = None;
@@ -818,65 +899,22 @@ impl WorkspaceView {
                         let path = tab.document.path.clone();
                         let active = workspace.active_path() == Some(path.as_str());
                         let marker = if tab.document.conflict.is_some() {
-                            "! "
+                            TabMarker::Conflict
                         } else if tab.dirty() {
-                            "● "
+                            TabMarker::Dirty
                         } else {
-                            ""
+                            TabMarker::None
                         };
-                        let label = hud_text::single(
-                            ui.painter(),
-                            &format!("{marker}{}", tab.file_name()),
-                            Style::new(12.0, colors::TEXT),
-                        );
-                        let width = label.size().x + 52.0;
-                        let (tab_rect, response) = ui.allocate_exact_size(vec2(width, rect.height()), Sense::click());
-                        let response = response.on_hover_text(format!("{project} / {path}"));
-                        let painter = ui.painter();
-                        painter.rect_filled(tab_rect, 0.0, if active { colors::SURFACE } else { colors::PANEL });
-                        if active {
-                            painter.rect_filled(
-                                Rect::from_min_size(tab_rect.min, vec2(tab_rect.width(), 2.0)),
-                                0.0,
-                                colors::ACCENT,
-                            );
-                        }
-                        painter.line_segment(
-                            [tab_rect.right_top(), tab_rect.right_bottom()],
-                            Stroke::new(1.0, colors::LINE),
-                        );
-                        label.paint(painter, pos2(tab_rect.min.x + 12.0, tab_rect.center().y - (label.size().y / 2.0)));
-                        let close_rect = Rect::from_center_size(
-                            pos2(tab_rect.right() - 18.0, tab_rect.center().y),
-                            vec2(20.0, 20.0),
-                        );
-                        let close_response = ui
-                            .interact(close_rect, Id::new(("close-tab", &path)), Sense::click())
-                            .on_hover_text(format!("Close {path}"));
-                        widgets::paint_icon(
-                            ui.painter(),
-                            close_rect.shrink(5.0),
-                            Icon::Close,
-                            if close_response.hovered() { colors::ACCENT } else { colors::MUTED },
-                        );
-                        self.controls.mark(format!("tab:{path}"), response.clone());
+                        let response = document_tab(ui, &path, document_glyph(&path), tab.file_name(), active, marker);
+                        let tab_response = response.tab.on_hover_text(format!("{project} / {path}"));
+                        let close_response = response.close.on_hover_text(format!("Close {path}"));
+                        self.controls.mark(format!("tab:{path}"), tab_response.clone());
                         self.controls.mark(format!("close:{path}"), close_response.clone());
                         if close_response.clicked() {
                             close = Some(path.clone());
-                        } else if response.clicked() {
+                        } else if tab_response.clicked() {
                             activate = Some(path.clone());
                         }
-                    }
-                    let tool_tab = matches!(workspace.active_tab().map(|tab| &tab.content), Some(TabContent::Tool(_)));
-                    if tool_tab {
-                        ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                            ui.add_space(8.0);
-                            let label = if workspace.maximized { "Restore" } else { "Maximize" };
-                            let maximize = toggle_button(ui, label, workspace.maximized);
-                            if self.controls.mark("lab-maximize", maximize).clicked() {
-                                workspace.maximized = !workspace.maximized;
-                            }
-                        });
                     }
                 },
             );

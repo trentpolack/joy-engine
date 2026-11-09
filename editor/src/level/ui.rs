@@ -11,9 +11,18 @@
 
 use std::collections::HashMap;
 
+use joy_engine::development::editor_shell::{
+    StatusTone,
+    call_to_action,
+    chip_button,
+    chip_menu_button,
+    overflow_button,
+    quiet_button,
+    quiet_menu_button,
+    rule,
+    status_label,
+};
 use joy_engine::development::{
-    NumberField,
-    NumericDrafts,
     PaneLimits,
     PanelLayout,
     PanelLayoutOptions,
@@ -51,6 +60,7 @@ use joy_engine::serde_json::{
 use joy_engine::theme::{
     colors,
     layout,
+    text_styles,
 };
 
 use super::constants::{
@@ -105,14 +115,16 @@ use crate::interaction::widgets::{
     heading,
     primary_button,
     region,
-    shortcut_button,
-    toggle_button,
 };
 
-/// Toolbar height in logical points.
-const TOOLBAR_HEIGHT: f32 = 46.0;
-/// Status bar height.
-const STATUS_HEIGHT: f32 = 26.0;
+/// Grid snap choices in meters offered by the toolbar's Snap menu; zero turns snapping off.
+const SNAP_CHOICES: [f32; 6] = [0.0, 0.25, 0.5, 1.0, 2.0, 5.0];
+/// Width of the viewport's View settings popover.
+const VIEW_SETTINGS_WIDTH: f32 = 250.0;
+/// Width of the empty-scene card.
+const EMPTY_CARD_WIDTH: f32 = 520.0;
+/// Height of one outliner row.
+const OUTLINER_ROW_HEIGHT: f32 = 40.0;
 /// Height of one inspector row of controls.
 const ROW_HEIGHT: f32 = 30.0;
 /// Width of a seed field's reroll button.
@@ -148,8 +160,9 @@ pub struct LevelUi {
     dialog: Option<LevelDialog>,
     missing_choice: HashMap<String, String>,
     custom_fields: HashMap<String, (String, CustomFieldKind)>,
-    view_drafts: NumericDrafts,
     source_editor: ScriptEditor,
+    // The viewport's View settings popover (grid, camera reset, panels).
+    view_settings_open: bool,
 }
 
 impl LevelUi {
@@ -175,8 +188,8 @@ impl LevelUi {
             dialog: None,
             missing_choice: HashMap::new(),
             custom_fields: HashMap::new(),
-            view_drafts: NumericDrafts::default(),
             source_editor: ScriptEditor::new("level-components-source", ScriptSyntax::json()),
+            view_settings_open: false,
         }
     }
 
@@ -185,7 +198,10 @@ impl LevelUi {
         self.panels.maximized()
     }
 
-    /// Draw the level editor inside `rect`, reading and creating project content through `access`.
+    /// Draw the level editor's panes inside `rect` (the body beneath the shell's toolbar), reading and creating project
+    /// content through `access`. The shell draws [`toolbar_actions`](Self::toolbar_actions) and
+    /// [`toolbar_trailing`](Self::toolbar_trailing) in its toolbar and [`status_context`](Self::status_context) in its
+    /// status bar.
     pub fn show(
         &mut self,
         context: &egui::Context,
@@ -196,12 +212,7 @@ impl LevelUi {
     ) {
         // Transparent: the viewport pane shows the 3D render beneath; every other pane paints its own background.
         region(context, "level-editor", rect, Color32::TRANSPARENT, Order::Middle, |ui| {
-            let toolbar = Rect::from_min_size(rect.min, vec2(rect.width(), TOOLBAR_HEIGHT));
-            let status = Rect::from_min_max(pos2(rect.min.x, rect.max.y - STATUS_HEIGHT), rect.max);
-            let body = Rect::from_min_max(pos2(rect.min.x, toolbar.max.y), pos2(rect.max.x, status.min.y));
-            let panes = self.panels.panes(body);
-
-            self.toolbar(ui, toolbar, level, access, controls);
+            let panes = self.panels.panes(rect);
             if let Some(center) = panes.center {
                 controls.insert("viewport", center);
                 level.viewport.region = ViewRegion {
@@ -210,7 +221,7 @@ impl LevelUi {
                 };
                 joy_engine::runtime::ui_layout::show_region(ui, "viewport-pane", center, |ui| {
                     self.viewport(ui, center, level, controls);
-                    self.viewport_overlay(ui, center, level, controls);
+                    self.viewport_overlay(ui, center, level, access, controls);
                 });
             }
             if let Some(left) = panes.left {
@@ -225,7 +236,6 @@ impl LevelUi {
                     self.inspector(ui, right, level, access, controls);
                 });
             }
-            self.status_bar(ui, status, level, controls);
             self.panels.dividers(ui, &panes);
         });
         self.dialogs(context, level, access, controls);
@@ -236,146 +246,150 @@ impl LevelUi {
     // Toolbar and status
     // -----------------------------------------------------------------------------------------------------------------
 
-    fn toolbar(
+    /// The level's authoring actions in the shell toolbar: add primitives, place reusable objects, the Select and Move
+    /// tools, and grid snap. Object documents edit one object, so they offer only the tools.
+    pub fn toolbar_actions(
         &mut self,
         ui: &mut Ui,
-        rect: Rect,
         level: &mut LevelEditor,
         access: &mut dyn AssetAccess,
         controls: &mut ControlMap,
     ) {
-        ui.painter().rect_filled(rect, 0.0, colors::PANEL);
-        widgets::edge(ui, rect.left_bottom(), rect.right_bottom());
-        let inner = rect.shrink2(vec2(14.0, 8.0));
-        // Undo and Redo claim the right edge first; on narrow windows the authoring buttons scroll in the space left of
-        // them instead of drawing underneath.
-        let history = ui
-            .scope_builder(
-                egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::right_to_left(Align::Center)),
-                |ui| {
-                    ui.spacing_mut().item_spacing.x = 8.0;
-                    let redo = ui
-                        .add_enabled_ui(level.document().can_redo(), |ui| button(ui, "REDO"))
-                        .inner
-                        .on_hover_text("Redo (Ctrl/Cmd Shift Z)");
-                    if controls.mark("redo", redo).clicked() {
-                        level.history(true);
+        if !level.object_mode() {
+            let primitive = chip_menu_button(ui, "+ Primitive");
+            controls.mark("add-primitive", primitive.clone());
+            egui::Popup::menu(&primitive).show(|ui| {
+                ui.set_min_width(160.0);
+                for (name, label) in
+                    [("add-box", "Box"), ("add-sphere", "Sphere"), ("add-light", "Light"), ("add-empty", "Empty")]
+                {
+                    let item = ui.button(label);
+                    if controls.mark(name, item).clicked() {
+                        match name {
+                            "add-box" => level.add_primitive(false),
+                            "add-sphere" => level.add_primitive(true),
+                            "add-light" => level.add_light(),
+                            _ => level.add_empty(),
+                        }
                     }
-                    let undo = ui
-                        .add_enabled_ui(level.document().can_undo(), |ui| button(ui, "UNDO"))
-                        .inner
-                        .on_hover_text("Undo (Ctrl/Cmd Z)");
-                    if controls.mark("undo", undo).clicked() {
-                        level.history(false);
-                    }
-                },
-            )
-            .response
-            .rect;
-        let left = Rect::from_min_max(inner.min, pos2((history.min.x - 12.0).max(inner.min.x), inner.max.y));
-        ui.scope_builder(
-            egui::UiBuilder::new().max_rect(left).layout(egui::Layout::left_to_right(Align::Center)),
-            |ui| {
-                ScrollArea::horizontal()
-                    .id_salt("level-toolbar")
-                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 8.0;
-                            heading(ui, if level.object_mode() { "OBJECT" } else { "LEVEL" });
-                            caption(ui, "AUTHORING", colors::MUTED);
-                            ui.add_space(10.0);
-                            if !level.object_mode() {
-                                if controls.mark("add-box", button(ui, "+ BOX")).clicked() {
-                                    level.add_primitive(false);
-                                }
-                                if controls.mark("add-sphere", button(ui, "+ SPHERE")).clicked() {
-                                    level.add_primitive(true);
-                                }
-                                if controls.mark("add-light", button(ui, "+ LIGHT")).clicked() {
-                                    level.add_light();
-                                }
-                                if controls.mark("add-empty", button(ui, "+ EMPTY")).clicked() {
-                                    level.add_empty();
-                                }
-                                let objects: Vec<String> = access
-                                    .catalog()
-                                    .iter()
-                                    .filter(|asset| asset.kind == "joyobject")
-                                    .map(|asset| asset.path.clone())
-                                    .collect();
-                                if level.instance_choice.as_ref().is_none_or(|choice| !objects.contains(choice)) {
-                                    level.instance_choice = objects.first().cloned();
-                                }
-                                let selected = level.instance_choice.clone().unwrap_or_else(|| "No objects".to_owned());
-                                let combo = egui::ComboBox::from_id_salt("instance-picker")
-                                    .selected_text(selected.strip_prefix("assets/").unwrap_or(&selected).to_owned())
-                                    .width(140.0)
-                                    .show_ui(ui, |ui| {
-                                        for path in &objects {
-                                            let label = path.strip_prefix("assets/").unwrap_or(path);
-                                            ui.selectable_value(&mut level.instance_choice, Some(path.clone()), label);
-                                        }
-                                    });
-                                controls.mark("instance-picker", combo.response);
-                                let instance =
-                                    ui.add_enabled_ui(!objects.is_empty(), |ui| button(ui, "+ INSTANCE")).inner;
-                                if controls.mark("add-instance", instance).clicked()
-                                    && let Some(path) = level.instance_choice.clone()
-                                    && let Err(error) = level.add_instance(&path, access)
-                                {
-                                    level.set_status(error);
-                                }
-                                let has_selection = level.selected().is_some();
-                                let save_object =
-                                    ui.add_enabled_ui(has_selection, |ui| button(ui, "SAVE AS OBJECT")).inner;
-                                if controls.mark("save-object", save_object).clicked() {
-                                    self.dialog = Some(LevelDialog::SaveObject(level.suggested_object_path()));
-                                }
-                                let duplicate = ui.add_enabled_ui(has_selection, |ui| button(ui, "DUPLICATE")).inner;
-                                if controls.mark("duplicate", duplicate).clicked() {
-                                    level.duplicate();
-                                }
-                                let delete = ui.add_enabled_ui(has_selection, |ui| button(ui, "DELETE")).inner;
-                                if controls.mark("delete", delete).clicked() {
-                                    level.remove_selected();
-                                }
-                            }
-                        });
-                    });
-            },
-        );
+                }
+            });
+            self.place_asset_menu(ui, level, access, controls);
+            rule(ui);
+        }
+
+        let tool = level.viewport.tool;
+        let select = quiet_toggle(ui, "Select", tool == LevelTool::Select);
+        if controls.mark("select-mode", select).clicked() {
+            level.set_tool(LevelTool::Select);
+        }
+        let move_button = quiet_toggle(ui, "Move", tool == LevelTool::Move)
+            .on_hover_text("Drag a gizmo handle or click the ground to move the selection");
+        if controls.mark("move-mode", move_button).clicked() {
+            level.set_tool(LevelTool::Move);
+        }
+        let snap_label = if level.viewport.snap > 0.0 {
+            format!("Snap {} m", format_number(f64::from(level.viewport.snap)))
+        } else {
+            "Snap off".to_owned()
+        };
+        let snap = quiet_menu_button(ui, &snap_label).on_hover_text("Grid snap for moves and placement");
+        controls.mark("snap", snap.clone());
+        egui::Popup::menu(&snap).show(|ui| {
+            for choice in SNAP_CHOICES {
+                let label =
+                    if choice > 0.0 { format!("{} m", format_number(f64::from(choice))) } else { "Off".to_owned() };
+                let item = ui.selectable_label(level.viewport.snap == choice, label);
+                if controls.mark(format!("snap:{choice}"), item).clicked() {
+                    level.viewport.snap = choice;
+                }
+            }
+        });
     }
 
-    fn status_bar(&mut self, ui: &mut Ui, rect: Rect, level: &LevelEditor, controls: &mut ControlMap) {
-        ui.painter().rect_filled(rect, 0.0, colors::HEADER);
-        widgets::edge(ui, rect.left_top(), rect.right_top());
-        ui.scope_builder(
-            egui::UiBuilder::new()
-                .max_rect(rect.shrink2(vec2(12.0, 2.0)))
-                .layout(egui::Layout::left_to_right(Align::Center)),
-            |ui| {
-                let (dot, _) = ui.allocate_exact_size(vec2(8.0, 8.0), Sense::hover());
-                ui.painter().circle_filled(dot.center(), 3.0, colors::SUCCESS);
-                let status = ui.add(
-                    egui::Label::new(RichText::new(level.status()).size(layout::TYPE_XS).color(colors::TEXT))
-                        .truncate(),
+    /// The toolbar's right edge for a level: Focus viewport and the overflow menu (history, duplicate, delete, and
+    /// Save As Object).
+    pub fn toolbar_trailing(&mut self, ui: &mut Ui, level: &mut LevelEditor, controls: &mut ControlMap) {
+        let more = overflow_button(ui).on_hover_text("More actions");
+        controls.mark("more-actions", more.clone());
+        egui::Popup::menu(&more).show(|ui| {
+            ui.set_min_width(190.0);
+            let undo =
+                ui.add_enabled(level.document().can_undo(), egui::Button::new("Undo").shortcut_text("Ctrl/Cmd Z"));
+            if controls.mark("undo", undo).clicked() {
+                level.history(false);
+            }
+            let redo = ui
+                .add_enabled(level.document().can_redo(), egui::Button::new("Redo").shortcut_text("Ctrl/Cmd Shift Z"));
+            if controls.mark("redo", redo).clicked() {
+                level.history(true);
+            }
+            if !level.object_mode() {
+                ui.separator();
+                let has_selection = level.selected().is_some();
+                let duplicate = ui.add_enabled(has_selection, egui::Button::new("Duplicate"));
+                if controls.mark("duplicate", duplicate).clicked() {
+                    level.duplicate();
+                }
+                let save_object = ui.add_enabled(has_selection, egui::Button::new("Save as Object…"));
+                if controls.mark("save-object", save_object).clicked() {
+                    self.dialog = Some(LevelDialog::SaveObject(level.suggested_object_path()));
+                }
+                let delete =
+                    ui.add_enabled(has_selection, egui::Button::new(RichText::new("Delete").color(colors::DANGER)));
+                if controls.mark("delete", delete).clicked() {
+                    level.remove_selected();
+                }
+            }
+        });
+        let label = if self.panels.maximized() { "Restore panels" } else { "Focus viewport" };
+        let focus = quiet_button(ui, label).on_hover_text("Show only the viewport");
+        if controls.mark("focus-viewport", focus).clicked() {
+            let maximized = self.panels.maximized();
+            self.panels.set_maximized(!maximized);
+        }
+        status_label(ui, "Preview: Current", StatusTone::Good);
+    }
+
+    /// The status bar's right side for a level: grid spacing and drawn instances.
+    pub fn status_context(&self, level: &LevelEditor) -> String {
+        let spacing = level
+            .viewport
+            .grid_spacing()
+            .map_or("Grid off".to_owned(), |spacing| format!("Grid {} m", format_number(spacing)));
+        format!("{spacing} · {} instances", level.viewport.instance_count())
+    }
+
+    /// Place Asset…: instance a reusable object from the project at the scene origin.
+    fn place_asset_menu(
+        &mut self,
+        ui: &mut Ui,
+        level: &mut LevelEditor,
+        access: &mut dyn AssetAccess,
+        controls: &mut ControlMap,
+    ) {
+        let objects: Vec<String> =
+            access.catalog().iter().filter(|asset| asset.kind == "joyobject").map(|asset| asset.path.clone()).collect();
+        let place = quiet_button(ui, "Place Asset…").on_hover_text("Place a reusable object from this project");
+        controls.mark("place-asset", place.clone());
+        egui::Popup::menu(&place).show(|ui| {
+            ui.set_min_width(220.0);
+            if objects.is_empty() {
+                ui.label(
+                    RichText::new("No reusable objects yet. Save a selection as an object first.").color(colors::MUTED),
                 );
-                controls.mark("level-status", status);
-                ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                    let spacing = level
-                        .viewport
-                        .grid_spacing()
-                        .map_or("GRID OFF".to_owned(), |spacing| format!("GRID {} M", format_number(spacing)));
-                    let instances = level.viewport.instance_count();
-                    ui.label(
-                        RichText::new(format!("{spacing} · {instances} INSTANCES"))
-                            .size(layout::TYPE_XS)
-                            .color(colors::MUTED),
-                    );
-                });
-            },
-        );
+            }
+            for path in &objects {
+                let label = path.strip_prefix("assets/").unwrap_or(path);
+                let item = ui.button(label);
+                if controls.mark(format!("place:{path}"), item).clicked() {
+                    level.instance_choice = Some(path.clone());
+                    if let Err(error) = level.add_instance(path, access) {
+                        level.set_status(error);
+                    }
+                }
+            }
+        });
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -384,97 +398,117 @@ impl LevelUi {
 
     fn outliner(&mut self, ui: &mut Ui, rect: Rect, level: &mut LevelEditor, controls: &mut ControlMap) {
         ui.painter().rect_filled(rect, 0.0, colors::PANEL);
+        widgets::edge(ui, rect.right_top(), rect.right_bottom());
+        let total = level.document().level().entities.len();
+        let filtered = level.filtered_entities().len();
+
+        // Heading row: "Scene" and the entity count, on a hairline like the shell's panel headings.
+        let heading_rect = Rect::from_min_size(rect.min, vec2(rect.width(), PANEL_HEADING_HEIGHT));
+        widgets::edge(ui, heading_rect.left_bottom(), heading_rect.right_bottom());
+        let count =
+            if level.filter.trim().is_empty() { entity_count_label(total) } else { format!("{filtered} of {total}") };
+        controls.insert(format!("entity-count:{count}"), Rect::NOTHING);
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(rect.shrink2(vec2(12.0, 10.0))).layout(egui::Layout::top_down(Align::LEFT)),
+            egui::UiBuilder::new()
+                .max_rect(heading_rect.shrink2(vec2(16.0, 0.0)))
+                .layout(egui::Layout::left_to_right(Align::Center)),
             |ui| {
-                ui.spacing_mut().item_spacing.y = 6.0;
-                let total = level.document().level().entities.len();
-                let filtered = level.filtered_entities().len();
-                heading(ui, "SCENE");
-                let count = if level.filter.trim().is_empty() {
-                    format!("{total} ENTITIES")
-                } else {
-                    format!("{filtered} / {total}")
-                };
-                let label = caption(ui, &count, colors::MUTED);
-                controls.mark("entity-count", label);
-                controls.insert(format!("entity-count:{count}"), Rect::NOTHING);
-                ui.add_space(4.0);
-                caption(ui, "LEVEL NAME", colors::MUTED);
-                let name = level.document().level().name.clone();
-                let key = FieldKey::LevelName;
-                let draft = level.drafts().get(&key).cloned();
-                let (response, event) =
-                    draft_field(ui, Id::new("level-name"), &name, draft.as_ref(), ui.available_width(), false, "");
-                controls.mark("level-name", response);
-                apply_text_event(level, key, event);
-                caption(ui, "FILTER", colors::MUTED);
-                let filter = TextEdit::singleline(&mut level.filter)
-                    .id(Id::new("scene-filter"))
-                    .hint_text("Name, type or tag")
-                    .desired_width(f32::INFINITY)
-                    .show(ui)
-                    .response
-                    .response;
-                controls.mark("scene-filter", filter);
-                let height = (ui.available_height() - 34.0).max(60.0);
-                ScrollArea::vertical().id_salt("entities").auto_shrink([false, false]).max_height(height).show(
-                    ui,
-                    |ui| {
-                        let rows: Vec<(String, String, String)> = level
-                            .filtered_entities()
-                            .into_iter()
-                            .map(|entity| (entity.id.clone(), entity.name.clone(), level.resolve(entity).kind))
-                            .collect();
-                        let selected = level.document().selected_id().map(str::to_owned);
-                        let mut choose = None;
-                        for (id, name, kind) in rows {
-                            let active = selected.as_deref() == Some(id.as_str());
-                            let (row, response) =
-                                ui.allocate_exact_size(vec2(ui.available_width(), 44.0), Sense::click());
-                            let painter = ui.painter();
-                            if active {
-                                painter.rect_filled(row.shrink(1.0), 0.0, colors::SELECTED_ROW);
-                                painter.rect_stroke(
-                                    row.shrink(1.0),
-                                    0.0,
-                                    Stroke::new(1.0, colors::TEXT),
-                                    egui::StrokeKind::Inside,
-                                );
-                            } else if response.hovered() {
-                                painter.rect_filled(row, 0.0, colors::SURFACE);
-                            }
-                            painter.text(
-                                row.min + vec2(8.0, 9.0),
-                                egui::Align2::LEFT_TOP,
-                                &name,
-                                egui::FontId::proportional(12.0),
-                                colors::TEXT,
-                            );
-                            painter.text(
-                                row.min + vec2(8.0, 26.0),
-                                egui::Align2::LEFT_TOP,
-                                &kind,
-                                egui::FontId::proportional(10.0),
-                                colors::MUTED,
-                            );
-                            controls.mark(format!("entity:{id}"), response.clone());
-                            if response.clicked() {
-                                choose = Some(id);
-                            }
-                        }
-                        if let Some(id) = choose {
-                            level.select(Some(&id));
-                        }
-                    },
-                );
-                ui.label(
-                    RichText::new("Select an entity to edit its transform and components.")
-                        .size(layout::TYPE_XS)
-                        .color(colors::MUTED),
-                );
+                panel_title(ui, "Scene");
+                ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                    let label = ui.label(RichText::new(&count).size(layout::TYPE_MD).color(colors::MUTED));
+                    controls.mark("entity-count", label);
+                });
             },
         );
+
+        let body = Rect::from_min_max(pos2(rect.min.x, heading_rect.max.y), rect.max).shrink2(vec2(14.0, 14.0));
+        ui.scope_builder(egui::UiBuilder::new().max_rect(body).layout(egui::Layout::top_down(Align::LEFT)), |ui| {
+            ui.spacing_mut().item_spacing.y = 6.0;
+            let filter = TextEdit::singleline(&mut level.filter)
+                .id(Id::new("scene-filter"))
+                .hint_text("Filter scene…")
+                .font(egui::FontId::proportional(layout::TYPE_MD + 1.0))
+                .margin(vec2(10.0, 8.0))
+                .desired_width(f32::INFINITY)
+                .show(ui)
+                .response
+                .response;
+            controls.mark("scene-filter", filter);
+            ui.add_space(4.0);
+            let height = (ui.available_height() - 70.0).max(60.0);
+            ScrollArea::vertical().id_salt("entities").auto_shrink([false, true]).max_height(height).show(ui, |ui| {
+                let rows: Vec<(String, String, String)> = level
+                    .filtered_entities()
+                    .into_iter()
+                    .map(|entity| (entity.id.clone(), entity.name.clone(), level.resolve(entity).kind))
+                    .collect();
+                let selected = level.document().selected_id().map(str::to_owned);
+                let mut choose = None;
+                for (id, name, kind) in rows {
+                    let active = selected.as_deref() == Some(id.as_str());
+                    let (row, response) =
+                        ui.allocate_exact_size(vec2(ui.available_width(), OUTLINER_ROW_HEIGHT), Sense::click());
+                    let painter = ui.painter();
+                    if active {
+                        painter.rect_filled(row, 0.0, colors::SURFACE);
+                        painter.rect_filled(Rect::from_min_size(row.min, vec2(3.0, row.height())), 0.0, colors::ACCENT);
+                    } else if response.hovered() {
+                        painter.rect_filled(row, 0.0, colors::SURFACE.gamma_multiply(0.6));
+                    }
+                    let marker = Rect::from_center_size(pos2(row.min.x + 20.0, row.center().y), vec2(8.0, 8.0));
+                    painter.add(egui::Shape::convex_polygon(
+                        vec![marker.center_top(), marker.right_center(), marker.center_bottom(), marker.left_center()],
+                        colors::MUTED.gamma_multiply(0.7),
+                        Stroke::NONE,
+                    ));
+                    // The type sits at the right edge when the name leaves room for it; the name truncates otherwise.
+                    let label = if name.is_empty() { kind.clone() } else { name.clone() };
+                    let kind_galley = painter.layout_no_wrap(
+                        kind.clone(),
+                        egui::FontId::proportional(layout::TYPE_SM),
+                        colors::MUTED,
+                    );
+                    let name_left = row.min.x + 36.0;
+                    let kind_space = if name.is_empty() { 0.0 } else { kind_galley.size().x + 16.0 };
+                    let mut job = egui::text::LayoutJob::simple_singleline(
+                        label,
+                        egui::FontId::proportional(layout::TYPE_MD + 1.0),
+                        colors::TEXT,
+                    );
+                    job.wrap = egui::text::TextWrapping::truncate_at_width(
+                        (row.max.x - 10.0 - kind_space - name_left).max(24.0),
+                    );
+                    let name_galley = painter.layout_job(job);
+                    let name_width = name_galley.size().x;
+                    painter.galley(
+                        pos2(name_left, row.center().y - (name_galley.size().y / 2.0)),
+                        name_galley,
+                        colors::TEXT,
+                    );
+                    if !name.is_empty() && name_left + name_width + 16.0 + kind_galley.size().x <= row.max.x - 10.0 {
+                        let kind_position = pos2(
+                            row.max.x - 10.0 - kind_galley.size().x,
+                            row.center().y - (kind_galley.size().y / 2.0),
+                        );
+                        painter.galley(kind_position, kind_galley, colors::MUTED);
+                    }
+                    controls.mark(format!("entity:{id}"), response.clone());
+                    if response.clicked() {
+                        choose = Some(id);
+                    }
+                }
+                if let Some(id) = choose {
+                    level.select(Some(&id));
+                }
+            });
+            ui.add_space(8.0);
+            let hint = if total == 0 {
+                "Scene settings can exist before any visible objects are placed."
+            } else {
+                "Select an entity to edit its transform and components."
+            };
+            ui.label(RichText::new(hint).size(layout::TYPE_MD).color(colors::MUTED));
+        });
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -567,93 +601,154 @@ impl LevelUi {
         }
     }
 
-    fn viewport_overlay(&mut self, ui: &mut Ui, rect: Rect, level: &mut LevelEditor, controls: &mut ControlMap) {
-        let bar = Rect::from_min_size(rect.min + vec2(10.0, 10.0), vec2((rect.width() - 20.0).max(0.0), 30.0));
-        // Panel toggles and Maximize claim the right edge first (the kit keeps them in reading order); on narrow
-        // viewports the tools scroll in the space left of them instead of drawing underneath.
-        let toggles = ui
-            .scope_builder(
-                egui::UiBuilder::new().max_rect(bar).layout(egui::Layout::right_to_left(Align::Center)),
-                |ui| {
-                    ui.spacing_mut().item_spacing.x = 6.0;
-                    self.panels.visibility_controls(ui);
-                },
-            )
-            .response
-            .rect;
-        let tools = Rect::from_min_max(bar.min, pos2((toggles.min.x - 10.0).max(bar.min.x), bar.max.y));
+    fn viewport_overlay(
+        &mut self,
+        ui: &mut Ui,
+        rect: Rect,
+        level: &mut LevelEditor,
+        access: &mut dyn AssetAccess,
+        controls: &mut ControlMap,
+    ) {
+        // Top chips: Frame on the left, View settings on the right.
+        let bar = rect.shrink2(vec2(20.0, 20.0));
+        let bar = Rect::from_min_size(bar.min, vec2(bar.width().max(0.0), 36.0));
+        let mut settings_anchor = None;
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(tools).layout(egui::Layout::left_to_right(Align::Center)),
+            egui::UiBuilder::new().max_rect(bar).layout(egui::Layout::left_to_right(Align::Center)),
             |ui| {
-                ScrollArea::horizontal()
-                    .id_salt("level-viewport-tools")
-                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 6.0;
-                            let tool = level.viewport.tool;
-                            if controls.mark("select-mode", toggle_button(ui, "SELECT", tool == LevelTool::Select)).clicked() {
-                                level.set_tool(LevelTool::Select);
-                            }
-                            let move_button = toggle_button(ui, "MOVE", tool == LevelTool::Move)
-                                .on_hover_text("Drag a gizmo handle or click the ground to move the selection");
-                            if controls.mark("move-mode", move_button).clicked() {
-                                level.set_tool(LevelTool::Move);
-                            }
-                            if controls.mark("focus", shortcut_button(ui, "FRAME", "F")).on_hover_text("Frame selection or scene").clicked()
-                            {
-                                let selected = level.document().selected_id().map(str::to_owned);
-                                level.viewport.focus(selected.as_deref());
-                            }
-                            if controls.mark("reset-camera", button(ui, "RESET 0")).on_hover_text("Reset camera (0)").clicked() {
-                                level.viewport.reset_camera();
-                            }
-                            let grid = ui.checkbox(&mut level.viewport.show_grid, RichText::new("GRID").size(layout::TYPE_SM)).on_hover_text(
-                                "Editor-only lines; minor spacing follows 1/2/5 meters, major lines mark five divisions",
-                            );
-                            controls.mark("grid-toggle", grid);
-                            caption(ui, "SNAP", colors::MUTED);
-                            let mut snap = f64::from(level.viewport.snap);
-                            let field = NumberField::new("snap", &mut snap)
-                                .minimum(0.0)
-                                .step(0.25)
-                                .width(52.0)
-                                .label("Grid snap meters")
-                                .show(ui, &mut self.view_drafts);
-                            controls.mark("snap", field.response.clone());
-                            if field.changed {
-                                level.viewport.snap = snap as f32;
-                            }
-                        });
-                    });
-            },
-        );
-        // Scene effect previews in a panel below the panel toggles.
-        let effects =
-            Rect::from_min_size(pos2(bar.max.x - 230.0, bar.max.y + 6.0), vec2(230.0, (rect.height() - 90.0).max(0.0)));
-        ui.scope_builder(egui::UiBuilder::new().max_rect(effects).layout(egui::Layout::top_down(Align::LEFT)), |ui| {
-            let frame = egui::Frame::new()
-                .fill(colors::PANEL.gamma_multiply(0.92))
-                .stroke(Stroke::new(1.0, colors::LINE))
-                .inner_margin(6.0);
-            let shown = frame.show(ui, |ui| {
-                ui.set_width(effects.width() - 14.0);
-                level.viewport.effects.ui(ui);
-            });
-            controls.mark("effects", shown.response);
-        });
-        let corner =
-            Rect::from_min_size(pos2(rect.min.x + 12.0, rect.max.y - 24.0), vec2((rect.width() - 24.0).max(0.0), 18.0));
-        ui.scope_builder(
-            egui::UiBuilder::new().max_rect(corner).layout(egui::Layout::left_to_right(Align::Center)),
-            |ui| {
-                ui.label(RichText::new("Y UP · METERS · PERSPECTIVE").size(layout::TYPE_XS).color(colors::MUTED));
+                ui.spacing_mut().item_spacing.x = 10.0;
+                let frame = chip_button(ui, "Frame  F", false).on_hover_text("Frame the selection, or the whole scene");
+                if controls.mark("focus", frame).clicked() {
+                    let selected = level.document().selected_id().map(str::to_owned);
+                    level.viewport.focus(selected.as_deref());
+                }
                 ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                    let help = "CLICK SELECT · DRAG ORBIT · SHIFT DRAG PAN · SCROLL ZOOM · F FRAME · 0 RESET";
-                    ui.label(RichText::new(help).size(layout::TYPE_XS).color(colors::MUTED));
+                    let settings = chip_button(ui, "View settings", self.view_settings_open);
+                    if controls.mark("view-settings", settings.clone()).clicked() {
+                        self.view_settings_open = !self.view_settings_open;
+                    }
+                    settings_anchor = Some(settings.rect);
                 });
             },
         );
+        if self.view_settings_open
+            && let Some(anchor) = settings_anchor
+        {
+            self.view_settings(ui, rect, anchor, level, controls);
+        }
+
+        if level.viewport.instance_count() == 0 && !level.object_mode() {
+            self.empty_scene(ui, rect, level, access, controls);
+        }
+
+        // Bottom hints: camera gestures on the left, the world axes on the right.
+        let corner =
+            Rect::from_min_size(pos2(rect.min.x + 20.0, rect.max.y - 34.0), vec2((rect.width() - 40.0).max(0.0), 24.0));
+        ui.scope_builder(
+            egui::UiBuilder::new().max_rect(corner).layout(egui::Layout::left_to_right(Align::Center)),
+            |ui| {
+                let hint = egui::FontId::monospace(layout::TYPE_SM + 1.0);
+                ui.label(
+                    RichText::new("Drag orbit · Shift drag pan · Scroll zoom").font(hint.clone()).color(colors::MUTED),
+                );
+                ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 18.0;
+                    for axis in ["Z ↙", "X →", "Y ↑"] {
+                        ui.label(RichText::new(axis).font(hint.clone()).color(colors::SLIDER_EDGE));
+                    }
+                });
+            },
+        );
+    }
+
+    /// The View settings popover: editor grid, camera reset, and which panels show.
+    fn view_settings(
+        &mut self,
+        ui: &mut Ui,
+        viewport: Rect,
+        anchor: Rect,
+        level: &mut LevelEditor,
+        controls: &mut ControlMap,
+    ) {
+        let top_left = pos2(anchor.max.x - VIEW_SETTINGS_WIDTH, anchor.max.y + 8.0);
+        let area =
+            Rect::from_min_size(top_left, vec2(VIEW_SETTINGS_WIDTH, (viewport.max.y - top_left.y - 50.0).max(0.0)));
+        ui.scope_builder(egui::UiBuilder::new().max_rect(area).layout(egui::Layout::top_down(Align::LEFT)), |ui| {
+            let frame = egui::Frame::new()
+                .fill(colors::HEADER)
+                .stroke(Stroke::new(1.0, colors::LINE))
+                .corner_radius(layout::RADIUS_SM)
+                .inner_margin(12.0);
+            let shown = frame.show(ui, |ui| {
+                ui.set_width(VIEW_SETTINGS_WIDTH - 26.0);
+                ui.spacing_mut().item_spacing.y = 8.0;
+                section_label(ui, "VIEWPORT");
+                let grid = ui
+                    .checkbox(&mut level.viewport.show_grid, RichText::new("Editor grid").size(layout::TYPE_MD))
+                    .on_hover_text(
+                        "Editor-only lines; minor spacing follows 1/2/5 meters, major lines mark five divisions",
+                    );
+                controls.mark("grid-toggle", grid);
+                let reset = ui.button("Reset camera  0").on_hover_text("Reset camera (0)");
+                if controls.mark("reset-camera", reset).clicked() {
+                    level.viewport.reset_camera();
+                }
+                ui.add_space(4.0);
+                section_label(ui, "PANELS");
+                ui.horizontal_wrapped(|ui| self.panels.visibility_controls(ui));
+            });
+            controls.mark("view-settings-panel", shown.response);
+        });
+    }
+
+    /// The empty-scene card: what the level holds so far and the two ways to start building it.
+    fn empty_scene(
+        &mut self,
+        ui: &mut Ui,
+        viewport: Rect,
+        level: &mut LevelEditor,
+        access: &mut dyn AssetAccess,
+        controls: &mut ControlMap,
+    ) {
+        let width = EMPTY_CARD_WIDTH.min(viewport.width() - 40.0).max(0.0);
+        let card = Rect::from_center_size(viewport.center(), vec2(width, 300.0));
+        ui.painter().rect(
+            card,
+            layout::RADIUS_SM,
+            colors::HEADER,
+            Stroke::new(1.0, colors::LINE),
+            egui::StrokeKind::Inside,
+        );
+        let mark = Rect::from_center_size(pos2(card.center().x, card.min.y + 64.0), vec2(30.0, 30.0));
+        ui.painter().add(egui::Shape::closed_line(
+            vec![mark.center_top(), mark.right_center(), mark.center_bottom(), mark.left_center()],
+            Stroke::new(1.6, colors::ACCENT),
+        ));
+        let inner = Rect::from_min_max(pos2(card.min.x + 24.0, mark.max.y + 22.0), card.max - vec2(24.0, 24.0));
+        ui.scope_builder(egui::UiBuilder::new().max_rect(inner).layout(egui::Layout::top_down(Align::Center)), |ui| {
+            ui.label(
+                RichText::new("Start building the scene")
+                    .font(egui::FontId::new(layout::TYPE_LG + 10.0, text_styles::strong_family()))
+                    .color(colors::TEXT),
+            );
+            ui.add_space(8.0);
+            let detail = if level.document().level().entities.is_empty() {
+                "Your level has no objects yet."
+            } else {
+                "Your level has scene settings and no visible objects yet."
+            };
+            ui.label(RichText::new(detail).size(layout::TYPE_LG).color(colors::MUTED));
+            ui.add_space(18.0);
+            ui.horizontal(|ui| {
+                let buttons = 170.0 + 150.0;
+                ui.add_space(((ui.available_width() - buttons) / 2.0).max(0.0));
+                let add = call_to_action(ui, "+ Add Primitive");
+                if controls.mark("empty-add-primitive", add).clicked() {
+                    level.add_primitive(false);
+                }
+                self.place_asset_menu(ui, level, access, controls);
+            });
+        });
     }
 
     // -----------------------------------------------------------------------------------------------------------------
@@ -669,120 +764,163 @@ impl LevelUi {
         controls: &mut ControlMap,
     ) {
         ui.painter().rect_filled(rect, 0.0, colors::PANEL);
+        widgets::edge(ui, rect.left_top(), rect.left_bottom());
+        let heading_rect = Rect::from_min_size(rect.min, vec2(rect.width(), PANEL_HEADING_HEIGHT));
+        widgets::edge(ui, heading_rect.left_bottom(), heading_rect.right_bottom());
+        let title = if level.selected().is_some() { "Inspector" } else { "Level settings" };
         ui.scope_builder(
-            egui::UiBuilder::new().max_rect(rect.shrink2(vec2(12.0, 10.0))).layout(egui::Layout::top_down(Align::LEFT)),
-            |ui| {
-                heading(ui, "INSPECTOR");
-                ScrollArea::vertical().id_salt("inspector").auto_shrink([false, false]).show(ui, |ui| {
-                    ui.spacing_mut().item_spacing.y = 6.0;
-                    let Some(selected) = level.selected().cloned() else {
+            egui::UiBuilder::new()
+                .max_rect(heading_rect.shrink2(vec2(16.0, 0.0)))
+                .layout(egui::Layout::left_to_right(Align::Center)),
+            |ui| panel_title(ui, title),
+        );
+        let body = Rect::from_min_max(pos2(rect.min.x, heading_rect.max.y), rect.max).shrink2(vec2(14.0, 12.0));
+        ui.scope_builder(egui::UiBuilder::new().max_rect(body).layout(egui::Layout::top_down(Align::LEFT)), |ui| {
+            ScrollArea::vertical().id_salt("inspector").auto_shrink([false, false]).show(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = 6.0;
+                let Some(selected) = level.selected().cloned() else {
+                    self.level_settings(ui, level, controls);
+                    return;
+                };
+                let resolved = level.resolve(&selected);
+                let width = ui.available_width();
+                for (key, label, value, hint) in [
+                    (FieldKey::EntityName, "NAME", resolved.name.clone(), ""),
+                    (FieldKey::EntityType, "TYPE", resolved.kind.clone(), ""),
+                    (FieldKey::EntityTags, "TAGS", resolved.tags.join(", "), "comma, separated"),
+                ] {
+                    caption(ui, label, colors::MUTED);
+                    let draft = level.drafts().get(&key).cloned();
+                    let name = format!("{key:?}");
+                    let (response, event) =
+                        draft_field(ui, Id::new(("inspector", &name)), &value, draft.as_ref(), width, false, hint);
+                    controls.mark(name, response);
+                    apply_text_event(level, key, event);
+                }
+
+                if let Some(template) = &selected.template {
+                    ui.add_space(4.0);
+                    egui::Frame::new().fill(colors::SURFACE).inner_margin(8.0).show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        caption(ui, "LINKED OBJECT", colors::ACCENT);
+                        ui.label(RichText::new(template).monospace().size(layout::TYPE_XS));
+                        let groups = selected.overrides.as_ref().map_or(0, |overrides| overrides.len());
                         ui.label(
-                            RichText::new("Select an entity in the scene.").size(layout::TYPE_MD).color(colors::MUTED),
+                            RichText::new(format!("{groups} override groups"))
+                                .size(layout::TYPE_XS)
+                                .color(colors::MUTED),
                         );
-                        return;
-                    };
-                    let resolved = level.resolve(&selected);
-                    let width = ui.available_width();
-                    for (key, label, value, hint) in [
-                        (FieldKey::EntityName, "NAME", resolved.name.clone(), ""),
-                        (FieldKey::EntityType, "TYPE", resolved.kind.clone(), ""),
-                        (FieldKey::EntityTags, "TAGS", resolved.tags.join(", "), "comma, separated"),
-                    ] {
-                        caption(ui, label, colors::MUTED);
-                        let draft = level.drafts().get(&key).cloned();
-                        let name = format!("{key:?}");
-                        let (response, event) =
-                            draft_field(ui, Id::new(("inspector", &name)), &value, draft.as_ref(), width, false, hint);
-                        controls.mark(name, response);
-                        apply_text_event(level, key, event);
-                    }
-
-                    if let Some(template) = &selected.template {
-                        ui.add_space(4.0);
-                        egui::Frame::new().fill(colors::SURFACE).inner_margin(8.0).show(ui, |ui| {
-                            ui.set_min_width(ui.available_width());
-                            caption(ui, "LINKED OBJECT", colors::ACCENT);
-                            ui.label(RichText::new(template).monospace().size(layout::TYPE_XS));
-                            let groups = selected.overrides.as_ref().map_or(0, |overrides| overrides.len());
-                            ui.label(
-                                RichText::new(format!("{groups} override groups"))
-                                    .size(layout::TYPE_XS)
-                                    .color(colors::MUTED),
-                            );
-                            ui.horizontal_wrapped(|ui| {
-                                if controls.mark("edit-object", button(ui, "EDIT SOURCE ↗")).clicked() {
-                                    level.open_source(template);
-                                }
-                                if controls.mark("reset-overrides", button(ui, "RESET OVERRIDES")).clicked() {
-                                    level.reset_overrides();
-                                }
-                                if controls.mark("detach-object", button(ui, "DETACH")).clicked() {
-                                    level.detach();
-                                }
-                            });
+                        ui.horizontal_wrapped(|ui| {
+                            if controls.mark("edit-object", button(ui, "EDIT SOURCE ↗")).clicked() {
+                                level.open_source(template);
+                            }
+                            if controls.mark("reset-overrides", button(ui, "RESET OVERRIDES")).clicked() {
+                                level.reset_overrides();
+                            }
+                            if controls.mark("detach-object", button(ui, "DETACH")).clicked() {
+                                level.detach();
+                            }
                         });
-                    }
-
-                    ui.add_space(6.0);
-                    ui.horizontal(|ui| {
-                        heading(ui, "TRANSFORM");
-                        caption(ui, "WORLD SPACE", colors::MUTED);
                     });
-                    for field in TransformField::ALL {
-                        caption(ui, field.label(), colors::MUTED);
-                        ui.horizontal(|ui| {
-                            let channel_width = ((width / 3.0) - 6.0).max(40.0);
-                            for (axis, axis_label) in ["X", "Y", "Z"].iter().enumerate() {
-                                ui.label(RichText::new(*axis_label).size(layout::TYPE_XS).color(colors::MUTED));
-                                let key = FieldKey::Transform(field, axis);
-                                let current = level.transform_value(field, axis).map(f64::from).unwrap_or(0.0);
-                                let draft = level.drafts().get(&key).cloned();
-                                let id = Id::new(("transform", field, axis));
-                                let (response, event) = draft_field(
-                                    ui,
-                                    id,
-                                    &display_number(current),
-                                    draft.as_ref(),
-                                    channel_width - 14.0,
-                                    true,
-                                    "",
-                                );
-                                controls.mark(format!("{}-{axis}", transform_name(field)), response);
-                                apply_number_event(level, key, event, transform_bounds(field), current);
-                            }
-                        });
-                    }
+                }
 
-                    ui.add_space(6.0);
-                    heading(ui, "COMPONENTS");
-                    self.component_menu(ui, level, access, controls);
-                    self.properties(ui, level, access, controls);
-
-                    ui.add_space(8.0);
-                    let source = egui::CollapsingHeader::new(RichText::new("ADVANCED SOURCE").size(layout::TYPE_SM))
-                        .id_salt("advanced-source")
-                        .show(ui, |ui| {
-                            ui.label(
-                                RichText::new("Optional component source and repair view.")
-                                    .size(layout::TYPE_XS)
-                                    .color(colors::MUTED),
-                            );
-                            let editor = ui
-                                .allocate_ui(vec2(ui.available_width(), 220.0), |ui| {
-                                    self.source_editor.show(ui, &mut level.components_source)
-                                })
-                                .inner;
-                            controls.mark("components", editor.response);
-                            if controls.mark("apply-components", button(ui, "APPLY SOURCE")).clicked() {
-                                match level.apply_components() {
-                                    Ok(()) => level.set_status("Components applied."),
-                                    Err(error) => level.set_status(error),
-                                }
-                            }
-                        });
-                    controls.mark("advanced-source", source.header_response);
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    heading(ui, "TRANSFORM");
+                    caption(ui, "WORLD SPACE", colors::MUTED);
                 });
-            },
+                for field in TransformField::ALL {
+                    caption(ui, field.label(), colors::MUTED);
+                    ui.horizontal(|ui| {
+                        let channel_width = ((width / 3.0) - 6.0).max(40.0);
+                        for (axis, axis_label) in ["X", "Y", "Z"].iter().enumerate() {
+                            ui.label(RichText::new(*axis_label).size(layout::TYPE_XS).color(colors::MUTED));
+                            let key = FieldKey::Transform(field, axis);
+                            let current = level.transform_value(field, axis).map(f64::from).unwrap_or(0.0);
+                            let draft = level.drafts().get(&key).cloned();
+                            let id = Id::new(("transform", field, axis));
+                            let (response, event) = draft_field(
+                                ui,
+                                id,
+                                &display_number(current),
+                                draft.as_ref(),
+                                channel_width - 14.0,
+                                true,
+                                "",
+                            );
+                            controls.mark(format!("{}-{axis}", transform_name(field)), response);
+                            apply_number_event(level, key, event, transform_bounds(field), current);
+                        }
+                    });
+                }
+
+                ui.add_space(6.0);
+                heading(ui, "COMPONENTS");
+                self.component_menu(ui, level, access, controls);
+                self.properties(ui, level, access, controls);
+
+                ui.add_space(8.0);
+                let source = egui::CollapsingHeader::new(RichText::new("ADVANCED SOURCE").size(layout::TYPE_SM))
+                    .id_salt("advanced-source")
+                    .show(ui, |ui| {
+                        ui.label(
+                            RichText::new("Optional component source and repair view.")
+                                .size(layout::TYPE_XS)
+                                .color(colors::MUTED),
+                        );
+                        let editor = ui
+                            .allocate_ui(vec2(ui.available_width(), 220.0), |ui| {
+                                self.source_editor.show(ui, &mut level.components_source)
+                            })
+                            .inner;
+                        controls.mark("components", editor.response);
+                        if controls.mark("apply-components", button(ui, "APPLY SOURCE")).clicked() {
+                            match level.apply_components() {
+                                Ok(()) => level.set_status("Components applied."),
+                                Err(error) => level.set_status(error),
+                            }
+                        }
+                    });
+                controls.mark("advanced-source", source.header_response);
+            });
+        });
+    }
+
+    /// The inspector with nothing selected: the level document, its scene, and viewport-only previews.
+    fn level_settings(&mut self, ui: &mut Ui, level: &mut LevelEditor, controls: &mut ControlMap) {
+        section_label(ui, "DOCUMENT");
+        ui.label(RichText::new("Level name").size(layout::TYPE_MD + 1.0).color(colors::TEXT));
+        let name = level.document().level().name.clone();
+        let key = FieldKey::LevelName;
+        let draft = level.drafts().get(&key).cloned();
+        let (response, event) =
+            draft_field(ui, Id::new("level-name"), &name, draft.as_ref(), ui.available_width(), false, "");
+        controls.mark("level-name", response);
+        apply_text_event(level, key, event);
+        ui.label(RichText::new("Y-up · World units in meters").size(layout::TYPE_MD).color(colors::MUTED));
+        ui.add_space(10.0);
+        ui.separator();
+
+        section_label(ui, "SCENE");
+        let entities = level.document().level().entities.len();
+        ui.label(
+            RichText::new(format!(
+                "{}. Authored scene settings are saved in this level.",
+                entity_count_label(entities)
+            ))
+            .size(layout::TYPE_MD)
+            .color(colors::MUTED),
+        );
+        ui.add_space(10.0);
+        ui.separator();
+
+        section_label(ui, "VIEWPORT ONLY");
+        let effects = ui.scope(|ui| level.viewport.effects.ui(ui));
+        controls.mark("effects", effects.response);
+        ui.label(
+            RichText::new("Preview enablement does not change the saved scene.")
+                .size(layout::TYPE_MD)
+                .color(colors::MUTED),
         );
     }
 
@@ -1360,4 +1498,40 @@ fn apply_number_event(
     } else if event.commit {
         let _ = level.commit_draft(&key);
     }
+}
+
+/// Height of a pane's heading row (`Scene`, `Level settings`).
+const PANEL_HEADING_HEIGHT: f32 = 56.0;
+
+/// A pane's heading in the shell's sentence-case title face.
+fn panel_title(ui: &mut Ui, text: &str) {
+    ui.label(
+        RichText::new(text)
+            .font(egui::FontId::new(layout::TYPE_LG + 1.0, text_styles::strong_family()))
+            .color(colors::TEXT),
+    );
+}
+
+/// A small spaced capital section label (`DOCUMENT`, `VIEWPORT ONLY`).
+fn section_label(ui: &mut Ui, text: &str) {
+    ui.add_space(4.0);
+    caption(ui, text, colors::MUTED);
+}
+
+/// `1 entity` or `N entities`.
+fn entity_count_label(count: usize) -> String {
+    if count == 1 { "1 entity".to_owned() } else { format!("{count} entities") }
+}
+
+/// A sentence-case tool toggle for the toolbar: accent text while selected.
+fn quiet_toggle(ui: &mut Ui, label: &str, selected: bool) -> egui::Response {
+    let response = quiet_button(ui, label);
+    if selected {
+        let underline = Rect::from_min_max(
+            pos2(response.rect.min.x + 10.0, response.rect.max.y - 2.0),
+            pos2(response.rect.max.x - 10.0, response.rect.max.y),
+        );
+        ui.painter().rect_filled(underline, 0.0, colors::ACCENT);
+    }
+    response
 }

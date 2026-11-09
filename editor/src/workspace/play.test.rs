@@ -5,7 +5,7 @@ use super::*;
 
 #[test]
 fn play_requires_a_dev_script_and_starts_idle() {
-    assert!(defines_dev_script(r#"{"scripts": {"dev": "cargo run -p luna"}}"#));
+    assert!(defines_dev_script(r#"{"scripts": {"dev": "cargo run -p my-game"}}"#));
     assert!(!defines_dev_script(r#"{"scripts": {"build": "x"}}"#));
     assert!(!defines_dev_script(r#"{"scripts": {"dev": "  "}}"#));
     assert!(!defines_dev_script("not json"));

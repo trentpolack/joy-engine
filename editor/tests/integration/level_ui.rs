@@ -47,16 +47,19 @@ fn authoring_selection_moves_inspector_edits_history_and_saves_through_the_ui() 
     driver.click("row:assets/track.joylevel");
     let viewport = driver.editor.control("viewport").unwrap();
     assert!(viewport.width() > 400.0 && viewport.height() > 300.0, "the viewport has a usable authoring area");
-    let outliner = driver.editor.control("level-name").unwrap();
+    let outliner = driver.editor.control("outliner").unwrap();
     let inspector_heading = driver.editor.control("viewport").unwrap().max.x;
     assert!(
         outliner.max.x <= viewport.min.x + 1.0 && inspector_heading < 1440.0,
         "outliner and inspector flank the viewport"
     );
+    driver.frames(30);
+    driver.capture("level-empty");
 
+    driver.click("add-primitive");
     driver.click("add-box");
     assert_eq!(level(&mut driver).document().level().entities.len(), 1);
-    assert!(driver.has("entity-count:1 ENTITIES"));
+    assert!(driver.has("entity-count:1 entity"));
     driver.fill("EntityName", "Authored obstacle");
     driver.fill("position-0", "3");
     driver.fill("scale-0", "3");
@@ -64,10 +67,13 @@ fn authoring_selection_moves_inspector_edits_history_and_saves_through_the_ui() 
     assert_eq!(entity.name, "Authored obstacle");
     assert_eq!((entity.transform.position.x, entity.transform.scale.x), (3.0, 3.0));
 
+    driver.click("more-actions");
     driver.click("duplicate");
     assert_eq!(level(&mut driver).document().level().entities.len(), 2);
+    driver.click("more-actions");
     driver.click("undo");
     assert_eq!(level(&mut driver).document().level().entities.len(), 1);
+    driver.click("more-actions");
     driver.click("redo");
     assert_eq!(level(&mut driver).document().level().entities.len(), 2);
 
@@ -101,6 +107,7 @@ fn authoring_selection_moves_inspector_edits_history_and_saves_through_the_ui() 
     assert!(dragged.x != origin.x && dragged.x.fract() == 0.0, "{origin} -> {dragged}");
     assert_eq!((dragged.y, dragged.z), (origin.y, origin.z));
     assert!(undo_before);
+    driver.click("more-actions");
     driver.click("undo");
     assert_eq!(level(&mut driver).selected().unwrap().transform.position, origin);
     driver.capture("level-gizmo");
@@ -139,6 +146,7 @@ fn components_and_camera_controls_work_through_the_ui() {
     let workspace = level_workspace();
     let mut driver = Driver::start(shell, editor(&workspace.root, None, ToolRegistry::new(), Some("demo")));
     driver.click("row:assets/track.joylevel");
+    driver.click("add-primitive");
     driver.click("add-light");
     assert!(driver.has("group:light"), "{:?}", driver.editor.view().controls.names());
     // Component fields follow the transform and may start below the inspector's fold.
@@ -151,6 +159,7 @@ fn components_and_camera_controls_work_through_the_ui() {
     driver.scroll(inspector, Vec2::new(0.0, -2000.0));
     driver.click("remove:light");
     assert!(!level(&mut driver).selected().unwrap().components.contains_key("light"));
+    driver.click("more-actions");
     driver.click("undo");
     assert!(level(&mut driver).selected().unwrap().components.contains_key("light"));
 
@@ -171,6 +180,7 @@ fn components_and_camera_controls_work_through_the_ui() {
     assert_eq!(level(&mut driver).viewport.camera.distance, 26.0, "0 resets the camera");
     driver.press("KeyF", egui::Modifiers::NONE);
     assert!(level(&mut driver).viewport.camera.distance >= 6.0);
+    driver.click("view-settings");
     driver.click("grid-toggle");
     assert!(!level(&mut driver).viewport.show_grid);
 }
@@ -197,41 +207,4 @@ fn the_viewport_renders_primitives_and_the_editor_grid() {
     let center = sample(viewport.center().x, viewport.center().y);
     assert_ne!(background, center, "the framed box draws over the clear color");
     driver.capture("level-viewport");
-}
-
-/// Screenshots of VEHICLE PLAYGROUND's level, run when `JOY_EDITOR_JOYGAMES` names a JoyGames checkout.
-#[test]
-fn vehicle_playground_capture() {
-    let Ok(checkout) = std::env::var("JOY_EDITOR_JOYGAMES") else {
-        return;
-    };
-    let Some(shell) = joy_engine::HeadlessShell::new(joy_engine::HeadlessOptions {
-        width: 1600,
-        height: 1000,
-        ..Default::default()
-    })
-    .ok() else {
-        return;
-    };
-    let storage = TempFolder::new("playground-storage");
-    let mut driver = Driver::start(
-        shell,
-        editor(std::path::Path::new(&checkout), Some(&storage.root), ToolRegistry::new(), Some("vehicle-playground")),
-    );
-    driver.capture("rust-workspace");
-    driver.click("row:assets/playground.joylevel");
-    driver.frames(10);
-    driver.capture("rust-level");
-    // The kart sits far down the 56-entity outliner; filter to reach it, then show the whole scene again.
-    driver.type_into("scene-filter", "Coral");
-    driver.click("entity:kart-coral");
-    driver.type_into("scene-filter", "");
-    driver.frames(4);
-    driver.capture("rust-level-selected");
-    driver.click("move-mode");
-    driver.frames(2);
-    driver.capture("rust-level-gizmo");
-    driver.click("workspace-help-open");
-    driver.frames(20);
-    driver.capture("rust-documentation");
 }

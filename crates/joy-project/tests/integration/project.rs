@@ -21,16 +21,11 @@ use serde_json::{
     json,
 };
 
-/// Every JoyGames project manifest, copied verbatim.
-const MANIFESTS: [(&str, &str); 8] = [
-    ("blast-garden.joyproject", include_str!("../fixtures/projects/blast-garden.joyproject")),
+/// Real project manifests from a hosting workspace, copied verbatim, so parsing stays compatible with shipped projects.
+const MANIFESTS: [(&str, &str); 3] = [
     ("framebreak.joyproject", include_str!("../fixtures/projects/framebreak.joyproject")),
-    ("god-game.joyproject", include_str!("../fixtures/projects/god-game.joyproject")),
-    ("luna.joyproject", include_str!("../fixtures/projects/luna.joyproject")),
-    ("magic-colors.joyproject", include_str!("../fixtures/projects/magic-colors.joyproject")),
     ("space-scuffles.joyproject", include_str!("../fixtures/projects/space-scuffles.joyproject")),
     ("vectors-to-victory.joyproject", include_str!("../fixtures/projects/vectors-to-victory.joyproject")),
-    ("vehicle-playground.joyproject", include_str!("../fixtures/projects/vehicle-playground.joyproject")),
 ];
 
 /// A parse result as the recording spells it: `{"ok": manifest}` in its document form, or `{"error": message}`.
@@ -42,7 +37,7 @@ fn result_record(result: &Result<ProjectManifest, ProjectManifestError>) -> Valu
 }
 
 #[test]
-fn every_joygames_manifest_parses_as_recorded() {
+fn shipped_project_manifests_parse_as_recorded() {
     let golden = golden_file!("project-manifest-reference.json");
     let results: Vec<_> = MANIFESTS.iter().map(|(_, text)| parse_project_manifest_text(text)).collect();
     let records: Vec<Value> = MANIFESTS

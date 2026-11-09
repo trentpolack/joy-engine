@@ -5,10 +5,10 @@
 ```rust
 use joy_engine::runtime::{Storage, StorageError};
 
-let storage = Storage::new("luna");                       // native folder name; browsers use the page origin
-let saved: Option<String> = storage.load("joy.luna.character.v1")?;
-storage.save("joy.luna.character.v1", &serialized)?;
-storage.remove("joy.luna.character.v1")?;
+let storage = Storage::new("my-game");                       // native folder name; browsers use the page origin
+let saved: Option<String> = storage.load("joy.my-game.save.v1")?;
+storage.save("joy.my-game.save.v1", &serialized)?;
+storage.remove("joy.my-game.save.v1")?;
 ```
 
 - Keys are 1 to 128 ASCII letters, digits, periods, hyphens, or underscores and may not start with a period, so the same key is a valid `localStorage` key and a portable file name. Values are text of at most 1 MiB (`MAXIMUM_STORAGE_BYTES`); callers serialize and validate them.
@@ -22,7 +22,7 @@ A failed read does not mean nothing is saved. The value may exist and be unreada
 ```rust
 use joy_engine::runtime::{SaveSlot, SaveWrite, Storage};
 
-let (mut slot, loaded) = SaveSlot::open(Storage::new("luna"), "joy.luna.character.v1");
+let (mut slot, loaded) = SaveSlot::open(Storage::new("my-game"), "joy.my-game.save.v1");
 let character = match loaded {
     Ok(Some(text)) => restore(&text).unwrap_or_else(|| { slot.reject(); fresh() }),  // damaged: keep it
     Ok(None) => fresh(),

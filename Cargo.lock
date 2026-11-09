@@ -1624,7 +1624,6 @@ version = "1.0.0"
 dependencies = [
  "indexmap",
  "joy-core",
- "libm",
  "log",
  "serde_json",
  "thiserror 2.0.21",

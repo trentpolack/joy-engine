@@ -416,7 +416,14 @@ impl ProjectStore for ProjectFiles {
     }
 
     fn open_folder(&mut self, folder: &str) -> Result<ProjectSummary, ProjectError> {
-        let root = canonical(Path::new(folder))?;
+        // A project's manifest path opens its folder, so authors can pick `project.joyproject` directly.
+        let requested = Path::new(folder);
+        let folder = if requested.file_name().is_some_and(|name| name == JOY_PROJECT_MANIFEST) && requested.is_file() {
+            requested.parent().unwrap_or(requested)
+        } else {
+            requested
+        };
+        let root = canonical(folder)?;
         let manifest = read_manifest(&root).map_err(|message| {
             ProjectError::Rejected(format!("This is not a compatible Joy project ({JOY_PROJECT_MANIFEST}): {message}"))
         })?;

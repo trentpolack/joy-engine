@@ -14,6 +14,7 @@ mod authoring_tool;
 mod choice_controls;
 mod component_layout;
 pub mod components;
+pub mod editor_shell;
 pub mod file_dialogs;
 mod lab_controls;
 pub mod lab_values;

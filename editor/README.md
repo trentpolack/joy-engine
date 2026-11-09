@@ -5,16 +5,17 @@ Joy Editor is a Rust authoring application for local game projects. It keeps lev
 From the engine root:
 
 ```bash
+cargo run -p joy-editor -- <project folder or project.joyproject>
 cargo run -p joy-editor -- --workspace=<hosting-workspace>
 cargo test -p joy-editor
 npm run build --workspace @joy-games/joy-editor
 ```
 
-In JoyGames, `npm run dev:editor` or `npm run dev:joy-editor` runs the native editor. Project discovery uses `--workspace`, `JOY_EDITOR_WORKSPACE`, or the nearest `joy.joyconfig`; projects contain `project.joyproject` manifests. Open Folder accepts another compatible folder for the session.
+Any folder with a `project.joyproject` manifest is a Joy project, and the editor opens one directly from its folder or manifest path (positionally or with `--project`) without a hosting workspace. A hosting workspace, from `--workspace`, `JOY_EDITOR_WORKSPACE`, or the nearest `joy.joyconfig`, additionally lists the projects in its `projects/` folder; in JoyGames, `npm run dev:editor` runs the native editor that way. **Open…** in the header switches projects, reopens up to eight recent project folders, and opens another project folder or manifest.
 
 The static browser build opens bundled examples and supports document downloads. It cannot discover or save project filesystem assets or start games.
 
-**Play** (native builds) runs the selected project's game with its `npm run dev` command in a separate window; **Stop**, choosing Play again, or closing the editor ends it. Games that read their assets through `GameAssets` hot reload what the editor saves, so FORM, effect, and level edits update the running game without a restart.
+**Run Project** (native builds) runs the selected project's game in a separate window, with its npm `dev` script when its `package.json` defines one and `cargo run` otherwise; **Stop**, running again, or closing the editor ends it. Games that read their assets through `GameAssets` hot reload what the editor saves, so FORM, effect, and level edits update the running game without a restart.
 
 Shortcuts: Ctrl/Cmd+S saves, Ctrl/Cmd+P searches the Content Browser, Ctrl/Cmd+O opens a project folder (native), and Alt+1 through Alt+9 switch document tabs. Standalone FORM EDITOR and JOYFX EDITOR also save with Ctrl/Cmd+S and open with Ctrl/Cmd+O.
 

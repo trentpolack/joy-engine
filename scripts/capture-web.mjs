@@ -11,7 +11,7 @@ import { basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { chromium, firefox, webkit } from '@playwright/test';
-import { preview } from 'vite';
+import { startStaticServer } from './static-server.mjs';
 
 const engineRoot = fileURLToPath(new URL('../', import.meta.url));
 const { values } = parseArgs({ options: {
@@ -45,10 +45,8 @@ const browserType = { chromium, firefox, webkit }[browserName];
 assert.ok(browserType, `Unsupported CAPTURE_BROWSER: ${browserName}`);
 const backend = process.env.CAPTURE_BACKEND ?? 'webgl';
 assert.ok(['auto', 'webgl', 'webgpu', 'fallback'].includes(backend), `Unsupported CAPTURE_BACKEND: ${backend}`);
-const server = await preview({
-  root: directory, configFile: false, logLevel: 'error',
-  preview: { host: '127.0.0.1', port: 0 }
-});
+// Builds write their browser output to `dist/` beside the package manifest.
+const server = await startStaticServer({ root: resolve(directory, 'dist') });
 const errors = [];
 const captures = [];
 const report = { passed: false, browser: browserName, requestedBackend: backend, built: values.built, errors, captures };
@@ -80,7 +78,7 @@ try {
   if(backend === 'fallback') {
     await page.addInitScript(() => Object.defineProperty(navigator, 'gpu', { get: () => undefined }));
   }
-  const url = new URL(server.resolvedUrls.local[0]);
+  const url = new URL(server.url);
   if(backend === 'webgl' || backend === 'webgpu') {
     url.searchParams.set('backend', backend);
   }

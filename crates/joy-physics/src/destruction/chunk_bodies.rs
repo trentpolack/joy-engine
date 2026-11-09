@@ -343,6 +343,11 @@ impl DebrisPool {
         report
     }
 
+    /// The options pieces are released with.
+    pub fn options(&self) -> &DebrisOptions {
+        &self.options
+    }
+
     /// Pieces still simulating (not frozen into rubble).
     pub fn moving(&self) -> usize {
         self.pieces.values().filter(|piece| !piece.settled).count()

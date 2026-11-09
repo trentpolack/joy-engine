@@ -3,8 +3,9 @@
 
 //! Play: run the open project's game in its own window from the native editor.
 //!
-//! Joy Editor never embeds a game. Play starts the project's canonical development command (`npm run dev`, which runs
-//! the game's native development build) in the project folder, so the game opens in a separate window with its own
+//! Joy Editor never embeds a game. Play starts the project's development command in the project folder: its npm `dev`
+//! script when its `package.json` defines one (a hosting workspace's convention), otherwise `cargo run` for a project
+//! that is a Cargo package. Either way the game runs its native development build, so the game opens in a separate window with its own
 //! input and development tools. Games built on `GameAssets` hot reload the assets the editor saves, so editing a FORM
 //! asset, effect, or level here updates the running game without restarting it.
 //!
@@ -18,6 +19,18 @@ const PACKAGE_MANIFEST: &str = "package.json";
 
 /// The npm script that runs a game's native development build.
 const DEV_SCRIPT: &str = "dev";
+
+/// The Cargo manifest of a project that is its own Rust package.
+const CARGO_MANIFEST: &str = "Cargo.toml";
+
+/// How Play starts a project's game.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LaunchCommand {
+    /// `npm run dev`.
+    NpmDev,
+    /// `cargo run`.
+    CargoRun,
+}
 
 /// Outcomes Play reports; browser builds never start a game, so only native builds use the first and last.
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -80,16 +93,21 @@ impl PlaySession {
         }
     }
 
-    /// Start `project`'s game from its folder, ending any game already running. Fails when the folder has no
-    /// `package.json` with a `dev` script, or the command cannot start.
+    /// Start `project`'s game from its folder, ending any game already running. Fails when the folder has neither a
+    /// `package.json` with a `dev` script nor a `Cargo.toml`, or the command cannot start.
     pub fn start(&mut self, project: &str, folder: &Path) -> Result<(), String> {
         self.stop();
-        let manifest = std::fs::read_to_string(folder.join(PACKAGE_MANIFEST))
-            .map_err(|_| format!("{project} has no {PACKAGE_MANIFEST}, so it has no game to play."))?;
-        if !defines_dev_script(&manifest) {
-            return Err(format!("{project}'s {PACKAGE_MANIFEST} has no \"{DEV_SCRIPT}\" script to run."));
-        }
-        self.spawn(project, folder)
+        let package = std::fs::read_to_string(folder.join(PACKAGE_MANIFEST)).ok();
+        let command = if package.as_deref().is_some_and(defines_dev_script) {
+            LaunchCommand::NpmDev
+        } else if folder.join(CARGO_MANIFEST).is_file() {
+            LaunchCommand::CargoRun
+        } else {
+            return Err(format!(
+                "{project} has no \"{DEV_SCRIPT}\" script in {PACKAGE_MANIFEST} and no {CARGO_MANIFEST}, so it has no game to run."
+            ));
+        };
+        self.spawn(project, folder, command)
     }
 
     /// End the running game, if any.
@@ -122,11 +140,21 @@ impl PlaySession {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn spawn(&mut self, project: &str, folder: &Path) -> Result<(), String> {
-        // npm is a batch script on Windows, which `Command` runs only through its `.cmd` name.
-        let npm = if cfg!(windows) { "npm.cmd" } else { "npm" };
-        let child = std::process::Command::new(npm)
-            .args(["run", DEV_SCRIPT])
+    fn spawn(&mut self, project: &str, folder: &Path, command: LaunchCommand) -> Result<(), String> {
+        let mut process = match command {
+            LaunchCommand::NpmDev => {
+                // npm is a batch script on Windows, which `Command` runs only through its `.cmd` name.
+                let mut process = std::process::Command::new(if cfg!(windows) { "npm.cmd" } else { "npm" });
+                process.args(["run", DEV_SCRIPT]);
+                process
+            }
+            LaunchCommand::CargoRun => {
+                let mut process = std::process::Command::new("cargo");
+                process.arg("run");
+                process
+            }
+        };
+        let child = process
             .current_dir(folder)
             .stdin(std::process::Stdio::null())
             .spawn()
@@ -137,7 +165,7 @@ impl PlaySession {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn spawn(&mut self, project: &str, _folder: &Path) -> Result<(), String> {
+    fn spawn(&mut self, project: &str, _folder: &Path, _command: LaunchCommand) -> Result<(), String> {
         Err(format!("Play runs {project} from the native editor; the browser editor cannot start games."))
     }
 

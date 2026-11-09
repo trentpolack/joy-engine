@@ -9,6 +9,16 @@ use std::f64::consts::TAU;
 use joy_core::math::DVec3;
 use joy_core::math::clamp;
 use joy_core::math::deterministic;
+use joy_core::math::{
+    angle_difference,
+    approach_angle,
+    damp_factor,
+    horizontal_distance,
+    lerp,
+    normalize_or,
+    point_segment_distance,
+    wrap_angle,
+};
 use mlua::FromLua;
 use mlua::Lua;
 use mlua::LuaSerdeExt;
@@ -208,11 +218,58 @@ fn register_math(lua: &Lua, definitions: &mut LuaDefinitions) -> mlua::Result<()
     bindings.function(
         "lerp",
         LuaSignature::new(&["from", "to", "amount"]),
-        |_, (from, to, amount): (f64, f64, f64)| Ok(from + ((to - from) * amount)),
+        |_, (from, to, amount): (f64, f64, f64)| Ok(lerp(from, to, amount)),
     )?;
+    register_angles(&mut bindings)?;
     bindings.function("PI", LuaSignature::new(&[]), |_, ()| Ok(PI))?;
     bindings.function("TAU", LuaSignature::new(&[]), |_, ()| Ok(TAU))?;
     bindings.function("to_float", LuaSignature::new(&["value"]), |_, value: f64| Ok(value))?;
     bindings.function("to_int", LuaSignature::new(&["value"]), |_, value: f64| Ok(value as i64))?;
+    Ok(())
+}
+
+/// Angle, damping, and closest-point helpers shared with Rust simulation (`joy_core::math`), so scripts and engine code
+/// compute identical results instead of each game reimplementing them.
+fn register_angles(bindings: &mut LuaBindings<'_>) -> mlua::Result<()> {
+    bindings.function(
+        "wrap_angle",
+        LuaSignature::new(&["angle"]).doc("Wrap radians into (-π, π]."),
+        |_, angle: f64| Ok(wrap_angle(angle)),
+    )?;
+    bindings.function(
+        "angle_difference",
+        LuaSignature::new(&["from", "to"]).doc("Signed shortest rotation from one heading to another, in radians."),
+        |_, (from, to): (f64, f64)| Ok(angle_difference(from, to)),
+    )?;
+    bindings.function(
+        "approach_angle",
+        LuaSignature::new(&["current", "target", "maximum_step"])
+            .doc("Turn toward a heading by at most `maximum_step` radians along the shorter arc."),
+        |_, (current, target, maximum_step): (f64, f64, f64)| Ok(approach_angle(current, target, maximum_step)),
+    )?;
+    bindings.function(
+        "damp_factor",
+        LuaSignature::new(&["rate", "elapsed_seconds"])
+            .doc("Frame-rate independent exponential approach factor for a response rate per second."),
+        |_, (rate, elapsed_seconds): (f64, f64)| Ok(damp_factor(rate, elapsed_seconds)),
+    )?;
+    bindings.function(
+        "normalize_or",
+        LuaSignature::new(&["vector", "fallback"])
+            .doc("Normalize, returning `fallback` for vectors shorter than 1e-9."),
+        |_, (vector, fallback): (ScriptVec3, ScriptVec3)| Ok(ScriptVec3(normalize_or(vector.0, fallback.0))),
+    )?;
+    bindings.function(
+        "horizontal_distance",
+        LuaSignature::new(&["a", "b"]).doc("Ground-plane (XZ) distance between two Y-up points, ignoring height."),
+        |_, (a, b): (ScriptVec3, ScriptVec3)| Ok(horizontal_distance(a.0, b.0)),
+    )?;
+    bindings.function(
+        "point_segment_distance",
+        LuaSignature::new(&["point", "start", "finish"]).doc("Distance from a point to a segment."),
+        |_, (point, start, finish): (ScriptVec3, ScriptVec3, ScriptVec3)| {
+            Ok(point_segment_distance(point.0, start.0, finish.0).distance)
+        },
+    )?;
     Ok(())
 }

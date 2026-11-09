@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Engine math: the vector, matrix, and quaternion types every engine crate and app uses, scalar helpers, and
-//! [`deterministic`] functions for simulations that must replay identically on every target.
+//! Engine math: the vector, matrix, and quaternion types every engine crate and app uses, scalar helpers, [`angles`]
+//! (wrapping, turn-limited approach, damping), [`geometry`] (closest-point and sweep tests), and [`deterministic`]
+//! functions for simulations that must replay identically on every target.
 //!
 //! The vector, matrix, and quaternion types come from glam and are re-exported here so the engine owns the path:
 //! engine crates and apps name `joy_core::math::Vec3` (`joy_core::math::Vec3` outside the engine), never `glam`
@@ -18,7 +19,29 @@
 //! Transcendental functions are not, so `f64` simulation code calls [`deterministic`] instead of the standard methods;
 //! clippy enforces that in the simulation crates and games.
 
+pub mod angles;
 pub mod deterministic;
+pub mod geometry;
+
+pub use angles::{
+    angle_difference,
+    approach_angle,
+    damp_factor,
+    lerp,
+    sign,
+    wrap_angle,
+};
+pub use geometry::{
+    NORMALIZE_MINIMUM_LENGTH,
+    SegmentApproach,
+    SegmentClosestPoint,
+    horizontal_distance,
+    normalize_or,
+    point_segment_distance,
+    ray_box_distance,
+    segment_circle_entry,
+    segment_segment_distance,
+};
 
 pub use glam::{
     DMat4,

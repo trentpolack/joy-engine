@@ -8,7 +8,8 @@
 //! A typical frame queues hits with [`ChunkStructure::queue_damage`], counts down overloaded chunks with
 //! [`ChunkStructure::advance_stress`], calls [`ChunkStructure::commit`] once at the simulation boundary, turns the
 //! [`ChunkChangeSet`] into collision changes ([`create_removal_mutation_batch`](crate::create_removal_mutation_batch))
-//! and debris, and rebuilds the visible mesh from [`ChunkStructure::active_chunks`] with [`create_chunk_mesh_data`].
+//! and debris (a [`DebrisWorld`] owns the debris simulation, structure colliders, budgeted pool, and strikes), and
+//! rebuilds the visible mesh from [`ChunkStructure::active_chunks`] with [`create_chunk_mesh_data`].
 //! [`ChunkStructure::stress_state`] telegraphs strained and failing chunks before they fall.
 
 mod chunk_bodies;
@@ -18,6 +19,7 @@ mod chunk_shape;
 mod chunk_stress;
 mod chunk_structure;
 mod chunk_support;
+mod debris_world;
 
 pub use chunk_bodies::{
     DebrisOptions,
@@ -61,6 +63,15 @@ pub use chunk_support::{
     ChunkSupportOptions,
     ChunkSupportState,
     DEFAULT_CONTACT_TOLERANCE,
+};
+pub use debris_world::{
+    DebrisCounts,
+    DebrisStep,
+    DebrisStrike,
+    DebrisStriker,
+    DebrisTarget,
+    DebrisWorld,
+    DebrisWorldOptions,
 };
 
 /// Invalid chunk definitions, damage, queries, or support options. Messages are stable diagnostics.

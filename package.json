@@ -22,7 +22,6 @@
     "./development/patches": "./scripts/patching/index.mjs",
     "./form/catalog": "./scripts/form-reference.mjs",
     "./schemas/*": "./schemas/*",
-    "./tsconfig.base.json": "./tsconfig.base.json",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -31,7 +30,6 @@
   "files": [
     "schemas",
     "scripts",
-    "tsconfig.base.json",
     "README.md",
     "LICENSE"
   ],
@@ -51,8 +49,7 @@
     "precheck": "npm run generate:lua-definitions"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
-    "vite": "^8.3.2"
+    "@playwright/test": "^1.63.0"
   },
   "dependencies": {
     "@bjorn3/browser_wasi_shim": "0.4.2"

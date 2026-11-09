@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Persistent rigid debris for released chunks: the ground (a craterable heightfield patch inside flat apron slabs) and
-//! the engine's structure colliders and debris pool in one physics simulation, plus one mesh per debris piece.
+//! Persistent rigid debris for released chunks: the ground (a craterable heightfield patch inside flat apron slabs) in
+//! the engine's `DebrisWorld` (structure colliders and a budgeted debris pool in one simulation), plus one mesh per
+//! debris piece.
 //!
 //! Directly fractured chunks shatter into Voronoi shards; support failures and overloads leave whole. Surviving chunks
 //! keep static colliders, so falling pieces land on what stands, and the pool freezes settled pieces into static rubble
@@ -18,14 +19,13 @@ use joy_engine::physics::{
     BodyHandle,
     BodyOptions,
     DebrisOptions,
-    DebrisPool,
     DebrisRelease,
+    DebrisWorld,
+    DebrisWorldOptions,
     DestructibleChunkDefinition,
     PhysicsError,
-    PhysicsSimulation,
     PhysicsSimulationOptions,
     StructureColliderOptions,
-    StructureColliders,
     create_chunk_mesh_data,
     fracture_chunk,
     fracture_sites,
@@ -73,15 +73,12 @@ pub struct DebrisSnapshot {
     pub pieces: Vec<DebrisPieceSnapshot>,
 }
 
-/// Owns the physics simulation, the ground mesh and colliders, the structure's colliders, the debris pool, and the debris
-/// meshes.
+/// Owns the debris world (with the ground colliders), the ground mesh, and the debris meshes.
 pub struct DestructionDebris {
-    world: PhysicsSimulation,
+    debris: DebrisWorld,
     ground_mesh: MeshInstanceId,
     // The craterable patch's collider; replaced whenever the ground changes.
     ground_patch: BodyHandle,
-    structure: StructureColliders,
-    debris: DebrisPool,
     // One mesh per debris piece, keyed like the pool (which keeps the release order).
     meshes: HashMap<String, MeshInstanceId>,
 }
@@ -89,11 +86,29 @@ pub struct DestructionDebris {
 impl DestructionDebris {
     /// Create the world and flat, uncratered ground (colliders and mesh, sharing dimensions) in `scene`.
     pub fn new(scene: &mut RenderScene) -> AppResult<Self> {
-        let mut world = PhysicsSimulation::new(PhysicsSimulationOptions {
-            gravity: Vec3::new(0.0, -DESTRUCTION.debris_gravity, 0.0),
-            fixed_step: DESTRUCTION.physics_step_seconds,
-            max_sub_steps: DESTRUCTION.maximum_physics_substeps,
+        let mut debris = DebrisWorld::new(DebrisWorldOptions {
+            simulation: PhysicsSimulationOptions {
+                gravity: Vec3::new(0.0, -DESTRUCTION.debris_gravity, 0.0),
+                fixed_step: DESTRUCTION.physics_step_seconds,
+                max_sub_steps: DESTRUCTION.maximum_physics_substeps,
+            },
+            pool: DebrisOptions {
+                friction: DESTRUCTION.debris_friction,
+                restitution: DESTRUCTION.debris_restitution,
+                linear_damping: DESTRUCTION.debris_linear_damping,
+                angular_damping: DESTRUCTION.debris_angular_damping,
+                release_scale: DESTRUCTION.released_chunk_scale,
+                maximum_moving: DESTRUCTION.maximum_moving_debris,
+                maximum_pieces: DESTRUCTION.maximum_debris,
+                ..DebrisOptions::default()
+            },
+            structure: StructureColliderOptions {
+                friction: DESTRUCTION.debris_friction,
+                restitution: DESTRUCTION.debris_restitution,
+                ..StructureColliderOptions::default()
+            },
         })?;
+        let world = debris.simulation_mut();
 
         // Four apron slabs frame the patch, with tops at the undisturbed ground height, so craters stay open.
         let apron = GROUND.apron_half_extent;
@@ -118,27 +133,10 @@ impl DestructionDebris {
         let ground = CraterGround::new();
         let ground_patch = world.create_heightfield_body(&ground.heightfield())?;
         let ground_mesh = scene.insert(ground_mesh_instance(&ground)?);
-        let structure = StructureColliders::new(StructureColliderOptions {
-            friction: DESTRUCTION.debris_friction,
-            restitution: DESTRUCTION.debris_restitution,
-            ..StructureColliderOptions::default()
-        });
-        let debris = DebrisPool::new(DebrisOptions {
-            friction: DESTRUCTION.debris_friction,
-            restitution: DESTRUCTION.debris_restitution,
-            linear_damping: DESTRUCTION.debris_linear_damping,
-            angular_damping: DESTRUCTION.debris_angular_damping,
-            release_scale: DESTRUCTION.released_chunk_scale,
-            maximum_moving: DESTRUCTION.maximum_moving_debris,
-            maximum_pieces: DESTRUCTION.maximum_debris,
-            ..DebrisOptions::default()
-        });
         Ok(Self {
-            world,
+            debris,
             ground_mesh,
             ground_patch,
-            structure,
-            debris,
             meshes: HashMap::new(),
         })
     }
@@ -146,8 +144,9 @@ impl DestructionDebris {
     /// Replace the ground's patch collider and mesh with `ground`'s current surface (after a crater or a reset).
     /// Removing the old patch wakes debris resting in it, so it settles onto the new surface on the next steps.
     pub fn set_ground(&mut self, scene: &mut RenderScene, ground: &CraterGround) -> AppResult {
-        let patch = self.world.create_heightfield_body(&ground.heightfield())?;
-        self.world.remove_body(std::mem::replace(&mut self.ground_patch, patch));
+        let world = self.debris.simulation_mut();
+        let patch = world.create_heightfield_body(&ground.heightfield())?;
+        world.remove_body(std::mem::replace(&mut self.ground_patch, patch));
         let mesh = scene.insert(ground_mesh_instance(ground)?);
         scene.remove(std::mem::replace(&mut self.ground_mesh, mesh));
         Ok(())
@@ -236,17 +235,17 @@ impl DestructionDebris {
             scale: Some(scale),
             rotation: Vec3::ZERO,
         };
-        let Some(body) = self.debris.release(&mut self.world, piece, request)? else {
+        let Some(body) = self.debris.release(piece, request, None)? else {
             return Ok(());
         };
         let top = piece.center.as_vec3() + Vec3::new(0.0, (piece.size[1] / 2.0) as f32, 0.0);
         match release {
             Release::Fractured => {
                 let spin = Vec3::from_array(DESTRUCTION.debris_spin_impulse) * share;
-                self.world.apply_impulse(body, spin, Some(top))?;
+                self.debris.apply_impulse(body, spin, Some(top))?;
             }
             Release::Crumbled => {
-                self.world.apply_impulse(body, Vec3::from_array(DESTRUCTION.crumble_tip_impulse), Some(top))?;
+                self.debris.apply_impulse(body, Vec3::from_array(DESTRUCTION.crumble_tip_impulse), Some(top))?;
             }
             Release::Resting => {}
         }
@@ -255,7 +254,7 @@ impl DestructionDebris {
             return Ok(());
         };
         let asset = MeshAsset::new(&create_chunk_mesh_data([&released.local_chunk()]))?;
-        let start = self.world.body_transform(body).map_or(piece.center.as_vec3(), |pose| pose.position);
+        let start = self.debris.simulation().body_transform(body).map_or(piece.center.as_vec3(), |pose| pose.position);
         let mesh = MeshInstance::new(asset).with_transform(Transform::new(start, Vec3::ZERO, Vec3::ONE));
         self.meshes.insert(piece.id.clone(), scene.insert(mesh));
         Ok(())
@@ -267,22 +266,21 @@ impl DestructionDebris {
         &mut self,
         chunks: impl IntoIterator<Item = &'a DestructibleChunkDefinition>,
     ) -> Result<(), PhysicsError> {
-        self.structure.sync(&mut self.world, chunks)
+        self.debris.sync_structure(0, chunks)
     }
 
     /// Advance bounded fixed-step physics by `elapsed_seconds`, keep the pool within its budget, and draw every piece
     /// at its interpolated pose.
     pub fn update(&mut self, scene: &mut RenderScene, elapsed_seconds: f32) -> Result<(), PhysicsError> {
-        self.world.step(elapsed_seconds)?;
-        let settlement = self.debris.settle(&mut self.world, f64::from(elapsed_seconds));
-        for id in &settlement.removed {
+        let step = self.debris.step(f64::from(elapsed_seconds));
+        for id in &step.removed {
             if let Some(mesh) = self.meshes.remove(id) {
                 scene.remove(mesh);
             }
         }
         for piece in self.debris.pieces() {
             let (Some(pose), Some(mesh)) = (
-                self.world.interpolated_body_transform(piece.body),
+                self.debris.interpolated_pose(&piece.chunk_id),
                 self.meshes.get(&piece.chunk_id).and_then(|mesh| scene.get_mut(*mesh)),
             ) else {
                 continue;
@@ -290,7 +288,7 @@ impl DestructionDebris {
             mesh.transform.position = pose.position;
             mesh.transform.rotation = pose.rotation;
         }
-        Ok(())
+        step.failure.map_or(Ok(()), Err)
     }
 
     /// Copied diagnostics.
@@ -298,14 +296,14 @@ impl DestructionDebris {
     pub fn snapshot(&self) -> DebrisSnapshot {
         DebrisSnapshot {
             ground_top: GROUND.height,
-            static_chunks: self.structure.len(),
+            static_chunks: self.debris.structure_collider_count(),
             pieces: self
                 .debris
                 .pieces()
                 .map(|piece| DebrisPieceSnapshot {
                     chunk_id: piece.chunk_id.clone(),
-                    position: self.world.body_transform(piece.body).map_or(Vec3::ZERO, |pose| pose.position),
-                    velocity: self.world.body_velocity(piece.body).unwrap_or(Vec3::ZERO),
+                    position: self.debris.pose(&piece.chunk_id).map_or(Vec3::ZERO, |pose| pose.position),
+                    velocity: self.debris.velocity(&piece.chunk_id).unwrap_or(Vec3::ZERO),
                 })
                 .collect(),
         }
@@ -318,7 +316,7 @@ impl DestructionDebris {
 
     /// Release every debris body and mesh, keeping the ground for the next reset.
     pub fn reset(&mut self, scene: &mut RenderScene) {
-        self.debris.clear(&mut self.world);
+        self.debris.clear_pieces();
         for (_, mesh) in self.meshes.drain() {
             scene.remove(mesh);
         }

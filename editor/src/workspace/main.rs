@@ -245,6 +245,23 @@ impl Workspace {
                 return;
             }
         }
+        // Recent project folders outside the hosting workspace come back as projects; moved or deleted ones drop out.
+        for folder in self.session.recent_folders.clone() {
+            match self.store.open_folder(&folder) {
+                Ok(summary) if !self.projects.iter().any(|project| project.id == summary.id) => {
+                    self.projects.push(summary);
+                }
+                Ok(_) => {}
+                Err(_) => self.session.recent_folders.retain(|known| *known != folder),
+            }
+        }
+        // A requested project that is not a known id may be a project folder or manifest path on disk.
+        if let Some(path) = requested.filter(|value| !self.projects.iter().any(|project| project.id == *value))
+            && std::path::Path::new(path).exists()
+            && self.open_folder(path) == Outcome::Done
+        {
+            return;
+        }
         let wanted = requested.map(str::to_owned).unwrap_or_else(|| self.session.project.clone());
         let id = self
             .projects
@@ -257,7 +274,8 @@ impl Workspace {
                 self.select_project(&id, true);
             }
             None => {
-                self.status = "No projects found. Open a folder with a project.joyproject manifest.".to_owned();
+                self.status =
+                    "No project open. Choose Open… and pick a project folder or its project.joyproject.".to_owned();
             }
         }
     }
@@ -265,6 +283,11 @@ impl Workspace {
     // -----------------------------------------------------------------------------------------------------------------
     // State
     // -----------------------------------------------------------------------------------------------------------------
+
+    /// Project folders opened outside the hosting workspace, most recent first.
+    pub fn recent_folders(&self) -> &[String] {
+        &self.session.recent_folders
+    }
 
     /// Projects available to open.
     pub fn projects(&self) -> &[ProjectSummary] {
@@ -489,6 +512,7 @@ impl Workspace {
     pub fn open_folder(&mut self, folder: &str) -> Outcome {
         match self.store.open_folder(folder) {
             Ok(summary) => {
+                self.session.remember_folder(folder);
                 let id = summary.id.clone();
                 if !self.projects.iter().any(|project| project.id == id) {
                     self.projects.push(summary);

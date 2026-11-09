@@ -14,11 +14,13 @@
 //! simulations use; [`transform`], [`random`], and [`fixed_step`] build on it. [`color`], [`config_values`], and
 //! [`primitive`] define shared engine records, [`mod@format`] writes numbers for text and JSON, and [`base64`] handles
 //! the `data:` URL encoding authored documents embed. [`events`] carries typed events across update boundaries, with
-//! cursors for readers that run at their own rate. [`scripting`] describes the engine's script languages (FORM and
+//! cursors for readers that run at their own rate. [`camera_shake`] turns impacts into deterministic camera motion.
+//! [`scripting`] describes the engine's script languages (FORM and
 //! JOYFX) for editors and language tools. Meshes, materials, and lights live in `joy-render-types`, which builds on
 //! this crate.
 
 pub mod base64;
+pub mod camera_shake;
 pub mod color;
 pub mod config_values;
 pub mod events;
@@ -33,6 +35,14 @@ pub mod transform;
 pub use base64::{
     decode_base64,
     encode_base64,
+};
+pub use camera_shake::{
+    CameraShake,
+    CameraShakeSettings,
+    ShakeAxis,
+    ShakeDecay,
+    ShakeResponse,
+    ShakeWave,
 };
 pub use color::{
     Color,

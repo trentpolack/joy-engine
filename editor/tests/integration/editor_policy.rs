@@ -44,8 +44,8 @@ fn arguments_and_the_environment_choose_the_workspace_first() {
             && message.contains("joy.joyconfig")
     );
 
-    let arguments: Vec<String> = ["--project", "god-game", "--examples"].map(str::to_owned).to_vec();
-    assert_eq!(launch_option(&arguments, "project").as_deref(), Some("god-game"));
-    assert_eq!(launch_option(&["--project=luna".to_owned()], "project").as_deref(), Some("luna"));
+    let arguments: Vec<String> = ["--project", "my-game", "--examples"].map(str::to_owned).to_vec();
+    assert_eq!(launch_option(&arguments, "project").as_deref(), Some("my-game"));
+    assert_eq!(launch_option(&["--project=demo".to_owned()], "project").as_deref(), Some("demo"));
     assert_eq!(launch_option(&arguments, "workspace"), None);
 }

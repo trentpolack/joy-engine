@@ -54,7 +54,12 @@ pub struct WorkspaceSession {
     pub active: BTreeMap<String, String>,
     /// Panel widths and visibility.
     pub layout: LayoutPreferences,
+    /// Project folders opened outside the hosting workspace, most recent first, so Open… can offer them again.
+    pub recent_folders: Vec<String>,
 }
+
+/// Most recent project folders the session remembers.
+pub const RECENT_FOLDER_LIMIT: usize = 8;
 
 impl WorkspaceSession {
     /// Read the stored session; missing, unreadable, or invalid data gives an empty session.
@@ -71,6 +76,13 @@ impl WorkspaceSession {
             return Ok(());
         };
         storage.save(SESSION_STORAGE_KEY, &self.to_json().to_string()).map_err(|error| error.to_string())
+    }
+
+    /// Move `folder` to the front of the recent project folders.
+    pub fn remember_folder(&mut self, folder: &str) {
+        self.recent_folders.retain(|known| known != folder);
+        self.recent_folders.insert(0, folder.to_owned());
+        self.recent_folders.truncate(RECENT_FOLDER_LIMIT);
     }
 
     /// Read a session record, ignoring malformed fields.
@@ -100,6 +112,15 @@ impl WorkspaceSession {
                 }
             }
         }
+        if let Some(Value::Array(folders)) = record.get("recentFolders") {
+            session.recent_folders = folders
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|folder| !folder.is_empty())
+                .take(RECENT_FOLDER_LIMIT)
+                .map(str::to_owned)
+                .collect();
+        }
         if let Some(Value::Object(layout)) = record.get("layout") {
             let number = |name: &str| layout.get(name).and_then(Value::as_f64).filter(|value| value.is_finite());
             let defaults = LayoutPreferences::default();
@@ -125,6 +146,7 @@ impl WorkspaceSession {
         layout.insert("contentBrowserWidth".to_owned(), Value::from(f64::from(self.layout.content_browser_width)));
         layout.insert("contentBrowserCollapsed".to_owned(), Value::Bool(self.layout.content_browser_collapsed));
         record.insert("layout".to_owned(), Value::Object(layout));
+        record.insert("recentFolders".to_owned(), Value::from(self.recent_folders.clone()));
         Value::Object(record)
     }
 }

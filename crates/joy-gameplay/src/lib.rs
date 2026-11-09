@@ -15,8 +15,11 @@
 //! [`ComponentRegistry`] factories for authored component types; hooks receive the entity's [`EntityState`] and a
 //! [`SimulationContext`] (split borrows of physics and the handle maps), never references to other entities.
 //! [`EntitySystem`]s process entities selected by runtime components. [`IntentController`] samples player input or AI
-//! decisions into each possessed entity's [`ControlIntent`]; [`Controller`] only holds possession.
+//! decisions into each possessed entity's [`ControlIntent`]; [`Controller`] only holds possession. The [`ai`] module
+//! supplies the deterministic decision, perception, and steering pieces those decisions are built from, usable with or
+//! without the entity world.
 
+pub mod ai;
 mod asset_path;
 mod built_in_component_schemas;
 mod character;

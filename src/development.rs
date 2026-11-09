@@ -62,6 +62,7 @@ pub use joy_authoring::{
     ViewportShortcut,
     choice_control,
     components,
+    editor_shell,
     file_dialogs,
     is_modified,
     lab_slider,
