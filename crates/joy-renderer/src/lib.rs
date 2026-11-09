@@ -32,10 +32,12 @@ mod debug_view;
 mod deferred;
 mod display;
 mod display_output;
+mod draw_items;
 mod editor_grid;
 mod environment;
 mod error;
 mod frame;
+mod frame_plan;
 mod geometry;
 mod gpu;
 mod lighting;
@@ -49,6 +51,7 @@ mod postprocessor;
 mod profiler;
 mod renderer;
 mod scene;
+mod scene_batcher;
 pub mod scene_effects;
 mod shadows;
 mod sky;
@@ -56,7 +59,6 @@ pub mod terrain;
 mod texture;
 mod texture_mips;
 mod transparency;
-mod triangle_renderer;
 
 pub use camera::{
     Camera,
@@ -66,6 +68,7 @@ pub use camera::{
     RegionCamera,
     ShiftedCamera,
     TopDownCamera,
+    TopDownView,
     WorldRay,
     intersect_ray_plane,
     look_at,
@@ -73,8 +76,6 @@ pub use camera::{
     perspective,
     project_to_viewport,
     screen_ray,
-    sort_top_down_transparent_triangles,
-    top_down_orthographic,
 };
 pub use capture::{
     CAPTURE_FORMAT,
@@ -126,6 +127,7 @@ pub use geometry::{
     add_shaded_shape,
     add_triangle,
     append_ground_ring,
+    decode_display_colors,
 };
 pub use gpu::{
     BackendPreference,
@@ -221,10 +223,4 @@ pub use texture::{
     ImageFormat,
     MAX_TEXTURE_DIMENSION,
     TextureAsset,
-};
-pub use triangle_renderer::{
-    TriangleFrame,
-    TriangleParticles,
-    TriangleRenderer,
-    TriangleRendererOptions,
 };

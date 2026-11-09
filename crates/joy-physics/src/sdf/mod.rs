@@ -5,7 +5,7 @@
 //!
 //! An [`SdfShape`] describes a solid by its signed distance function: analytical primitives, or a voxel grid baked from
 //! any triangle mesh (FORM output included) without convex decomposition. Bodies built with
-//! [`PhysicsWorld::create_sdf_body`](super::PhysicsWorld::create_sdf_body) collide with each other and with the
+//! [`PhysicsSimulation::create_sdf_body`](super::PhysicsSimulation::create_sdf_body) collide with each other and with the
 //! world's boxes, spheres, and planes; everything else about them (solver, materials, damping, raycasts) works like
 //! any other body.
 //!

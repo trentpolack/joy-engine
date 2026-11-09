@@ -25,6 +25,7 @@ use serde_json::{
 
 use crate::constants::{
     ParticleBlend,
+    ParticleLighting,
     ParticleParameterType,
     ParticleRenderer,
     ParticleValueKind,
@@ -72,6 +73,15 @@ pub const PARTICLE_LIGHT_CASTS_SHADOW: &str = "castsShadow";
 
 /// Serialized name of an emitter's blend mode ([`ParticleBlend`]); written only when it is not the default.
 pub const PARTICLE_EMITTER_BLEND: &str = "blend";
+
+/// Serialized name of an emitter's soft-particle distance in world units; written only when positive.
+pub const PARTICLE_EMITTER_SOFTNESS: &str = "softness";
+
+/// Serialized name of an emitter's lighting mode ([`ParticleLighting`]); written only when it is not the default.
+pub const PARTICLE_EMITTER_LIGHTING: &str = "lighting";
+
+/// Largest soft-particle distance in world units.
+pub const MAXIMUM_PARTICLE_SOFTNESS: f64 = 10000.0;
 
 /// Upper bounds of color parameter channels: linear RGB may exceed one for HDR tints, and alpha is opacity.
 const COLOR_PARAMETER_LIMITS: [f64; 4] =
@@ -369,6 +379,14 @@ pub struct ParticleEmitterAsset {
     /// How the particles composite over what is behind them (serialized as `blend`, written only when not
     /// [`ParticleBlend::Alpha`]).
     pub blend: ParticleBlend,
+    /// Soft-particle distance in world units, 0–10000 (serialized as `softness`, written only when positive): fragments
+    /// fade out as they come within this distance in front of opaque geometry, so smoke and glows meet the ground and
+    /// walls without a hard intersection line. Zero keeps hard intersections. Renderers that cannot read scene depth
+    /// (WebGL 2) draw every particle hard.
+    pub softness: f64,
+    /// How the particles respond to the scene's lights (serialized as `lighting`, written only when not
+    /// [`ParticleLighting::Unlit`]).
+    pub lighting: ParticleLighting,
     /// Embedded texture; required by textured and flipbook renderers.
     pub texture: Option<ParticleTexture>,
     /// Particle point lights.
@@ -406,6 +424,12 @@ impl ParticleEmitterAsset {
         record.insert("renderer".to_owned(), Value::from(self.renderer.as_str()));
         if self.blend != ParticleBlend::default() {
             record.insert(PARTICLE_EMITTER_BLEND.to_owned(), Value::from(self.blend.as_str()));
+        }
+        if self.softness > 0.0 {
+            record.insert(PARTICLE_EMITTER_SOFTNESS.to_owned(), json_number(self.softness));
+        }
+        if self.lighting != ParticleLighting::default() {
+            record.insert(PARTICLE_EMITTER_LIGHTING.to_owned(), Value::from(self.lighting.as_str()));
         }
         record.insert("spawn".to_owned(), Value::from(self.spawn.clone()));
         record.insert("update".to_owned(), Value::from(self.update.clone()));
@@ -812,6 +836,19 @@ fn read_emitter(value: &Value, index: usize) -> Result<ParticleEmitterAsset, Par
             .and_then(ParticleBlend::parse)
             .ok_or_else(|| invalid(format!("{id}: unknown particle blend mode.")))?,
     };
+    let softness = match item.get(PARTICLE_EMITTER_SOFTNESS) {
+        None => 0.0,
+        Some(value) => {
+            number(Some(value), &format!("{id}.{PARTICLE_EMITTER_SOFTNESS}"), 0.0, MAXIMUM_PARTICLE_SOFTNESS, false)?
+        }
+    };
+    let lighting = match item.get(PARTICLE_EMITTER_LIGHTING) {
+        None => ParticleLighting::default(),
+        Some(value) => value
+            .as_str()
+            .and_then(ParticleLighting::parse)
+            .ok_or_else(|| invalid(format!("{id}: unknown particle lighting mode.")))?,
+    };
     let (Some(Value::String(spawn)), Some(Value::String(update))) = (item.get("spawn"), item.get("update")) else {
         return Err(invalid(format!("{id}: spawn and update scripts must be strings.")));
     };
@@ -875,6 +912,8 @@ fn read_emitter(value: &Value, index: usize) -> Result<ParticleEmitterAsset, Par
         lifetime,
         renderer,
         blend,
+        softness,
+        lighting,
         texture,
         light,
         spawn: spawn.clone(),

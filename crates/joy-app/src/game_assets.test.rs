@@ -39,5 +39,13 @@ fn development_reads_prefer_source_files_and_report_edits_once_polled() {
     // A removed file falls back to the embedded text.
     std::fs::remove_file(&file).unwrap();
     assert_eq!(assets.read("assets/tower.form").unwrap(), "embedded");
+
+    // A file only on disk still reads in development, but is reported (once) as missing from release builds.
+    assert_eq!(assets.unembedded_reads().count(), 0);
+    std::fs::write(folder.join("forgotten.form"), "box(0,0,0,1,1,1)").unwrap();
+    for _ in 0..2 {
+        assert_eq!(assets.read("assets/forgotten.form").unwrap(), "box(0,0,0,1,1,1)");
+    }
+    assert_eq!(assets.unembedded_reads().collect::<Vec<_>>(), ["assets/forgotten.form"]);
     let _ = std::fs::remove_dir_all(&root);
 }

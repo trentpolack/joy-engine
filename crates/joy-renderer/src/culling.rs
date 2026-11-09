@@ -53,6 +53,68 @@ pub(crate) fn sphere_outside_view(center: Vec3, radius: f32, view_projection: Ma
     })
 }
 
+/// Where a box lies against a query volume.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Overlap {
+    /// Wholly outside: nothing inside the box can reach the volume.
+    Outside,
+    /// Possibly reaching the volume.
+    Partial,
+    /// Wholly inside: everything inside the box reaches the volume, so the boxes within need no test.
+    Inside,
+}
+
+impl Overlap {
+    /// [`Partial`](Self::Partial) when `reaches`, else [`Outside`](Self::Outside), for tests that never report
+    /// containment.
+    pub(crate) fn reaching(reaches: bool) -> Self {
+        if reaches { Self::Partial } else { Self::Outside }
+    }
+}
+
+/// A view-projection's six clip planes, for classifying many boxes against one view quickly. Box tests here prune a
+/// search (the bounds tree's); every candidate they keep still takes the exact corner test of
+/// [`bounds_outside_view`] or [`outside_frustum`], so they only need to be conservative.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ClipPlanes {
+    /// Left, right, bottom, top, near, and far, unnormalized (Gribb and Hartmann), positive inside.
+    planes: [Vec4; 6],
+}
+
+impl ClipPlanes {
+    pub(crate) fn new(view_projection: Mat4) -> Self {
+        let rows = [view_projection.row(0), view_projection.row(1), view_projection.row(2), view_projection.row(3)];
+        Self {
+            planes: [
+                rows[3] + rows[0],
+                rows[3] - rows[0],
+                rows[3] + rows[1],
+                rows[3] - rows[1],
+                rows[2],
+                rows[3] - rows[2],
+            ],
+        }
+    }
+
+    /// Where world-space `bounds` lie against the view: wholly outside one plane, wholly inside all six, or across.
+    pub(crate) fn classify(&self, bounds: &Bounds) -> Overlap {
+        let center = bounds.center();
+        let half = (bounds.max - bounds.min) * 0.5;
+        let mut inside = true;
+        for plane in &self.planes {
+            // The box's signed distance range along the plane: its center's distance, plus or minus its reach.
+            let normal = plane.truncate();
+            let distance = normal.dot(center) + plane.w;
+            let reach = half.dot(normal.abs());
+            if distance + reach < 0.0 {
+                return Overlap::Outside;
+            }
+            inside &= distance - reach >= 0.0;
+        }
+        if inside { Overlap::Inside } else { Overlap::Partial }
+    }
+}
+
 /// Whether the sphere at `center` with `radius` overlaps `bounds` (touching counts).
 pub(crate) fn sphere_touches_bounds(center: Vec3, radius: f32, bounds: Bounds) -> bool {
     let nearest = center.clamp(bounds.min, bounds.max);

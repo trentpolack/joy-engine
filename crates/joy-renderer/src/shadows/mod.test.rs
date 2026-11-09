@@ -38,7 +38,7 @@ fn cascades_contain_their_slices_and_reach_only_the_casters_above_them() {
         min: Vec3::new(-50.0, -0.5, -50.0),
         max: Vec3::new(50.0, 0.0, 50.0),
     };
-    let fits = fit_cascades(&camera, direction, &splits, 4, 1024, 100.0, &[ground]);
+    let fits = fit_cascades(&camera, direction, &splits, 4, 1024, 100.0, [ground].as_slice());
     assert_eq!(fits.len(), 4);
 
     // Points along the view ray at each cascade's middle depth project inside that cascade's map.
@@ -56,12 +56,12 @@ fn cascades_contain_their_slices_and_reach_only_the_casters_above_them() {
 
     // Without casters a cascade spans only its receivers; a tall caster above it stretches its depth range toward the
     // light to hold the caster, within the caster distance.
-    let bare = fit_cascades(&camera, direction, &splits, 4, 1024, 100.0, &[]);
+    let bare = fit_cascades(&camera, direction, &splits, 4, 1024, 100.0, &[] as &[Bounds]);
     let tower = Bounds {
         min: Vec3::new(-1.0, 0.0, 12.0),
         max: Vec3::new(1.0, 40.0, 14.0),
     };
-    let towered = fit_cascades(&camera, direction, &splits, 4, 1024, 100.0, &[tower]);
+    let towered = fit_cascades(&camera, direction, &splits, 4, 1024, 100.0, [tower].as_slice());
     assert!(
         towered[0].depth_range > bare[0].depth_range + 10.0,
         "{} vs {}",
@@ -70,7 +70,7 @@ fn cascades_contain_their_slices_and_reach_only_the_casters_above_them() {
     );
     let top = towered[0].matrix * Vec3::new(0.0, 40.0, 13.0).extend(1.0);
     assert!((0.0..=1.0).contains(&top.z), "the tower's top is inside the cascade: {}", top.z);
-    let capped = fit_cascades(&camera, direction, &splits, 4, 1024, 5.0, &[tower]);
+    let capped = fit_cascades(&camera, direction, &splits, 4, 1024, 5.0, [tower].as_slice());
     assert!(capped[0].depth_range < towered[0].depth_range);
 }
 

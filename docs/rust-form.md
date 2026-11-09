@@ -399,7 +399,35 @@ let unit_box = mesh_box(1.0, 1.0, 1.0)?;
 - Tools validate document values with the same rules evaluation uses: `read_materials` (palette with Default first, 128 materials, embedded PNG, JPEG, or WebP maps within `DOCUMENT_TEXTURE_BYTES` each and `DOCUMENT_TOTAL_TEXTURE_BYTES` together), `default_material`, `read_parameter_value` (scalars, XYZ vectors, RGBA colors, true/false, one line of text, and mesh or material resources, with integral numbers kept as JSON integers), `read_mesh`, `read_material_value`, and the resource constructors `mesh_box_value` and `mesh_sphere_value`; failures are `FormValueError`s.
 - `form_language_catalog()`, `FORM_KEYWORDS`, and `FORM_ATTRIBUTE_DOMAINS` describe the language for highlighting, completion, and hover text, and `form_document_symbols(source, cursor)` lists the names a script declares that are in scope at a character offset (variables, parameters, functions, enums, modules, and attributes). The [authoring kit](rust-authoring.md#script-editor) uses both.
 - `mesh_box(width, height, depth)` and `mesh_sphere(radius, segments)` return indexed primitive geometry (`DEFAULT_SPHERE_SEGMENTS` is 20), with FORM's default vertex tint and Default material. They return a `Diagnostic` for nonpositive sizes or out-of-range segment counts instead of panicking.
-- Rendering lives in `joy-scene`: `compile_form_mesh`, `form_mesh_asset`, and `FormAssetLibrary` turn results into mesh assets, and `FormAssetLibrary::resolve_asset(path, text, read, variant, parameters, model)` compiles a `.form` or `.forminst` with its referenced script and modules (read through `read`) and returns the mesh with its placements. See [scenes](scenes.md).
+- Rendering lives in `joy-scene`: `compile_form_mesh`, `compile_cooked_form_mesh`, `form_mesh_asset`, and `FormAssetLibrary` turn results into mesh assets, and `FormAssetLibrary::resolve_asset(path, text, read, variant, parameters, model)` compiles a `.form` or `.forminst` with its referenced script and modules (read through `read`) and returns the mesh with its placements. `FormEvaluation::resolve(path, text, loader, variant, parameters)` is the shared resolution step: it layers an instance's overrides, its variant's, and then `parameters` the way every host does. See [scenes](scenes.md).
+
+## Cooked Meshes
+Release and browser builds can skip FORM evaluation. A game's build script cooks the FORM assets it names with `joy-cook` (the one engine crate a game lists, under `[build-dependencies]`, because a build script cannot reach the facade without compiling the whole engine for the host):
+
+```rust
+// build.rs
+fn main() {
+    joy_cook::BuildCook::new()
+        .folder("assets/form")
+        .skip("assets/form/garden.form") // evaluated with a per-run seed
+        .run();
+}
+```
+
+Then the game embeds the result and evaluates through it:
+
+```rust
+let cooked = joy_engine::cooked_forms!();
+let hero = compile_cooked_form_mesh(&cooked, HERO_SOURCE, &json!({}), None, ShadingModel::Lit)?;
+let village = cooked.compile(HOME_SOURCE, &json!({}), None)?; // GeometryData, like form::compile
+asset_scene.set_cooked_forms(cooked.clone()); // levels prepared through AssetScene
+```
+
+- What cooks: every `.form` under a named folder at its authored defaults, every `.forminst` at its own overrides and with each of its variants, named files, and explicit `CookRequest`s. Evaluations whose inputs a game picks at run time (seeded layouts, paint, or palettes built in code) find no cooked copy and evaluate live in every build, as do level components whose `parameters` were not cooked. A script that fails to evaluate is reported as a Cargo warning and evaluates live, where the game reports the same diagnostic.
+- When it cooks: release builds and every browser build. Native development builds (debug assertions on, not WebAssembly) write an empty bundle, so FORM evaluates live and `GameAssets` hot reloads it. `JOY_COOK_FORMS=always` cooks a native development build too (to try the cooked path), and `never` turns cooking off.
+- Keys: `CookKey` is a 128-bit content hash of `FORM_EVALUATOR_VERSION` (the crate version plus a fingerprint of the evaluator's source), the script's text, every module it uses (path and text), the layered overrides (object keys sorted), and the palette. A lookup finds a cooked copy exactly when live evaluation would see the same inputs; anything else, including a hot-reloaded edit, misses and evaluates.
+- Cache: each record is cached as `<key>.jfgm` in `joy-cook/forms/` inside Cargo's target directory (or `JOY_COOK_CACHE_DIR`), shared by every profile and target, so editing one asset re-evaluates only that asset. Entries never go stale, since any input change produces a new key; `cargo clean` or deleting the folder only costs re-evaluation.
+- Format: a bundle (`JOYFCOOK`, its layout version, the evaluator version, and key-indexed records) of cooked geometry records (`encode_geometry`/`decode_geometry`): vertex and index arrays in the narrowest exact encoding (empty, one repeated value, `f32` or `u16` when every value fits exactly, otherwise full width), then the palette, parameter descriptors, project metadata, and custom attributes as JSON. Cooked geometry is lossless except that it leaves out named outputs (`GeometryData::outputs`), which only authoring tools and output-splitting hosts read; scripts read that way should not be cooked. A bundle from another evaluator build or layout is refused and the game evaluates live with a warning.
 
 ## Ownership
 Every evaluation creates its own geometry, random stream, material-identity registry, procedural store, module state, and allocation and work budgets. A `CompiledScript` retains only immutable syntax (including its modules), so evaluations are independent and deterministic for identical inputs. Returned data is owned by the caller and never borrows the overrides, the palette, or earlier results. Geometry bindings alias within an evaluation; `copy`, function arguments, resource conversion, and named outputs take owned snapshots.

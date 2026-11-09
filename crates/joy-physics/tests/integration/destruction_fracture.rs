@@ -17,8 +17,8 @@ use joy_physics::{
     DebrisPool,
     DebrisRelease,
     DestructibleChunkDefinition,
-    PhysicsWorld,
-    PhysicsWorldOptions,
+    PhysicsSimulation,
+    PhysicsSimulationOptions,
     RadialDamage,
     StructureColliderOptions,
     StructureColliders,
@@ -94,7 +94,7 @@ fn shared_faces_bond_a_fractured_wall_and_an_impact_undermines_it() {
 
 #[test]
 fn released_shards_land_on_the_surviving_structure_sleep_and_freeze() {
-    let mut world = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+    let mut world = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     world
         .create_body(joy_physics::BodyOptions {
             half_extents: Vec3::new(10.0, 0.5, 10.0),

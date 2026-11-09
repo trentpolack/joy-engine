@@ -11,8 +11,7 @@ mod top_down_camera;
 
 pub use top_down_camera::{
     TopDownCamera,
-    sort_top_down_transparent_triangles,
-    top_down_orthographic,
+    TopDownView,
 };
 
 use joy_core::math::{

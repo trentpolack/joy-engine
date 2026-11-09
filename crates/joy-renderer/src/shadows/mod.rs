@@ -12,9 +12,16 @@
 //! reach appears on screen, up to the quality preset's face size; when the frame's lights do not fit, the least
 //! important lights shrink first, then lose their shadows. Every face renders in one pass, each into its own viewport.
 //! Receivers (`shadow-receiver.wgsl`) filter both kinds with percentage-closer soft shadows.
+//!
+//! Maps are cached ([`cache`]): a frame re-renders a cascade or a light's faces only when its view or the casters
+//! inside it changed, and [`planner`] culls each rendering view's casters through the scene's bounds tree.
 
 mod atlas;
+pub(crate) mod cache;
 mod maps;
+pub(crate) mod planner;
+
+use std::cell::Cell;
 
 use joy_core::math::{
     Mat4,
@@ -31,9 +38,9 @@ use crate::camera::{
 use crate::mesh::Bounds;
 
 pub(crate) use atlas::{
+    AtlasAllocator,
     AtlasTile,
     fit_face_sizes,
-    place_faces,
 };
 pub(crate) use maps::{
     CascadeRaw,
@@ -218,6 +225,19 @@ pub(crate) fn cascade_splits(near: f32, far: f32, count: usize, lambda: f32) -> 
     splits
 }
 
+/// Shadow casters as cascade fitting reads them.
+pub(crate) trait CasterVolumes {
+    /// Call `visit` with the bounds of every caster that might pass `reaches`, a conservative test (bounds that fail
+    /// it contain no bounds that pass), so implementations may prune with it; `visit` applies its own exact test.
+    fn visit(&self, reaches: &dyn Fn(&Bounds) -> bool, visit: &mut dyn FnMut(&Bounds));
+}
+
+impl CasterVolumes for [Bounds] {
+    fn visit(&self, reaches: &dyn Fn(&Bounds) -> bool, visit: &mut dyn FnMut(&Bounds)) {
+        self.iter().filter(|bounds| reaches(bounds)).for_each(visit);
+    }
+}
+
 /// One directional cascade's light camera.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct CascadeFit {
@@ -240,7 +260,7 @@ pub(crate) fn fit_cascades(
     count: usize,
     map_size: u32,
     caster_distance: f32,
-    casters: &[Bounds],
+    casters: &(impl CasterVolumes + ?Sized),
 ) -> Vec<CascadeFit> {
     // The camera frustum's corners at its near and far planes.
     let inverse = camera.view_projection().inverse();
@@ -261,8 +281,6 @@ pub(crate) fn fit_cascades(
 
     // Casters as boxes (center and half size); a box's reach along a unit axis is its half size dotted with the axis's
     // magnitudes.
-    let caster_boxes: Vec<(Vec3, Vec3)> =
-        casters.iter().map(|bounds| (bounds.center(), (bounds.max - bounds.min) * 0.5)).collect();
     let extent = |half: Vec3, axis: Vec3| half.dot(axis.abs());
 
     let mut slice_near = camera.near;
@@ -288,18 +306,30 @@ pub(crate) fn fit_cascades(
         };
         let snapped = center + snap(right) + snap(up);
 
-        // Reach toward the light only as far as the highest caster above the footprint.
-        let mut reach = radius;
-        for (caster_center, half) in &caster_boxes {
-            let offset = *caster_center - snapped;
-            let beside = offset.dot(right).abs() > radius + extent(*half, right);
-            let above = offset.dot(up).abs() > radius + extent(*half, up);
-            if beside || above {
-                continue;
+        // Reach toward the light only as far as the highest caster above the footprint: the casters inside the
+        // footprint's column along the light, a test boxes that hold them also pass.
+        let in_column = |bounds: &Bounds| {
+            let offset = bounds.center() - snapped;
+            let half = (bounds.max - bounds.min) * 0.5;
+            let beside = offset.dot(right).abs() > radius + extent(half, right);
+            let above = offset.dot(up).abs() > radius + extent(half, up);
+            !(beside || above)
+        };
+        let height = |bounds: &Bounds| {
+            let half = (bounds.max - bounds.min) * 0.5;
+            (bounds.center() - snapped).dot(toward) + extent(half, toward)
+        };
+        // A box no higher than the highest caster found so far (or found once the reach is capped) cannot raise it,
+        // and neither can any box inside it, so the search skips it: the result is the plain maximum, found sooner.
+        let cap = radius + caster_distance;
+        let reach = Cell::new(radius);
+        let may_raise = |bounds: &Bounds| reach.get() < cap && in_column(bounds) && height(bounds) > reach.get();
+        casters.visit(&may_raise, &mut |bounds| {
+            if in_column(bounds) {
+                reach.set(reach.get().max(height(bounds)));
             }
-            reach = reach.max(offset.dot(toward) + extent(*half, toward));
-        }
-        let reach = reach.min(radius + caster_distance) + texel;
+        });
+        let reach = reach.get().min(cap) + texel;
 
         let eye = snapped + (toward * reach);
         let view = look_at(eye, snapped, up);

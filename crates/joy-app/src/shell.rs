@@ -9,13 +9,16 @@
 //! and presentation phases, acquire the surface, run the render phase, paint UI, present, and run the after-frame phase.
 //! A phase error stops the loop and is shown to the player. Hiding the window resets the clock; losing focus releases
 //! held input. On HDR surfaces the shell re-reads the display's headroom about once a second (it follows the brightness
-//! slider on Apple displays) and after resizes and moves, and hands changes to the renderer and UI.
+//! slider on Apple displays), and ten times a second for the first few seconds after startup, resizes, and moves, while
+//! macOS raises the headroom it grants a newly presenting window; it hands changes to the renderer and UI.
 
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use joy_devtools::DevTools;
-use joy_devtools::dock;
+use crate::development::{
+    DevTools,
+    dock,
+};
 use joy_input::GamepadPoller;
 use joy_input::{
     InputManager,
@@ -26,6 +29,7 @@ use joy_input::{
 use joy_renderer::{
     BackendPreference,
     GpuContext,
+    MAX_DISPLAY_HEADROOM,
     PresentationTime,
     RenderError,
     Renderer,
@@ -74,12 +78,21 @@ use crate::surface::ConfiguredSurface;
 /// Seconds between reads of an HDR display's headroom and SDR white level.
 const DISPLAY_POLL_SECONDS: f64 = 1.0;
 
+/// Seconds after startup, a resize, or a move during which the display is read every [`DISPLAY_SETTLE_POLL_SECONDS`]:
+/// macOS grants a window its extended-range headroom only after the window presents, and raises it over a moment, so
+/// the first reads are low (about 1.2x on displays that settle at 4x).
+const DISPLAY_SETTLE_SECONDS: f64 = 3.0;
+
+/// Seconds between display reads while the headroom settles.
+const DISPLAY_SETTLE_POLL_SECONDS: f64 = 0.1;
+
 /// Shell configuration; copied at startup.
 #[derive(Clone, Debug)]
 pub struct ShellOptions {
     /// Window title and development overlay label.
     pub title: String,
-    /// Enables the development overlay and console (backquote toggles the console). Disable for production builds.
+    /// Enables the development overlay and console (backquote toggles the console). Disable for production builds;
+    /// builds without the `devtools` feature have neither, whatever this says.
     pub development: bool,
     /// Renderer settings (shadows, sky, display processing, render scale).
     pub renderer: RendererOptions,
@@ -195,11 +208,22 @@ struct Running {
     started: Instant,
     /// Seconds since `started` at which an HDR surface's display is read again; zero reads on the next frame.
     next_display_poll: f64,
+    /// Seconds since `started` until which the display is read quickly while its headroom settles.
+    display_settling_until: f64,
     /// The app asked for the pointer lock and the shell applied it.
     pointer_lock: bool,
     touches: TouchOwners,
     #[cfg(target_arch = "wasm32")]
     first_frame_presented: bool,
+}
+
+impl Running {
+    /// Read the display on the next frame and quickly for a few seconds after, while its headroom settles (after a
+    /// resize, a scale change, or a move to another display).
+    fn settle_display(&mut self) {
+        self.next_display_poll = 0.0;
+        self.display_settling_until = self.started.elapsed().as_secs_f64() + DISPLAY_SETTLE_SECONDS;
+    }
 }
 
 /// Which touches belong to the UI. A touch that starts on a widget stays with the UI until it ends, so dragging a slider
@@ -291,17 +315,17 @@ impl<A: App> ApplicationHandler for WindowedShell<A> {
             WindowEvent::Resized(size) => {
                 running.surface.resize(&running.gpu, size.width, size.height);
                 running.renderer.resize(size.width, size.height, display_scale(&running.window));
-                running.next_display_poll = 0.0;
+                running.settle_display();
             }
             WindowEvent::ScaleFactorChanged {
                 ..
             } => {
                 let size = running.window.inner_size();
                 running.renderer.resize(size.width, size.height, display_scale(&running.window));
-                running.next_display_poll = 0.0;
+                running.settle_display();
             }
             // A window moved to another display may have different headroom.
-            WindowEvent::Moved(_) => running.next_display_poll = 0.0,
+            WindowEvent::Moved(_) => running.settle_display(),
             WindowEvent::KeyboardInput {
                 event,
                 ..
@@ -430,7 +454,16 @@ impl<A: App> WindowedShell<A> {
         renderer.resize(size.width, size.height, scale_factor);
         renderer.set_display_output(display);
         let egui = EguiLayer::new(&gpu, &window, surface.view_format, display);
-        log::info!("{}: presenting {display}", self.options.title);
+        // Before the first present, macOS reports only the headroom it grants windows without extended-range content;
+        // say where it is headed so the startup line is not mistaken for the display's limit.
+        match surface.potential_headroom(&gpu).filter(|potential| *potential > display.effective_headroom() + 0.05) {
+            Some(potential) => log::info!(
+                "{}: presenting {display}, rising toward {:.1}x as the display grants headroom",
+                self.options.title,
+                potential.min(MAX_DISPLAY_HEADROOM)
+            ),
+            None => log::info!("{}: presenting {display}", self.options.title),
+        }
 
         let viewport = Viewport {
             logical_size: renderer.logical_size(),
@@ -461,7 +494,8 @@ impl<A: App> WindowedShell<A> {
             ticker: FixedTicker::new(self.options.fixed_updates_per_second),
             requests: ShellRequests::default(),
             started: Instant::now(),
-            next_display_poll: DISPLAY_POLL_SECONDS,
+            next_display_poll: 0.0,
+            display_settling_until: DISPLAY_SETTLE_SECONDS,
             pointer_lock: false,
             touches: TouchOwners::default(),
             #[cfg(target_arch = "wasm32")]
@@ -505,6 +539,7 @@ impl<A: App> WindowedShell<A> {
             requests,
             started,
             next_display_poll,
+            display_settling_until,
             pointer_lock,
             touches: _,
             #[cfg(target_arch = "wasm32")]
@@ -526,13 +561,17 @@ impl<A: App> WindowedShell<A> {
         let mut time = clock.tick(started.elapsed().as_secs_f64());
         time.fixed_ticks = ticker.advance(time.elapsed_seconds);
         time.fixed_interpolation = ticker.interpolation();
-        follow_display(surface, gpu, renderer, egui, started.elapsed().as_secs_f64(), next_display_poll);
+        let display_poll = DisplayPoll {
+            now_seconds: started.elapsed().as_secs_f64(),
+            settling_until: *display_settling_until,
+        };
+        follow_display(surface, gpu, renderer, egui, display_poll, next_display_poll);
         // UI text entry suspends gameplay input, so typing into a field never drives the game.
         input.set_typing(egui.wants_keyboard());
         input.set_gamepads(gamepads.poll());
         let lock_held = *pointer_lock && pointer_lock_held(window);
         input.set_pointer_locked(lock_held);
-        input.update();
+        input.update(f64::from(time.elapsed_seconds));
         let viewport = Viewport {
             logical_size: renderer.logical_size(),
             scale_factor: display_scale(window),
@@ -636,20 +675,30 @@ impl<A: App> WindowedShell<A> {
     }
 }
 
+/// When a frame reads the display: now, and until when its headroom is still settling (both seconds since startup).
+#[derive(Clone, Copy, Debug)]
+struct DisplayPoll {
+    now_seconds: f64,
+    settling_until: f64,
+}
+
 /// Read an HDR surface's display when its poll is due and hand a changed headroom or SDR white level to the renderer
-/// and UI. Standard surfaces never change.
+/// and UI: every [`DISPLAY_SETTLE_POLL_SECONDS`] while the headroom settles, then every [`DISPLAY_POLL_SECONDS`].
+/// Standard surfaces never change.
 fn follow_display(
     surface: &ConfiguredSurface,
     gpu: &GpuContext,
     renderer: &mut Renderer,
     egui: &mut EguiLayer,
-    now_seconds: f64,
+    poll: DisplayPoll,
     next_poll: &mut f64,
 ) {
-    if !surface.encoding.is_extended() || now_seconds < *next_poll {
+    if !surface.encoding.is_extended() || poll.now_seconds < *next_poll {
         return;
     }
-    *next_poll = now_seconds + DISPLAY_POLL_SECONDS;
+    let interval =
+        if poll.now_seconds < poll.settling_until { DISPLAY_SETTLE_POLL_SECONDS } else { DISPLAY_POLL_SECONDS };
+    *next_poll = poll.now_seconds + interval;
     let display = surface.display_output(gpu);
     if display != renderer.display_output() {
         renderer.set_display_output(display);

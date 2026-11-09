@@ -9,6 +9,7 @@ use joy_engine::particles::{
     ParticleBurst,
     ParticleEffectAsset,
     ParticleEmitterAsset,
+    ParticleLighting,
     ParticleRenderer,
     compile_particle_effect,
 };
@@ -121,6 +122,8 @@ pub fn create_emitter_template(id: &str, preset: EmitterPreset) -> ParticleEmitt
         lifetime: 1.0,
         renderer: ParticleRenderer::Soft,
         blend: ParticleBlend::Alpha,
+        softness: 0.0,
+        lighting: ParticleLighting::Unlit,
         texture: None,
         light: None,
         spawn: "let angle = rand(0, tau);\nlet vertical = rand(-1, 1);\nlet radial = sqrt(1 - vertical * vertical);\nvelocity = vector(cos(angle) * radial, vertical, sin(angle) * radial) * 80;\nsize = 3;".to_owned(),

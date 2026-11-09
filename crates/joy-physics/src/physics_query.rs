@@ -26,7 +26,7 @@ use super::{
     BodyHandle,
     CollisionGroups,
     PhysicsError,
-    PhysicsWorld,
+    PhysicsSimulation,
     RaycastHit,
 };
 
@@ -56,7 +56,7 @@ impl Default for QueryOptions {
     }
 }
 
-impl PhysicsWorld {
+impl PhysicsSimulation {
     /// Closest hit along the world-space segment from `from` to `to` among bodies `options` admits, or `None`.
     ///
     /// Follows [`raycast`](Self::raycast)'s rules (a body containing the segment start is skipped; non-finite or

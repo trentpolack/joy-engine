@@ -9,15 +9,20 @@
 //! caller picks: [`ShadingModel::Layered`] keeps every factor and embedded map (PNG, JPEG, or WebP data URLs), while
 //! [`ShadingModel::Lit`] and [`ShadingModel::Unlit`] draw FORM's vertex colors alone in one slot, as FORM's flat look
 //! always has.
+//!
+//! Every path here can draw cooked geometry: [`FormAssetLibrary::set_cooked_forms`] and [`compile_cooked_form_mesh`]
+//! take a game's [`CookedForms`] (`joy_engine::cooked_forms!`), so release and browser builds load the meshes their build
+//! cooked and evaluate only inputs it did not cook.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use joy_form::{
-    CompiledScript,
-    FORM_INSTANCE_EXTENSION,
-    FormInstance,
+    CookKey,
+    CookedForms,
+    EvaluationError,
+    FormEvaluation,
     GeometryData,
 };
 use joy_render_types::ShadingModel;
@@ -58,7 +63,20 @@ pub fn compile_form_mesh(
     materials: Option<&serde_json::Value>,
     model: ShadingModel<'_>,
 ) -> Result<MeshAsset, FormMeshError> {
-    let geometry = joy_form::compile(source, overrides, materials).map_err(FormMeshError::Form)?;
+    compile_cooked_form_mesh(&CookedForms::default(), source, overrides, materials, model)
+}
+
+/// [`compile_form_mesh`] that loads `cooked` geometry when the build cooked these exact inputs (the script's text,
+/// `overrides`, and `materials`) and evaluates otherwise, so a game embedding its FORM sources skips evaluation in
+/// release and browser builds without changing what it draws.
+pub fn compile_cooked_form_mesh(
+    cooked: &CookedForms,
+    source: &str,
+    overrides: &serde_json::Value,
+    materials: Option<&serde_json::Value>,
+    model: ShadingModel<'_>,
+) -> Result<MeshAsset, FormMeshError> {
+    let geometry = cooked.compile(source, overrides, materials).map_err(FormMeshError::Form)?;
     Ok(form_mesh_asset(&geometry, model)?)
 }
 
@@ -71,8 +89,10 @@ pub struct FormAsset {
     pub placements: Arc<[FormPlacement]>,
 }
 
-/// Compiled FORM assets for levels and tools, cached by path, source text (including referenced scripts and modules),
-/// variant, parameters, and shading model; the mesh half of [`AssetScene`](crate::AssetScene).
+/// Compiled FORM assets for levels and tools, cached by their evaluation inputs (source text, referenced scripts and
+/// modules, and layered parameters; see [`joy_form::CookKey`]) and shading model; the mesh half of
+/// [`AssetScene`](crate::AssetScene). With [`set_cooked_forms`](Self::set_cooked_forms), inputs the game's build cooked
+/// load their geometry instead of evaluating.
 ///
 /// `.form` files are FORM scripts; `.forminst` files are FORM instances (see [`joy_form::FormInstance`]): a script
 /// reference or packed script with overrides, materials, and variants. Overrides layer in order: the instance's
@@ -81,17 +101,27 @@ pub struct FormAsset {
 /// so the library never touches the file system and works the same in browsers.
 #[derive(Default)]
 pub struct FormAssetLibrary {
-    cache: HashMap<String, FormAsset>,
+    // Compiled assets by evaluation inputs and shading model, and the decoded material maps they share.
+    cache: HashMap<(CookKey, String), FormAsset>,
     textures: FormTextureCache,
+
+    // Geometry the game's build cooked; empty (every asset evaluates live) until a game supplies it.
+    cooked: CookedForms,
 }
 
 /// Reads an asset path's text for the library: referenced scripts and modules, relative to the reader's root.
 pub type FormAssetReader<'a> = dyn FnMut(&str) -> Result<String, String> + 'a;
 
 impl FormAssetLibrary {
-    /// An empty library.
+    /// An empty library that evaluates every asset live.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Load geometry from `cooked` whenever an asset's evaluation inputs were cooked; anything else evaluates live.
+    /// Cached assets stay valid, since cooked geometry equals what evaluating the same inputs produces.
+    pub fn set_cooked_forms(&mut self, cooked: CookedForms) {
+        self.cooked = cooked;
     }
 
     /// Compile `text` (the contents of `path`) with `parameters`, reusing a cached asset when nothing changed.
@@ -119,37 +149,23 @@ impl FormAssetLibrary {
         parameters: &serde_json::Map<String, serde_json::Value>,
         model: ShadingModel<'_>,
     ) -> Result<FormAsset, FormMeshError> {
-        // Record every file the script reads, so an edit to a referenced script or module misses the cache.
-        let dependencies: RefCell<Vec<(String, String)>> = RefCell::new(Vec::new());
+        // `read` is mutable, while module loaders are shared; the library resolves one asset at a time.
         let reader = RefCell::new(read);
-        let loader = |dependency: &str| -> Result<String, String> {
-            let text = (reader.borrow_mut())(dependency)?;
-            dependencies.borrow_mut().push((dependency.to_owned(), text.clone()));
-            Ok(text)
-        };
+        let loader = |dependency: &str| -> Result<String, String> { (reader.borrow_mut())(dependency) };
         let invalid = |message: String| FormMeshError::Render(RenderError::InvalidMesh(format!("{path}: {message}")));
+        let evaluation =
+            FormEvaluation::resolve(path, text, &loader, variant, parameters).map_err(|error| match error {
+                EvaluationError::Instance(message) => invalid(message),
+                EvaluationError::Form(diagnostic) => FormMeshError::Form(diagnostic),
+            })?;
 
-        let (script, mut overrides, materials) = if path.ends_with(FORM_INSTANCE_EXTENSION) {
-            let instance = FormInstance::read(text).map_err(|error| invalid(error.to_string()))?;
-            let script = instance.parse_script(path, &loader).map_err(FormMeshError::Form)?;
-            let overrides = instance.overrides_for(variant).map_err(|error| invalid(error.to_string()))?;
-            (script, overrides, instance.materials.map(serde_json::Value::Array))
-        } else {
-            if let Some(name) = variant {
-                return Err(invalid(format!("variant \"{name}\" requires a FORM instance (.forminst)")));
-            }
-            let script = CompiledScript::parse_with_modules(text, path, &loader).map_err(FormMeshError::Form)?;
-            (script, serde_json::Map::new(), None)
-        };
-
-        let key =
-            serde_json::json!([path, text, variant, parameters, model.name(), dependencies.into_inner()]).to_string();
+        // The evaluation key covers the asset's text, its referenced script and every module it read, and the layered
+        // parameters, so any edit misses the cache.
+        let key = (evaluation.key(), model.name().to_owned());
         if let Some(asset) = self.cache.get(&key) {
             return Ok(asset.clone());
         }
-        overrides.extend(parameters.iter().map(|(name, value)| (name.clone(), value.clone())));
-        let geometry =
-            script.evaluate(&serde_json::Value::Object(overrides), materials.as_ref()).map_err(FormMeshError::Form)?;
+        let geometry = self.cooked.evaluate(&evaluation).map_err(FormMeshError::Form)?;
         let asset = FormAsset {
             mesh: form_mesh_asset_with_textures(&geometry, model, &mut self.textures)?,
             placements: form_placements(&geometry).into(),

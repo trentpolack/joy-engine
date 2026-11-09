@@ -56,8 +56,11 @@ pub use asset::{
     CompiledEmitter,
     CompiledParticleEffect,
     MAXIMUM_EFFECT_PARTICLES,
+    MAXIMUM_PARTICLE_SOFTNESS,
     PARTICLE_EFFECT_VERSION,
     PARTICLE_EMITTER_BLEND,
+    PARTICLE_EMITTER_LIGHTING,
+    PARTICLE_EMITTER_SOFTNESS,
     PARTICLE_LIGHT_CASTS_SHADOW,
     ParticleAssetError,
     ParticleBurst,
@@ -75,6 +78,7 @@ pub use asset::{
 };
 pub use constants::{
     ParticleBlend,
+    ParticleLighting,
     ParticleParameterType,
     ParticleRenderer,
     ParticleValueKind,

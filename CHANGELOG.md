@@ -2,6 +2,13 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 11-09-2026
+### Rendering
+- GPU frame profiling works on Apple GPUs. Each profile mark pass now dispatches one thread, because Metal samples a pass's timestamps only when its encoder executes work, and the empty mark passes resolved every timestamp to zero. A device whose timestamps never advance falls back to CPU timings with one warning instead of reporting zero GPU time.
+
+### Platform
+- On HDR displays the shell reads the headroom ten times a second for the first three seconds after startup, resizes, and moves, so tone mapping follows macOS as it raises a newly presenting window's EDR headroom (from about 1.2x to the display's level) instead of lagging up to a second behind. The startup log names the potential headroom it is rising toward instead of reading as the display's limit.
+
 ## 11-06-2026
 ### JOYFX EDITOR
 - Restored descriptive accessible names for the compact UNDO and REDO property buttons, retaining their disabled states and verifying that a slider drag undoes and redoes as one edit.
@@ -23,11 +30,13 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR
 - Added entity scripts: an authored `script` component runs its Rhai script's `init` and `update` hooks through `ScriptSystem` against engine-owned `Entity` and `World` views, and the system applies the commands scripts return (spawn, remove, send, timers, and body pushes). Entity state survives hot reloads, and failures arrive once as `ScriptFailure` events.
 - `AssetScene::adopt` prepares FORM meshes, effects, and lights for entities spawned at runtime, and `follow` releases them when they leave; previously such entities drew fallback primitives.
 - FORM assets in levels draw with the layered shading model (`LEVEL_FORM_SHADING`) that FORM EDITOR previews with, so placed assets keep their palettes and maps.
+- Breaking: typed events moved to `joy_core::events` for any system: `EventQueue`, a double-buffered `EventChannel` that keeps the last 16 updates (every fixed tick one frame can run), and `EventCursor<T>` for readers that run at their own rate, such as presentation reading once per frame. Event types must be `Clone`. `World` keeps only its own records (`ContactEvent`, `TimerFired`, `EntitySpawned`, and `EntityRemoved`), drops `WorldEvents`, and adds `World::event_channel`; `PhysicsSimulation::event_channel` carries contact pairs the same way.
 
 ### Physics
 - Breaking: bodies sleep once they come to rest (`BodyOptions::can_sleep`, default true). Teleporting or removing a body wakes everything resting against it, so supports that disappear no longer leave sleeping bodies hovering.
 - Breaking: user forces act on every fixed step of the next `PhysicsWorld::step` call that runs one, instead of only its first, so a force set once per frame moves bodies the same distance at any frame rate.
 - Added collision groups (`CollisionGroups`, `BodyOptions::groups`), sensors (`BodyOptions::sensor`), contact and sensor events (`PhysicsWorld::events`, `PhysicsEvent`, `ContactPhase`, `BodyOptions::report_contacts`), and filtered queries (`QueryOptions`, `raycast_with`, `overlap_sphere`, `overlap_box`). Plain raycasts skip sensors.
+- Breaking: `PhysicsWorld` is now `PhysicsSimulation` (`physics_simulation.rs`) with `PhysicsSimulationOptions`: physics is the gameplay world's simulation, not a second kind of world.
 
 ### Destruction
 - Chunks can be any convex piece: `DestructibleChunkDefinition::shape` (a `ChunkPolyhedron`) drives damage, raycasts, occupancy, support, stress mass and footprint, colliders, and meshes, and shaped chunks bond through exact shared faces. Breaking: chunk definition literals need `shape` (`None` keeps the box). Box structures behave exactly as before.
@@ -40,16 +49,25 @@ This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR
 - The shells compile every registered shading model's pipelines after `App::start` (`Renderer::warm_up_pipelines`), behind the loading screen, instead of stalling the first frames that show each material.
 - Point-light shadows cull casters with one sphere test per light before testing each cube face, and opaque batching resolves each material's model once before sorting instead of inside the sort comparison.
 - Added `GroundRing` and `append_ground_ring` for flat XZ rings and discs (selection, targeting, and blob shadows).
+- `RenderScene` keeps a retained render proxy per instance (world matrix, world bounds, and draw policy, refreshed only for what changed) in a dynamic bounds tree, so camera and shadow culling no longer scan every instance. Preparing a still 4,000-instance frame with eight shadowed point lights dropped from about 3 to 5 ms to under 1 ms.
+- Shadow maps are cached between frames: a point light re-renders only when it moves, its face size or the atlas changes, or a caster within its reach changes, and a cascade only when its matrix changes. `RendererDiagnostics::shadow_maps_rendered` counts the maps rendered this frame.
+- Every pass draws `DrawItem` queues (meshes, terrain, transient triangles, and particles), a `FramePlan` declares each pass's reads and writes and derives load and store operations, and `SceneBatcher` and `ShadowPlanner` moved out of `renderer.rs`.
+- Breaking: retired the arcade `TriangleRenderer`. Arcade games draw through the scene renderer with `TopDownView` and `decode_display_colors`; removed `TriangleFrame`, `TriangleParticles`, `RenderTarget::draw_triangles`, `top_down_orthographic`, and `sort_top_down_transparent_triangles`.
 
 ### Particles
 - Breaking: particles draw as GPU instances (one 60-byte instance per particle, with every renderer's shape computed in the shader) instead of CPU-built triangles. Every consumer submits effects through `ParticleFrame` (`FrameInputs::particles`, or `TriangleFrame::particles` for the arcade renderer), which batches each effect by blend and texture, culls whole batches, and sorts only blended batches. Removed `append_particle_effect`, `create_particle_effect_batches`, `ParticleCameraBasis`, the textured transparent pipeline (`TransparentDraw`, `TexturedVertex`), and `AssetScene`'s particle geometry helpers (replaced by `add_particles`); Joy Editor, FORM EDITOR, and JOYFX EDITOR migrated, and JOYFX EDITOR's preview geometry cache is gone.
 - Added emitter blend modes (`blend`: `alpha`, `additive`, or `premultiplied`) to `.joyfx` documents, the schema, and JOYFX EDITOR's inspector. Particle edges are antialiased, and each compiled emitter carries a texture id so frames no longer hash texture sources.
 - Removed the geometry sections from the particle parity recording; simulation checkpoints are unchanged.
 - Added `ParticleEffectPool`: a bounded pool of one-shot effects that evicts the oldest when full, seeds each effect from its own cosmetic counter (`EffectPoolOptions`), advances or fixed-steps every effect, and logs and drops a failing effect instead of stopping the frame.
+- Added soft particles (`softness`, a per-emitter fade distance against opaque depth; WebGL 2 draws them hard) and lit particles (`lighting: "lit"`, half-Lambert from the frame's ambient, sky, directional, and point lights) to `.joyfx` documents, the schema, and JOYFX EDITOR. Blended particles sort back to front on the GPU where compute runs, with the CPU sort kept for WebGL 2.
+- Added `ParticleDrawOptions` (transform, sort point, and display colors) for `ParticleFrame::add_effect_with`, and `add_styled_particles` for game-styled particles. `ParticleInstance` grew to 64 bytes.
 
 ### Platform
 - Added `runtime::KeyRepeat` (fire on press, repeat after a delay) and `runtime::ProgressSave` with `SaveStatus`, which loads, restores, guards, and saves one record of game progress so unreadable or damaged saves are never overwritten.
 - `joy-terrain` moved from the foundation layer to the simulation layer: it streams tiles from storage and selects detail for views, beside the physics that collides with it.
+- Breaking: replaced `KeyRepeat` with repeat on input actions. `InputAction::new(bindings).repeat(delay, interval)` registers through `InputMap::action_with`, `ActionState::repeats` counts an action's fires this frame (the press, including a tap shorter than a frame, then one per interval), and `InputManager::update(elapsed_seconds)` takes the frame time. Repeat timing resets wherever holds release. Added `InputBinding::stick_direction` (`GamepadStick` and `StickDirection`) so a stick drives four-way navigation like a d-pad.
+- Added the `devtools` (default) and `authoring` facade features, so release games ship without development or editor code; Joy Editor and the tools enable `authoring`. Breaking: `GameAssets`, `game_assets!`, and `source_root!` moved to `runtime` (`joy-app`), and `project` and the authoring re-exports need `authoring`. Development reads of files a release build would not embed now warn once per path.
+- Added `joy-cook` and cooked FORM bundles (`cooked_forms!`, `CookedForms`, and `set_cooked_forms` on `FormAssetLibrary` and `AssetScene`): build scripts evaluate FORM assets into lossless binary meshes under a content-hash cache for release and browser builds, which skip FORM evaluation; native development builds keep live evaluation.
 
 ### Documentation
 - The Rust standards now say what golden recordings protect: simulation outcomes and document contracts, not how presentation is produced, and recordings from the retired TypeScript runtimes are re-recorded deliberately when behavior moves into the engine.

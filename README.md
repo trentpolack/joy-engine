@@ -28,6 +28,18 @@ Games using standard Lua 5.4 enable the facade's `game-script` feature. Lua is b
 
 The engine owns its Cargo workspace, tests, assets, schemas, and build tooling. A hosting repository such as [JoyGames](https://github.com/trentpolack/JoyGames) consumes it as a submodule and provides its own site commands. npm workspaces remain useful for build orchestration, captures, metadata, and patch delivery.
 
+## Public Entry Points and Features
+Games and tools use the `joy-engine` facade (`src/lib.rs`): `run` and the `App` phases, `prelude`, `web_main!` for browser entry points, `game_assets!` and `source_root!` for the embedded asset table (`runtime::GameAssets`), `cooked_forms!` for FORM meshes cooked at build time, and the system modules (`core`, `math`, `physics`, `gameplay`, `form`, `particles`, `rendering`, `terrain`, `runtime`, and the rest). Cargo features decide what a build ships:
+
+| Feature | Default | Adds |
+| --- | --- | --- |
+| `devtools` | Yes | `development`: the CONFIG and JOY-EDITOR dock, statistics overlay, console, config panels, live tuning, and effect editors, plus the shell's development UI. Without it, `Frame::dev_tools` is an inert `DevTools` and `runtime::development_dock_height` is zero. |
+| `authoring` | No | The authoring kit, native file dialogs, and `project` manifests that Joy Editor, FORM EDITOR, and JOYFX EDITOR enable (implies `devtools`). |
+| `game-script` | No | Sandboxed Lua game scripts (`game_script`). |
+| `test-support` | No | Golden-file helpers (`testing`) for games' `[dev-dependencies]`. |
+
+Games depend on the facade with `default-features = false` and turn `devtools` on through a default feature of their own, so `cargo run`, `npm run dev`, and tests keep the development tools while production builds pass `--no-default-features` and ship no development or authoring code. Games with FORM assets also cook them in a build script (`[build-dependencies] joy-cook`), so release and browser builds load cooked meshes instead of evaluating FORM; see [cooked FORM meshes](docs/rust-form.md#cooked-meshes).
+
 ## Guides
 - [Documentation index](docs/README.md)
 - [Runtime, rendering, and browser builds](docs/rust.md)

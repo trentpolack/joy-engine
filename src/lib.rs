@@ -17,7 +17,21 @@
 //! | simulation | [`environment`] (`joy-environment`), [`terrain`] (`joy-terrain`), [`physics`] (`joy-physics`), [`gameplay`] (`joy-gameplay`), `game_script` (`joy-game-script`) | Solar time and wind, terrain heightfields, tile pyramids, streaming, detail, and craters, rigid bodies and vehicles, entities, controllers, levels, sandboxed Lua game scripts (`game-script` feature) |
 //! | content | [`dcc`] (`joy-dcc-gltf`), [`form`] (`joy-form`), [`particles`] (`joy-fx`), [`project`] (`joy-project`) | GLB and glTF mesh import, the FORM procedural modeling language (renderer-free geometry), `.joyfx` particle documents, scripts, and simulation, project manifests |
 //! | rendering | [`rendering`] (`joy-renderer`, `joy-scene`) | The wgpu renderer every game, tool, and preview draws with, including particle drawing, and the scene presentation of levels, FORM meshes, and effects |
-//! | platform | [`runtime`] (`joy-app`, `joy-input`, `joy-audio`, `joy-storage`, `joy-ui`), [`development`] (`joy-devtools`, `joy-authoring`) | The game shell, frame phases, input and gamepads, audio, storage, egui UI and theme, dev tools, the authoring kit, browser glue |
+//! | platform | [`runtime`] (`joy-app`, `joy-input`, `joy-audio`, `joy-storage`, `joy-ui`), [`development`] (`joy-devtools`, `joy-authoring`) | The game shell, frame phases, embedded game assets, input and gamepads, audio, storage, egui UI and theme, dev tools, the authoring kit, browser glue |
+//!
+//! Cargo features decide what a build ships:
+//! - `devtools` (default): [`development`]'s dock (the CONFIG and JOY-EDITOR menus), statistics overlay, console, config
+//!   panels, live tuning, and effect editors. Without it the shell compiles no development UI; [`Frame::dev_tools`] is an
+//!   inert [`DevTools`] that accepts published values, and [`runtime::development_dock_height`] is zero, so game code
+//!   needs `#[cfg(feature = "devtools")]` only around the editors it attaches.
+//! - `authoring`: the authoring kit, native file dialogs, and `project` manifests behind Joy Editor, FORM EDITOR, and
+//!   JOYFX EDITOR (implies `devtools`).
+//! - `game-script`: sandboxed Lua game scripts (`game_script`). `test-support`: golden-file helpers (`testing`).
+//!
+//! Games depend on the facade with `default-features = false` and turn `devtools` on through a default feature of their
+//! own, which production builds drop (`--no-default-features`), so release and browser builds contain no development or
+//! authoring code. Those builds also load FORM meshes their build script cooked ([`cooked_forms!`], `joy-cook`) instead
+//! of evaluating FORM, while native development builds evaluate live and hot reload ([`game_assets!`]).
 //!
 //! Conventions shared by every module:
 //! - World space is Y-up and right-handed, measured in meters; vehicles drive along local +Z.
@@ -90,6 +104,7 @@ pub use joy_dcc_gltf as dcc;
 #[doc(inline)]
 pub use joy_form as form;
 #[doc(inline)]
+#[cfg(feature = "authoring")]
 pub use joy_project as project;
 
 // Rendering.
@@ -124,22 +139,25 @@ pub mod particles {
 }
 
 // Platform.
+#[cfg(feature = "devtools")]
 pub mod development;
 pub mod runtime;
 
-pub use development::DevTools;
-pub use joy_devtools::{
+pub use joy_app::{
     game_assets,
     source_root,
 };
+pub use joy_form::cooked_forms;
 pub use runtime::{
     App,
     AppError,
     AppResult,
     AudioBank,
+    DevTools,
     FixedTick,
     Frame,
     FrameTime,
+    GameAssets,
     InputBinding,
     InputManager,
     InputMap,
@@ -180,18 +198,21 @@ pub use wasm_bindgen;
 pub mod prelude {
     pub use crate::core::{
         Color,
+        EventChannel,
+        EventCursor,
+        EventQueue,
         FixedStepLoop,
         LinearColor,
         RandomSource,
         SeededRandom,
         Transform,
     };
-    pub use crate::development::DevTools;
     pub use crate::environment::{
         EnvironmentFrame,
         EnvironmentOptions,
         EnvironmentSystem,
     };
+    pub use crate::form::CookedForms;
     pub use crate::gameplay::{
         ComponentRegistry,
         ContactEvent,
@@ -241,8 +262,8 @@ pub mod prelude {
         BodyOptions,
         CollisionGroups,
         ContactPhase,
-        PhysicsWorld,
-        PhysicsWorldOptions,
+        PhysicsSimulation,
+        PhysicsSimulationOptions,
         QueryOptions,
         VehicleInput,
         VehicleTuning,
@@ -274,6 +295,7 @@ pub mod prelude {
         ShadowQuality,
         SkyOptions,
         TextureAsset,
+        compile_cooked_form_mesh,
         compile_form_mesh,
         environment_lighting,
         primitive_box,
@@ -285,14 +307,16 @@ pub mod prelude {
         AppResult,
         AudioBank,
         AudioBankOptions,
+        DevTools,
         FixedTick,
         Frame,
         FrameTime,
+        GameAssets,
+        InputAction,
         InputAxis,
         InputBinding,
         InputManager,
         InputMap,
-        KeyRepeat,
         PcmSound,
         RenderTarget,
         ShellError,

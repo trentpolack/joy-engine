@@ -13,13 +13,15 @@
 //! [`math`] owns the engine's vector, matrix, and quaternion types and the [`math::deterministic`] functions seeded
 //! simulations use; [`transform`], [`random`], and [`fixed_step`] build on it. [`color`], [`config_values`], and
 //! [`primitive`] define shared engine records, [`mod@format`] writes numbers for text and JSON, and [`base64`] handles
-//! the `data:` URL encoding authored documents embed. [`scripting`] describes the engine's script languages (FORM and
+//! the `data:` URL encoding authored documents embed. [`events`] carries typed events across update boundaries, with
+//! cursors for readers that run at their own rate. [`scripting`] describes the engine's script languages (FORM and
 //! JOYFX) for editors and language tools. Meshes, materials, and lights live in `joy-render-types`, which builds on
 //! this crate.
 
 pub mod base64;
 pub mod color;
 pub mod config_values;
+pub mod events;
 pub mod fixed_step;
 pub mod format;
 pub mod math;
@@ -45,6 +47,12 @@ pub use config_values::{
     create_config_document_values,
     create_config_schema,
     create_config_values,
+};
+pub use events::{
+    EventChannel,
+    EventCursor,
+    EventQueue,
+    EventSequence,
 };
 pub use fixed_step::FixedStepLoop;
 pub use format::{

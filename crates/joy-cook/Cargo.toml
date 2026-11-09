@@ -1,0 +1,32 @@
+# Copyright (c) 2026 Trent Polack. All Rights Reserved.
+# Licensed under the MIT License.
+
+# Joy Engine's build-time asset cook: evaluates a game's FORM scripts and instances into the cooked-geometry bundle its
+# release and browser builds embed, with a content-addressed cache in Cargo's target directory. Games call it from their
+# build scripts (`[build-dependencies] joy-cook`); it is the one engine crate a game names directly, because a build
+# script cannot reach the `joy-engine` facade without compiling the whole engine (wgpu included) for the host.
+#
+#   cargo test -p joy-cook
+
+[package]
+name = "joy-cook"
+description = "Joy Engine's build-time cook: FORM assets into the cooked-geometry bundles release and browser builds load."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+joy-form.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+# Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
+[package.metadata.joy]
+layer = "content"
+
+[lints]
+workspace = true

@@ -16,8 +16,9 @@ mod rendering_display;
 mod rendering_headless;
 mod rendering_lighting;
 mod rendering_materials;
+mod rendering_scaling;
 mod rendering_terrain;
-mod rendering_triangles;
+mod rendering_top_down;
 
 /// A mesh from flat XYZ positions, a triangle list, and optional flat linear RGB colors (empty for white), as the
 /// headless scenes build their boxes.

@@ -1,8 +1,10 @@
 # Copyright (c) 2026 Trent Polack. All Rights Reserved.
 # Licensed under the MIT License.
 
-# FORM, the procedural modeling language: parse, evaluate, and compile scripts into renderer-free geometry. The
-# `joy-form-evaluate` JSON-lines CLI drives the FORM EDITOR parity harness.
+# FORM, the procedural modeling language: parse, evaluate, and compile scripts into renderer-free geometry, plus the
+# cooked-geometry format and bundles release builds load instead of evaluating (written at build time by `joy-cook`).
+# The `joy-form-evaluate` JSON-lines CLI drives the FORM EDITOR parity harness; `build.rs` fingerprints the evaluator's
+# source for `FORM_EVALUATOR_VERSION`.
 #
 #   cargo test -p joy-form
 #   cargo build -p joy-form --bin joy-form-evaluate
@@ -24,6 +26,7 @@ joy-render-types.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+log.workspace = true
 
 # Architecture layer, enforced by `npm run check` (see `[workspace.metadata.joy]` in the workspace manifest).
 [package.metadata.joy]

@@ -11,8 +11,18 @@
 //!
 //! Paths are the project-relative `assets/…` paths levels and components already use. Reads outside the embedded table
 //! or the source folder's `assets/` directory are refused, so a hot-reload path can never reach other files.
+//!
+//! Hot reload reads any `assets/` file from disk, so a file a game forgot to embed would work in development and fail
+//! only in browser and release builds. Development reads of a path the table does not embed therefore succeed but log
+//! a warning once per path, and [`GameAssets::unembedded_reads`] lists them.
+//!
+//! The table lives in the shell crate rather than the development tools because release and browser builds need it as
+//! much as development builds do.
 
-use std::collections::HashMap;
+use std::collections::{
+    BTreeSet,
+    HashMap,
+};
 use std::path::{
     Path,
     PathBuf,
@@ -55,6 +65,9 @@ pub struct GameAssets {
     source_root: Option<PathBuf>,
     stamps: HashMap<String, FileStamp>,
 
+    // Paths read from the source folder that the table does not embed, each warned about once.
+    unembedded: BTreeSet<String>,
+
     // Seconds accumulated toward the next file check.
     poll_elapsed: f64,
 }
@@ -72,6 +85,7 @@ impl GameAssets {
             embedded: embedded.into_iter().map(|(path, text)| (path.into(), text)).collect(),
             source_root: source_root.filter(|_| FILES_READABLE).map(PathBuf::from),
             stamps: HashMap::new(),
+            unembedded: BTreeSet::new(),
             poll_elapsed: 0.0,
         }
     }
@@ -82,7 +96,8 @@ impl GameAssets {
     }
 
     /// The current text of `path`: the source folder's file while hot reloading (falling back to the embedded text
-    /// when the file cannot be read), otherwise the embedded text.
+    /// when the file cannot be read), otherwise the embedded text. A hot-reload read of a file the table does not embed
+    /// succeeds but warns once, since browser and release builds will report it [`Missing`](AssetReadError::Missing).
     pub fn read(&mut self, path: &str) -> Result<String, AssetReadError> {
         if !is_asset_path(path) {
             return Err(AssetReadError::OutsideAssets(path.to_owned()));
@@ -91,10 +106,17 @@ impl GameAssets {
             let file = root.join(path);
             self.stamps.insert(path.to_owned(), file_stamp(&file));
             if let Some(text) = read_file(&file) {
+                self.note_unembedded(path);
                 return Ok(text);
             }
         }
         self.embedded.get(path).map(|text| (*text).to_owned()).ok_or_else(|| AssetReadError::Missing(path.to_owned()))
+    }
+
+    /// Paths read from the source folder that this table does not embed, in sorted order: each works in development
+    /// and is missing from browser and release builds. Always empty without hot reload.
+    pub fn unembedded_reads(&self) -> impl Iterator<Item = &str> {
+        self.unembedded.iter().map(String::as_str)
     }
 
     /// The text compiled into the build for `path`, ignoring the source folder.
@@ -128,6 +150,20 @@ impl GameAssets {
     }
 }
 
+impl GameAssets {
+    /// Record and warn once when a development read reaches a file the release build would not embed.
+    fn note_unembedded(&mut self, path: &str) {
+        if self.embedded.contains_key(path) || self.unembedded.contains(path) {
+            return;
+        }
+        log::warn!(
+            "{path} was read from the project folder but is not embedded, so browser and release builds will not find \
+             it; add it to the game's game_assets! list (or its GameAssets table)."
+        );
+        self.unembedded.insert(path.to_owned());
+    }
+}
+
 /// Whether `path` is a plain relative `assets/…` path without parent, current, or empty segments.
 fn is_asset_path(path: &str) -> bool {
     path.starts_with(ASSET_FOLDER)
@@ -141,9 +177,15 @@ const FILES_READABLE: bool = true;
 #[cfg(target_arch = "wasm32")]
 const FILES_READABLE: bool = false;
 
+/// Largest asset hot reload reads from disk; larger files fall back to their embedded text.
+#[cfg(not(target_arch = "wasm32"))]
+const MAXIMUM_FILE_BYTES: u64 = 1024 * 1024;
+
+/// Modification time and length, enough to notice outside edits cheaply.
 #[cfg(not(target_arch = "wasm32"))]
 fn file_stamp(path: &Path) -> FileStamp {
-    crate::files::stamp(path)
+    let metadata = std::fs::metadata(path).ok()?;
+    Some((metadata.modified().ok()?, metadata.len()))
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -151,9 +193,14 @@ fn file_stamp(_path: &Path) -> FileStamp {
     None
 }
 
+/// The text of a regular file of at most [`MAXIMUM_FILE_BYTES`].
 #[cfg(not(target_arch = "wasm32"))]
 fn read_file(path: &Path) -> Option<String> {
-    crate::files::read_document(path).ok()
+    let metadata = std::fs::symlink_metadata(path).ok()?;
+    if !metadata.is_file() || metadata.len() > MAXIMUM_FILE_BYTES {
+        return None;
+    }
+    std::fs::read_to_string(path).ok()
 }
 
 #[cfg(target_arch = "wasm32")]

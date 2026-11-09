@@ -6,14 +6,29 @@
 //! Scenes hold no gameplay authority. Instances reference shared assets and own their presentation state (transform,
 //! material overrides, tint, opacity, visibility, pass, and shadow policy). The renderer borrows a scene for each frame.
 //!
+//! The scene also keeps a render proxy per instance ([`proxy`]): its world matrix, world bounds, and draw policy,
+//! cached between frames on the dense instance slots and refreshed when a frame begins for only the instances edits
+//! marked, plus a bounds tree ([`bounds_tree`]) that camera and shadow culling query instead of scanning every instance.
+//!
 //! Instances and nodes may be parented to transform-only [`SceneNode`]s:
 //! their transform is local to the parent's world transform, and hiding a node hides everything beneath it. Removing
 //! a node removes its whole subtree. Instances are leaves, so
 //! parent several instances to one node to move them together.
 
+mod bounds_tree;
+mod proxy;
 mod terrain_instance;
 
 use std::collections::HashSet;
+use std::sync::atomic::{
+    AtomicU64,
+    Ordering,
+};
+use std::sync::{
+    Mutex,
+    MutexGuard,
+    PoisonError,
+};
 
 use indexmap::IndexMap;
 use joy_core::math::Mat4;
@@ -25,10 +40,18 @@ use joy_core::{
 use crate::material::MaterialAsset;
 use crate::mesh::MeshAsset;
 
+pub(crate) use proxy::{
+    ProxyChanges,
+    RenderProxy,
+    SceneProxies,
+};
 pub use terrain_instance::{
     DEFAULT_TERRAIN_TOLERANCE,
     TerrainInstance,
 };
+
+/// Source of process-unique scene identities, so a renderer can tell the scene it cached shadow maps for from another.
+static NEXT_SCENE_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Which queue an instance draws in.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -143,6 +166,14 @@ pub struct MeshInstanceId {
     generation: u32,
 }
 
+impl MeshInstanceId {
+    /// The dense slot the instance (and its render proxy) occupies.
+    #[cfg(test)]
+    pub(crate) fn slot(self) -> u32 {
+        self.index
+    }
+}
+
 /// Stable handle to a scene terrain instance; stale handles never alias a newer instance.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TerrainInstanceId {
@@ -201,7 +232,6 @@ struct NodeSlot {
 }
 
 /// Flat retained collection of mesh and terrain instances, each iterated in creation-slot order.
-#[derive(Default)]
 pub struct RenderScene {
     slots: Vec<Slot<MeshInstance>>,
     free: Vec<u32>,
@@ -210,6 +240,31 @@ pub struct RenderScene {
     terrain_free: Vec<u32>,
     node_slots: Vec<NodeSlot>,
     node_free: Vec<u32>,
+
+    // Derived render data, refreshed on the first frame read after edits. Edits mark it through `&mut self` without
+    // locking; the lock is taken once per frame, while the renderer's shared borrow of the scene rules out edits.
+    proxies: Mutex<SceneProxies>,
+    /// Process-unique identity, so renderers keep per-scene caches apart.
+    id: u64,
+    /// Increases with every terrain or scene-node edit, so renderers know when terrain shadows may have changed.
+    terrain_revision: u64,
+}
+
+impl Default for RenderScene {
+    fn default() -> Self {
+        Self {
+            slots: Vec::new(),
+            free: Vec::new(),
+            live: 0,
+            terrain_slots: Vec::new(),
+            terrain_free: Vec::new(),
+            node_slots: Vec::new(),
+            node_free: Vec::new(),
+            proxies: Mutex::new(SceneProxies::default()),
+            id: NEXT_SCENE_ID.fetch_add(1, Ordering::Relaxed),
+            terrain_revision: 0,
+        }
+    }
 }
 
 impl RenderScene {
@@ -221,22 +276,25 @@ impl RenderScene {
     /// Add an instance and return its handle.
     pub fn insert(&mut self, instance: MeshInstance) -> MeshInstanceId {
         self.live += 1;
-        if let Some(index) = self.free.pop() {
+        let id = if let Some(index) = self.free.pop() {
             let slot = &mut self.slots[index as usize];
             slot.instance = Some(instance);
-            return MeshInstanceId {
+            MeshInstanceId {
                 index,
                 generation: slot.generation,
-            };
-        }
-        self.slots.push(Slot {
-            generation: 0,
-            instance: Some(instance),
-        });
-        MeshInstanceId {
-            index: (self.slots.len() - 1) as u32,
-            generation: 0,
-        }
+            }
+        } else {
+            self.slots.push(Slot {
+                generation: 0,
+                instance: Some(instance),
+            });
+            MeshInstanceId {
+                index: (self.slots.len() - 1) as u32,
+                generation: 0,
+            }
+        };
+        self.mark(id.index, ProxyChanges::MESH);
+        id
     }
 
     /// Convenience: add an untransformed instance of `asset`.
@@ -249,8 +307,13 @@ impl RenderScene {
         self.slots.get(id.index as usize).filter(|slot| slot.generation == id.generation)?.instance.as_ref()
     }
 
-    /// Mutably borrow a live instance.
+    /// Mutably borrow a live instance. The borrow marks the instance's render proxy, so the next frame compares the
+    /// instance with what it last drew and refreshes only what changed.
     pub fn get_mut(&mut self, id: MeshInstanceId) -> Option<&mut MeshInstance> {
+        let live = self.get(id).is_some();
+        if live {
+            self.mark(id.index, ProxyChanges::EDITED);
+        }
         self.slots.get_mut(id.index as usize).filter(|slot| slot.generation == id.generation)?.instance.as_mut()
     }
 
@@ -266,6 +329,7 @@ impl RenderScene {
         slot.generation = slot.generation.wrapping_add(1);
         self.free.push(id.index);
         self.live -= 1;
+        self.mark(id.index, ProxyChanges::NONE);
         true
     }
 
@@ -291,6 +355,8 @@ impl RenderScene {
                 self.node_free.push(index as u32);
             }
         }
+        self.proxies_mut().reset();
+        self.terrain_revision += 1;
     }
 
     /// Number of live mesh instances.
@@ -320,6 +386,7 @@ impl RenderScene {
 
     /// Add a terrain instance and return its handle. The renderer creates its GPU resources on first draw.
     pub fn insert_terrain(&mut self, instance: TerrainInstance) -> TerrainInstanceId {
+        self.terrain_revision += 1;
         if let Some(index) = self.terrain_free.pop() {
             let slot = &mut self.terrain_slots[index as usize];
             slot.instance = Some(instance);
@@ -350,6 +417,7 @@ impl RenderScene {
 
     /// Mutably borrow a live terrain instance.
     pub fn terrain_mut(&mut self, id: TerrainInstanceId) -> Option<&mut TerrainInstance> {
+        self.terrain_revision += 1;
         self.terrain_slots.get_mut(id.index as usize).filter(|slot| slot.generation == id.generation)?.instance.as_mut()
     }
 
@@ -365,6 +433,7 @@ impl RenderScene {
         slot.instance = None;
         slot.generation = slot.generation.wrapping_add(1);
         self.terrain_free.push(id.index);
+        self.terrain_revision += 1;
         true
     }
 
@@ -422,8 +491,11 @@ impl RenderScene {
         self.node_slot(id)?.node.as_ref()
     }
 
-    /// Mutably borrow a live node.
+    /// Mutably borrow a live node. The borrow marks every instance beneath the node for the next frame's refresh.
     pub fn node_mut(&mut self, id: SceneNodeId) -> Option<&mut SceneNode> {
+        if self.node_slot(id).is_some() {
+            self.mark_node(id.index);
+        }
         self.node_slots.get_mut(id.index as usize).filter(|slot| slot.generation == id.generation)?.node.as_mut()
     }
 
@@ -445,6 +517,7 @@ impl RenderScene {
             ancestor = self.node_slot(current).ok_or(SceneGraphError::UnknownParent)?.parent;
         }
         self.node_slots[id.index as usize].parent = parent;
+        self.mark_node(id.index);
         Ok(())
     }
 
@@ -478,6 +551,7 @@ impl RenderScene {
             slot.generation = slot.generation.wrapping_add(1);
             self.node_free.push(node.index);
         }
+        self.terrain_revision += 1;
         true
     }
 
@@ -487,6 +561,7 @@ impl RenderScene {
             return Err(SceneGraphError::UnknownParent);
         }
         self.get_mut(id).ok_or(SceneGraphError::UnknownTarget)?.parent = parent;
+        self.mark(id.index, ProxyChanges::HIERARCHY);
         Ok(())
     }
 
@@ -547,6 +622,62 @@ impl RenderScene {
             current = slot.parent;
         }
         (matrix, visible)
+    }
+
+    /// The scene's render proxies, with every edit since the last read applied. The renderer holds the guard for one
+    /// frame; no edit can happen meanwhile, since edits need `&mut self` while the frame borrows the scene.
+    pub(crate) fn proxies(&self) -> MutexGuard<'_, SceneProxies> {
+        let mut proxies = match self.proxies.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                // A panic during an earlier refresh left the cache unknown; rebuild it from the instances.
+                self.proxies.clear_poison();
+                let mut guard = poisoned.into_inner();
+                guard.rebuild(self.slots.len());
+                guard
+            }
+        };
+        proxies.refresh(self);
+        proxies
+    }
+
+    /// Process-unique identity of this scene.
+    pub(crate) fn id(&self) -> u64 {
+        self.id
+    }
+
+    /// Increases with every terrain or scene-node edit.
+    pub(crate) fn terrain_revision(&self) -> u64 {
+        self.terrain_revision
+    }
+
+    /// The handle of the live instance in slot `index`.
+    pub(crate) fn instance_at(&self, index: u32) -> Option<(MeshInstanceId, &MeshInstance)> {
+        let slot = self.slots.get(index as usize)?;
+        let instance = slot.instance.as_ref()?;
+        Some((
+            MeshInstanceId {
+                index,
+                generation: slot.generation,
+            },
+            instance,
+        ))
+    }
+
+    /// The proxies for an edit, without locking (the mutable borrow already excludes every reader).
+    fn proxies_mut(&mut self) -> &mut SceneProxies {
+        self.proxies.get_mut().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Mark instance slot `index` for the next refresh.
+    fn mark(&mut self, index: u32, changes: ProxyChanges) {
+        self.proxies_mut().mark(index, changes);
+    }
+
+    /// Mark node slot `index` (and so every instance beneath it) for the next refresh; terrain beneath it may move too.
+    fn mark_node(&mut self, index: u32) {
+        self.proxies_mut().mark_node(index);
+        self.terrain_revision += 1;
     }
 
     fn node_slot(&self, id: SceneNodeId) -> Option<&NodeSlot> {

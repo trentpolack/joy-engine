@@ -33,4 +33,15 @@ fn timestamps_divide_the_frame_into_phases() {
     };
     apply_gpu_timings(&mut short, &[0, 1_000], 1_000.0);
     assert_eq!(short.phases[1].gpu_milliseconds, None);
+
+    // A driver that never sampled the marks resolves every timestamp to the same value (Metal with empty passes): the
+    // frame reports no GPU timings instead of zero milliseconds, and says so, so the profiler can stop asking.
+    let mut stalled = FrameProfile {
+        phases: vec![phase(FramePhase::Prepare), phase(FramePhase::Scene)],
+        gpu_milliseconds: None,
+        ..short
+    };
+    assert!(!apply_gpu_timings(&mut stalled, &[0, 0, 0], 1_000.0));
+    assert!(stalled.phases.iter().all(|timing| timing.gpu_milliseconds.is_none()));
+    assert_eq!(stalled.gpu_milliseconds, None);
 }

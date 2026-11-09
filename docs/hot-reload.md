@@ -2,9 +2,10 @@
 Games embed their authored text assets so browser and release builds need no file system, and native development builds read the same assets from the project folder so edits apply without recompiling or restarting.
 
 ## GameAssets
-`joy_engine::game_assets!["assets/main.joylevel", "assets/form/tower.form"]` embeds each file (paths relative to the game's manifest directory, always under `assets/`) and, in native development builds, remembers the project folder. Games that already embed text can build the table themselves with `GameAssets::new(entries, joy_engine::source_root!())`.
+`joy_engine::game_assets!["assets/main.joylevel", "assets/form/tower.form"]` embeds each file (paths relative to the game's manifest directory, always under `assets/`) and, in native development builds, remembers the project folder. Games that already embed text can build the table themselves with `GameAssets::new(entries, joy_engine::source_root!())`. The table is `runtime::GameAssets` (the `joy-app` shell crate), so release and browser builds have it without the development tools.
 
 - `read(path)` returns the file on disk while hot reloading (falling back to the embedded text when the file cannot be read) and the embedded text otherwise. Paths outside `assets/`, absolute paths, and parent segments are refused.
+- A hot-reload read of a file the table does not embed still succeeds, but logs a warning once per path, because browser and release builds will report it missing; `unembedded_reads()` lists those paths. Add the file to `game_assets!` (or the game's table) before shipping.
 - `poll_changes(elapsed_seconds)` checks, at most every `ASSET_POLL_SECONDS`, the stamps of files read so far and returns the paths that changed. A path stays reported until the game reads it again, so a refused edit (for example FORM that no longer parses) is retried after the next save.
 - Browser and release builds report `hot_reload() == false`, never touch files, and always return the embedded text.
 
@@ -16,7 +17,7 @@ Reload only what an edit touched, and keep the previous result when the new text
 - `.joyfx` effects: restart the effects that use the changed definition.
 - `.joylevel`: rebuild the level session when the game can restart it safely.
 
-Embed the referenced scripts and modules a FORM asset reads alongside it, since browser and release builds can only read embedded files.
+Embed the referenced scripts and modules a FORM asset reads alongside it, since browser and release builds can only read embedded files. Those builds also load the FORM meshes their build script cooked instead of evaluating them; native development builds always evaluate live, so hot reload never sees cooked geometry (see [cooked FORM meshes](rust-form.md#cooked-meshes)).
 
 Joy Editor's **Play** runs a game in its own window; saved assets reach it through this path, so authoring and playing stay live together.
 

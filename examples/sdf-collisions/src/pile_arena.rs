@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! One bin and its growing pile: an independent physics world with a static floor and walls, props dropped on a
+//! One bin and its growing pile: an independent physics simulation with a static floor and walls, props dropped on a
 //! seeded schedule, and (when a scene is supplied) one mesh per body that follows it.
 //!
 //! The SDF bin gives each prop its signed distance collider. The box bin gives each prop its bounding box, which is
@@ -67,7 +67,7 @@ pub struct PileArena {
     center_x: f32,
 
     // Simulation. Pieces are in drop order, which is also the order the hash and meshes visit them.
-    world: PhysicsWorld,
+    world: PhysicsSimulation,
     random: SeededRandom,
     pieces: Vec<Piece>,
     target: usize,
@@ -83,10 +83,10 @@ pub struct PileArena {
 impl PileArena {
     /// An empty bin centered at `center_x`, with its floor top at y = 0. Adds the bin's meshes to `scene` if given.
     pub fn new(mode: ColliderMode, center_x: f32, scene: Option<&mut RenderScene>) -> Result<Self, PhysicsError> {
-        let mut world = PhysicsWorld::new(PhysicsWorldOptions {
+        let mut world = PhysicsSimulation::new(PhysicsSimulationOptions {
             fixed_step: PHYSICS.fixed_step,
             max_sub_steps: PHYSICS.max_sub_steps,
-            ..PhysicsWorldOptions::default()
+            ..PhysicsSimulationOptions::default()
         })?;
         let slabs = bin_slabs(center_x);
         for (center, half_extents) in &slabs {

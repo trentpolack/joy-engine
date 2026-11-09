@@ -33,8 +33,8 @@ use joy_physics::{
     PhysicsError,
     PhysicsMutationBatch,
     PhysicsResidency,
-    PhysicsWorld,
-    PhysicsWorldOptions,
+    PhysicsSimulation,
+    PhysicsSimulationOptions,
     RadialDamage,
     create_chunk_mesh_data,
     create_removal_mutation_batch,
@@ -543,8 +543,8 @@ fn shape(chunk: &DestructibleChunkDefinition) -> PhysicsCollisionShape {
 }
 
 #[test]
-fn physics_world_keeps_chunk_collision_in_step_with_committed_damage() {
-    let mut physics = PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap();
+fn physics_simulation_keeps_chunk_collision_in_step_with_committed_damage() {
+    let mut physics = PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap();
     assert_eq!(physics.residency(), PhysicsResidency::Cpu);
     let mut structure = ChunkStructure::new(&wall(), None).unwrap();
     let initial = PhysicsMutationBatch {
@@ -607,7 +607,7 @@ fn physics_world_keeps_chunk_collision_in_step_with_committed_damage() {
         })
         .unwrap();
     for _ in 0..180 {
-        PhysicsWorld::step(&mut physics, 1.0 / 60.0).unwrap();
+        PhysicsSimulation::step(&mut physics, 1.0 / 60.0).unwrap();
     }
     let resting = physics.body_transform(debris).unwrap().position;
     assert!((resting.y - 3.2).abs() < 0.05, "debris rests on the wall top, at {resting}");

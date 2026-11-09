@@ -12,25 +12,37 @@
 //! the working directory), [`Stopwatch`] times CPU work on every target, and [`AssetFetcher`] streams asset files
 //! without blocking a frame (a worker thread natively, HTTP fetches in browsers).
 //!
+//! [`GameAssets`] ([`game_assets!`](crate::game_assets)) embeds a game's authored text assets for browser and release
+//! builds and hot reloads them from the project folder in native development builds, warning once about files read
+//! from disk that the build does not embed. [`DevTools`] is the development overlay each [`Frame`] carries; builds
+//! without the `devtools` feature get an inert one, and [`development_dock_height`] reports the room the development
+//! dock takes (zero there).
+//!
 //! This module gathers the platform crates apps use: the shell, frame phases, and clocks from `joy-app`; input and
 //! gamepads from `joy-input`; sound from `joy-audio`; storage, save slots, and exports from `joy-storage`; and the
 //! viewport, theme, and HUD typography from `joy-ui`.
 
 pub use joy_app::{
+    ASSET_POLL_SECONDS,
     App,
     AppError,
     AppResult,
     AssetFetcher,
+    AssetReadError,
     DEFAULT_MAXIMUM_FRAME_SECONDS,
+    DevTools,
+    EmbeddedAsset,
     FixedTick,
     Frame,
     FrameClock,
     FrameTime,
+    GameAssets,
     RenderTarget,
     ShellError,
     ShellOptions,
     StartContext,
     Stopwatch,
+    development_dock_height,
     launch_parameter,
     run,
     unix_time_milliseconds,
@@ -52,19 +64,24 @@ pub use joy_audio::{
     SoundSource,
 };
 pub use joy_input::{
+    ActionRepeat,
     ActionState,
     DEFAULT_DEAD_ZONE,
+    DEFAULT_REPEAT_DELAY_SECONDS,
+    DEFAULT_REPEAT_INTERVAL_SECONDS,
     GAMEPLAY_CONTEXT,
     GamepadState,
+    GamepadStick,
     InputAction,
     InputAxis,
     InputBinding,
     InputError,
     InputManager,
     InputMap,
-    KeyRepeat,
     PRESS_THRESHOLD,
     PointerState,
+    STICK_DIRECTION_THRESHOLD,
+    StickDirection,
     gamepad,
     key,
 };

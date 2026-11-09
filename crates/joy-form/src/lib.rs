@@ -28,6 +28,14 @@
 //! its own geometry, random stream, material registry, procedural store, and work budgets, and
 //! returns owned data that never borrows the caller's overrides, palette, or earlier results.
 //!
+//! # Cooking
+//!
+//! Release and browser builds can skip evaluation: a game's build script (`joy-cook`) evaluates its scripts ahead of
+//! time into a bundle of [`encode_geometry`] records keyed by [`CookKey`] (a content hash of the sources, modules,
+//! overrides, palette, and [`FORM_EVALUATOR_VERSION`]), and [`CookedForms::evaluate`] returns the cooked copy when the
+//! inputs match, evaluating live otherwise. [`FormEvaluation::resolve`] layers a `.forminst` instance's overrides the way
+//! every host does, so cooked keys and run-time keys agree.
+//!
 //! # Budgets
 //!
 //! Sources are limited to 200,000 characters and 40,000 tokens. Evaluation allows
@@ -37,7 +45,11 @@
 
 mod ast;
 mod builder;
+mod cook_key;
+mod cooked_forms;
+mod cooked_geometry;
 mod diagnostic;
+mod evaluation;
 mod evaluator;
 mod geometry_data;
 mod instance;
@@ -57,12 +69,33 @@ mod scope;
 mod tokenizer;
 mod value;
 
+use std::cell::RefCell;
+
 use serde_json::Value as Json;
 
+pub use cook_key::{
+    CookKey,
+    FORM_EVALUATOR_VERSION,
+};
+pub use cooked_forms::{
+    COOKED_FORMS_FILE,
+    CookedForms,
+    write_cooked_bundle,
+};
+pub use cooked_geometry::{
+    COOKED_GEOMETRY_VERSION,
+    CookError,
+    decode_geometry,
+    encode_geometry,
+};
 pub use diagnostic::{
     Diagnostic,
     FormValueError,
     SourceToken,
+};
+pub use evaluation::{
+    EvaluationError,
+    FormEvaluation,
 };
 pub use geometry_data::{
     AttributeColumn,
@@ -132,6 +165,8 @@ pub const DOCUMENT_TOTAL_TEXTURE_BYTES: usize = materials::MAX_TOTAL_TEXTURE_BYT
 #[derive(Debug)]
 pub struct CompiledScript {
     program: modules::Program,
+    // The main source and every module's path and source, hashed while parsing: the source half of a `CookKey`.
+    source_fingerprint: cook_key::SourceFingerprint,
 }
 
 impl CompiledScript {
@@ -143,6 +178,7 @@ impl CompiledScript {
     pub fn parse(source: &str) -> Result<Self, Diagnostic> {
         Ok(Self {
             program: modules::build(source, None, None)?,
+            source_fingerprint: cook_key::SourceFingerprint::new(source, []),
         })
     }
 
@@ -154,8 +190,19 @@ impl CompiledScript {
     /// parsing; evaluation never loads files. A module failure is reported at the `use` declaration
     /// that reached it, with the module path, line, and column in the message.
     pub fn parse_with_modules(source: &str, path: &str, loader: &dyn ModuleLoader) -> Result<Self, Diagnostic> {
+        // Record each module the parser loads, in load order, so the fingerprint covers exactly what was read.
+        let loaded: RefCell<Vec<(String, String)>> = RefCell::new(Vec::new());
+        let recording = |module: &str| -> Result<String, String> {
+            let text = loader.load(module)?;
+            loaded.borrow_mut().push((module.to_owned(), text.clone()));
+            Ok(text)
+        };
+        let program = modules::build(source, Some(path), Some(&recording))?;
+        let loaded = loaded.into_inner();
+        let modules = loaded.iter().map(|(module, text)| (module.as_str(), text.as_str()));
         Ok(Self {
-            program: modules::build(source, Some(path), Some(loader))?,
+            program,
+            source_fingerprint: cook_key::SourceFingerprint::new(source, modules),
         })
     }
 
@@ -177,6 +224,16 @@ impl CompiledScript {
     /// fails or exceeds a budget; no partial geometry is returned.
     pub fn evaluate(&self, overrides: &Json, materials: Option<&Json>) -> Result<GeometryData, Diagnostic> {
         evaluator::evaluate(&self.program, overrides, materials)
+    }
+
+    /// The content key of evaluating this script with `overrides` and `materials` under this evaluator build: what
+    /// cooked FORM bundles are indexed by (see [`CookKey`]).
+    pub fn cook_key(&self, overrides: &Json, materials: Option<&Json>) -> CookKey {
+        cook_key::evaluation_key(self.source_fingerprint, overrides, materials)
+    }
+
+    pub(crate) fn source_fingerprint(&self) -> cook_key::SourceFingerprint {
+        self.source_fingerprint
     }
 }
 

@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Bloom on a real device: HDR patches drawn by the triangle renderer pass through the engine's display processing
-//! with no tone curve, so glow reads back as linear light around them. Light below the threshold never glows, glow
+//! Bloom on a real device: HDR patches drawn through the scene renderer's top-down view at unit ambient (which leaves
+//! their colors exact) pass through the engine's display processing with no tone curve, so glow reads back as linear
+//! light around them. Light below the threshold never glows, glow
 //! grows with strength, the radius sets how far it reaches, and every filtering quality produces a smooth halo. Skips
 //! without a GPU adapter or an HDR scene format; native only (browsers cannot block on readback).
 #![cfg(not(target_arch = "wasm32"))]
@@ -19,40 +20,15 @@ use joy_renderer::{
     BackendPreference,
     CAPTURE_FORMAT,
     ColorVertex,
+    FrameInputs,
     GpuContext,
     OffscreenTarget,
+    RenderScene,
+    Renderer,
+    RendererOptions,
     TopDownCamera,
-    TriangleFrame,
-    TriangleRenderer,
-    TriangleRendererOptions,
-    top_down_orthographic,
+    TopDownView,
 };
-
-/// Passes vertex colors through unchanged, so patches carry exact HDR values into the scene target.
-const SHADER: &str = r"
-struct Uniforms {
-  viewProjection: mat4x4f,
-  frame: vec4f,
-};
-
-@group(0) @binding(0) var<uniform> uniforms: Uniforms;
-
-struct VertexOutput {
-  @builtin(position) position: vec4f,
-  @location(0) color: vec4f,
-};
-
-@vertex fn vertexMain(@location(0) position: vec3f, @location(1) color: vec4f) -> VertexOutput {
-  var output: VertexOutput;
-  output.position = uniforms.viewProjection*vec4f(position, 1.0);
-  output.color = color;
-  return output;
-}
-
-@fragment fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
-  return input.color;
-}
-";
 
 /// Drawing size; the patch sits at the center.
 const WIDTH: u32 = 256;
@@ -90,22 +66,20 @@ fn bloom(strength: f32, radius: f32, quality: BloomQuality) -> PostProcessSettin
 /// Render one centered patch of `light` and return each pixel's linear red channel, row by row.
 fn render(gpu: &GpuContext, light: f32, config: &PostProcessSettings) -> Vec<f32> {
     let target = OffscreenTarget::new(gpu, WIDTH, HEIGHT).expect("capture target");
-    let options = TriangleRendererOptions {
-        shader: SHADER.to_owned(),
-        uniform_size: 80,
-        post_process: Some(config.clone()),
+    let options = RendererOptions {
+        post_process: config.clone(),
+        shadows: None,
+        ..RendererOptions::default()
     };
-    let mut renderer = TriangleRenderer::new(gpu, CAPTURE_FORMAT, options).expect("renderer");
+    let mut renderer = Renderer::new(gpu, CAPTURE_FORMAT, options);
     renderer.resize(WIDTH, HEIGHT, 1.0);
-    let (width, height) = (WIDTH as f32, HEIGHT as f32);
+    let size = Vec2::new(WIDTH as f32, HEIGHT as f32);
     let camera = TopDownCamera {
         height: 10.0,
         near: 1.0,
         far: 20.0,
     };
-    let matrix = top_down_orthographic(width, height, Vec2::new(width * 0.5, height * 0.5), camera).unwrap();
-    let mut uniforms = matrix.to_cols_array().to_vec();
-    uniforms.extend([0.0; 4]);
+    let view = TopDownView::new(size, size * 0.5, camera).unwrap();
 
     let (left, top) = (((WIDTH - PATCH) / 2) as f32, ((HEIGHT - PATCH) / 2) as f32);
     let (right, bottom) = (left + PATCH as f32, top + PATCH as f32);
@@ -118,14 +92,14 @@ fn render(gpu: &GpuContext, light: f32, config: &PostProcessSettings) -> Vec<f32
                 color,
             })
             .collect();
-    let frame = TriangleFrame {
-        opaque: &vertices,
-        transparent: &[],
-        uniforms: bytemuck::cast_slice(&uniforms),
+    // Unit ambient and no other light leave the lit transient triangles at exactly their vertex color.
+    let inputs = FrameInputs {
+        opaque_triangles: &vertices,
+        ambient: Some(1.0),
         clear_color: LinearColor::rgb(0.0, 0.0, 0.0),
-        particles: None,
+        ..FrameInputs::default()
     };
-    renderer.render(target.view(), &frame).expect("frame renders");
+    renderer.render(&RenderScene::new(), &view, &inputs, target.view()).expect("frame renders");
     let pixels = target.read_rgba(gpu).expect("readback");
     let (rgba_pixels, _) = pixels.as_chunks::<4>();
     rgba_pixels.iter().map(|pixel| srgb_to_linear(f64::from(pixel[0]) / 255.0) as f32).collect()

@@ -3,10 +3,10 @@
 
 //! Rigid bodies, raycast vehicles, contact and sensor events, and filtered scene queries behind a backend-neutral API.
 //!
-//! [`PhysicsWorld`] owns a rapier3d solver and every body created through it, and hands out copyable [`BodyHandle`]
+//! [`PhysicsSimulation`] owns a rapier3d solver and every body created through it, and hands out copyable [`BodyHandle`]
 //! values. Handles carry the identity of the world that created them, so a handle from another world (or a removed
 //! body) is reported as unknown instead of aliasing an unrelated body. A raycast vehicle is a kind of body: its chassis
-//! is created with [`PhysicsWorld::create_vehicle`] and every vehicle operation takes the chassis body's handle.
+//! is created with [`PhysicsSimulation::create_vehicle`] and every vehicle operation takes the chassis body's handle.
 //!
 //! Coordinates are meters in Y-up world space; rotations are XYZ Euler radians applied X, then Y, then Z. Vehicles use
 //! up = +Y, forward = +Z, and right = +X in chassis space. Time is in seconds and the solver advances in fixed steps
@@ -16,12 +16,12 @@
 //! are documented on the individual options and in `docs/rust-simulation.md`.
 //!
 //! [`destruction`] holds solver-independent destructible chunk structures, and [`PhysicsBackend`] is the
-//! shape-residency contract they synchronize through; `PhysicsWorld` implements it as the CPU backend.
+//! shape-residency contract they synchronize through; `PhysicsSimulation` implements it as the CPU backend.
 //!
 //! [`SdfShape`] colliders describe solids by signed distance (analytical primitives or meshes baked into voxel grids)
-//! and collide through optimization-based contact search; see [`PhysicsWorld::create_sdf_body`].
+//! and collide through optimization-based contact search; see [`PhysicsSimulation::create_sdf_body`].
 //!
-//! Static heightfields ([`PhysicsWorld::create_heightfield_body`]) collide with every body kind, SDF bodies included.
+//! Static heightfields ([`PhysicsSimulation::create_heightfield_body`]) collide with every body kind, SDF bodies included.
 //! [`TerrainColliders`] keeps heightfields for a `joy_terrain` surface's collision level around moving anchors and
 //! rebuilds them when tiles change (for example after a crater), so gameplay collides with the surface it samples.
 
@@ -32,8 +32,8 @@ mod physics_body;
 mod physics_events;
 mod physics_heightfield;
 mod physics_query;
+mod physics_simulation;
 mod physics_vehicle;
-mod physics_world;
 mod sdf;
 mod terrain_colliders;
 
@@ -84,6 +84,10 @@ pub use physics_events::{
 };
 pub use physics_heightfield::HeightfieldOptions;
 pub use physics_query::QueryOptions;
+pub use physics_simulation::{
+    PhysicsSimulation,
+    PhysicsSimulationOptions,
+};
 pub use physics_vehicle::{
     VEHICLE_DEFAULTS,
     VehicleInput,
@@ -91,10 +95,6 @@ pub use physics_vehicle::{
     VehicleTuning,
     WHEEL_DEFAULTS,
     WheelOptions,
-};
-pub use physics_world::{
-    PhysicsWorld,
-    PhysicsWorldOptions,
 };
 pub use sdf::{
     SDF_BAKE_DEFAULTS,
@@ -113,7 +113,7 @@ use joy_core::math::Vec3;
 
 use joy_core::format::format_number;
 
-/// Opaque handle to a rigid body owned by one [`PhysicsWorld`].
+/// Opaque handle to a rigid body owned by one [`PhysicsSimulation`].
 ///
 /// Handles are plain values: copying one never extends the body's lifetime. Operations on a removed body, or on a
 /// handle from another world, fail with [`PhysicsError::UnknownBody`] or return `None`.

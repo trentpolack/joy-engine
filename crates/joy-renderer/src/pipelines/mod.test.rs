@@ -18,7 +18,8 @@ fn builtin_models() -> [(&'static str, &'static str); 3] {
 const SHADOW_DEPTH_VIEWS: [&str; 2] = ["cascadeDepths", "pointShadowDepths"];
 
 /// Every built-in model composes into valid scene, depth pre-pass, and shadow caster modules, as do the sky and the
-/// particle passes, and the GL variants translate to WebGL 2 GLSL without shadow samplers or extensions or depth reads WebGL 2 would leave incomplete.
+/// hard particle pass WebGL 2 draws every particle with, and the GL variants translate to WebGL 2 GLSL without shadow
+/// samplers or extensions or depth reads WebGL 2 would leave incomplete.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn every_model_pass_validates_and_translates_for_webgl() {
@@ -42,19 +43,12 @@ fn every_model_pass_validates_and_translates_for_webgl() {
         modules.push((format!("{name} caster"), caster_module_source(source), "vertexMain", vec!["fragmentMain"]));
     }
     modules.push(("sky".into(), ATMOSPHERE_SOURCE.to_owned(), "vertexMain", vec!["fragmentMain", "fragmentTargets"]));
-    // Instanced particles, in the scene renderer and in the arcade triangle renderer.
-    let particle_entries = vec!["fragmentOver", "fragmentAdditive"];
+    // Instanced particles: WebGL 2 composes only the hard pipelines, with lit and display-color instances.
     modules.push((
         "scene particles".into(),
-        format!("{common}\n{PARTICLE_SHAPES_SOURCE}\n{PARTICLE_SCENE_SOURCE}"),
+        particles::particle_module_source(&common, false),
         "vertexMain",
-        particle_entries.clone(),
-    ));
-    modules.push((
-        "triangle particles".into(),
-        format!("{PARTICLE_SHAPES_SOURCE}\n{PARTICLE_TRIANGLES_SOURCE}"),
-        "vertexMain",
-        particle_entries,
+        vec!["fragmentOver", "fragmentAdditive"],
     ));
 
     for (name, source, vertex_entry, fragment_entries) in modules {
@@ -138,5 +132,23 @@ fn deferred_models_compose_gbuffer_and_lighting_passes() {
                 assert!(group < 2 || usage[handle].is_empty(), "{name} lighting reads {:?}", variable.name);
             }
         }
+    }
+}
+
+/// The modules only devices with depth reads and compute shaders compile, the soft particle pipelines and the GPU
+/// particle sort, validate as WGSL; WebGL 2 never builds them (it draws soft particles hard and sorts on the CPU).
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn soft_particles_and_the_gpu_sort_validate_for_native_and_webgpu() {
+    let modules = [
+        ("soft particles", particles::particle_module_source(&scene_common_for(false), true)),
+        ("particle sort", particle_sort::PARTICLE_SORT_SOURCE.to_owned()),
+    ];
+    for (name, source) in modules {
+        let module = wgpu::naga::front::wgsl::parse_str(&source)
+            .unwrap_or_else(|error| panic!("{name}: {}", error.emit_to_string(&source)));
+        wgpu::naga::valid::Validator::new(Default::default(), wgpu::naga::valid::Capabilities::all())
+            .validate(&module)
+            .unwrap_or_else(|error| panic!("{name}: {error:?}"));
     }
 }

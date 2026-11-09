@@ -12,7 +12,7 @@
 //!
 //! Bodies sleep once they come to rest (rapier's thresholds), so settled debris and props cost no solver time;
 //! `can_sleep: false` keeps a body awake. Pushing, teleporting, or driving a body wakes it, and teleporting or removing
-//! a body wakes everything resting against it. Forces act on every fixed step of the next [`PhysicsWorld::step`] call
+//! a body wakes everything resting against it. Forces act on every fixed step of the next [`PhysicsSimulation::step`] call
 //! that runs one; impulses change velocity immediately.
 
 use joy_core::PrimitiveShape;
@@ -44,14 +44,14 @@ use super::convert::{
     solver_rotation_from_euler,
     to_solver_vector,
 };
-use super::physics_world::BodyRecord;
+use super::physics_simulation::BodyRecord;
 use super::sdf::SdfCollider;
 use super::{
     BodyHandle,
     CollisionGroups,
     PhysicsError,
+    PhysicsSimulation,
     PhysicsTransform,
-    PhysicsWorld,
     SdfShape,
 };
 
@@ -106,10 +106,10 @@ pub struct BodyOptions {
     pub angular_damping: f32,
     /// Collision layers the body belongs to and interacts with; default every layer.
     pub groups: CollisionGroups,
-    /// Whether the body is a sensor: it reports overlaps through [`PhysicsWorld::events`] but never collides, and
+    /// Whether the body is a sensor: it reports overlaps through [`PhysicsSimulation::events`] but never collides, and
     /// unfiltered raycasts ignore it.
     pub sensor: bool,
-    /// Whether contacts with this body are reported through [`PhysicsWorld::events`]; sensors always report.
+    /// Whether contacts with this body are reported through [`PhysicsSimulation::events`]; sensors always report.
     pub report_contacts: bool,
     /// Whether the body may sleep once it comes to rest; default true.
     pub can_sleep: bool,
@@ -131,7 +131,7 @@ impl Default for BodyOptions {
     }
 }
 
-impl PhysicsWorld {
+impl PhysicsSimulation {
     /// Create a world-owned rigid body and return its handle.
     ///
     /// Options are validated in a fixed order (mass, friction, restitution, position, rotation, damping, shape
@@ -149,7 +149,7 @@ impl PhysicsWorld {
     /// Create a world-owned rigid body whose collider is a signed distance shape, and return its handle.
     ///
     /// The shape replaces the primitive collider: `options.shape`, `half_extents`, and `radius` are ignored, while mass,
-    /// pose, friction, restitution, and damping are validated and applied exactly as in [`PhysicsWorld::create_body`].
+    /// pose, friction, restitution, and damping are validated and applied exactly as in [`PhysicsSimulation::create_body`].
     /// The shape's local frame is the body frame, and its center of mass and inertia come from the field. The body
     /// shares `shape`'s data; dropping the last body and handle releases it. Invalid options leave the world unchanged.
     pub fn create_sdf_body(&mut self, shape: &SdfShape, options: BodyOptions) -> Result<BodyHandle, PhysicsError> {
@@ -168,7 +168,7 @@ impl PhysicsWorld {
     /// return its handle.
     ///
     /// The hull replaces the primitive collider: `options.shape`, `half_extents`, and `radius` are ignored, while mass,
-    /// pose, materials, damping, layers, and flags apply as in [`PhysicsWorld::create_body`]; mass properties come from
+    /// pose, materials, damping, layers, and flags apply as in [`PhysicsSimulation::create_body`]; mass properties come from
     /// the hull. Fails with [`PhysicsError::DegenerateHull`] for fewer than four points, non-finite points, or points
     /// that span no volume; invalid configuration leaves the world unchanged.
     pub fn create_convex_body(&mut self, points: &[Vec3], options: BodyOptions) -> Result<BodyHandle, PhysicsError> {
@@ -288,7 +288,7 @@ impl PhysicsWorld {
         Ok(())
     }
 
-    /// Apply a force in newtons over the next [`step`](PhysicsWorld::step) call.
+    /// Apply a force in newtons over the next [`step`](PhysicsSimulation::step) call.
     ///
     /// `point` is a world-space application point; `None` applies at the center of mass (no torque). Forces accumulate
     /// until a `step` call that runs at least one fixed step, act on every fixed step of that call, and then reset, so a
@@ -339,7 +339,7 @@ impl PhysicsWorld {
     }
 }
 
-impl PhysicsWorld {
+impl PhysicsSimulation {
     /// The presentation pose of a live body: its previous fixed-step pose blended toward the current one.
     pub(super) fn interpolated_pose(&self, handle: BodyHandle) -> Option<Pose> {
         let raw = self.resolve_body(handle)?;

@@ -2,19 +2,13 @@
 // Licensed under the MIT License.
 
 // Particle entry points for the scene renderer's transparency queue. Composed after scene-common.wgsl (group 0: the
-// frame uniforms, whose view matrix gives the camera axes, and the fog volume; group 1, the shadow receiver, is bound
-// but unused) and particle-shapes.wgsl. Group 2 is the sprite texture: the batch's image, or one white texel for
-// untextured batches. Colors are linear HDR as authored, depth-tested against opaque geometry without depth writes.
+// frame uniforms, whose view matrix gives the camera axes, the frame's lights, and the fog volume; group 1, the shadow
+// receiver, is bound but unused), particle-shapes.wgsl, and particle-depth.wgsl or particle-depth-none.wgsl (the soft
+// fade, with the scene depth in group 3 for soft pipelines). Group 2 is the sprite texture: the batch's image, or one
+// white texel for untextured batches. Particles are depth-tested against opaque geometry without depth writes.
 
 @group(2) @binding(0) var particleTexture: texture_2d<f32>;
 @group(2) @binding(1) var particleTextureSampler: sampler;
-
-/**
- * Scene particles use their linear HDR colors as authored.
- */
-fn particleSourceColor(rgb: vec3f) -> vec3f {
-  return rgb;
-}
 
 /**
  * Expand one quad corner facing the frame's camera.
@@ -28,12 +22,53 @@ fn particleSourceColor(rgb: vec3f) -> vec3f {
 }
 
 /**
- * The fragment's premultiplied shape color. Sampling and derivatives happen here, before any per-shape branch.
+ * Half-Lambert wrap: light falls off smoothly across the particle and never reaches black on its far side, so a flat
+ * camera-facing card reads as a soft volume.
+ */
+fn halfLambert(cosine: f32) -> f32 {
+  let wrapped = (cosine*0.5) + 0.5;
+  return wrapped*wrapped;
+}
+
+/**
+ * Irradiance on a lit particle: uniform ambient and the skylight, the frame's directional light, and the point lights
+ * of its light cluster, each through the half-Lambert wrap on the camera-facing normal. Particles receive no shadows;
+ * the model stays cheap enough for thousands of overlapping fragments. Unlit particles keep their authored color.
+ */
+fn particleIrradiance(input: ParticleVarying) -> vec3f {
+  if((input.shape & PARTICLE_LIT) == 0u) {
+    return vec3f(1.0);
+  }
+  let normal = normalize(input.normal);
+  var irradiance = vec3f(frame.lighting.y) + skylightIrradiance(normal);
+  if(frame.primaryDirection.w > 0.0) {
+    let cosine = dot(normal, normalize(frame.primaryDirection.xyz));
+    irradiance+= frame.primaryColor.rgb*frame.primaryDirection.w*halfLambert(cosine);
+  }
+
+  let cluster = lightCluster(input.worldPosition);
+  for(var entry = cluster.x; entry < cluster.x + cluster.y; entry++) {
+    let light = pointLight(clusterLightIndex(entry));
+    let reach = pointLightReach(light, input.worldPosition);
+    if(reach <= 0.0) {
+      continue;
+    }
+    let direction = normalize(light.positionRange.xyz - input.worldPosition);
+    irradiance+= light.color.rgb*reach*halfLambert(dot(normal, direction));
+  }
+  return irradiance;
+}
+
+/**
+ * The fragment's premultiplied color, lit and faded against the scene. Sampling and derivatives happen here, before any
+ * per-shape branch.
  */
 fn sceneParticle(input: ParticleVarying) -> vec4f {
   let texel = textureSample(particleTexture, particleTextureSampler, input.uv);
   let pixel = max(fwidth(input.local.x), fwidth(input.local.y));
-  return shadeParticle(input, texel, pixel);
+  let shaded = shadeParticle(input, texel, pixel);
+  let lit = vec4f(shaded.rgb*particleIrradiance(input), shaded.a);
+  return lit*particleSceneFade(input);
 }
 
 /**

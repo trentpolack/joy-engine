@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! The physics world owner: fixed-step advancement with bounded catch-up, body bookkeeping (including the vehicles
+//! The physics simulation owner: fixed-step advancement with bounded catch-up, body bookkeeping (including the vehicles
 //! some bodies carry), contact and sensor events, and raycasts.
 
 use std::fmt;
@@ -12,6 +12,7 @@ use std::sync::atomic::{
 };
 
 use indexmap::IndexMap;
+use joy_core::EventChannel;
 use joy_core::math::Vec3;
 use rapier3d::control::DynamicRayCastVehicleController;
 use rapier3d::dynamics::RigidBodyHandle;
@@ -85,16 +86,16 @@ static NEXT_WORLD_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Solver policy. Gravity is meters per second squared; the fixed step is seconds.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct PhysicsWorldOptions {
+pub struct PhysicsSimulationOptions {
     /// World gravity in meters per second squared; default `[0, -9.81, 0]`.
     pub gravity: Vec3,
     /// Fixed simulation step in seconds, in `[1/1000, 1]`; default `1/60`.
     pub fixed_step: f32,
-    /// Maximum fixed steps per [`PhysicsWorld::step`] call, in `[1, 120]`; default 5. Extra catch-up time is dropped.
+    /// Maximum fixed steps per [`PhysicsSimulation::step`] call, in `[1, 120]`; default 5. Extra catch-up time is dropped.
     pub max_sub_steps: u32,
 }
 
-impl Default for PhysicsWorldOptions {
+impl Default for PhysicsSimulationOptions {
     fn default() -> Self {
         Self {
             gravity: DEFAULT_GRAVITY,
@@ -139,7 +140,7 @@ pub(super) struct VehicleRecord {
 ///
 /// Independent instances share no simulation state. Collisions are discrete: thin surfaces and very fast bodies can
 /// tunnel, and raycast tires have no solid wheel collider. Dropping the world releases everything it owns.
-pub struct PhysicsWorld {
+pub struct PhysicsSimulation {
     // Identity stamped into every handle this world issues.
     pub(super) world_id: u64,
 
@@ -159,10 +160,10 @@ pub struct PhysicsWorld {
     // force set once per frame acts for the whole frame whatever the step count.
     pub(super) forced_bodies: Vec<RigidBodyHandle>,
 
-    // Contact and sensor events from the latest `step` call, the solver callback that buffers them during a fixed step,
-    // and the colliders of bodies removed since the last fixed step (their parent is gone, but the solver still
-    // reports their contacts ending).
-    events: Vec<PhysicsEvent>,
+    // Contact and sensor events, one channel update per `step` call; the solver callback that buffers them during a
+    // fixed step; and the colliders of bodies removed since the last fixed step (their parent is gone, but the solver
+    // still reports their contacts ending).
+    events: EventChannel,
     event_collector: EventCollector,
     pub(super) retired_colliders: Vec<(ColliderHandle, RigidBodyHandle)>,
 
@@ -175,10 +176,10 @@ pub struct PhysicsWorld {
     sdf_counters: Arc<SdfCollisionCounters>,
 }
 
-impl fmt::Debug for PhysicsWorld {
+impl fmt::Debug for PhysicsSimulation {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("PhysicsWorld")
+            .debug_struct("PhysicsSimulation")
             .field("world_id", &self.world_id)
             .field("fixed_step", &self.fixed_step)
             .field("max_sub_steps", &self.max_sub_steps)
@@ -190,12 +191,12 @@ impl fmt::Debug for PhysicsWorld {
     }
 }
 
-impl PhysicsWorld {
+impl PhysicsSimulation {
     /// Create an independent Y-up solver with bounded fixed-step work.
     ///
     /// Fails if gravity is non-finite, the fixed step is outside `[1/1000, 1]` seconds, or `max_sub_steps` is outside
     /// `[1, 120]`.
-    pub fn new(options: PhysicsWorldOptions) -> Result<Self, PhysicsError> {
+    pub fn new(options: PhysicsSimulationOptions) -> Result<Self, PhysicsError> {
         // Fixed work limits prevent hidden-tab catch-up from stalling the frame.
         let fixed_step = finite_number(options.fixed_step, "fixedStep", MIN_FIXED_STEP, MAX_FIXED_STEP)?;
         if options.max_sub_steps < 1 || options.max_sub_steps > MAX_SUB_STEPS_LIMIT {
@@ -225,7 +226,7 @@ impl PhysicsWorld {
             solver,
             bodies: IndexMap::new(),
             forced_bodies: Vec::new(),
-            events: Vec::new(),
+            events: EventChannel::default(),
             event_collector: EventCollector::default(),
             retired_colliders: Vec::new(),
             resident_shapes: IndexMap::new(),
@@ -246,7 +247,7 @@ impl PhysicsWorld {
         let fixed_step = f64::from(self.fixed_step);
         let budget = fixed_step * f64::from(self.max_sub_steps);
         self.accumulator = (self.accumulator + f64::from(elapsed_seconds)).min(budget);
-        self.events.clear();
+        self.events.advance();
 
         let mut steps = 0;
         while self.accumulator + ACCUMULATOR_EPSILON >= fixed_step && steps < self.max_sub_steps {
@@ -268,6 +269,13 @@ impl PhysicsWorld {
     /// Only pairs where at least one body reports events appear: sensors always do, solid bodies when created with
     /// `report_contacts`. Empty before the first step and after a call that ran no fixed step.
     pub fn events(&self) -> &[PhysicsEvent] {
+        self.events.produced().read::<PhysicsEvent>()
+    }
+
+    /// The simulation's event channel (one update per [`step`](Self::step) call), for readers that run at their own
+    /// rate: an [`EventCursor<PhysicsEvent>`](joy_core::EventCursor) read once per frame sees every contact change
+    /// once, however many `step` calls ran.
+    pub fn event_channel(&self) -> &EventChannel {
         &self.events
     }
 
@@ -322,7 +330,7 @@ impl PhysicsWorld {
         self.presentation_fraction = fraction.is_finite().then(|| fraction.clamp(0.0, 1.0));
     }
 
-    /// Maximum fixed steps executed per [`PhysicsWorld::step`] call.
+    /// Maximum fixed steps executed per [`PhysicsSimulation::step`] call.
     pub fn max_sub_steps(&self) -> u32 {
         self.max_sub_steps
     }
@@ -350,7 +358,7 @@ impl PhysicsWorld {
         Some(handle.raw)
     }
 
-    /// Closest hit among `candidates` along the segment from `from` to `to`, with [`PhysicsWorld::raycast`] rules.
+    /// Closest hit among `candidates` along the segment from `from` to `to`, with [`PhysicsSimulation::raycast`] rules.
     ///
     /// Ties keep the earliest candidate, so callers control precedence through iteration order.
     pub(super) fn raycast_bodies(
@@ -487,7 +495,7 @@ impl PhysicsWorld {
                 continue;
             };
             let phase = if event.started() { ContactPhase::Started } else { ContactPhase::Ended };
-            self.events.push(PhysicsEvent {
+            self.events.send(PhysicsEvent {
                 phase,
                 first: BodyHandle {
                     world: self.world_id,

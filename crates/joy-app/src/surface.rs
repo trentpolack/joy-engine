@@ -101,6 +101,19 @@ impl ConfiguredSurface {
         DisplayOutput::extended(self.encoding, headroom, sdr_white_level)
     }
 
+    /// The most headroom the display can grant this surface, a multiple of SDR white, when the platform reports it
+    /// (Apple EDR does; browsers do not). It can exceed the current headroom: macOS raises a window's headroom only
+    /// after it presents extended-range content, so the first reads at startup are low.
+    pub fn potential_headroom(&self, gpu: &GpuContext) -> Option<f32> {
+        if !self.encoding.is_extended() {
+            return None;
+        }
+        let info = self.surface.display_hdr_info(gpu.adapter());
+        info.headroom
+            .and_then(|headroom| headroom.potential)
+            .filter(|potential| potential.is_finite() && *potential > 1.0)
+    }
+
     /// Reconfigure for a new drawing size; zero sizes are ignored (minimized windows).
     pub fn resize(&mut self, gpu: &GpuContext, width: u32, height: u32) {
         if width == 0 || height == 0 {

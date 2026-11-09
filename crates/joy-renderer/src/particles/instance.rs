@@ -6,12 +6,14 @@
 //! Every particle draws as one instance of a shared six-vertex quad: the vertex shader expands it to face the camera
 //! (or to follow a streak's velocity), and the fragment shader computes the shape analytically
 //! (`shaders/particle-shapes.wgsl`). Building an instance only reads the simulation; it never advances it or draws
-//! randomness. Positions are world units, colors linear HDR, and rotations radians.
+//! randomness. Positions and softness distances are world units, colors linear HDR (or display-encoded when flagged),
+//! and rotations radians.
 
 use bytemuck::{
     Pod,
     Zeroable,
 };
+use joy_core::LinearColor;
 use joy_core::math::{
     Mat4,
     Vec3,
@@ -19,6 +21,7 @@ use joy_core::math::{
 use joy_fx::{
     EffectParticle,
     ParticleBlend,
+    ParticleLighting,
     ParticleRenderer,
     ParticleTexture,
     ParticleTextureDimensions,
@@ -42,6 +45,16 @@ pub(crate) const RING_WIDTH_FRACTION: f32 = 0.045;
 
 /// Flag bit (above the shape byte) marking an instance whose color is premultiplied (`PARTICLE_PREMULTIPLIED`).
 const PREMULTIPLIED_FLAG: u32 = 1 << 8;
+
+/// Flag bit marking an instance the frame's lights shade (`PARTICLE_LIT`).
+const LIT_FLAG: u32 = 1 << 9;
+
+/// Flag bit marking an instance whose RGB holds display-encoded values the shader decodes per shape layer
+/// (`PARTICLE_DISPLAY_COLOR`).
+const DISPLAY_COLOR_FLAG: u32 = 1 << 10;
+
+/// Mask of the shape id in [`ParticleInstance::shape`].
+const SHAPE_MASK: u32 = 0xff;
 
 /// Largest value of a normalized 16-bit texture coordinate.
 const UNORM16_MAXIMUM: f64 = 65535.0;
@@ -80,7 +93,8 @@ impl From<ParticleRenderer> for ParticleShape {
     }
 }
 
-/// One particle as the GPU draws it: 60 bytes, five vertex attributes (`ParticleInstance` in particle-shapes.wgsl).
+/// One particle as the GPU draws it: 64 bytes, six vertex attributes (`ParticleInstance` in particle-shapes.wgsl), and
+/// sixteen words the GPU sort copies whole (`InstanceWords` in particle-sort.wgsl).
 ///
 /// The layout is a renderer contract, not a stable format: it changes whenever particle drawing does.
 #[repr(C)]
@@ -95,8 +109,11 @@ pub struct ParticleInstance {
     /// A sprite's atlas cell as normalized 16-bit left, top, right, and bottom texture coordinates (top-left origin),
     /// inset by half a texel; zero for untextured shapes.
     pub uv_rect: [u16; 4],
-    /// Shape id in the low byte; bit 8 marks premultiplied color.
+    /// Shape id in the low byte; bit 8 marks premultiplied color, bit 9 lit shading, and bit 10 display-encoded color.
     pub shape: u32,
+    /// Soft-particle distance in world units: the fragment fades out within it in front of opaque geometry. Zero draws
+    /// a hard intersection.
+    pub softness: f32,
 }
 
 impl ParticleInstance {
@@ -109,7 +126,7 @@ impl ParticleInstance {
     pub(crate) fn extent(&self) -> f32 {
         let size = self.position_size[3];
         let trail = Vec3::new(self.trail_rotation[0], self.trail_rotation[1], self.trail_rotation[2]).length();
-        match self.shape & 0xff {
+        match self.shape & SHAPE_MASK {
             shape if shape == ParticleShape::Streak as u32 => (size * STREAK_GLOW).max(trail + (size * 0.5)),
             shape if shape == ParticleShape::Ring as u32 => size + ring_half_width(size),
             shape if shape == ParticleShape::Billow as u32 => size * BILLOW_EXTENT,
@@ -136,6 +153,8 @@ pub(crate) struct EmitterDrawing {
     pub shape: u32,
     /// Whether the emitter's color is premultiplied (alpha zero still glows).
     pub premultiplied: bool,
+    /// Soft-particle distance in world units; zero is hard.
+    pub softness: f32,
     /// The sprite atlas and whether it animates (flipbook), for textured emitters.
     pub sprite: Option<SpriteAtlas>,
 }
@@ -154,15 +173,20 @@ pub(crate) struct SpriteAtlas {
 }
 
 impl EmitterDrawing {
-    /// The drawing settings of an emitter with `renderer` and `blend`; `texture` and `dimensions` are required for
-    /// textured renderers (callers check first).
+    /// The drawing settings of an emitter with `renderer`, `blend`, `lighting`, and `softness` (world units); `texture`
+    /// and `dimensions` are required for textured renderers (callers check first).
     pub fn new(
         renderer: ParticleRenderer,
         blend: ParticleBlend,
+        lighting: ParticleLighting,
+        softness: f64,
         texture: Option<(&ParticleTexture, ParticleTextureDimensions)>,
     ) -> Self {
         let premultiplied = blend == ParticleBlend::Premultiplied;
-        let flags = if premultiplied { PREMULTIPLIED_FLAG } else { 0 };
+        let mut flags = if premultiplied { PREMULTIPLIED_FLAG } else { 0 };
+        if lighting == ParticleLighting::Lit {
+            flags |= LIT_FLAG;
+        }
         let sprite = texture.filter(|_| renderer.is_textured()).map(|(texture, dimensions)| SpriteAtlas {
             columns: f64::from(texture.columns),
             rows: f64::from(texture.rows),
@@ -176,8 +200,14 @@ impl EmitterDrawing {
         Self {
             shape: (ParticleShape::from(renderer) as u32) | flags,
             premultiplied,
+            softness: softness.max(0.0) as f32,
             sprite,
         }
+    }
+
+    /// Mark the emitter's colors as display-encoded, so the shader decodes each shape layer to linear light.
+    pub fn decode_display_colors(&mut self) {
+        self.shape |= DISPLAY_COLOR_FLAG;
     }
 
     /// Whether `particle` draws anything: positive size within its lifetime, and some alpha (or, for premultiplied
@@ -202,7 +232,7 @@ impl EmitterDrawing {
             Some(transform) => (transform.transform_point3(local), transform.transform_vector3(trail_local)),
             None => (local, trail_local),
         };
-        let is_streak = (self.shape & 0xff) == ParticleShape::Streak as u32;
+        let is_streak = (self.shape & SHAPE_MASK) == ParticleShape::Streak as u32;
         let trail = if is_streak { trail } else { Vec3::ZERO };
         let alpha = particle.alpha.clamp(0.0, 1.0);
         ParticleInstance {
@@ -211,8 +241,49 @@ impl EmitterDrawing {
             trail_rotation: [trail.x, trail.y, trail.z, particle.rotation as f32],
             uv_rect: self.sprite.as_ref().map_or([0; 4], |atlas| atlas.cell(particle)),
             shape: self.shape,
+            softness: self.softness,
         }
     }
+
+    /// The instance for one caller-styled particle, or `None` when it draws nothing (no size, or no alpha and, for
+    /// premultiplied color, no light). Untextured shapes only; colors follow the same rules as simulated particles.
+    pub fn styled_instance(&self, particle: &StyledParticle) -> Option<ParticleInstance> {
+        let [red, green, blue, alpha] = particle.color.to_array();
+        let lit = self.premultiplied && (red > 0.0 || green > 0.0 || blue > 0.0);
+        if particle.size <= 0.0 || !(alpha > 0.0 || lit) {
+            return None;
+        }
+        let is_streak = (self.shape & SHAPE_MASK) == ParticleShape::Streak as u32;
+        let trail = if is_streak { particle.trail } else { Vec3::ZERO };
+        Some(ParticleInstance {
+            position_size: particle.position.extend(particle.size).to_array(),
+            color: [red.max(0.0), green.max(0.0), blue.max(0.0), alpha.clamp(0.0, 1.0)],
+            trail_rotation: trail.extend(particle.rotation).to_array(),
+            uv_rect: [0; 4],
+            shape: self.shape,
+            softness: self.softness,
+        })
+    }
+}
+
+/// One particle styled by its caller rather than an emitter's scripts, for [`ParticleFrame::add_styled_particles`]:
+/// presentations that draw simulated particles in their own look (sizes, fades, and tints derived from game state) or
+/// that have no effect behind them. Drawn exactly like an emitter's particle of the same renderer and blend.
+///
+/// [`ParticleFrame::add_styled_particles`]: crate::particles::ParticleFrame::add_styled_particles
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct StyledParticle {
+    /// World position (a streak's head), in world units.
+    pub position: Vec3,
+    /// Radius, or a square's half extent, in world units; particles without size draw nothing.
+    pub size: f32,
+    /// Linear HDR RGB (negative channels clamp to zero) and straight alpha in `[0, 1]`, or premultiplied color for
+    /// premultiplied batches.
+    pub color: LinearColor,
+    /// Camera-facing roll in radians (squares).
+    pub rotation: f32,
+    /// A streak's world offset from its head to its tail; other shapes ignore it.
+    pub trail: Vec3,
 }
 
 impl SpriteAtlas {

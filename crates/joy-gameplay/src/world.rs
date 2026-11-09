@@ -29,20 +29,20 @@ use super::entity_definition::{
 use super::entity_registry::EntityRegistry;
 use super::entity_world::EntityWorld;
 use super::error::GameplayError;
-use super::world_events::{
-    ContactEvent,
-    EventQueue,
-    WorldEvents,
-};
+use super::world_events::ContactEvent;
 use super::world_timers::{
     TimerId,
     TimerRepeat,
     WorldTimers,
 };
+use joy_core::{
+    EventChannel,
+    EventQueue,
+};
 use joy_physics::{
     BodyHandle,
-    PhysicsWorld,
-    PhysicsWorldOptions,
+    PhysicsSimulation,
+    PhysicsSimulationOptions,
 };
 
 /// Caller name used in delta-time errors.
@@ -81,33 +81,33 @@ pub struct World {
     /// Entity owner.
     pub entities: EntityWorld,
     /// Physics owner.
-    pub physics: PhysicsWorld,
+    pub physics: PhysicsSimulation,
     /// Body owned by each entity, including vehicle chassis bodies.
     pub bodies: IndexMap<EntityId, BodyHandle>,
     // Events produced and delivered at update boundaries, and running timers.
-    events: WorldEvents,
+    events: EventChannel,
     timers: WorldTimers,
 }
 
 impl World {
     /// Create independent entity and physics owners.
-    pub fn new(registry: EntityRegistry, physics: PhysicsWorldOptions) -> Result<Self, GameplayError> {
-        Ok(Self::with_physics(registry, PhysicsWorld::new(physics)?))
+    pub fn new(registry: EntityRegistry, physics: PhysicsSimulationOptions) -> Result<Self, GameplayError> {
+        Ok(Self::with_physics(registry, PhysicsSimulation::new(physics)?))
     }
 
-    /// Create a world around an existing physics world, which it takes ownership of.
-    pub fn with_physics(registry: EntityRegistry, physics: PhysicsWorld) -> Self {
+    /// Create a world around an existing physics simulation, which it takes ownership of.
+    pub fn with_physics(registry: EntityRegistry, physics: PhysicsSimulation) -> Self {
         Self::from_parts(EntityWorld::new(registry), physics)
     }
 
     /// Create a world from an existing entity world (for example one built with
-    /// [`EntityWorld::with_component_registry`]) and physics world, taking ownership of both.
-    pub fn from_parts(entities: EntityWorld, physics: PhysicsWorld) -> Self {
+    /// [`EntityWorld::with_component_registry`]) and physics simulation, taking ownership of both.
+    pub fn from_parts(entities: EntityWorld, physics: PhysicsSimulation) -> Self {
         Self {
             entities,
             physics,
             bodies: IndexMap::new(),
-            events: WorldEvents::default(),
+            events: EventChannel::default(),
             timers: WorldTimers::default(),
         }
     }
@@ -159,8 +159,15 @@ impl World {
         self.events.produced()
     }
 
+    /// The world's event channel, for presentation that reads at its own rate: keep an
+    /// [`EventCursor`](joy_core::EventCursor) per event type and read it once per frame to see every event once, however
+    /// many updates the frame ran.
+    pub fn event_channel(&self) -> &EventChannel {
+        &self.events
+    }
+
     /// Send an event from outside an update; behaviors read it during the next update.
-    pub fn send_event<T: 'static>(&mut self, event: T) {
+    pub fn send_event<T: Clone + 'static>(&mut self, event: T) {
         self.events.send(event);
     }
 
@@ -193,7 +200,7 @@ impl World {
 
     /// The placement to draw an entity at this frame, or `None` if it is not live.
     ///
-    /// An entity with a body takes the body's [interpolated pose](PhysicsWorld::interpolated_body_transform), so
+    /// An entity with a body takes the body's [interpolated pose](PhysicsSimulation::interpolated_body_transform), so
     /// motion stays smooth when the display refreshes faster than (or out of step with) the fixed physics rate. Gameplay
     /// keeps reading `EntityState::transform`, the simulation's state.
     pub fn presentation_transform(&self, id: &EntityId) -> Option<EntityTransform> {

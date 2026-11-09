@@ -9,7 +9,6 @@
 //! (`?mode=baked`, or `--mode=baked` natively) draws the supplied cottage record without parsing or evaluating FORM.
 //! Recipes and baked meshes save as downloads in browsers and into the working directory natively.
 
-use joy_engine::development::dock;
 use joy_engine::egui::{
     Align2,
     Color32,
@@ -29,6 +28,7 @@ use joy_engine::form::{
 use joy_engine::prelude::*;
 use joy_engine::render_types::MeshDocument;
 use joy_engine::rendering::ShiftedCamera;
+use joy_engine::runtime::development_dock_height;
 use joy_engine::runtime::{
     Stopwatch,
     launch_parameter,
@@ -377,7 +377,7 @@ impl BuildingExample {
         let screen = context.content_rect();
         let width = sidebar_width(screen.width());
         let margin: i8 = if width == SIDEBAR_WIDTH { 24 } else { 14 };
-        let reserved = dock::reserved_height(context);
+        let reserved = development_dock_height(context);
         egui::Area::new(Id::new("form-building-sidebar"))
             .anchor(Align2::RIGHT_TOP, UiVec2::ZERO)
             .constrain(false)

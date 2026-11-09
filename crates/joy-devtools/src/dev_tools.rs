@@ -259,8 +259,11 @@ impl DevTools {
             egui::CollapsingHeader::new("GPU Resources").default_open(false).show(ui, |ui| {
                 let shadows = if diagnostics.shadows_active || diagnostics.shadow_point_lights > 0 {
                     format!(
-                        "{} casters, {} point lights, {} views",
-                        diagnostics.shadow_casters, diagnostics.shadow_point_lights, diagnostics.shadow_views
+                        "{} casters, {} point lights, {} views ({} rendered)",
+                        diagnostics.shadow_casters,
+                        diagnostics.shadow_point_lights,
+                        diagnostics.shadow_views,
+                        diagnostics.shadow_maps_rendered
                     )
                 } else {
                     "off".to_owned()

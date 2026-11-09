@@ -1,27 +1,32 @@
 // Copyright (c) 2026 Trent Polack. All Rights Reserved.
 // Licensed under the MIT License.
 
-//! Particle submission: frames group each effect into material batches with bounds and never touch the simulation,
-//! texture sources validate, flipbooks select frames by seconds in row-major order, and texture sets stage images
-//! before activation.
+//! Particle submission: frames group each effect into material batches with bounds and sort points and never touch the
+//! simulation, caller-styled particles batch like an emitter's, texture sources validate, flipbooks select frames by
+//! seconds in row-major order, and texture sets stage images before activation.
 
+use joy_core::LinearColor;
 use joy_core::math::{
     Mat4,
     Vec3,
 };
 use joy_fx::{
     DEFAULT_PARTICLE_TEXTURE,
+    ParticleBlend,
     ParticleEffect,
     ParticleEffectOptions,
+    ParticleRenderer,
     ParticleTextureDimensions,
     ParticleTextureError,
     compile_particle_effect,
     read_particle_texture_source,
 };
 use joy_renderer::particles::{
+    ParticleDrawOptions,
     ParticleFrame,
     ParticleRenderError,
     ParticleTextureSet,
+    StyledParticle,
 };
 use serde_json::{
     Value,
@@ -115,6 +120,16 @@ fn frames_group_effects_into_material_batches_without_touching_the_simulation() 
     let streak = batches[2].bounds();
     assert!(streak.min.x <= 10.0 - (100.0 * 0.035) && streak.max.x >= 10.0, "{streak:?}");
     assert!(batches[0].bounds().min.z <= 8.0 && batches[0].bounds().max.z >= 22.0);
+    // Batches sort at the center of their bounds unless the frame names a sort point; none of these emitters is soft.
+    assert!(batches.iter().all(|batch| batch.sort_point() == batch.bounds().center() && !batch.is_soft()));
+    let layered = ParticleDrawOptions {
+        sort_point: Some(Vec3::new(0.0, 0.0, -3.0)),
+        ..ParticleDrawOptions::default()
+    };
+    let mut layered_frame = ParticleFrame::new();
+    layered_frame.add_effect_with(&effect, Some(&textures), &layered).unwrap();
+    assert!(layered_frame.batches().iter().all(|batch| batch.sort_point() == Vec3::new(0.0, 0.0, -3.0)));
+    assert_eq!(layered_frame.instances(), frame.instances(), "a sort point never moves the particles themselves");
 
     // Transforms place effects in the world and scale sizes; clearing empties the frame for the next one.
     frame.clear();
@@ -124,6 +139,29 @@ fn frames_group_effects_into_material_batches_without_touching_the_simulation() 
     let first = frame.instances()[0];
     assert_eq!(first.position(), Vec3::new(21.0, 40.0, 20.0));
     assert_eq!(first.position_size[3], 4.0);
+
+    // Caller-styled particles become one batch of the named shape and blend; invisible ones are skipped, soft emitters
+    // mark their batch, and textured shapes need an emitter's atlas.
+    frame.clear();
+    let styled = |size: f32, alpha: f32| StyledParticle {
+        position: Vec3::new(size, 0.0, 4.0),
+        size,
+        color: LinearColor::new(1.0, 0.5, 0.25, alpha),
+        ..StyledParticle::default()
+    };
+    let particles = [styled(1.0, 1.0), styled(0.0, 1.0), styled(2.0, 0.0), styled(3.0, 0.5)];
+    frame.add_styled_particles(ParticleRenderer::Circle, ParticleBlend::Alpha, &particles).unwrap();
+    assert_eq!((frame.batches().len(), frame.instances().len()), (1, 2));
+    assert_eq!(frame.instances()[1].color, [1.0, 0.5, 0.25, 0.5]);
+    assert_eq!(frame.batches()[0].sort_point().z, 4.0, "a single height sorts at that height whatever the sizes");
+    assert_eq!(
+        frame.add_styled_particles(ParticleRenderer::Textured, ParticleBlend::Alpha, &particles),
+        Err(ParticleRenderError::StyledTexture)
+    );
+    let mut soft = single("soft", None, "size = 1;");
+    soft["emitters"][0]["softness"] = json!(2);
+    frame.add_effect(&runtime(&soft), None).unwrap();
+    assert!(frame.batches()[1].is_soft() && frame.instances()[2].softness == 2.0);
 }
 
 #[test]

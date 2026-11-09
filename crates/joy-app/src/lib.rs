@@ -11,14 +11,21 @@
 //! development switches from a URL query or the command line. [`AssetFetcher`] reads streamed assets (terrain package
 //! tiles, for example) without blocking a frame: from a folder on a worker thread natively, over HTTP in browsers.
 //!
-//! The shell composes the other platform crates (`joy-input`, `joy-ui`, and `joy-devtools`) with `joy-renderer`; apps
-//! reach all of them through `joy_engine::runtime`.
+//! [`GameAssets`] embeds a game's authored text assets ([`game_assets!`]) and hot reloads them in native development
+//! builds; it lives here because release and browser builds need it too.
+//!
+//! The shell composes the other platform crates (`joy-input`, `joy-ui`, and, with the `devtools` feature,
+//! `joy-devtools`) with `joy-renderer`; apps reach all of them through `joy_engine::runtime`. Without `devtools`
+//! (release and browser production builds) the shell compiles no development UI, and [`DevTools`] is an inert stand-in
+//! so games publish diagnostics the same way in every build.
 
 mod app;
 #[cfg(not(target_arch = "wasm32"))]
 mod asset_fetch;
 mod clock;
+mod development;
 mod fixed_tick;
+mod game_assets;
 #[cfg(not(target_arch = "wasm32"))]
 mod headless;
 mod launch;
@@ -46,7 +53,17 @@ pub use clock::{
     Stopwatch,
     unix_time_milliseconds,
 };
+pub use development::{
+    DevTools,
+    development_dock_height,
+};
 pub use fixed_tick::FixedTick;
+pub use game_assets::{
+    ASSET_POLL_SECONDS,
+    AssetReadError,
+    EmbeddedAsset,
+    GameAssets,
+};
 #[cfg(not(target_arch = "wasm32"))]
 pub use headless::{
     CAPTURE_DIRECTORY_VARIABLE,

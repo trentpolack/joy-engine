@@ -1,5 +1,5 @@
 # FORM Destruction
-A Rust example of queued chunk damage, geometric support, and rigid debris. `ChunkStructure` commits one revision for visible geometry and collision, and the engine's `PhysicsWorld` owns debris bodies.
+A Rust example of queued chunk damage, geometric support, and rigid debris. `ChunkStructure` commits one revision for visible geometry and collision, and the engine's `PhysicsSimulation` owns debris bodies.
 
 ```bash
 npm run dev --workspace @joy-engine/example-form-destruction

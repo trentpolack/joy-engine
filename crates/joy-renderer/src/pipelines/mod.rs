@@ -30,6 +30,7 @@ use crate::material::{
 use crate::mesh::MeshVertex;
 
 mod fullscreen;
+mod particle_sort;
 mod particles;
 
 pub(crate) use fullscreen::{
@@ -39,9 +40,6 @@ pub(crate) use fullscreen::{
     fullscreen_pipeline,
 };
 pub(crate) use particles::{
-    PARTICLE_SCENE_SOURCE,
-    PARTICLE_SHAPES_SOURCE,
-    PARTICLE_TRIANGLES_SOURCE,
     ParticlePass,
     ParticleView,
 };

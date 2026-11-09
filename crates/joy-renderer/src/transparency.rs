@@ -5,10 +5,11 @@
 //! back to front together.
 //!
 //! Every element is ordered by its view depth, the distance along the camera's forward axis: a blended mesh by the
-//! center of its bounds, a triangle by its centroid, and a particle batch by the center of its bounds (its particles
-//! are already ordered inside the batch). So a particle effect behind a glass pane draws before the pane, and one in
-//! front draws after it. The sort is stable, so equal depths keep the order elements were supplied in (meshes in scene
-//! order, then transient triangles, then particle batches). Consecutive transient triangles merge into one draw.
+//! center of its bounds, a triangle by its centroid, and a particle batch by its sort point, the center of its bounds
+//! unless the particle frame names one (its particles are already ordered inside the batch). So a particle effect
+//! behind a glass pane draws before the pane, and one in front draws after it. The sort is stable, so equal depths keep
+//! the order elements were supplied in (meshes in scene order, then transient triangles, then particle batches).
+//! Consecutive transient triangles merge into one draw.
 //!
 //! Intersecting transparent surfaces, and particle effects that overlap each other or a surface in depth, remain an
 //! approximation, not order-independent transparency.

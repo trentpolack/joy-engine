@@ -21,6 +21,9 @@ use crate::shadows::{
 /// Byte stride between caster matrices; the portable minimum uniform offset alignment.
 const CASTER_STRIDE: u64 = 256;
 
+/// The far-plane triangle that clears one atlas tile before it renders again.
+const TILE_CLEAR_SOURCE: &str = include_str!("../shaders/shadow-clear.wgsl");
+
 /// The smallest atlas allocated once any point light casts.
 const MIN_ATLAS_SIZE: u32 = 512;
 
@@ -194,6 +197,8 @@ impl PointAtlas {
 pub(crate) struct ShadowMaps {
     // Bind groups reference the views, buffers, and samplers below; drop them first.
     receiver: wgpu::BindGroup,
+    /// Writes the far plane over one tile, so a cached atlas can re-render single lights.
+    tile_clear: wgpu::RenderPipeline,
     caster: wgpu::BindGroup,
     cascades: CascadeArray,
     atlas: PointAtlas,
@@ -256,6 +261,7 @@ impl ShadowMaps {
         let caster = caster_group(device, caster_layout, &casters);
         Self {
             receiver,
+            tile_clear: tile_clear_pipeline(device),
             caster,
             cascades,
             atlas,
@@ -285,9 +291,9 @@ impl ShadowMaps {
         (view as u64 * CASTER_STRIDE) as u32
     }
 
-    /// The attachment for one cascade.
-    pub fn cascade_layer(&self, cascade: usize) -> &wgpu::TextureView {
-        &self.cascades.layers[cascade]
+    /// The attachment of each cascade layer, by cascade index.
+    pub fn cascade_layers(&self) -> &[wgpu::TextureView] {
+        &self.cascades.layers
     }
 
     /// The point-light atlas attachment.
@@ -300,7 +306,14 @@ impl ShadowMaps {
         self.atlas.size
     }
 
-    /// Grow the atlas to hold six faces of each requested size (powers of two), up to its configured size.
+    /// The pipeline that clears one atlas tile to the far plane: bind nothing, set the tile's viewport, and draw three
+    /// vertices.
+    pub fn tile_clear(&self) -> &wgpu::RenderPipeline {
+        &self.tile_clear
+    }
+
+    /// Grow the atlas to hold six faces of each requested size (powers of two), up to its configured size. A grown
+    /// atlas starts empty; the shadow cache notices its new size and renders every light again.
     pub fn reserve_atlas(&mut self, device: &wgpu::Device, face_sizes: &[u32]) {
         let area: u64 = face_sizes.iter().map(|size| POINT_FACES as u64 * u64::from(*size).pow(2)).sum();
         let side = (area as f64).sqrt().ceil() as u32;
@@ -340,6 +353,42 @@ impl ShadowMaps {
     pub fn write_uniforms(&self, queue: &wgpu::Queue, uniforms: &ShadowUniforms) {
         queue.write_buffer(&self.uniforms, 0, bytemuck::bytes_of(uniforms));
     }
+}
+
+/// Depth-only, always passing, writing the far plane: what a cleared tile holds.
+fn tile_clear_pipeline(device: &wgpu::Device) -> wgpu::RenderPipeline {
+    let label = "shadow tile clear";
+    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some(label),
+        source: wgpu::ShaderSource::Wgsl(TILE_CLEAR_SOURCE.into()),
+    });
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some(label),
+        bind_group_layouts: &[],
+        immediate_size: 0,
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some(label),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module: &module,
+            entry_point: Some("vertexMain"),
+            compilation_options: Default::default(),
+            buffers: &[],
+        },
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: SHADOW_FORMAT,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Always),
+            stencil: Default::default(),
+            bias: Default::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        fragment: None,
+        multiview_mask: None,
+        cache: None,
+    })
 }
 
 fn depth_texture(device: &wgpu::Device, label: &str, size: u32, layers: u32) -> wgpu::Texture {

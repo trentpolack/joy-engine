@@ -32,7 +32,7 @@ fn crowded_lights_shrink_least_important_first_then_drop() {
 fn placed_faces_stay_inside_the_atlas_without_overlapping() {
     let mut sizes = vec![512, 256, 256, 128, 64, 64, 32, 256, 128];
     fit_face_sizes(&mut sizes, 2048, 32);
-    let placed = place_faces(&sizes, 2048);
+    let placed = AtlasAllocator::new(2048).place_all(&sizes).expect("fitted sizes fit an empty atlas");
     let tiles: Vec<AtlasTile> = placed.iter().flatten().copied().collect();
     assert_eq!(tiles.len(), sizes.len() * 6);
     for (light, faces) in placed.iter().enumerate() {
@@ -45,4 +45,31 @@ fn placed_faces_stay_inside_the_atlas_without_overlapping() {
     for (index, tile) in tiles.iter().enumerate() {
         assert!(tiles[index + 1..].iter().all(|other| !overlaps(*tile, *other)), "{tile:?} overlaps");
     }
+
+    // Cached lights keep their tiles while others come and go: released tiles are reused without overlapping the
+    // kept ones, and releasing everything merges the atlas back into one square.
+    let mut allocator = AtlasAllocator::new(2048);
+    let mut held: Vec<AtlasTile> =
+        allocator.place_all(&sizes).expect("the fitted sizes fit").into_iter().flatten().collect();
+    let released: Vec<AtlasTile> = held.drain(..18).collect();
+    for tile in released {
+        allocator.release(tile);
+    }
+    for size in [256, 128, 128, 64, 64, 64] {
+        held.push(allocator.allocate(size).expect("released space holds smaller faces"));
+    }
+    for (index, tile) in held.iter().enumerate() {
+        assert!(held[index + 1..].iter().all(|other| !overlaps(*tile, *other)), "{tile:?} overlaps after reuse");
+    }
+    for tile in held {
+        allocator.release(tile);
+    }
+    assert_eq!(
+        allocator.allocate(2048),
+        Some(AtlasTile {
+            x: 0,
+            y: 0,
+            size: 2048
+        })
+    );
 }

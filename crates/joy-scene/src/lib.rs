@@ -7,9 +7,10 @@
 //! [`LevelScene`] presents authored levels and runtime entities, [`AssetScene`] adds FORM meshes and per-entity particle
 //! effects, [`PostProcessVolumes`] resolves `postProcess` volumes into the renderer's post-processing at a view point,
 //! the presentation components' readers and schemas live in [`components`](RenderComponent) beside them, and the FORM
-//! adapters ([`compile_form_mesh`], [`form_mesh_asset`], [`FormAssetLibrary`]) are the only path from FORM output to
-//! the screen. [`FormPlacement`]s carry the points a FORM asset tags for its host, and [`placement_entities`] turns
-//! their `object` templates into level entities, so levels can be built from procedural assets. [`environment_lighting`]
+//! adapters ([`compile_form_mesh`], [`compile_cooked_form_mesh`], [`form_mesh_asset`], [`FormAssetLibrary`]) are the
+//! only path from FORM output to the screen, live or cooked at build time. [`FormPlacement`]s carry the points a FORM
+//! asset tags for its host, and [`placement_entities`] turns their `object` templates into level entities, so levels
+//! can be built from procedural assets. [`environment_lighting`]
 //! lights frames from the environment simulation, so games, tools, and previews present the same content the same way.
 //! Everything here draws through `joy-renderer`'s retained [`RenderScene`](joy_renderer::RenderScene);
 //! `joy_engine::rendering` combines both crates for games and tools.
@@ -53,6 +54,7 @@ pub use form_assets::{
     FormAssetLibrary,
     FormMeshError,
     FormTextureCache,
+    compile_cooked_form_mesh,
     compile_form_mesh,
     form_mesh_asset,
     form_mesh_asset_with_textures,

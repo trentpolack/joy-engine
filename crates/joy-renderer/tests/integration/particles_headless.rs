@@ -3,7 +3,8 @@
 
 //! Headless rendering of GPU-instanced particles: every shape covers its particle in every blend mode and blends as
 //! authored, source-over particles draw back to front, effects outside the view are culled, opaque geometry hides
-//! particles behind it, and arcade triangle frames draw particles at their layer in the game's color convention.
+//! particles behind it, soft particles fade where they meet opaque geometry, lit particles shade by the frame's lights,
+//! and arcade frames place particles between their translucent layers in the games' display-color convention.
 //!
 //! Needs a GPU adapter (a software adapter such as llvmpipe is enough); without one each test prints a message and
 //! returns. Set `JOY_RENDER_CAPTURE_DIR` to keep PNG captures of the shape, blend, and arcade scenes. Native only.
@@ -26,6 +27,7 @@ use joy_fx::{
     parse_particle_effect,
 };
 use joy_renderer::particles::{
+    ParticleDrawOptions,
     ParticleFrame,
     ParticleTextureSet,
 };
@@ -34,6 +36,7 @@ use joy_renderer::{
     CAPTURE_FORMAT,
     Camera,
     ColorVertex,
+    DirectionalLight,
     FrameInputs,
     GpuContext,
     Material,
@@ -42,16 +45,14 @@ use joy_renderer::{
     MeshInstance,
     OffscreenTarget,
     OrbitCamera,
+    PointLight,
     RenderScene,
     Renderer,
     RendererOptions,
     TopDownCamera,
-    TriangleFrame,
-    TriangleParticles,
-    TriangleRenderer,
-    TriangleRendererOptions,
+    TopDownView,
+    decode_display_colors,
     project_to_viewport,
-    top_down_orthographic,
 };
 use serde_json::{
     Value,
@@ -72,9 +73,6 @@ const ORANGE: [f64; 4] = [1.0, 0.45, 0.12, 0.85];
 
 /// The shape scenes' linear background.
 const BACKGROUND: LinearColor = LinearColor::new(0.02, 0.025, 0.04, 1.0);
-
-/// The display-decoding shader BLAST GARDEN and SPACE SCUFFLES author for their triangle frames.
-const ARCADE_SHADER: &str = include_str!("../fixtures/display-triangles.wgsl");
 
 fn gpu() -> Option<GpuContext> {
     match pollster::block_on(GpuContext::headless(BackendPreference::Auto)) {
@@ -428,26 +426,31 @@ fn arcade_effect(file: &str, x: f64, y: f64, ticks: u64) -> ParticleEffect {
     effect
 }
 
-/// A top-down orthographic camera over a `width` × `height` logical viewport centered on it.
-fn arcade_camera(width: u32, height: u32) -> Mat4 {
+/// A top-down orthographic view over a `width` × `height` logical viewport centered on it.
+fn arcade_view(width: u32, height: u32) -> TopDownView {
     let camera = TopDownCamera {
         height: 200.0,
         near: 1.0,
         far: 2000.0,
     };
-    let center = Vec2::new(width as f32 * 0.5, height as f32 * 0.5);
-    top_down_orthographic(width as f32, height as f32, center, camera).unwrap()
+    let size = Vec2::new(width as f32, height as f32);
+    TopDownView::new(size, size * 0.5, camera).unwrap()
 }
 
-fn arcade_renderer(gpu: &GpuContext, width: u32, height: u32) -> TriangleRenderer {
-    let options = TriangleRendererOptions {
-        shader: ARCADE_SHADER.to_owned(),
-        uniform_size: 80,
-        post_process: None,
+/// Render an arcade frame of `inputs` from `view` with linear display processing (no tone curve).
+fn render_arcade(gpu: &GpuContext, view: &TopDownView, inputs: &FrameInputs<'_>) -> Vec<u8> {
+    let size = view.size();
+    let (width, height) = (size.x as u32, size.y as u32);
+    let options = RendererOptions {
+        post_process: joy_renderer::PostProcessSettings::NEUTRAL,
+        shadows: None,
+        ..RendererOptions::default()
     };
-    let mut renderer = TriangleRenderer::new(gpu, CAPTURE_FORMAT, options).unwrap();
+    let mut renderer = Renderer::new(gpu, CAPTURE_FORMAT, options);
     renderer.resize(width, height, 1.0);
-    renderer
+    let target = OffscreenTarget::new(gpu, width, height).expect("capture target");
+    renderer.render(&RenderScene::new(), view, inputs, target.view()).expect("frame renders");
+    target.read_rgba(gpu).expect("readback")
 }
 
 /// An axis-aligned quad of transparent triangles at height `z`.
@@ -467,13 +470,15 @@ fn quad(left: f32, top: f32, right: f32, bottom: f32, z: f32, color: [f32; 4]) -
 }
 
 #[test]
-fn triangle_frames_draw_particles_at_their_layer_in_the_games_color_convention() {
+fn arcade_frames_place_particles_between_their_layers_in_the_games_color_convention() {
     let Some(gpu) = gpu() else {
         return;
     };
     let (width, height) = (200_u32, 100_u32);
 
-    // Two squares in the display color the triangles use; a quad drawn after the particles covers the right one.
+    // Two squares at height zero in the display color the triangles use, placed in the transparency order at height
+    // 1.5: after the swatch at height 1 and before the cover at height 2, which hides the right one although the
+    // particles' own height is below both.
     let color = [0.5, 0.25, 0.1];
     let spawn =
         format!("x = 50 + index * 100; y = 50; size = 12; color = rgba({}, {}, {}, 1);", color[0], color[1], color[2]);
@@ -482,61 +487,188 @@ fn triangle_frames_draw_particles_at_their_layer_in_the_games_color_convention()
     .unwrap();
     let effect = ParticleEffect::new(&definition, ParticleEffectOptions::default()).unwrap();
     let mut particles = ParticleFrame::new();
-    particles.add_effect(&effect, None).unwrap();
+    let layered = ParticleDrawOptions {
+        sort_point: Some(Vec3::new(100.0, 50.0, 1.5)),
+        display_colors: true,
+        ..ParticleDrawOptions::default()
+    };
+    particles.add_effect_with(&effect, None, &layered).unwrap();
 
+    // The games build triangles in display colors and decode the finished lists.
     let swatch = quad(90.0, 0.0, 110.0, 20.0, 1.0, [color[0], color[1], color[2], 1.0]);
     let cover = quad(120.0, 20.0, 180.0, 80.0, 2.0, [0.0, 0.0, 0.6, 1.0]);
-    let transparent = [swatch, cover].concat();
-    let view_projection = arcade_camera(width, height);
-    let mut uniforms = [0.0_f32; 20];
-    uniforms[..16].copy_from_slice(&view_projection.to_cols_array());
-    let mut renderer = arcade_renderer(&gpu, width, height);
-    let target = OffscreenTarget::new(&gpu, width, height).expect("capture target");
-    let frame = TriangleFrame {
-        opaque: &[],
-        transparent: &transparent,
-        uniforms: bytemuck::cast_slice(&uniforms),
-        clear_color: LinearColor::BLACK,
-        particles: Some(TriangleParticles {
-            after_triangles: 2,
-            display_colors: true,
-            ..TriangleParticles::xy_plane(&particles, view_projection)
-        }),
+    let mut transparent = [swatch, cover].concat();
+    decode_display_colors(&mut transparent);
+    let inputs = FrameInputs {
+        transparent_triangles: &transparent,
+        particles: Some(&particles),
+        ..FrameInputs::default()
     };
-    renderer.render(target.view(), &frame).unwrap();
-    let pixels = target.read_rgba(&gpu).expect("readback");
+    let pixels = render_arcade(&gpu, &arcade_view(width, height), &inputs);
 
-    // The left square shows the same display color as the game's own swatch; the cover hides the right square.
+    // The left square shows the same color as the decoded swatch; the cover hides the right square.
     let square = pixel(&pixels, width, Vec2::new(50.0, 50.0));
     let reference = pixel(&pixels, width, Vec2::new(100.0, 10.0));
     assert!(reference[0] > 100, "the swatch draws: {reference:?}");
     assert!(largest_difference(square, reference) <= 3, "particle {square:?} matches triangle {reference:?}");
     let covered = pixel(&pixels, width, Vec2::new(150.0, 50.0));
-    assert!(covered[2] > covered[0] + 60, "triangles after the layer draw over particles: {covered:?}");
+    assert!(covered[2] > covered[0] + 60, "triangles above the sort point draw over particles: {covered:?}");
 
-    // The arcade effects the CPU triangle path was captured with, for review against it.
+    // The arcade effects in the games' color convention, for review against the games' captures.
     if std::env::var("JOY_RENDER_CAPTURE_DIR").is_ok() {
         let (width, height) = (960_u32, 480_u32);
         particles.clear();
         let blast = arcade_effect("blast-garden-blast.joyfx", 240.0, 240.0, 9);
         let explosion = arcade_effect("space-scuffles-explosion.joyfx", 720.0, 240.0, 14);
-        particles.add_effect(&blast, None).unwrap();
-        particles.add_effect(&explosion, None).unwrap();
-        let view_projection = arcade_camera(width, height);
-        uniforms[..16].copy_from_slice(&view_projection.to_cols_array());
-        let mut renderer = arcade_renderer(&gpu, width, height);
-        let target = OffscreenTarget::new(&gpu, width, height).expect("capture target");
-        let frame = TriangleFrame {
-            opaque: &[],
-            transparent: &[],
-            uniforms: bytemuck::cast_slice(&uniforms),
-            clear_color: LinearColor::new(0.01, 0.012, 0.02, 1.0),
-            particles: Some(TriangleParticles {
-                display_colors: true,
-                ..TriangleParticles::xy_plane(&particles, view_projection)
-            }),
+        let display = ParticleDrawOptions {
+            display_colors: true,
+            ..ParticleDrawOptions::default()
         };
-        renderer.render(target.view(), &frame).unwrap();
-        save_capture("particles-arcade.png", &target.read_rgba(&gpu).expect("readback"), (width, height));
+        particles.add_effect_with(&blast, None, &display).unwrap();
+        particles.add_effect_with(&explosion, None, &display).unwrap();
+        let inputs = FrameInputs {
+            clear_color: LinearColor::new(0.01, 0.012, 0.02, 1.0),
+            particles: Some(&particles),
+            ..FrameInputs::default()
+        };
+        let pixels = render_arcade(&gpu, &arcade_view(width, height), &inputs);
+        save_capture("particles-arcade.png", &pixels, (width, height));
     }
+}
+
+/// One opaque, unit-ambient white wall at height zero below `top` (world units, in front of a front camera).
+fn wall_below(top: f32) -> Vec<ColorVertex> {
+    let corner = |x: f32, y: f32| ColorVertex {
+        position: [x, y, 0.0],
+        color: [1.0, 1.0, 1.0, 1.0],
+    };
+    let (left, right, bottom) = (-8.0, 8.0, -6.0);
+    vec![
+        corner(left, bottom),
+        corner(right, bottom),
+        corner(right, top),
+        corner(left, bottom),
+        corner(right, top),
+        corner(left, top),
+    ]
+}
+
+#[test]
+fn soft_particles_fade_where_they_meet_opaque_geometry() {
+    let Some(gpu) = gpu() else {
+        return;
+    };
+
+    // Green squares just in front of a wall that covers their lower half: the left one hard, the right one fading
+    // over two world units. Their upper halves have only the background behind them.
+    let hard = emitter("hard", "square", "alpha", 1, "x = -2; y = 0; z = 0.3; size = 1; color = rgba(0, 1, 0, 1);");
+    let mut soft = emitter("soft", "square", "alpha", 1, "x = 2; y = 0; z = 0.3; size = 1; color = rgba(0, 1, 0, 1);");
+    soft["softness"] = json!(2);
+    let definition = compile_particle_effect(&json!({
+        "version": 1, "name": "Soft", "maxParticles": 4, "parameters": {}, "emitters": [hard, soft]
+    }))
+    .unwrap();
+    let effect = ParticleEffect::new(&definition, ParticleEffectOptions::default()).unwrap();
+    let mut particles = ParticleFrame::new();
+    particles.add_effect(&effect, None).unwrap();
+    assert!(particles.batches()[0].is_soft(), "the shared batch draws with the soft pipelines");
+
+    let camera = front_camera(10.0);
+    let wall = wall_below(0.0);
+    let inputs = FrameInputs {
+        clear_color: LinearColor::BLACK,
+        opaque_triangles: &wall,
+        ambient: Some(1.0),
+        particles: Some(&particles),
+        ..FrameInputs::default()
+    };
+    let size = (320, 240);
+    let (pixels, _) = render(&gpu, size, &RenderScene::new(), &camera, &inputs);
+    save_capture("particles-soft.png", &pixels, size);
+    let viewport = Vec2::new(size.0 as f32, size.1 as f32);
+    let view_projection = camera.camera_frame(viewport.x / viewport.y).view_projection();
+    let sample = |point: Vec3| pixel(&pixels, size.0, project_to_viewport(point, view_projection, viewport).unwrap());
+
+    // Over the wall, the hard square stays solid green while the soft one, 0.3 units in front of it, keeps only about
+    // a sixth of its coverage and lets the white wall through.
+    let hard_on_wall = sample(Vec3::new(-2.0, -0.5, 0.3));
+    let soft_on_wall = sample(Vec3::new(2.0, -0.5, 0.3));
+    assert!(hard_on_wall[1] > 200 && hard_on_wall[0] < 20, "the hard square covers the wall: {hard_on_wall:?}");
+    assert!(soft_on_wall[0] > 150 && soft_on_wall[1] > soft_on_wall[0], "the wall shows through: {soft_on_wall:?}");
+
+    // With nothing opaque behind them, both squares draw the same.
+    let hard_in_air = sample(Vec3::new(-2.0, 0.5, 0.3));
+    let soft_in_air = sample(Vec3::new(2.0, 0.5, 0.3));
+    assert!(hard_in_air[1] > 200, "green over the background: {hard_in_air:?}");
+    assert!(largest_difference(hard_in_air, soft_in_air) <= 2, "{soft_in_air:?} fades only near geometry");
+}
+
+#[test]
+fn lit_particles_shade_by_the_frames_lights_while_unlit_ones_keep_their_color() {
+    let Some(gpu) = gpu() else {
+        return;
+    };
+
+    // Two white squares facing the camera: the left one unlit, the right one lit. A red key light shines from the
+    // camera's side and a blue point light sits just in front of the lit square.
+    let unlit = emitter("unlit", "square", "alpha", 1, "x = -2; size = 1; color = rgba(1, 1, 1, 1);");
+    let mut lit = emitter("lit", "square", "alpha", 1, "x = 2; size = 1; color = rgba(1, 1, 1, 1);");
+    lit["lighting"] = json!("lit");
+    let definition = compile_particle_effect(&json!({
+        "version": 1, "name": "Lit", "maxParticles": 4, "parameters": {}, "emitters": [unlit, lit]
+    }))
+    .unwrap();
+    let effect = ParticleEffect::new(&definition, ParticleEffectOptions::default()).unwrap();
+    let mut particles = ParticleFrame::new();
+    particles.add_effect(&effect, None).unwrap();
+
+    let key = DirectionalLight {
+        direction: Vec3::Z,
+        color: LinearColor::rgb(1.0, 0.0, 0.0),
+        intensity: 0.6,
+        casts_shadow: false,
+        ..DirectionalLight::default()
+    };
+    let lights = [PointLight {
+        position: Vec3::new(2.0, 0.0, 1.0),
+        color: LinearColor::rgb(0.0, 0.0, 2.0),
+        range: 4.0,
+        casts_shadow: false,
+    }];
+    let camera = front_camera(10.0);
+    let inputs = FrameInputs {
+        clear_color: LinearColor::BLACK,
+        directional_light: Some(key),
+        lights: &lights,
+        ambient: Some(0.1),
+        particles: Some(&particles),
+        ..FrameInputs::default()
+    };
+    let size = (320, 240);
+    let options = RendererOptions {
+        post_process: joy_renderer::PostProcessSettings::NEUTRAL,
+        shadows: None,
+        ..RendererOptions::default()
+    };
+    let target = OffscreenTarget::new(&gpu, size.0, size.1).expect("capture target");
+    let mut renderer = Renderer::new(&gpu, CAPTURE_FORMAT, options);
+    renderer.resize(size.0, size.1, 1.0);
+    renderer.render(&RenderScene::new(), &camera, &inputs, target.view()).expect("frame renders");
+    let pixels = target.read_rgba(&gpu).expect("readback");
+    save_capture("particles-lit.png", &pixels, size);
+    let viewport = Vec2::new(size.0 as f32, size.1 as f32);
+    let view_projection = camera.camera_frame(viewport.x / viewport.y).view_projection();
+    let sample = |point: Vec3| pixel(&pixels, size.0, project_to_viewport(point, view_projection, viewport).unwrap());
+
+    // The unlit square keeps its authored white whatever lights the frame.
+    let plain = sample(Vec3::new(-2.0, 0.0, 0.0));
+    assert!(plain.iter().all(|channel| *channel > 250), "unlit particles keep their color: {plain:?}");
+
+    // The lit square takes the key light's red and the point light's blue over a little ambient gray, and the
+    // point light falls off away from it.
+    let shaded = sample(Vec3::new(2.0, 0.0, 0.0));
+    assert!(shaded[0] > shaded[1] + 60 && shaded[2] > shaded[1] + 60, "red key and blue point light: {shaded:?}");
+    assert!(shaded[1] > 40 && shaded[1] < 160, "a little ambient light: {shaded:?}");
+    let edge = sample(Vec3::new(2.9, 0.9, 0.0));
+    assert!(edge[2] < shaded[2], "the point light reaches the center most: {edge:?} {shaded:?}");
 }

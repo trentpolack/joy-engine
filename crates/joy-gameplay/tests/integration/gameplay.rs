@@ -29,13 +29,13 @@ use joy_gameplay::{
     entity_type,
 };
 use joy_physics::{
-    PhysicsWorld,
-    PhysicsWorldOptions,
+    PhysicsSimulation,
+    PhysicsSimulationOptions,
 };
 use serde_json::json;
 
 fn world(registry: EntityRegistry) -> World {
-    World::new(registry, PhysicsWorldOptions::default()).unwrap()
+    World::new(registry, PhysicsSimulationOptions::default()).unwrap()
 }
 
 fn definition(id: &str, kind: &str) -> EntityDefinition {
@@ -268,7 +268,7 @@ fn systems_match_components_in_stable_order_and_defer_frame_spawns() {
     let mut components = ComponentRegistry::new();
     components.register("marker", |_, _| Box::new(Marker)).unwrap();
     let entities = EntityWorld::with_component_registry(EntityRegistry::new(), components);
-    let mut world = World::from_parts(entities, PhysicsWorld::new(PhysicsWorldOptions::default()).unwrap());
+    let mut world = World::from_parts(entities, PhysicsSimulation::new(PhysicsSimulationOptions::default()).unwrap());
     world.spawn(&EntityDefinition::from_json(&json!({"id": "first", "components": {"marker": {}}})).unwrap()).unwrap();
     world.spawn(&EntityDefinition::new("ignored")).unwrap();
     let authored_only = EntityDefinition::from_json(&json!({"id": "authored", "components": {"other": {}}})).unwrap();
@@ -297,7 +297,7 @@ fn systems_match_components_in_stable_order_and_defer_frame_spawns() {
 
 #[test]
 fn world_steps_physics_before_entities_and_rejects_invalid_deltas() {
-    let options = PhysicsWorldOptions {
+    let options = PhysicsSimulationOptions {
         fixed_step: 0.25,
         max_sub_steps: 2,
         ..Default::default()

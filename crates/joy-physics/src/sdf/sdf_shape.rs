@@ -6,7 +6,7 @@
 //! An [`SdfShape`] is an immutable, cheaply cloned handle. Construction validates the input, then precomputes
 //! everything collision needs from the field alone: tight local bounds, unit-density mass properties, and the
 //! high-curvature seed points that steer stochastic contact sampling (Eq. 7 of Giles and Andrews 2026). Bodies created
-//! with [`PhysicsWorld::create_sdf_body`](super::super::PhysicsWorld::create_sdf_body) share the handle's data, so one
+//! with [`PhysicsSimulation::create_sdf_body`](super::super::PhysicsSimulation::create_sdf_body) share the handle's data, so one
 //! baked grid serves any number of instances.
 
 use std::fmt;

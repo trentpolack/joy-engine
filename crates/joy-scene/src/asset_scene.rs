@@ -38,6 +38,7 @@ use crate::components::{
 use indexmap::IndexMap;
 use joy_core::Transform;
 use joy_core::math::Mat4;
+use joy_form::CookedForms;
 use joy_fx::{
     CompiledParticleEffect,
     ParticleAssetError,
@@ -294,6 +295,12 @@ impl AssetScene {
             destroyed: false,
             error: String::new(),
         }
+    }
+
+    /// Load FORM geometry from `cooked` (a game's `joy_engine::cooked_forms!`) whenever a level asset's evaluation
+    /// inputs were cooked at build time; everything else, including hot-reloaded edits, evaluates live.
+    pub fn set_cooked_forms(&mut self, cooked: CookedForms) {
+        self.library.set_cooked_forms(cooked);
     }
 
     /// Resolve, read, compile, and start everything `entities` need, without changing the displayed presentation.

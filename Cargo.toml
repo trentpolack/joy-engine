@@ -32,13 +32,17 @@ autoexamples = false
 name = "form-viewer"
 path = "examples/form-viewer/main.rs"
 
+# Examples that open development panels from their HUDs need the development tools; `--no-default-features` builds
+# skip them.
 [[example]]
 name = "terrain"
 path = "examples/terrain/main.rs"
+required-features = ["devtools"]
 
 [[example]]
 name = "scene-effects"
 path = "examples/scene-effects/main.rs"
+required-features = ["devtools"]
 
 [[example]]
 name = "form-building"
@@ -47,6 +51,7 @@ path = "examples/form-building/main.rs"
 [[example]]
 name = "form-destruction"
 path = "examples/form-destruction/main.rs"
+required-features = ["devtools"]
 
 [[example]]
 name = "sdf-collisions"
@@ -56,10 +61,10 @@ path = "examples/sdf-collisions/main.rs"
 # Engine crates. The facade re-exports them under their historical module names (`joy_engine::physics`).
 joy-app.workspace = true
 joy-audio.workspace = true
-joy-authoring.workspace = true
+joy-authoring = { workspace = true, optional = true }
 joy-core.workspace = true
 joy-dcc-gltf.workspace = true
-joy-devtools.workspace = true
+joy-devtools = { workspace = true, optional = true }
 joy-environment.workspace = true
 joy-form.workspace = true
 joy-fx.workspace = true
@@ -67,7 +72,7 @@ joy-game-script = { workspace = true, optional = true }
 joy-gameplay.workspace = true
 joy-input.workspace = true
 joy-physics.workspace = true
-joy-project.workspace = true
+joy-project = { workspace = true, optional = true }
 joy-render-types.workspace = true
 joy-renderer.workspace = true
 joy-scene.workspace = true
@@ -86,6 +91,17 @@ egui.workspace = true
 joy-test-support = { workspace = true, optional = true }
 
 [features]
+# Development tools are on by default, so examples, tests, and `cargo run` get the CONFIG and JOY-EDITOR dock, the
+# statistics overlay, and the console. Games turn defaults off (`default-features = false` on the workspace dependency)
+# and enable `devtools` through their own default `devtools` feature, which production builds drop with
+# `--no-default-features`, so release and browser builds ship no development or authoring code.
+default = ["devtools"]
+# The development dock, overlay, console, config panels, live tuning, and effect editors (`development`), and the shell's
+# development UI.
+devtools = ["dep:joy-devtools", "joy-app/devtools"]
+# The authoring kit and project manifests behind Joy Editor, FORM EDITOR, and JOYFX EDITOR (`development`'s authoring
+# controls, native file dialogs, and `project`). Authoring tools are development applications, so it implies `devtools`.
+authoring = ["devtools", "dep:joy-authoring", "dep:joy-project"]
 # Only consumers using gameplay scripts need the Lua VM and browser WASI runtime.
 game-script = ["dep:joy-game-script", "joy-gameplay/game-script", "joy-app/lua"]
 # Games enable this in `[dev-dependencies]` only (`joy-engine = { workspace = true, features = ["test-support"] }`),
@@ -114,6 +130,7 @@ default-members = [
   "crates/joy-app",
   "crates/joy-audio",
   "crates/joy-authoring",
+  "crates/joy-cook",
   "crates/joy-core",
   "crates/joy-dcc-gltf",
   "crates/joy-devtools",
@@ -150,6 +167,7 @@ repository = "https://github.com/trentpolack/joy-engine"
 joy-app = { path = "crates/joy-app" }
 joy-audio = { path = "crates/joy-audio" }
 joy-authoring = { path = "crates/joy-authoring" }
+joy-cook = { path = "crates/joy-cook" }
 joy-core = { path = "crates/joy-core" }
 joy-dcc-gltf = { path = "crates/joy-dcc-gltf" }
 joy-devtools = { path = "crates/joy-devtools" }

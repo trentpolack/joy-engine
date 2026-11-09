@@ -26,7 +26,9 @@ autoexamples = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-joy-engine.workspace = true
+# Joy Editor is an authoring tool: the authoring kit, project manifests, and native file dialogs (and, through them, the
+# development tools).
+joy-engine = { workspace = true, features = ["authoring"] }
 # Hosted as tabs through `joy_engine::development::AuthoringTool`, without their own browser entry points.
 form-editor = { path = "../tools/form-editor", default-features = false }
 joyfx-editor = { path = "../tools/joyfx-editor", default-features = false }

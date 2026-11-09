@@ -29,7 +29,7 @@ use super::physics_heightfield::HeightfieldOptions;
 use super::{
     BodyHandle,
     PhysicsError,
-    PhysicsWorld,
+    PhysicsSimulation,
 };
 
 /// How terrain colliders sit in the world and which tiles they cover.
@@ -110,7 +110,7 @@ impl TerrainColliders {
     /// become a heightfield (for example with invalid friction).
     pub fn sync(
         &mut self,
-        world: &mut PhysicsWorld,
+        world: &mut PhysicsSimulation,
         surface: &TerrainSurface,
         anchors: &[Vec3],
     ) -> Result<TerrainColliderReport, PhysicsError> {
@@ -151,7 +151,7 @@ impl TerrainColliders {
     }
 
     /// Remove every collider from `world`; returns how many were removed.
-    pub fn clear(&mut self, world: &mut PhysicsWorld) -> usize {
+    pub fn clear(&mut self, world: &mut PhysicsSimulation) -> usize {
         let count = self.colliders.len();
         for collider in std::mem::take(&mut self.colliders).into_values() {
             world.remove_body(collider.body);
