@@ -5,8 +5,10 @@
 //! queries, to run on the GPU.
 //!
 //! The renderer marks the start of each phase as it records a frame. On the CPU a mark reads the clock. On the GPU it
-//! is an empty compute pass that writes a timestamp as it begins, which WebGPU's pass-level timestamp rule allows as
-//! well as native backends do. At the end of the frame the timestamps resolve into a buffer that maps once the frame's
+//! is a compute pass that writes a timestamp as it begins, which WebGPU's pass-level timestamp rule allows as well as
+//! native backends do. Each mark pass dispatches one thread of real work (`shaders/profile-mark.wgsl`), because Metal
+//! samples a pass's counters only when its encoder executes something, and empty mark passes left every Apple GPU
+//! timestamp at zero. A device whose timestamps still never advance falls back to CPU timings with one warning. At the end of the frame the timestamps resolve into a buffer that maps once the frame's
 //! commands are submitted and finish, so GPU timings arrive a few frames late without ever stalling the CPU. WebGL 2 has
 //! no timestamp queries; its profiles carry CPU timings only. Profiling is off until a host enables it and costs
 //! nothing while off.
@@ -99,6 +101,13 @@ const READBACK_SLOTS: usize = 8;
 /// Bytes per resolved timestamp.
 const TIMESTAMP_BYTES: u64 = 8;
 
+/// Consecutive frames whose GPU timestamps never advance before the profiler stops asking the device for them: a
+/// driver that resolves every sample to the same value reports CPU timings instead of zeros.
+const STALLED_FRAME_LIMIT: u32 = 8;
+
+/// The mark pass's shader: one thread that counts marks, so every mark pass carries work.
+const PROFILE_MARK_SOURCE: &str = include_str!("shaders/profile-mark.wgsl");
+
 /// Readback states shared with a slot's map callback.
 const MAP_PENDING: u8 = 0;
 const MAP_READY: u8 = 1;
@@ -114,6 +123,8 @@ pub(crate) struct FrameProfiler {
     recording: Option<Recording>,
     /// GPU timestamps, when the device has timestamp queries; created on first enable.
     gpu: Option<GpuTimer>,
+    /// The device's timestamps never advanced, so GPU timing stays off for this renderer.
+    timestamps_unusable: bool,
     /// The latest finished profile.
     latest: Option<FrameProfile>,
 }
@@ -127,11 +138,22 @@ struct Recording {
     slot: Option<usize>,
 }
 
-/// Timestamp queries and their readback ring.
+/// Timestamp queries, their readback ring, and the work each mark pass carries.
 struct GpuTimer {
     /// Nanoseconds per timestamp tick.
     period_nanoseconds: f64,
     slots: Vec<TimerSlot>,
+    mark: MarkWork,
+    /// Frames in a row whose timestamps all read the same value.
+    stalled_frames: u32,
+}
+
+/// The one-thread dispatch inside every mark pass, and the counter it writes.
+struct MarkWork {
+    pipeline: wgpu::ComputePipeline,
+    bind_group: wgpu::BindGroup,
+    // Held for the bind group; nothing reads it.
+    _counter: wgpu::Buffer,
 }
 
 /// One frame's query set and the buffers its timestamps travel through.
@@ -155,7 +177,7 @@ impl FrameProfiler {
             self.latest = None;
             return;
         }
-        if timestamps && self.gpu.is_none() {
+        if timestamps && !self.timestamps_unusable && self.gpu.is_none() {
             self.gpu = Some(GpuTimer::new(device, queue));
         }
     }
@@ -182,6 +204,15 @@ impl FrameProfiler {
                 self.latest = Some(profile);
             }
             slot = gpu.slots.iter().position(|slot| slot.waiting.is_none());
+            if gpu.stalled_frames >= STALLED_FRAME_LIMIT {
+                log::warn!(
+                    "GPU timestamps on this device never advance; frame profiles show CPU timings only. Report the \
+                     adapter if this persists."
+                );
+                self.gpu = None;
+                self.timestamps_unusable = true;
+                slot = None;
+            }
         }
         self.recording = Some(Recording {
             frame: self.frame,
@@ -201,7 +232,7 @@ impl FrameProfiler {
             return;
         }
         if let (Some(gpu), Some(slot)) = (&self.gpu, recording.slot) {
-            write_timestamp(encoder, &gpu.slots[slot].query_set, recording.marks.len() as u32);
+            write_timestamp(encoder, &gpu.slots[slot].query_set, recording.marks.len() as u32, &gpu.mark);
         }
         recording.marks.push((phase, Instant::now()));
     }
@@ -224,7 +255,12 @@ impl FrameProfiler {
             return;
         };
         let written = recording.marks.len() as u32 + 1;
-        gpu.slots[slot].record_end(encoder, written, profile);
+        let GpuTimer {
+            slots,
+            mark,
+            ..
+        } = gpu;
+        slots[slot].record_end(encoder, written, profile, mark);
     }
 }
 
@@ -234,13 +270,59 @@ impl GpuTimer {
         Self {
             period_nanoseconds: f64::from(queue.get_timestamp_period()),
             slots,
+            mark: MarkWork::new(device),
+            stalled_frames: 0,
         }
     }
 
-    /// Profiles whose timestamps have arrived; frees their slots.
+    /// Profiles whose timestamps have arrived; frees their slots and counts frames whose timestamps never advanced.
     fn collect(&mut self) -> Vec<FrameProfile> {
         let period = self.period_nanoseconds;
-        self.slots.iter_mut().filter_map(|slot| slot.collect(period)).collect()
+        let mut profiles = Vec::new();
+        for slot in &mut self.slots {
+            let Some((profile, advanced)) = slot.collect(period) else {
+                continue;
+            };
+            self.stalled_frames = if advanced { 0 } else { self.stalled_frames + 1 };
+            profiles.push(profile);
+        }
+        profiles
+    }
+}
+
+impl MarkWork {
+    fn new(device: &wgpu::Device) -> Self {
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("frame profile mark"),
+            source: wgpu::ShaderSource::Wgsl(PROFILE_MARK_SOURCE.into()),
+        });
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("frame profile mark"),
+            layout: None,
+            module: &module,
+            entry_point: Some("mark_main"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+        let counter = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("frame profile mark counter"),
+            size: 4,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("frame profile mark"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: counter.as_entire_binding(),
+            }],
+        });
+        Self {
+            pipeline,
+            bind_group,
+            _counter: counter,
+        }
     }
 }
 
@@ -272,8 +354,8 @@ impl TimerSlot {
     }
 
     /// Write the end timestamp, resolve the frame's timestamps, and map them for reading after submission.
-    fn record_end(&mut self, encoder: &mut wgpu::CommandEncoder, written: u32, profile: FrameProfile) {
-        write_timestamp(encoder, &self.query_set, written - 1);
+    fn record_end(&mut self, encoder: &mut wgpu::CommandEncoder, written: u32, profile: FrameProfile, mark: &MarkWork) {
+        write_timestamp(encoder, &self.query_set, written - 1, mark);
         encoder.resolve_query_set(&self.query_set, 0..written, &self.resolve, 0);
         let bytes = u64::from(written) * TIMESTAMP_BYTES;
         encoder.copy_buffer_to_buffer(&self.resolve, 0, &self.readback, 0, Some(bytes));
@@ -286,15 +368,15 @@ impl TimerSlot {
         self.written = written;
     }
 
-    /// The waiting frame's profile with GPU timings, once its readback has mapped.
-    fn collect(&mut self, period_nanoseconds: f64) -> Option<FrameProfile> {
+    /// The waiting frame's profile with GPU timings once its readback has mapped, and whether its timestamps advanced.
+    fn collect(&mut self, period_nanoseconds: f64) -> Option<(FrameProfile, bool)> {
         self.waiting.as_ref()?;
         match self.map_state.load(Ordering::Acquire) {
             MAP_READY => {}
             MAP_FAILED => {
                 // The frame's commands never ran (a lost device or a dropped encoder); keep its CPU timings.
                 self.map_state.store(MAP_PENDING, Ordering::Release);
-                return self.waiting.take();
+                return self.waiting.take().map(|profile| (profile, true));
             }
             _ => return None,
         }
@@ -311,14 +393,15 @@ impl TimerSlot {
         self.readback.unmap();
         self.map_state.store(MAP_PENDING, Ordering::Release);
         let mut profile = self.waiting.take()?;
-        apply_gpu_timings(&mut profile, &ticks, period_nanoseconds);
-        Some(profile)
+        let advanced = apply_gpu_timings(&mut profile, &ticks, period_nanoseconds);
+        Some((profile, advanced))
     }
 }
 
-/// Write a timestamp at this point of the command stream: an empty compute pass that writes it as it begins.
-fn write_timestamp(encoder: &mut wgpu::CommandEncoder, query_set: &wgpu::QuerySet, index: u32) {
-    encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+/// Write a timestamp at this point of the command stream: a compute pass that writes it as it begins and dispatches
+/// one thread, so drivers that skip empty encoders (Metal) still sample it.
+fn write_timestamp(encoder: &mut wgpu::CommandEncoder, query_set: &wgpu::QuerySet, index: u32, mark: &MarkWork) {
+    let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
         label: Some("frame profile mark"),
         timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
             query_set,
@@ -326,6 +409,9 @@ fn write_timestamp(encoder: &mut wgpu::CommandEncoder, query_set: &wgpu::QuerySe
             end_of_pass_write_index: None,
         }),
     });
+    pass.set_pipeline(&mark.pipeline);
+    pass.set_bind_group(0, &mark.bind_group, &[]);
+    pass.dispatch_workgroups(1, 1, 1);
 }
 
 /// A recorded frame's CPU timings: each phase lasts until the next mark, the last until `ended`.
@@ -352,9 +438,15 @@ fn cpu_profile(recording: &Recording, ended: Instant) -> FrameProfile {
     }
 }
 
-/// Fill in GPU timings from a frame's timestamps: one per phase mark, then the end. Timestamps that run backwards
-/// (some drivers reorder empty passes) count as zero rather than wrapping.
-fn apply_gpu_timings(profile: &mut FrameProfile, ticks: &[u64], period_nanoseconds: f64) {
+/// Fill in GPU timings from a frame's resolved timestamps: each phase runs from its timestamp to the next, and a
+/// timestamp written before the previous one counts as zero instead of wrapping. Returns whether the timestamps
+/// advanced at all; when every timestamp reads the same value (a driver that never sampled them), the profile keeps
+/// its CPU timings only rather than reporting zero GPU time.
+fn apply_gpu_timings(profile: &mut FrameProfile, ticks: &[u64], period_nanoseconds: f64) -> bool {
+    let advanced = ticks.windows(2).any(|pair| pair[0] != pair[1]);
+    if !advanced {
+        return false;
+    }
     let milliseconds = |from: u64, to: u64| (to.saturating_sub(from) as f64 * period_nanoseconds) / 1.0e6;
     for (index, timing) in profile.phases.iter_mut().enumerate() {
         if let (Some(start), Some(end)) = (ticks.get(index), ticks.get(index + 1)) {
@@ -364,6 +456,7 @@ fn apply_gpu_timings(profile: &mut FrameProfile, ticks: &[u64], period_nanosecon
     if let (Some(first), Some(last)) = (ticks.first(), ticks.last()) {
         profile.gpu_milliseconds = Some(milliseconds(*first, *last));
     }
+    true
 }
 
 #[cfg(test)]

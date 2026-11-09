@@ -2,6 +2,13 @@
 
 This changelog summarizes meaningful work on Joy Engine, Joy Editor, FORM EDITOR (formerly FORM LAB), JOYFX EDITOR (formerly PARTICLE LAB), and the engine examples. Entries are grouped by day, newest first, using America/Detroit dates. Work before 10-08-2026 happened inside [JoyGames](https://github.com/trentpolack/JoyGames); its [CHANGELOG](https://github.com/trentpolack/JoyGames/blob/develop/CHANGELOG.md) is the historical record for that period.
 
+## 11-09-2026
+### Rendering
+- GPU frame profiling works on Apple GPUs. Each profile mark pass now dispatches one thread, because Metal samples a pass's timestamps only when its encoder executes work, and the empty mark passes resolved every timestamp to zero. A device whose timestamps never advance falls back to CPU timings with one warning instead of reporting zero GPU time.
+
+### Platform
+- On HDR displays the shell reads the headroom ten times a second for the first three seconds after startup, resizes, and moves, so tone mapping follows macOS as it raises a newly presenting window's EDR headroom (from about 1.2x to the display's level) instead of lagging up to a second behind. The startup log names the potential headroom it is rising toward instead of reading as the display's limit.
+
 ## 11-06-2026
 ### JOYFX EDITOR
 - Restored descriptive accessible names for the compact UNDO and REDO property buttons, retaining their disabled states and verifying that a slider drag undoes and redoes as one edit.
